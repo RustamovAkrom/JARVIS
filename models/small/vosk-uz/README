@@ -1,0 +1,4 @@
+Small Uzbek for Vosk (Android, RPi, other small devices)
+
+%WER 13.54 [ 10409 / 76886, 1301 ins, 747 del, 8361 sub ] exp/chain/tdnn/decode_test_cv/wer_9_0.0
+%WER 12.92 [ 3495 / 27050, 473 ins, 347 del, 2675 sub ] exp/chain/tdnn/decode_test_is/wer_8_0.0

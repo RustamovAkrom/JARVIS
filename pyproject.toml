@@ -1,0 +1,25 @@
+[project]
+name = "jarvis2-0"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "comtypes>=1.4.15",
+    "google-genai>=1.60.0",
+    "numpy>=2.4.1",
+    "pvporcupine>=4.0.1",
+    "pyaudio>=0.2.14",
+    "pycaw>=20251023",
+    "pyinstaller>=6.18.0",
+    "pyside6>=6.10.1",
+    "python-dotenv>=1.2.1",
+    "python-levenshtein>=0.27.3",
+    "pyttsx3>=2.99",
+    "pyyaml>=6.0.3",
+    "rapidfuzz>=3.14.3",
+    "scikit-learn>=1.8.0",
+    "sounddevice>=0.5.4",
+    "vosk>=0.3.45",
+    "websockets>=15.0.1",
+]

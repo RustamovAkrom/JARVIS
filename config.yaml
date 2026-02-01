@@ -1,0 +1,18 @@
+assistant:
+  wakeword: "jarvis"
+  command_timeout: 15
+  confidence_threshold: 70
+
+audio:
+  microphone_index: null
+  microphone_sensitivity: 2.5
+  silence_timeout: 1.2
+
+porcupine:
+  access_key: ""
+
+ai:
+  enabled: true
+  provider: "gemini"
+  api_key: ""
+  model: "gemini-3-flash-preview"
