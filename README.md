@@ -1,4 +1,9 @@
-![img](/assets/logo.png)
+<p align="center">
+  <img src="assets/banner.png" width="100%">
+</p>
+
+`Python 3.12` | `Windows` | `Offline STT` | `AI Powered`
+
 
 # 🎙 Jarvis Voice Assistant — Windows Voice AI Assistant
 
