@@ -1,16 +1,6 @@
 import re
 from rapidfuzz import fuzz
-
-
-SEPARATORS = [
-    "и",
-    "потом",
-    "затем",
-    "после этого",
-    "а потом",
-    "далее",
-    "следующим образом",
-]
+from core import config
 
 
 class CommandRouter:
@@ -28,14 +18,8 @@ class CommandRouter:
         text = re.sub(r"[^\w\s]", " ", text)
 
         # remove filler words
-        fillers = [
-            "пожалуйста",
-            "ну",
-            "давай",
-            "короче",
-            "типа",
-        ]  # TODO: add more filter words
-        for f in fillers:
+  # TODO: add more filter words
+        for f in config.FILTERS:
             text = text.replace(f, "")
 
         return re.sub(r"\s+", " ", text).strip()
@@ -44,7 +28,7 @@ class CommandRouter:
 
         parts = [text]
 
-        for sep in SEPARATORS:
+        for sep in config.SEPARATORS:
             new = []
             for p in parts:
                 new.extend(p.split(sep))

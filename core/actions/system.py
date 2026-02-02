@@ -1,6 +1,7 @@
 import os
 import sys
 import time
+import ctypes
 import pyttsx3
 import platform
 import psutil
@@ -18,7 +19,7 @@ def restart_pc(*args, **kwargs):
 
 def lock_pc(*args, **kwargs):
     pyttsx3.speak("Блокирую экран")
-    os.system("rundll32.exe user32.dll,LockWorkStation")
+    ctypes.windll.user32.LockWorkStation()
 
 
 def exit_assistant(*args, **kwargs):

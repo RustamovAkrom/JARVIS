@@ -12,23 +12,6 @@ from core import config
 import socket
 
 
-AI_ON_PHRASES = [
-    "включи и ай",
-    "режим эй",
-    "поговорим",
-    "активируй ии",
-    "эй ай",
-    "включи помощника",
-    "активируй помощника",
-]
-
-AI_OFF_PHRASES = [
-    "выключи и ай",
-    "выйди из режима ай",
-    "отключи ай",
-    "вернись в обычный режим",
-    "обычный режим",
-]
 
 
 class Assistant:
@@ -94,15 +77,22 @@ class Assistant:
                 # Refresh activity timer
                 last_activity = time.time()
 
-                # Wakeword inside session
-                if config.WAKEWORD in user_text.lower():
-                    self.speak("Слушаю")
-                    continue
-
+                # Wakeword inside session    
                 normalized_text = self.router.normalize(user_text)
 
+                if config.WAKEWORD in normalized_text:
+
+                    self.speak("Слушаю")
+
+                    # remove wakeword
+                    normalized_text = normalized_text.replace(config.WAKEWORD, "").strip()
+
+                    # if user said only "Jarvis"
+                    if not normalized_text:
+                        continue
+
                 # AI mode toggling
-                if any(phrase in normalized_text for phrase in AI_ON_PHRASES):
+                if any(phrase in normalized_text for phrase in config.AI_ON_PHRASES):
                     if not self.internet_available():
                         pyttsx3.speak(
                             "Интернет недоступен. Невозможно включить режим ИИ."
@@ -120,7 +110,7 @@ class Assistant:
                     print("🤖 AI mode activated")
                     continue
 
-                if any(phrase in normalized_text for phrase in AI_OFF_PHRASES):
+                if any(phrase in normalized_text for phrase in config.AI_OFF_PHRASES):
                     self.mode = AssistantMode.SYSTEM
                     pyttsx3.speak("Возвращаюсь в обычный режим.")
                     print("🔄 Returned to system mode")
@@ -139,7 +129,8 @@ class Assistant:
                     continue
 
                 # SYSTEM MODE
-                commands_found = self.router.detect(user_text)
+                commands_found = self.router.detect(normalized_text)
+                
                 print("Commands found:", commands_found)
                 if commands_found:
 
