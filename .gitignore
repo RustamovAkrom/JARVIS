@@ -10,3 +10,4 @@ wheels/
 .venv
 *.log
 .env
+old_main.py

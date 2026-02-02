@@ -40,6 +40,7 @@ VOICE_SYSTEM_PROMPT = """
 Ответ должен звучать естественно вслух.
 """
 
+
 class GeminiClient:
 
     def __init__(self, api_key):
@@ -53,11 +54,11 @@ class GeminiClient:
         if self.available:
             try:
                 from google import genai
+
                 self.genai_client = genai.Client()
             except Exception as e:
                 print("❌ Gemini init failed:", e)
                 self.available = False
-
 
     def ask(self, prompt):
 
@@ -71,8 +72,7 @@ class GeminiClient:
             try:
 
                 response = self.genai_client.models.generate_content(
-                    model=AI_MODEL,
-                    contents=full_prompt
+                    model=AI_MODEL, contents=full_prompt
                 )
 
                 text = getattr(response, "text", None)
@@ -84,7 +84,7 @@ class GeminiClient:
 
                 # limit TTS spam
                 if len(text) > self.max_chars:
-                    text = text[:self.max_chars] + "..."
+                    text = text[: self.max_chars] + "..."
 
                 return text
 

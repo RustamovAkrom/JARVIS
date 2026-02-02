@@ -16,25 +16,20 @@ DEFAULT_CONFIG = {
     "assistant": {
         "wakeword": "jarvis",
         "command_timeout": 15,
-        "confidence_threshold": 70
+        "confidence_threshold": 70,
     },
-
     "audio": {
         "microphone_index": None,
         "microphone_sensitivity": 2.5,
-        "silence_timeout": 1.2
+        "silence_timeout": 1.2,
     },
-
-    "porcupine": {
-        "access_key": ""
-    },
-
+    "porcupine": {"access_key": ""},
     "ai": {
         "enabled": True,
         "provider": "gemini",
         "api_key": "",
-        "model": "gemini-3-flash-preview"
-    }
+        "model": "gemini-3-flash-preview",
+    },
 }
 
 
@@ -92,7 +87,7 @@ CONFIG = load_config()
 # Assistant
 WAKEWORD = str(CONFIG["assistant"].get("wakeword", "jarvis"))
 COMMAND_TIMEOUT = int(CONFIG["assistant"].get("command_timeout", 15))
-CONFIDENCE_THRESHOLD = int(CONFIG["assistant"].get("confidence_threshold", 70))
+CONFIDENCE_THRESHOLD = int(CONFIG["assistant"].get("confidence_threshold", 75))
 
 # Audio
 MICROPHONE_INDEX = CONFIG["audio"].get("microphone_index")
@@ -100,7 +95,9 @@ MICROPHONE_SENS = float(CONFIG["audio"].get("microphone_sensitivity", 2.5))
 SILENCE_TIMEOUT = float(CONFIG["audio"].get("silence_timeout", 1.2))
 
 # Porcupine (ENV priority)
-PORCUPINE_ACCESS_KEY = os.getenv("PORCUPINE_ACCESS_KEY") or CONFIG["porcupine"].get("access_key", "")
+PORCUPINE_ACCESS_KEY = os.getenv("PORCUPINE_ACCESS_KEY") or CONFIG["porcupine"].get(
+    "access_key", ""
+)
 
 # AI (ENV priority)
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or CONFIG["ai"].get("api_key", "")

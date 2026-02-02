@@ -1,7 +1,7 @@
 assistant:
   wakeword: "jarvis"
   command_timeout: 15
-  confidence_threshold: 70
+  confidence_threshold: 75
 
 audio:
   microphone_index: null

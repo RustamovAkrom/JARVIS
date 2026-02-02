@@ -25,10 +25,9 @@ class WakeWordListener:
 
         # Anti double-trigger protection
         self.last_trigger_time = 0
-        self.cooldown = 1.5   # seconds
+        self.cooldown = 1.5  # seconds
 
         self.running = False
-
 
     # START MIC STREAM
     def start(self):
@@ -42,12 +41,11 @@ class WakeWordListener:
             format=pyaudio.paInt16,
             input=True,
             frames_per_buffer=self.porcupine.frame_length,
-            input_device_index=self.device_index
+            input_device_index=self.device_index,
         )
 
         self.running = True
         print("🎧 Wakeword mic stream started")
-
 
     # STOP MIC STREAM
     def stop(self):
@@ -66,7 +64,6 @@ class WakeWordListener:
 
         print("🛑 Wakeword mic stream stopped")
 
-
     # LISTEN LOOP
     def listen(self):
 
@@ -79,14 +76,10 @@ class WakeWordListener:
             try:
 
                 pcm = self.stream.read(
-                    self.porcupine.frame_length,
-                    exception_on_overflow=False
+                    self.porcupine.frame_length, exception_on_overflow=False
                 )
 
-                pcm = struct.unpack_from(
-                    "h" * self.porcupine.frame_length,
-                    pcm
-                )
+                pcm = struct.unpack_from("h" * self.porcupine.frame_length, pcm)
 
                 result = self.porcupine.process(pcm)
 
@@ -106,7 +99,6 @@ class WakeWordListener:
             except Exception as e:
                 print("❗ Wakeword error:", e)
                 time.sleep(0.1)
-
 
     # FULL CLEANUP
     def close(self):

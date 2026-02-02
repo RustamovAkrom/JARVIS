@@ -9,12 +9,12 @@ def open_browser():
 
 
 def open_youtube():
-    pyttsx3.speak("Открываю YouTube")
+    pyttsx3.speak("Открываю Ютуб")
     webbrowser.open("https://youtube.com")
     print("YouTube opened in your browser.")
 
 
 def open_google():
-    pyttsx3.speak("Открываю Google")
+    pyttsx3.speak("Открываю Гугл")
     webbrowser.open("https://google.com")
     print("Google opened in your browser.")
