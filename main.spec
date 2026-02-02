@@ -108,7 +108,7 @@ exe = EXE(
     [],
     exclude_binaries=True,
     name='Jarvis',
-    icon='assets/icon.ico',
+    icon='assets/icon.png',
     version='assets/version.txt',
     debug=False,
     strip=False,

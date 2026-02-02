@@ -8,6 +8,7 @@ dependencies = [
     "comtypes>=1.4.15",
     "google-genai>=1.60.0",
     "numpy>=2.4.1",
+    "pillow>=12.1.0",
     "pvporcupine>=4.0.1",
     "pyaudio>=0.2.14",
     "pycaw>=20251023",

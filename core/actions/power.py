@@ -1,9 +1,12 @@
 import os
 import pyttsx3
 
-def shutdown_pc():
 
-    confirm = input("Вы уверены, что хотите выключить компьютер? (y/n): ")
-    if confirm.lower() == "y":
-        pyttsx3.speak("Выключаю компьютер")
-        os.system("shutdown /s /t 5")
+def shutdown_pc():
+    pyttsx3.speak("Выключаю компьютер через пять секунд")
+    os.system("shutdown /s /t 5")
+
+
+def cancel_shutdown():
+    pyttsx3.speak("Отмена выключения")
+    os.system("shutdown /a")

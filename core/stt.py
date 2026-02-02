@@ -14,8 +14,8 @@ q = queue.Queue(maxsize=30)
 
 
 # GLOBAL MIC STATS
-noise_floor = 10.0        # initial guess
-alpha = 0.05             # smoothing factor (LOW = STABLE) 
+noise_floor = 10.0  # initial guess
+alpha = 0.05  # smoothing factor (LOW = STABLE)
 
 
 def callback(indata, frames, time_info, status):
@@ -52,7 +52,6 @@ class SpeachToText:
         self.stream = None
         self.active = False
 
-
     # START MIC
     def start(self):
 
@@ -64,12 +63,11 @@ class SpeachToText:
             blocksize=8000,
             dtype="int16",
             channels=1,
-            callback=callback
+            callback=callback,
         )
 
         self.stream.start()
         self.active = True
-
 
     # STOP MIC
     def stop(self):
@@ -82,7 +80,6 @@ class SpeachToText:
 
         self.stream = None
         self.active = False
-
 
     # SMART LISTEN (ADAPTIVE)
     def listen(self, timeout=10, silence_timeout=1.2):
@@ -101,7 +98,6 @@ class SpeachToText:
             # absolute safety timeout
             if time.time() - start_time > timeout:
                 return None
-
 
             if not q.empty():
 
@@ -124,7 +120,6 @@ class SpeachToText:
 
                     if text.strip():
                         return text
-
 
             # Silence end detection
             if time.time() - last_voice_time > silence_timeout:
