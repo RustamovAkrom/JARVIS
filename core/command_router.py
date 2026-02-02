@@ -18,7 +18,7 @@ class CommandRouter:
         text = re.sub(r"[^\w\s]", " ", text)
 
         # remove filler words
-  # TODO: add more filter words
+        # TODO: add more filter words
         for f in config.FILTERS:
             text = text.replace(f, "")
 

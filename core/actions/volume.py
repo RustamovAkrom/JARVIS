@@ -5,11 +5,7 @@ from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
 
 def get_volume_interface():
     device = AudioUtilities.GetSpeakers()
-    interface = device._dev.Activate(
-        IAudioEndpointVolume._iid_,
-        CLSCTX_ALL,
-        None
-    )
+    interface = device._dev.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
     return cast(interface, POINTER(IAudioEndpointVolume))
 
 

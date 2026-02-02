@@ -12,8 +12,6 @@ from core import config
 import socket
 
 
-
-
 class Assistant:
 
     def __init__(
@@ -77,7 +75,7 @@ class Assistant:
                 # Refresh activity timer
                 last_activity = time.time()
 
-                # Wakeword inside session    
+                # Wakeword inside session
                 normalized_text = self.router.normalize(user_text)
 
                 if config.WAKEWORD in normalized_text:
@@ -85,7 +83,9 @@ class Assistant:
                     self.speak("Слушаю")
 
                     # remove wakeword
-                    normalized_text = normalized_text.replace(config.WAKEWORD, "").strip()
+                    normalized_text = normalized_text.replace(
+                        config.WAKEWORD, ""
+                    ).strip()
 
                     # if user said only "Jarvis"
                     if not normalized_text:
@@ -130,7 +130,7 @@ class Assistant:
 
                 # SYSTEM MODE
                 commands_found = self.router.detect(normalized_text)
-                
+
                 print("Commands found:", commands_found)
                 if commands_found:
 

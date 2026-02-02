@@ -183,4 +183,3 @@ COMMANDS = {
         "close assistant",
     ): actions.exit_assistant,
 }
-
