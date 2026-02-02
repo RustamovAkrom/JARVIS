@@ -40,7 +40,7 @@ Jarvis умеет:
 
 ## 1️⃣ Скачать установщик
 
-Перейдите в раздел **Releases** и скачайте:
+Перейдите в раздел [**Releases**](https://github.com/RustamovAkrom/JARVIS/releases) и скачайте:
 
 ```
 
