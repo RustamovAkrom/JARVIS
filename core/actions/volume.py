@@ -1,27 +1,17 @@
-from pycaw.pycaw import AudioUtilities
+from ctypes import cast, POINTER
+from comtypes import CLSCTX_ALL
+from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
 
 
-def _get_volume_interface():
+def get_volume_interface():
     device = AudioUtilities.GetSpeakers()
-    volume = device.EndpointVolume
-    return volume
+    interface = device._dev.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+    return cast(interface, POINTER(IAudioEndpointVolume))
 
 
-def set_volume(value: float):
-    """
-    value: 0.0 -> 1.0
-    """
-
-    volume = _get_volume_interface()
-
-    # clamp safety
-    value = max(0.0, min(1.0, value))
-
-    volume.SetMute(0, None)  # auto unmute
-
-    volume.SetMasterVolumeLevelScalar(value, None)
-
-    print(f"🔊 Volume set to {int(value * 100)}%")
+def set_volume(level: float):
+    volume = get_volume_interface()
+    volume.SetMasterVolumeLevelScalar(level, None)
 
 
 def set_volume_max():
@@ -33,4 +23,14 @@ def set_volume_mid():
 
 
 def set_volume_min():
-    set_volume(0.0)
+    set_volume(0.15)
+
+
+def mute_volume():
+    volume = get_volume_interface()
+    volume.SetMute(1, None)
+
+
+def unmute_volume():
+    volume = get_volume_interface()
+    volume.SetMute(0, None)

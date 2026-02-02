@@ -15,7 +15,7 @@
 #     def say(self, text):
 #         if not text:
 #             return
-        
+
 #         self.engine.say(text)
 #         self.engine.runAndWait()
 #         self.engine.stop()

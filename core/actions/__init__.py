@@ -1,7 +1,9 @@
-from core.actions.browser import * # noqa
-from core.actions.time_date import * # noqa
-from core.actions.power import * # noqa
-from core.actions.system import * # noqa
-from core.actions.jokes import * # noqa 
-from core.actions.volume import * # noqa
-from core.actions.media import * # noqa
+from .media import *  # noqa
+from .browser import *  # noqa
+from .system import *  # noqa
+from .power import *  # noqa
+from .screen import *  # noqa
+from .jokes import *  # noqa
+from .cleaner import *  # noqa
+from .volume import *  # noqa
+from .time_date import *  # noqa
