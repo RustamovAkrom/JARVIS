@@ -1,3 +1,5 @@
+import sys
+
 from core.stt import SpeachToText
 from core.wakeword import WakeWordListener
 from core.assistant import Assistant
@@ -12,11 +14,16 @@ def main():
 
     assistant = Assistant(stt, wake, COMMANDS)
 
-    assistant.run()
+    try:
+        assistant.run()
+    except KeyboardInterrupt:
+        print("Stoped 🔴")
+        sys.exit(0)
+
+    finally:
+        wake.close()
+        stt.stop()
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except KeyboardInterrupt:
-        print("Stoped 🔴")
+    main()

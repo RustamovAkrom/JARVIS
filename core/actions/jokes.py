@@ -9,6 +9,6 @@ JOKES = [
 ]
 
 
-def tell_joke():
+def tell_joke(*args, **kwargs):
     joke = random.choice(JOKES)
     pyttsx3.speak(joke)

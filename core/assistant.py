@@ -64,7 +64,7 @@ class Assistant:
 
                 # Listen user
                 user_text = self.stt.listen(
-                    timeout=2
+                    timeout=2, silence_timeout=config.SILENCE_TIMEOUT
                 )  # wait 2 seconds for detect commands
 
                 if not user_text:
@@ -93,6 +93,11 @@ class Assistant:
 
                 # AI mode toggling
                 if any(phrase in normalized_text for phrase in config.AI_ON_PHRASES):
+                    if not config.AI_ENABLED:
+                        self.speak("Режим ИИ отключен в настройках.")
+                        print("❌ AI mode disabled in config.")
+                        continue
+
                     if not self.internet_available():
                         pyttsx3.speak(
                             "Интернет недоступен. Невозможно включить режим ИИ."

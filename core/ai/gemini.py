@@ -2,6 +2,8 @@ import os
 import time
 from core.config import AI_MODEL
 
+from google import genai
+
 
 VOICE_SYSTEM_PROMPT = """
 РОЛЬ:
@@ -53,9 +55,8 @@ class GeminiClient:
 
         if self.available:
             try:
-                from google import genai
 
-                self.genai_client = genai.Client()
+                self.genai_client = genai.Client(api_key=api_key)
             except Exception as e:
                 print("❌ Gemini init failed:", e)
                 self.available = False

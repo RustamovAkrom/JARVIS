@@ -104,6 +104,9 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or CONFIG["ai"].get("api_key", "")
 AI_ENABLED = bool(CONFIG["ai"].get("enabled", True))
 AI_MODEL = CONFIG["ai"].get("model", "gemini-3-flash-preview")
 
+# Musics dir ~/Music if this None
+MUSICS_DIR = CONFIG["music"].get("path")
+
 # AI ON/OFF
 AI_ON_PHRASES = [
     "включи и ай",

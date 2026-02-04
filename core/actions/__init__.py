@@ -1,4 +1,4 @@
-from .media import *  # noqa
+from .music import *  # noqa
 from .browser import *  # noqa
 from .system import *  # noqa
 from .power import *  # noqa
@@ -7,3 +7,5 @@ from .jokes import *  # noqa
 from .cleaner import *  # noqa
 from .volume import *  # noqa
 from .time_date import *  # noqa
+from .apps import *  # noqa
+from .modes import *  # noqa

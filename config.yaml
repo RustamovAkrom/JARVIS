@@ -16,3 +16,6 @@ ai:
   provider: "gemini"
   api_key: ""
   model: "gemini-3-flash-preview"
+
+music:
+  path: "D:/Songs"
