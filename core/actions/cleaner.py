@@ -14,15 +14,15 @@ def clear_temp_folder(*args, **kwargs):
                 item.unlink()
             elif item.is_dir():
                 shutil.rmtree(item)
-        except:
-            pass
+        except Exception as e:
+            print("Clean temp folder error: ", e)
 
 
 def clear_recycle_bin(*args, **kwargs):
     try:
         ctypes.windll.shell32.SHEmptyRecycleBinW(None, None, 0x0007)
-    except:
-        pass
+    except Exception as e:
+        print("Clean recycle bin error: ", e)
 
 
 def clean_all_files(*args, **kwargs):
