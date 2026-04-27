@@ -1,22 +1,25 @@
+import sys
+
 from core.stt import SpeachToText
-from core.wakeword import WakeWordListener
 from core.assistant import Assistant
 from core import config
-from core.commands import COMMANDS
+from core.commands_loader import load_commands
 
 
 def main():
-
+    commands = load_commands()
     stt = SpeachToText("models/small/vosk-ru")
-    wake = WakeWordListener(config.WAKEWORD)
+    assistant = Assistant(stt, commands)
 
-    assistant = Assistant(stt, wake, COMMANDS)
+    try:
+        assistant.run()
+    except KeyboardInterrupt:
+        print("Stoped 🔴")
+        sys.exit(0)
 
-    assistant.run()
+    finally:
+        stt.stop()
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except KeyboardInterrupt:
-        print("Stoped 🔴")
+    main()

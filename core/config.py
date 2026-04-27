@@ -30,6 +30,9 @@ DEFAULT_CONFIG = {
         "api_key": "",
         "model": "gemini-3-flash-preview",
     },
+    "music": {
+        "path": None
+    }
 }
 
 
@@ -85,7 +88,7 @@ CONFIG = load_config()
 # EXPORT SETTINGS
 
 # Assistant
-WAKEWORD = str(CONFIG["assistant"].get("wakeword", "jarvis"))
+WAKEWORD = str(CONFIG["assistant"].get("wakeword", "джарвис"))
 COMMAND_TIMEOUT = int(CONFIG["assistant"].get("command_timeout", 15))
 CONFIDENCE_THRESHOLD = int(CONFIG["assistant"].get("confidence_threshold", 75))
 
@@ -103,6 +106,9 @@ PORCUPINE_ACCESS_KEY = os.getenv("PORCUPINE_ACCESS_KEY") or CONFIG["porcupine"].
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or CONFIG["ai"].get("api_key", "")
 AI_ENABLED = bool(CONFIG["ai"].get("enabled", True))
 AI_MODEL = CONFIG["ai"].get("model", "gemini-3-flash-preview")
+
+# Musics dir ~/Music if this None
+MUSICS_DIR = CONFIG.get("music", {}).get("path")
 
 # AI ON/OFF
 AI_ON_PHRASES = [

@@ -2,9 +2,10 @@ import shutil
 import ctypes
 from pathlib import Path
 import tempfile
+import pyttsx3
 
 
-def clear_temp_folder():
+def clear_temp_folder(*args, **kwargs):
     temp_path = Path(tempfile.gettempdir())
 
     for item in temp_path.iterdir():
@@ -13,17 +14,19 @@ def clear_temp_folder():
                 item.unlink()
             elif item.is_dir():
                 shutil.rmtree(item)
-        except:
-            pass
+        except Exception as e:
+            print("Clean temp folder error: ", e)
 
 
-def clear_recycle_bin():
+def clear_recycle_bin(*args, **kwargs):
     try:
         ctypes.windll.shell32.SHEmptyRecycleBinW(None, None, 0x0007)
-    except:
-        pass
+    except Exception as e:
+        print("Clean recycle bin error: ", e)
 
 
-def clean_all_files():
+def clean_all_files(*args, **kwargs):
+    pyttsx3.speak("очистка корзины пожалуйста подождите")
     clear_temp_folder()
     clear_recycle_bin()
+    pyttsx3.speak("корзинка успешно очищен")
