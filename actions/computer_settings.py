@@ -163,15 +163,9 @@ def volume_set(value: int):
     value = max(0, min(100, int(value)))
     if _OS == "Windows":
         try:
-            import math
-            from ctypes import cast, POINTER
-            from comtypes import CLSCTX_ALL
-            from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
-            devices   = AudioUtilities.GetSpeakers()
-            interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
-            vol       = cast(interface, POINTER(IAudioEndpointVolume))
-            vol_db    = -65.25 if value == 0 else max(-65.25, 20 * math.log10(value / 100))
-            vol.SetMasterVolumeLevel(vol_db, None)
+            from pycaw.pycaw import AudioUtilities
+            device = AudioUtilities.GetSpeakers()
+            device.volume_percent = value
             return
         except Exception as e:
             print(f"[Settings] pycaw failed, using keypress fallback: {e}")
@@ -185,6 +179,7 @@ def volume_set(value: int):
         subprocess.run(["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{value}%"],
             capture_output=True)
         return
+
 
 def brightness_up():
     if _OS == "Darwin":
