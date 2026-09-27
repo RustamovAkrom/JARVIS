@@ -1,0 +1,46 @@
+[project]
+name = "new-jarvis"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "beautifulsoup4>=4.12,<5",
+    "comtypes>=1.4.17 ; sys_platform == 'win32'",
+    "cryptography>=42,<50",
+    "ddgs>=9,<10",
+    "fastapi>=0.110,<1",
+    "google-api-python-client>=2.200.0",
+    "google-auth-oauthlib>=1.4.1",
+    "google-genai>=2.8.0,<3",
+    "mss>=9,<11",
+    "numpy>=1.24,<3",
+    "opencv-python>=4.8,<5",
+    "openpyxl>=3.1.5",
+    "paho-mqtt>=2.1.0",
+    "pdfplumber>=0.11.10",
+    "pillow>=10,<13",
+    "playwright>=1.40,<2",
+    "psutil>=5.9,<8",
+    "pyautogui>=0.9.54",
+    "pycaw>=20260927 ; sys_platform == 'win32'",
+    "pygetwindow>=0.0.9",
+    "pynvml>=13.0.1",
+    "pypdf2>=3.0.1",
+    "pyperclip>=1.11.0",
+    "pyqt6>=6.6,<7",
+    "python-docx>=1.2.0",
+    "python-multipart>=0.0.9,<1",
+    "python-pptx>=1.0.2",
+    "pywin32>=312 ; sys_platform == 'win32'",
+    "pywinauto>=0.6.9 ; sys_platform == 'win32'",
+    "qrcode[pil]>=7,<9",
+    "requests>=2.31,<3",
+    "send2trash>=2.1.0",
+    "sounddevice>=0.4,<1",
+    "tinytuya>=1.20.0",
+    "uvicorn[standard]>=0.27,<1",
+    "win10toast>=0.9 ; sys_platform == 'win32'",
+    "wmi>=1.5.1 ; sys_platform == 'win32'",
+    "youtube-transcript-api>=1.2.4",
+]
