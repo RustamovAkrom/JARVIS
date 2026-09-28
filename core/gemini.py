@@ -113,14 +113,56 @@ SEARCH = "search"  # grounded search — REST only, see below
 #     on REST — see SEARCH.
 LIVE = "live"
 
+# Every model this key can reach, in the order to try them. A rung that runs
+# out of quota is skipped for a while and the next one answers — which is the
+# whole point: one model a day means one daily limit, a ladder means the sum of
+# them. Names verified against the live model list rather than guessed.
+# Order is measured, not assumed. Timed against this key, same prompt:
+#     gemini-3.5-flash-lite      0.56s      gemini-2.5-flash        0.67s
+#     gemini-3.1-flash-lite      0.60s      gemini-2.5-flash-lite   0.74s
+#     gemini-flash-lite-latest   0.60s      gemini-3.5-flash        1.13s
+#     gemini-3-flash-preview     504, after 14.7s of waiting
+#     gemini-3.6-flash           504, after 12.0s
+#     gemini-flash-latest        503 UNAVAILABLE
+# The three that fail sit at the BOTTOM rather than being deleted: they are
+# real quota when they are healthy, and a rung that is down is set aside by the
+# cooldown after one attempt instead of being paid for on every call.
 _LADDERS = {
-    FAST: (LIVE, "gemini-2.5-flash-lite", "gemini-2.5-flash"),
-    SMART: (LIVE, "gemini-2.5-flash", "gemini-2.5-flash-lite"),
+    FAST: (LIVE,
+           "gemini-2.5-flash-lite", "gemini-3.5-flash-lite",
+           "gemini-3.1-flash-lite", "gemini-flash-lite-latest",
+           "gemini-2.5-flash", "gemini-3.5-flash",
+           "gemini-3.6-flash", "gemini-3-flash-preview"),
+    SMART: (LIVE,
+            "gemini-2.5-flash", "gemini-3.5-flash",
+            "gemini-2.5-flash-lite", "gemini-3.5-flash-lite",
+            "gemini-3.1-flash-lite",
+            "gemini-3.6-flash", "gemini-3-flash-preview", "gemini-flash-latest"),
     # Grounded search needs response.candidates[...].grounding_metadata, which a
     # Live turn does not produce. REST only, and it says so rather than silently
     # returning an answer with no sources behind it.
-    SEARCH: ("gemini-2.5-flash", "gemini-flash-latest", "gemini-2.5-flash-lite"),
+    SEARCH: ("gemini-2.5-flash", "gemini-3.5-flash", "gemini-2.5-flash-lite",
+             "gemini-flash-latest"),
 }
+
+# The conversation's own model, and ONE careful fallback behind it.
+#
+# Deliberately not a long ladder. The Live quota is not the one that runs out —
+# the text models are — and Live models are not interchangeable the way text
+# models are: they differ in which config fields they accept and in what they
+# can do, so falling through a list of them risks connecting to something that
+# behaves like a different assistant. The key also offers transcribe-live,
+# live-translate and a robotics streaming model, none of which are assistants
+# at all.
+#
+# So there are two: the current one, and the native-audio model this assistant
+# used before it, which is known to work here. A mismatch in config is already
+# survivable — the connect loop drops the tuning and proactive-audio fields and
+# reconnects when the server rejects them.
+LIVE_MODELS = (
+    "models/gemini-3.1-flash-live-preview",
+    "models/gemini-2.5-flash-native-audio-preview-12-2025",
+)
 
 # The Live model to use for one-shot calls. main.py owns the real one; this is
 # only the fallback for when this module is imported without it (tests).
@@ -174,13 +216,74 @@ _cached_key: str | None = None
 # reaching the model that could actually answer. Remembering that for a few
 # minutes turns the ladder from a cost into a saving.
 _COOLDOWN_SECONDS = 300
+# A model that does not exist, or that this key may not use, is not coming back
+# in five minutes. Retrying it on every call is a wasted round trip in front of
+# everything the assistant does, so it is set aside for the session instead.
+_GONE_SECONDS = 6 * 60 * 60
+# Overloaded or timing out. Usually passes, so a shorter rest than "gone" —
+# but long enough that the fourteen-second wait is paid once, not repeatedly.
+_UNAVAILABLE_SECONDS = 30 * 60
 _cooldown: dict[str, float] = {}
 _cool_lock = threading.Lock()
 
 
-def _cool(model: str) -> None:
+def _cool(model: str, seconds: float = _COOLDOWN_SECONDS) -> None:
     with _cool_lock:
-        _cooldown[model] = time.monotonic() + _COOLDOWN_SECONDS
+        _cooldown[model] = time.monotonic() + seconds
+
+
+def is_quota_error(err: str) -> bool:
+    return "429" in err or "RESOURCE_EXHAUSTED" in err
+
+
+def is_unavailable_error(err: str) -> bool:
+    """The model is up but not answering — overloaded, or a deadline expired.
+
+    Worth its own case because of what it costs: a 504 from one of these took
+    fourteen seconds to arrive. Retrying that on every call puts the wait in
+    front of everything the assistant does, so a rung that times out is rested
+    like an exhausted one — for less long, since it is usually passing.
+    """
+    low = err.lower()
+    return ("503" in err or "504" in err
+            or "unavailable" in low or "deadline_exceeded" in low)
+
+
+def is_gone_error(err: str) -> bool:
+    """The model is not there, or not ours to use — a different thing from busy."""
+    low = err.lower()
+    return ("404" in err or "not found" in low or "is not supported" in low
+            or "permission" in low or "403" in err)
+
+
+def live_model() -> str:
+    """The Live model to open the conversation with: the first rung that is not
+    resting. If every one is resting the ladder is used from the top anyway —
+    refusing to connect at all is never the better answer."""
+    for m in LIVE_MODELS:
+        if not _cooling(m):
+            return m
+    return LIVE_MODELS[0]
+
+
+def note_live_failure(model: str, err: str) -> bool:
+    """Record why a Live model failed. True when it is worth trying the next.
+
+    Only quota and availability move the ladder along. A bad API key or a
+    dropped network is not the model's fault, and stepping down the ladder for
+    those would work through every model and reach the same wall four times.
+    """
+    if is_quota_error(err):
+        _cool(model, _COOLDOWN_SECONDS)
+        print(f"[Gemini] Live model {model} is out of quota — "
+              f"switching for {_COOLDOWN_SECONDS // 60} minutes.")
+        return True
+    if is_gone_error(err):
+        _cool(model, _GONE_SECONDS)
+        print(f"[Gemini] Live model {model} is unavailable to this key — "
+              f"setting it aside.")
+        return True
+    return False
 
 
 def _cooling(model: str) -> bool:
@@ -402,10 +505,17 @@ def call(contents, tier: str = FAST, config=None,
             return cl.models.generate_content(**kwargs)
         except Exception as e:
             msg = str(e)
-            if "429" in msg or "RESOURCE_EXHAUSTED" in msg:
+            if is_quota_error(msg):
                 _cool(model)
                 print(f"[Gemini] {model}: out of quota — skipping it for "
                       f"{_COOLDOWN_SECONDS // 60} minutes")
+            elif is_gone_error(msg):
+                _cool(model, _GONE_SECONDS)
+                print(f"[Gemini] {model}: unavailable to this key — set aside")
+            elif is_unavailable_error(msg):
+                _cool(model, _UNAVAILABLE_SECONDS)
+                print(f"[Gemini] {model}: not answering — resting it for "
+                      f"{_UNAVAILABLE_SECONDS // 60} minutes")
             else:
                 print(f"[Gemini] {model}: {type(e).__name__}: {msg[:140]}")
     return None

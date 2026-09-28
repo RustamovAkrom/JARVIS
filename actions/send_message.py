@@ -150,7 +150,49 @@ def _desktop_send(app_name: str, receiver: str, message: str) -> str:
     return f"Message sent to {receiver} via {app_name}."
 
 def _send_whatsapp(receiver: str, message: str) -> str:
-    return _desktop_send("WhatsApp", receiver, message)
+    """WhatsApp goes through the verified driver when there is one.
+
+    _desktop_send below is a sequence of keystrokes with sleeps between them:
+    it presses Win, types the app name, presses Ctrl+F, types the contact,
+    presses Enter twice and reports success — without ever reading back which
+    window received any of that. When the machine is a second slower than the
+    sleeps assume, the whole sequence lands somewhere else and the user is
+    still told the message was sent.
+
+    plugins/_whatsapp_core.py already drives WhatsApp properly for the calling
+    plugins: it finds the real window, opens the conversation, checks the
+    conversation is the right person's, types, and confirms the box emptied
+    before it says "sent". Using it here costs nothing and removes the one
+    failure that matters — a message reported as delivered that never left.
+
+    The blind path stays as the fallback for a machine where the driver cannot
+    run at all (the plugin file removed, a missing dependency, no WhatsApp).
+    But once the driver HAS run, its answer stands: falling back after it
+    refused to send is how a message ends up typed into the wrong
+    conversation, which is worse than not sending it.
+    """
+    try:
+        from plugins import _whatsapp_core as wa
+    except Exception as e:
+        print(f"[SendMessage] WhatsApp driver unavailable ({e}) — typing blind.")
+        return _desktop_send("WhatsApp", receiver, message)
+
+    try:
+        transport, why = wa.get()
+    except Exception as e:
+        print(f"[SendMessage] WhatsApp driver failed to start ({e}) — typing blind.")
+        return _desktop_send("WhatsApp", receiver, message)
+
+    if transport is None:
+        print(f"[SendMessage] {why} — typing blind.")
+        return _desktop_send("WhatsApp", receiver, message)
+
+    sent, failure = transport.send_message_to(receiver, message)
+    if sent:
+        return f"Message sent to {receiver} via WhatsApp."
+    return (f"The message to {receiver} was NOT sent on WhatsApp: {failure}. "
+            f"Tell the user plainly that it was not sent, and why - do not "
+            f"say it was sent.")
 
 def _send_telegram(receiver: str, message: str) -> str:
     return _desktop_send("Telegram", receiver, message)
@@ -259,7 +301,11 @@ def send_message(
     except Exception as e:
         result = f"Could not send message: {e}"
 
-    print(f"[SendMessage] {'✅' if 'sent' in result.lower() else '❌'} {result}")
+    # "NOT sent" contains "sent". The old test read that as a success and put a
+    # tick next to a message that never went.
+    lowered = result.lower()
+    ok = "sent" in lowered and "not sent" not in lowered
+    print(f"[SendMessage] {'✅' if ok else '❌'} {result}")
     if player:
         player.write_log(f"[msg] {result}")
 
@@ -269,7 +315,13 @@ def send_message(
 # ── Tool declaration (auto-discovered by core/action_loader.py) ──────────────
 TOOL = {
     "name": "send_message",
-    "description": "Sends a text message via WhatsApp, Telegram, or other messaging platform.",
+    "description": (
+        "Sends a text message via WhatsApp, Telegram, or another messaging "
+        "platform. Write 'message_text' in the USER'S OWN LANGUAGE, exactly "
+        "what they asked to be said. If the result says the message was NOT "
+        "sent, repeat that plainly along with the reason it gives — never "
+        "tell the user a message was sent unless the result said it was."
+    ),
     "parameters": {
         "type": "OBJECT",
         "properties": {
