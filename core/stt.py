@@ -1,126 +1,93 @@
-import sounddevice as sd
-import queue
+"""
+Speech-to-Text engines for MARK XL.
+
+Whisper  – offline transcription via faster-whisper (VAD-buffered)
+Vosk     – offline streaming transcription (lighter)
+"""
 import json
-import time
-import os
-import sys
 import numpy as np
 
-from vosk import Model, KaldiRecognizer
+
+class WhisperSTT:
+    """Offline transcription using faster-whisper."""
+
+    def __init__(self, model_name: str = "base", language: str | None = None):
+        import os
+        from faster_whisper import WhisperModel
+        print(f"[STT] Loading Whisper '{model_name}'…")
+        try:
+            import torch
+            device  = "cuda" if torch.cuda.is_available() else "cpu"
+            compute = "float16" if device == "cuda" else "int8"
+        except Exception:
+            device, compute = "cpu", "int8"
+
+        try:
+            self._model = WhisperModel(model_name, device=device, compute_type=compute)
+        except Exception as _first_err:
+            # Offline flag set but model not cached yet → clear flags and download once.
+            # Keywords cover multiple huggingface_hub error message variants across versions.
+            _e = str(_first_err).lower()
+            _offline_keywords = (
+                "offline", "not found", "cache", "localentry",
+                "does not exist", "outgoing", "local_files_only",
+            )
+            if any(k in _e for k in _offline_keywords):
+                print(f"[STT] Whisper '{model_name}' not in local cache — downloading (one-time, internet required)…")
+                os.environ.pop("HF_HUB_OFFLINE",      None)
+                os.environ.pop("TRANSFORMERS_OFFLINE", None)
+                os.environ.pop("HF_DATASETS_OFFLINE",  None)
+                try:
+                    self._model = WhisperModel(model_name, device=device, compute_type=compute)
+                except Exception as _dl_err:
+                    raise RuntimeError(
+                        f"Whisper '{model_name}' model download failed.\n"
+                        f"Internet access is required the first time to download the speech model (~75–290 MB).\n"
+                        f"After the first download it runs fully offline.\n"
+                        f"Details: {_dl_err}"
+                    ) from _dl_err
+            else:
+                raise
+
+        self._language = None if (not language or language.strip().lower() == "auto") else language.strip().lower()
+        print(f"[STT] Whisper '{model_name}' ready ({device})")
+
+    def transcribe(self, audio: np.ndarray) -> str:
+        """Transcribe a float32 mono 16 kHz numpy array. Returns transcript string."""
+        try:
+            segments, _ = self._model.transcribe(
+                audio,
+                language=self._language,
+                beam_size=1,                       # greedy — 2-3x faster
+                best_of=1,
+                condition_on_previous_text=False,  # no hallucinations, faster
+                vad_filter=True,
+                vad_parameters={"min_silence_duration_ms": 300},
+            )
+            return " ".join(s.text for s in segments).strip()
+        except Exception as e:
+            print(f"[STT] Transcription error: {e}")
+            raise
 
 
-# AUDIO QUEUE
-q = queue.Queue(maxsize=30)
+class VoskSTT:
+    """Streaming transcription using Vosk."""
 
+    def __init__(self, model_path: str | None = None, language: str = "en-us"):
+        from vosk import Model, KaldiRecognizer
+        print("[STT] Loading Vosk model…")
+        if model_path:
+            model = Model(model_path)
+        else:
+            lang  = language.strip().lower() if language and language.strip().lower() != "auto" else "en-us"
+            model = Model(lang=lang)
+        self._rec = KaldiRecognizer(model, 16000)
+        print("[STT] Vosk ready.")
 
-# GLOBAL MIC STATS
-noise_floor = 10.0  # initial guess
-alpha = 0.05  # smoothing factor (LOW = STABLE)
-
-
-def callback(indata, frames, time_info, status):
-
-    global noise_floor
-
-    # RMS loudness
-    volume = np.linalg.norm(indata) * 10
-
-    # Adaptive noise calibration (EMA smoothing)
-    noise_floor = (1 - alpha) * noise_floor + alpha * volume
-
-    # Push audio frame + current volume
-    if not q.full():
-        q.put((bytes(indata), volume))
-
-
-def resource_path(relative):
-
-    if hasattr(sys, "_MEIPASS"):
-        return os.path.join(sys._MEIPASS, relative)
-
-    return relative
-
-
-# STT CLASS
-class SpeachToText:
-
-    def __init__(self, model_path):
-
-        self.model = Model(resource_path(model_path))
-        self.recognizer = KaldiRecognizer(self.model, 16000)
-
-        self.stream = None
-        self.active = False
-
-    # START MIC
-    def start(self):
-
-        if self.active:
-            return
-
-        self.stream = sd.RawInputStream(
-            samplerate=16000,
-            blocksize=8000,
-            dtype="int16",
-            channels=1,
-            callback=callback,
-        )
-
-        self.stream.start()
-        self.active = True
-
-    # STOP MIC
-    def stop(self):
-
-        if not self.active:
-            return
-
-        self.stream.stop()
-        self.stream.close()
-
-        self.stream = None
-        self.active = False
-
-    # SMART LISTEN (ADAPTIVE)
-    def listen(self, timeout=10, silence_timeout=1.2):
-
-        global noise_floor
-
-        self.start()
-
-        print("🎤 Listening...")
-
-        start_time = time.time()
-        last_voice_time = time.time()
-
-        while True:
-
-            # absolute safety timeout
-            if time.time() - start_time > timeout:
-                return None
-
-            if not q.empty():
-
-                data, volume = q.get()
-
-                # Dynamic voice threshold
-                voice_threshold = max(15, noise_floor * 2.5)
-
-                # Voice detected
-                if volume > voice_threshold:
-                    last_voice_time = time.time()
-
-                # Vosk recognition
-                if self.recognizer.AcceptWaveform(data):
-
-                    result = json.loads(self.recognizer.Result())
-                    self.recognizer.Reset()
-
-                    text = result.get("text", "")
-
-                    if text.strip():
-                        return text
-
-            # Silence end detection
-            if time.time() - last_voice_time > silence_timeout:
-                return None
+    def process_chunk(self, audio_bytes: bytes) -> tuple[str, bool]:
+        """Feed raw int16 LE PCM bytes. Returns (text, is_final)."""
+        if self._rec.AcceptWaveform(audio_bytes):
+            result = json.loads(self._rec.Result())
+            return result.get("text", ""), True
+        partial = json.loads(self._rec.PartialResult())
+        return partial.get("partial", ""), False
