@@ -5,12 +5,14 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
+    "av>=19.0.0",
     "beautifulsoup4>=4.12,<5",
     "comtypes>=1.4.17 ; sys_platform == 'win32'",
     "cryptography>=42,<50",
     "ddgs>=9,<10",
     "fastapi>=0.110,<1",
     "google-api-python-client>=2.200.0",
+    "google-auth-httplib2>=0.4.2",
     "google-auth-oauthlib>=1.4.1",
     "google-genai>=2.8.0,<3",
     "mediapipe>=1.0.1",
@@ -32,6 +34,7 @@ dependencies = [
     "pypdf2>=3.0.1",
     "pyperclip>=1.11.0",
     "pyqt6>=6.6,<7",
+    "pyqt6-webengine>=6.11.0",
     "python-docx>=1.2.0",
     "python-multipart>=0.0.9,<1",
     "python-pptx>=1.0.2",
