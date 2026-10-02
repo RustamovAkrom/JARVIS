@@ -13,9 +13,10 @@ config/whatsapp_web/
 *credentials*.json
 .env
 .env.*
-
+ui_old.py
 # ── Personal data the assistant accumulates about you ─────────────────────────
 memory/long_term.json
+memory/water_state.json
 memory/*.db
 
 # ── Python build noise ────────────────────────────────────────────────────────
