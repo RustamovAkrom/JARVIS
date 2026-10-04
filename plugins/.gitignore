@@ -10,3 +10,4 @@ quiz.py
 telegram_remote.py
 trading_agent.py
 water_reminder.py
+system_dashboard.py
