@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html as _html
 import json
 import math
 import os
@@ -27,7 +28,7 @@ else:
 os.environ.setdefault("QT_LOGGING_RULES", "qt.multimedia.*=false")
 
 from PyQt6.QtCore import (
-    QEasingCurve, QLineF, QMimeData, QObject, QParallelAnimationGroup, QPointF,
+    QEasingCurve, QEvent, QLineF, QMimeData, QObject, QParallelAnimationGroup, QPointF,
     QPoint, QPropertyAnimation, QRect, QRectF, QSize, QSizeF, Qt, QTimer,
     QUrl, pyqtSignal,
 )
@@ -50,7 +51,8 @@ except Exception as _e:            # noqa: BLE001 - reported, never fatal
     print(f"[Video] playback unavailable ({_e}) — the HUD will not show video.")
 
 from PyQt6.QtWidgets import (
-    QApplication, QComboBox, QFileDialog, QFrame, QHBoxLayout, QLabel, QLineEdit,
+    QApplication, QComboBox, QFileDialog, QFrame, QGridLayout, QHBoxLayout, QLabel,
+    QLineEdit, QListWidget, QListWidgetItem,
     QMainWindow, QMenu, QPushButton, QScrollArea, QSizeGrip, QSizePolicy,
     QSplitter, QGraphicsScene, QGraphicsView,
     QStackedWidget, QTextEdit, QVBoxLayout, QWidget, QProgressBar,
@@ -96,19 +98,35 @@ def _save_cfg(**kv) -> None:
         pass
 
 
+def _tasks_file() -> Path:
+    return CONFIG_DIR / "ui_tasks.json"
+
+
 # Single source of truth for the release name — the window title, the header
 # badge and the readme must never disagree again.
 APP_VERSION  = "JARVIS v2"
 APP_PROTOCOL = APP_VERSION.split()[-1]
 
 _DEFAULT_W, _DEFAULT_H = 1360, 820
-_MIN_W,     _MIN_H     = 1120, 680
-_LEFT_W  = 220
-_RIGHT_W = 390
+_MIN_W,     _MIN_H     = 700, 520
+_LEFT_W  = 292
+_RIGHT_W = 350
+_RAIL_W  = 36
 
 # Mini (orb-only, picture-in-picture style) window.
 _MINI_W,     _MINI_H     = 240, 290
 _MINI_MIN_W, _MINI_MIN_H = 120, 140
+
+# One-click prompts: (short label, palette title, message). A message starting
+# with "clip:" is a template that needs the clipboard text.
+_QUICK_ACTIONS = (
+    ("👁  SCREEN",    "Look at my screen",         "Take a look at my screen and tell me what you see."),
+    ("📋  SUMMARISE", "Summarise the clipboard",   "clip:Summarise this: {text}"),
+    ("💻  CODE",      "Explain the copied code",   "clip:Explain this code step by step: {text}"),
+    ("🌐  TRANSLATE", "Translate the clipboard",   "clip:Translate this text to English: {text}"),
+    ("📰  NEWS",      "Brief me on today's news",  "Give me a short briefing of today's top news."),
+    ("🗓  PLAN",      "Help me plan my day",       "Help me plan my day — ask me what is on my list."),
+)
 
 _OS = platform.system()  # "Windows" | "Darwin" | "Linux"
 
@@ -229,6 +247,41 @@ from PyQt6.QtGui import QFontMetrics
 
 _FONT = {"Windows": "Segoe UI", "Darwin": "Helvetica Neue"}.get(_OS, "Noto Sans")
 _MONO = {"Windows": "Consolas", "Darwin": "Menlo"}.get(_OS, "DejaVu Sans Mono")
+_DISPLAY = _FONT      # headings, the name under the orb, the clock
+
+
+def _init_fonts() -> None:
+    """Pick a technical, machine-like type stack.
+
+    Has to run after QApplication exists (Qt cannot enumerate families before
+    that), so it is called from JarvisUI.__init__ and the module globals are
+    rebound; every QFont(_FONT, ...) in the file reads them at call time.
+
+    Drop .ttf/.otf files into  assets/fonts/  and they are loaded too — the
+    intended look is Orbitron (display), Rajdhani (UI) and Share Tech Mono
+    (numbers), all free on Google Fonts. Without them it falls back to
+    Bahnschrift, which ships with Windows 10/11 and is a DIN-style technical
+    face, so the UI is never left on a plain system font."""
+    global _FONT, _MONO, _DISPLAY
+    have: set = set()
+    try:
+        fdir = BASE_DIR / "assets" / "fonts"
+        if fdir.is_dir():
+            for f in sorted(fdir.glob("*.[to]tf")):
+                QFontDatabase.addApplicationFont(str(f))
+        have = set(QFontDatabase.families())
+    except Exception:
+        pass
+
+    def pick(cands, default):
+        for c in cands:
+            if c in have:
+                return c
+        return default
+
+    _FONT = pick(("Rajdhani", "Exo 2", "Bahnschrift"), _FONT)
+    _DISPLAY = pick(("Orbitron", "Audiowide", "Michroma", "Bahnschrift"), _FONT)
+    _MONO = pick(("Share Tech Mono", "JetBrains Mono", "Cascadia Mono", "Consolas"), _MONO)
 
 
 def _bump(n) -> int:
@@ -566,16 +619,16 @@ _metrics = _SysMetrics()
 # decided ONCE, here, on the unit sphere — so a frame costs a rotation and a
 # batch of line draws, never an O(n²) neighbour search. Stars are generated the
 # same way: fixed seed, so the sky does not reshuffle between launches.
-_ORB_N = 150
+_ORB_N = 230
 _ORB_CACHE = None
 
 # Satellites: (orbit radius in sphere radii, inclination, node angle, angular
 # speed, start phase, head size). Each leaves a short fading trail of dots —
 # there is deliberately no orbit *line*.
 _SATS = (
-    (1.30,  0.55, 0.00,  0.55, 0.0, 3.4),
-    (1.18, -0.80, 2.10, -0.75, 2.0, 3.0),
-    (1.42,  1.25, 4.00,  0.40, 4.1, 2.8),
+    (1.30,  0.55, 0.00,  0.65, 0.0, 3.4),
+    (1.18, -0.80, 2.10, -0.88, 2.0, 3.0),
+    (1.42,  1.25, 4.00,  0.48, 4.1, 2.8),
 )
 
 
@@ -590,7 +643,7 @@ def _build_orb():
         pts.append((math.cos(th) * r, y, math.sin(th) * r))
         phs.append(rnd.uniform(0.0, 6.2832))
     edges = []
-    lim = 0.40 * 0.40
+    lim = 0.36 * 0.36
     for i in range(_ORB_N):
         xi, yi, zi = pts[i]
         for j in range(i + 1, _ORB_N):
@@ -713,9 +766,12 @@ class HudCanvas(QWidget):
         self._orb = _get_orb()
         _ne = max(1, len(self._orb[2]))
         self._pulses = [[random.randrange(_ne), random.random(),
-                         random.uniform(0.5, 1.2)] for _ in range(7)]
+                         random.uniform(0.5, 1.2)] for _ in range(12)]
 
         self._tick       = 0
+        self._born       = time.time()
+        self._tel        = {"cpu": 0.0, "mem": 0.0}
+        self._tel_t      = 0.0
         self._step_t     = time.time()
         self._blink      = True
         self._blink_tick = 0
@@ -1092,7 +1148,11 @@ class HudCanvas(QWidget):
             _draw_points(p, lst)
 
         # ── view rotation ────────────────────────────────────────────────────
-        ry = t * (0.30 + (0.24 if self.speaking else 0.0) + (0.12 if thinking else 0.0))
+        ry = t * (
+            0.38
+            + (0.30 if self.speaking else 0.0)
+            + (0.16 if thinking else 0.0)
+        )
         rx = -0.28 + math.sin(t * 0.21) * 0.10
         cyr, syr = math.cos(ry), math.sin(ry)
         cxr, sxr = math.cos(rx), math.sin(rx)
@@ -1181,8 +1241,8 @@ class HudCanvas(QWidget):
             dn = ((zs[a] + zs[b]) * 0.25) + 0.5
             bi = 0 if dn < 0.0 else (NB - 1 if dn >= 1.0 else int(dn * NB))
             elines[bi].append(QLineF(proj[a], proj[b]))
-        e_alpha = (22, 48, 86, 134)
-        e_width = (0.7, 0.8, 1.0, 1.2)
+        e_alpha = (28, 58, 100, 155)
+        e_width = (0.7, 0.85, 1.05, 1.3)
         elift = 1.0 + 0.8 * amp
         for bi in range(NB):
             p.setPen(QPen(tint(main, e_alpha[bi] * elift), e_width[bi]))
@@ -1194,8 +1254,8 @@ class HudCanvas(QWidget):
             dn = (zs[i] + 1.0) * 0.5
             bi = 0 if dn < 0.0 else (NB - 1 if dn >= 1.0 else int(dn * NB))
             dpts[bi].append(proj[i])
-        d_alpha = (70, 120, 190, 255)
-        d_size = (1.6, 2.2, 3.0, 4.0)
+        d_alpha = (80, 135, 205, 255)
+        d_size = (1.5, 2.0, 2.8, 3.8)
         bright = QColor(main).lighter(140)
         for bi in range(NB):
             col = bright if bi == NB - 1 else main
@@ -1224,7 +1284,7 @@ class HudCanvas(QWidget):
         if show_name:
             name = (self._assistant_name or "JARVIS").upper()
             fsz = int(max(10, min(22, R * 0.16)))
-            f = QFont(_FONT, fsz, QFont.Weight.Bold)
+            f = QFont(_DISPLAY, fsz, QFont.Weight.Bold)
             f.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, max(2.0, fsz * 0.28))
             p.setFont(f)
             ny = min(cy + R * 1.42, y + h - name_h)
@@ -1235,6 +1295,48 @@ class HudCanvas(QWidget):
             p.drawText(r1, Qt.AlignmentFlag.AlignCenter, name)
 
         p.restore()
+
+    def _paint_telemetry(self, p: QPainter, W: int, H: int, band_top: float,
+                         state_txt: str, state_col: QColor) -> None:
+        """Four small readouts in the corners: state, load, microphone, uptime.
+
+        They are real values, not decoration — and they are the reason a user
+        can hide both sidebars and still see that JARVIS is alive and how hard
+        the machine is working."""
+        now = time.time()
+        if now - self._tel_t > 1.0:
+            self._tel = _metrics.snapshot()
+            self._tel_t = now
+        s = self._tel
+        f = QFont(_MONO, 8)
+        f.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 0.6)
+        p.setFont(f)
+        fm = QFontMetrics(f)
+        m = min(W, H) * 0.03
+        inx = m + 12.0
+        top = band_top + m + 2.0
+        bot = H - 22.0
+        dim = qcol(C.TEXT_DIM)
+        AL = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        AR = Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+
+        p.setPen(QPen(dim, 1))
+        p.drawText(QRectF(inx, top, 60, 14), AL, "CORE")
+        p.setPen(QPen(state_col, 1))
+        p.drawText(QRectF(inx + fm.horizontalAdvance("CORE") + 8, top, 220, 14), AL, state_txt)
+
+        cpu, mem = float(s.get("cpu", 0.0)), float(s.get("mem", 0.0))
+        txt = f"CPU {cpu:.0f}%   MEM {mem:.0f}%"
+        p.setPen(QPen(qcol(C.RED) if max(cpu, mem) > 85 else dim, 1))
+        p.drawText(QRectF(W - inx - 240, top, 240, 14), AR, txt)
+
+        p.setPen(QPen(qcol(C.MUTED_C) if self.muted else dim, 1))
+        p.drawText(QRectF(inx, bot, 200, 14), AL, "MIC MUTED" if self.muted else "MIC LIVE")
+
+        up = int(now - self._born)
+        p.setPen(QPen(dim, 1))
+        p.drawText(QRectF(W - inx - 240, bot, 240, 14), AR,
+                   f"UP {up // 3600:02d}:{up % 3600 // 60:02d}:{up % 60:02d}")
 
     def _status(self):
         if self.muted:
@@ -1279,7 +1381,7 @@ class HudCanvas(QWidget):
 
             # Bottom 86 px belong to the status pill + waveform; the centrepiece
             # gets everything above, so nothing can overlap at any window size.
-            _sy_status = H - 86.0
+            _sy_status = H - 64.0
             _band_t = 12.0
             _band_h = max(60.0, _sy_status - 12.0 - _band_t)
             bx, by, bw, bh = 0.0, _band_t, float(W), _band_h
@@ -1306,6 +1408,9 @@ class HudCanvas(QWidget):
                              show_name=(not compact) or (H >= 200 and W >= 150),
                              brackets=not compact)
 
+        if not compact and W >= 460 and H >= 360:
+            self._paint_telemetry(p, W, H, by, txt, col)
+
         if compact:
             # One small status dot in the corner replaces the pill + waveform.
             dot = QColor(col)
@@ -1318,11 +1423,11 @@ class HudCanvas(QWidget):
 
         # ── status pill ──────────────────────────────────────────────────────
         sy = _sy_status
-        f = QFont(_FONT, 10, QFont.Weight.Bold)
+        f = QFont(_DISPLAY, 9, QFont.Weight.Bold)
         f.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 2.0)
         p.setFont(f)
         tw = QFontMetrics(f).horizontalAdvance(txt)
-        pw, ph = tw + 50.0, 28.0
+        pw, ph = tw + 50.0, 24.0
         pr = QRectF((W - pw) / 2, sy, pw, ph)
         edge = QColor(col); edge.setAlpha(95)
         p.setPen(QPen(edge, 1))
@@ -1338,7 +1443,7 @@ class HudCanvas(QWidget):
                    Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, txt)
 
         # ── waveform: rounded bars mirrored around a centre line ─────────────
-        wy = sy + 52
+        wy = sy + 44
         N, bw_, gap = 36, 4.0, 3.0
         wx0 = (W - (N * (bw_ + gap) - gap)) / 2
         amp = self._amp_disp
@@ -1363,59 +1468,79 @@ class HudCanvas(QWidget):
         p.end()   # end deterministically so the backing store never flushes an active painter
 
 class MetricBar(QWidget):
-    """Glass tile: ring gauge + live value + sparkline of recent history.
-
-    Same constructor and set_value(pct, text) as the old progress bar, so the
-    rest of the app does not change."""
+    """Circular futuristic system metric."""
 
     _HIST = 48
 
     def __init__(self, label: str, color: str = C.PRI, parent=None):
         super().__init__(parent)
+
         self._label = label
         self._color = color
         self._value = 0.0
         self._text = "--"
         self._hist = [0.0] * self._HIST
-        self.setMinimumHeight(56)
-        self.setMaximumHeight(86)
-        self.setMinimumWidth(100)
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+
+        self.setMinimumSize(118, 130)
+        self.setMaximumHeight(138)
+        self.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Fixed
+        )
 
     def set_value(self, pct: float, text: str):
         v = max(0.0, min(100.0, pct))
+
         self._hist.append(v)
         del self._hist[0]
+
         self._value = v
         self._text = text
+
         self.update()
 
     def _accent(self) -> str:
-        """The colour was stored as a hex at build time; map it back to the live
-        palette so a theme change recolours the tile too."""
         c = str(self._color).lower()
+
         for k, v in _PALETTE_DEFAULTS.items():
             if v.lower() == c:
                 return getattr(C, k)
+
         return self._color
 
     def paintEvent(self, _):
         p = QPainter(self)
+
         if not p.isActive():
             return
-        p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        W, H = self.width(), self.height()
 
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        W = self.width()
+        H = self.height()
+
+        cx = W / 2.0
+        cy = H / 2.0
+
+        # ── Card ────────────────────────────────────────────────────────
         card = QPainterPath()
-        card.addRoundedRect(QRectF(0.5, 0.5, W - 1, H - 1), 14, 14)
+        card.addRoundedRect(
+            QRectF(0.5, 0.5, W - 1, H - 1),
+            18,
+            18
+        )
+
         g = QLinearGradient(0, 0, 0, H)
         g.setColorAt(0.0, QColor(255, 255, 255, 24))
-        g.setColorAt(1.0, QColor(255, 255, 255, 8))
-        p.setPen(Qt.PenStyle.NoPen)
+        g.setColorAt(1.0, QColor(255, 255, 255, 7))
+
+        p.setPen(QPen(QColor(255, 255, 255, 24), 1))
         p.setBrush(QBrush(g))
         p.drawPath(card)
 
+        # ── Colour state ────────────────────────────────────────────────
         v = self._value
+
         if v > 85:
             col = qcol(C.RED)
         elif v > 65:
@@ -1423,70 +1548,191 @@ class MetricBar(QWidget):
         else:
             col = qcol(self._accent())
 
-        # ── sparkline, clipped to the card ───────────────────────────────────
-        p.save()
-        p.setClipPath(card)
-        n = len(self._hist)
-        step = W / float(n - 1)
-        top, bot = H * 0.46, H - 5.0
-        peak = max(25.0, max(self._hist))
-        pts = [QPointF(i * step, bot - (val / peak) * (bot - top))
-               for i, val in enumerate(self._hist)]
-        line = QPainterPath(pts[0])
-        for pt in pts[1:]:
-            line.lineTo(pt)
-        area = QPainterPath(line)
-        area.lineTo(W, H)
-        area.lineTo(0, H)
-        area.closeSubpath()
-        ag = QLinearGradient(0, top, 0, H)
-        c_top = QColor(col); c_top.setAlpha(80)
-        c_bot = QColor(col); c_bot.setAlpha(0)
-        ag.setColorAt(0.0, c_top)
-        ag.setColorAt(1.0, c_bot)
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QBrush(ag))
-        p.drawPath(area)
-        lc = QColor(col); lc.setAlpha(150)
-        p.setBrush(Qt.BrushStyle.NoBrush)
-        p.setPen(QPen(lc, 1.4))
-        p.drawPath(line)
-        p.restore()
-
-        # ── ring gauge ───────────────────────────────────────────────────────
-        rcx, rcy, rr = 34.0, H / 2.0, 16.0
-        ring = QRectF(rcx - rr, rcy - rr, rr * 2, rr * 2)
-        p.setBrush(Qt.BrushStyle.NoBrush)
-        p.setPen(QPen(QColor(255, 255, 255, 34), 4))
-        p.drawEllipse(ring)
-        if v > 0.5:
-            pen = QPen(col, 4)
-            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-            p.setPen(pen)
-            p.drawArc(ring, 90 * 16, -int(v * 3.6 * 16))
-        p.setPen(Qt.PenStyle.NoPen)
-        dc = QColor(col); dc.setAlpha(210)
-        p.setBrush(QBrush(dc))
-        p.drawEllipse(QPointF(rcx, rcy), 2.6, 2.6)
-
-        # ── text ─────────────────────────────────────────────────────────────
-        x0 = 62.0
-        tw = max(10.0, W - x0 - 10.0)
+        # ── Label ────────────────────────────────────────────────────────
         lf = QFont(_FONT, 8, QFont.Weight.Bold)
-        lf.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 1.0)
+        lf.setLetterSpacing(
+            QFont.SpacingType.AbsoluteSpacing,
+            1.2
+        )
+
         p.setFont(lf)
         p.setPen(QPen(qcol(C.TEXT_MED), 1))
-        lbl = QFontMetrics(lf).elidedText(self._label, Qt.TextElideMode.ElideRight, int(tw))
-        p.drawText(QRectF(x0, H / 2 - 22, tw, 16),
-                   Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, lbl)
 
-        vf = QFont(_MONO, 14, QFont.Weight.Bold)
+        p.drawText(
+            QRectF(8, 10, W - 16, 18),
+            Qt.AlignmentFlag.AlignCenter,
+            self._label
+        )
+
+        # ── Main circular gauge ─────────────────────────────────────────
+        radius = min(W, H) * 0.25
+
+        ring = QRectF(
+            cx - radius,
+            cy - radius + 5,
+            radius * 2,
+            radius * 2
+        )
+
+        # Outer glow
+        glow = QRadialGradient(
+            cx,
+            cy + 5,
+            radius * 1.7
+        )
+
+        glow.setColorAt(
+            0.0,
+            QColor(col.red(), col.green(), col.blue(), 40)
+        )
+        glow.setColorAt(
+            0.65,
+            QColor(col.red(), col.green(), col.blue(), 10)
+        )
+        glow.setColorAt(
+            1.0,
+            QColor(col.red(), col.green(), col.blue(), 0)
+        )
+
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QBrush(glow))
+
+        p.drawEllipse(
+            QRectF(
+                cx - radius * 1.7,
+                cy - radius * 1.7 + 5,
+                radius * 3.4,
+                radius * 3.4
+            )
+        )
+
+        # Base ring
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.setPen(QPen(QColor(255, 255, 255, 30), 5))
+
+        p.drawEllipse(ring)
+
+        # Progress ring
+        if v > 0.1:
+            progress_pen = QPen(col, 5)
+            progress_pen.setCapStyle(
+                Qt.PenCapStyle.RoundCap
+            )
+
+            p.setPen(progress_pen)
+
+            p.drawArc(
+                ring,
+                90 * 16,
+                -int(v * 3.6 * 16)
+            )
+
+        # Inner ring
+        inner_radius = radius * 0.70
+
+        inner_ring = QRectF(
+            cx - inner_radius,
+            cy - inner_radius + 5,
+            inner_radius * 2,
+            inner_radius * 2
+        )
+
+        p.setPen(
+            QPen(
+                QColor(col.red(), col.green(), col.blue(), 55),
+                1
+            )
+        )
+
+        p.drawEllipse(inner_ring)
+
+        # Centre point
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QBrush(col))
+
+        p.drawEllipse(
+            QPointF(cx, cy + 5),
+            3.0,
+            3.0
+        )
+
+        # ── Value ───────────────────────────────────────────────────────
+        vf = QFont(_MONO, 13, QFont.Weight.Bold)
+
         p.setFont(vf)
-        p.setPen(QPen(col if self._text != "--" else qcol(C.TEXT_DIM), 1))
-        val = QFontMetrics(vf).elidedText(self._text, Qt.TextElideMode.ElideRight, int(tw))
-        p.drawText(QRectF(x0, H / 2 - 6, tw, 26),
-                   Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, val)
+
+        p.setPen(
+            QPen(
+                col if self._text != "--"
+                else qcol(C.TEXT_DIM),
+                1
+            )
+        )
+
+        value_y = cy + radius * 0.48
+
+        p.drawText(
+            QRectF(
+                5,
+                value_y,
+                W - 10,
+                24
+            ),
+            Qt.AlignmentFlag.AlignCenter,
+            self._text
+        )
+
+        # ── Tiny activity graph ─────────────────────────────────────────
+        graph_y = H - 15
+        graph_left = 12
+        graph_right = W - 12
+
+        n = len(self._hist)
+
+        if n > 1:
+            step = (
+                graph_right - graph_left
+            ) / float(n - 1)
+
+            peak = max(
+                25.0,
+                max(self._hist)
+            )
+
+            points = []
+
+            for i, val in enumerate(self._hist):
+                px = graph_left + i * step
+                py = graph_y - (
+                    val / peak
+                ) * 7.0
+
+                points.append(
+                    QPointF(px, py)
+                )
+
+            spark = QPainterPath(points[0])
+
+            for pt in points[1:]:
+                spark.lineTo(pt)
+
+            spark_pen = QPen(
+                QColor(
+                    col.red(),
+                    col.green(),
+                    col.blue(),
+                    120
+                ),
+                1.0
+            )
+
+            p.setPen(spark_pen)
+            p.setBrush(Qt.BrushStyle.NoBrush)
+
+            p.drawPath(spark)
+
         p.end()
+
 
 class LogWidget(QTextEdit):
     _sig = pyqtSignal(str)
@@ -1536,6 +1782,15 @@ class LogWidget(QTextEdit):
     def append_log(self, text: str):
         self._sig.emit(text)
 
+    def clear_all(self) -> None:
+        """Empty the log, including lines still waiting to be typed."""
+        self._tmr.stop()
+        self._queue.clear()
+        self._typing = False
+        self._text = ""
+        self._pos = 0
+        self.clear()
+
     def _enqueue(self, text: str):
         self._queue.append(text)
         if not self._typing:
@@ -1559,7 +1814,10 @@ class LogWidget(QTextEdit):
 
     def _step(self):
         if self._pos < len(self._text):
-            ch  = self._text[self._pos]
+            # A few characters per tick, and a lot more when lines are queued
+            # up, so the typing effect never makes the log lag behind events.
+            n   = 3 if not self._queue else 14
+            ch  = self._text[self._pos:self._pos + n]
             cur = self.textCursor()
             fmt = cur.charFormat()
             col = {
@@ -1579,7 +1837,7 @@ class LogWidget(QTextEdit):
             cur.insertText(ch, fmt)
             self.setTextCursor(cur)
             self.ensureCursorVisible()
-            self._pos += 1
+            self._pos += len(ch)
         else:
             self._tmr.stop()
             cur = self.textCursor()
@@ -2872,6 +3130,7 @@ class ClipboardPanel(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(f"""
             ClipboardPanel {{
@@ -2880,75 +3139,186 @@ class ClipboardPanel(QWidget):
                 border-radius: 14px;
             }}
         """)
+
         self.setFixedWidth(self._W)
+
         self._clip_text = ""
+        self._drag_pos = None
 
         lay = QVBoxLayout(self)
         lay.setContentsMargins(8, 6, 8, 7)
         lay.setSpacing(4)
 
-        hdr = QHBoxLayout(); hdr.setSpacing(4)
+        # ── Draggable header ─────────────────────────────────────────────
+        self._drag_header = QWidget()
+
+        hdr = QHBoxLayout(self._drag_header)
+        hdr.setContentsMargins(0, 0, 0, 0)
+        hdr.setSpacing(4)
+
         icon_lbl = QLabel("◈  CLIPBOARD DETECTED")
         icon_lbl.setFont(QFont(_FONT, 8, QFont.Weight.Bold))
-        icon_lbl.setStyleSheet(f"color: {C.ACC2}; background: transparent;")
-        hdr.addWidget(icon_lbl); hdr.addStretch()
+        icon_lbl.setStyleSheet(
+            f"color: {C.ACC2}; background: transparent;"
+        )
+
+        hdr.addWidget(icon_lbl)
+        hdr.addStretch()
+
         x_btn = QPushButton("✕")
         x_btn.setFixedSize(16, 16)
         x_btn.setFont(QFont(_FONT, 9))
-        x_btn.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent; border: none;")
+        x_btn.setStyleSheet(
+            f"color: {C.TEXT_DIM}; "
+            f"background: transparent; "
+            f"border: none;"
+        )
         x_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         x_btn.clicked.connect(self.hide)
-        hdr.addWidget(x_btn)
-        lay.addLayout(hdr)
 
+        hdr.addWidget(x_btn)
+
+        lay.addWidget(self._drag_header)
+
+        # ── Clipboard preview ────────────────────────────────────────────
         self._preview = QLabel()
         self._preview.setFont(QFont(_FONT, 9))
         self._preview.setStyleSheet(f"""
-            color: {C.TEXT}; background: {C.PANEL2};
-            border: 1px solid {C.BORDER}; border-radius: 8px; padding: 4px 6px;
+            color: {C.TEXT};
+            background: {C.PANEL2};
+            border: 1px solid {C.BORDER};
+            border-radius: 8px;
+            padding: 4px 6px;
         """)
         self._preview.setWordWrap(False)
         self._preview.setFixedHeight(28)
+
         lay.addWidget(self._preview)
 
-        btn_row = QHBoxLayout(); btn_row.setSpacing(4)
-        _bs = (f"QPushButton {{ background: {C.PANEL2}; color: {C.TEXT_MED}; "
-               f"border: 1px solid {C.BORDER}; border-radius: 6px; }}"
-               f"QPushButton:hover {{ color: {C.PRI}; border-color: {C.BORDER_B}; }}")
+        # ── Action buttons ────────────────────────────────────────────────
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(4)
+
+        _bs = (
+            f"QPushButton {{ "
+            f"background: {C.PANEL2}; "
+            f"color: {C.TEXT_MED}; "
+            f"border: 1px solid {C.BORDER}; "
+            f"border-radius: 6px; "
+            f"}}"
+            f"QPushButton:hover {{ "
+            f"color: {C.PRI}; "
+            f"border-color: {C.BORDER_B}; "
+            f"}}"
+        )
+
         for label, cmd_fmt in [
             ("TRANSLATE", "Translate this text to English: {text}"),
             ("SUMMARISE", "Summarise this: {text}"),
-            ("EXPLAIN",   "Explain this: {text}"),
-            ("FIX",       "Fix grammar and spelling: {text}"),
+            ("EXPLAIN", "Explain this: {text}"),
+            ("FIX", "Fix grammar and spelling: {text}"),
         ]:
             b = QPushButton(label)
             b.setFixedHeight(22)
             b.setFont(QFont(_FONT, 8, QFont.Weight.Bold))
             b.setCursor(Qt.CursorShape.PointingHandCursor)
             b.setStyleSheet(_bs)
-            b.clicked.connect(lambda _, c=cmd_fmt: self._trigger(c))
+            b.clicked.connect(
+                lambda _, c=cmd_fmt: self._trigger(c)
+            )
             btn_row.addWidget(b)
+
         lay.addLayout(btn_row)
 
         self._dismiss_timer = QTimer(self)
         self._dismiss_timer.setSingleShot(True)
         self._dismiss_timer.timeout.connect(self.hide)
+
         self.hide()
+
+    # ── Dragging ─────────────────────────────────────────────────────────
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            if self._drag_header.geometry().contains(
+                event.position().toPoint()
+            ):
+                self._drag_pos = (
+                    event.globalPosition().toPoint()
+                    - self.frameGeometry().topLeft()
+                )
+                event.accept()
+                return
+
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if (
+            self._drag_pos is not None
+            and (event.buttons() & Qt.MouseButton.LeftButton)
+        ):
+            parent = self.parentWidget()
+
+            if parent is not None:
+                pos = (
+                    event.globalPosition().toPoint()
+                    - self._drag_pos
+                )
+
+                local = parent.mapFromGlobal(pos)
+
+                x = max(
+                    0,
+                    min(
+                        local.x(),
+                        parent.width() - self.width()
+                    )
+                )
+
+                y = max(
+                    0,
+                    min(
+                        local.y(),
+                        parent.height() - self.height()
+                    )
+                )
+
+                self.move(x, y)
+
+            event.accept()
+            return
+
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._drag_pos = None
+
+        super().mouseReleaseEvent(event)
+
+    # ── Actions ──────────────────────────────────────────────────────────
 
     def _trigger(self, cmd_fmt: str):
         if self._clip_text:
-            self.action_requested.emit(cmd_fmt.format(text=self._clip_text[:800]))
+            self.action_requested.emit(
+                cmd_fmt.format(text=self._clip_text[:800])
+            )
         self.hide()
 
     def show_clipboard(self, text: str):
         self._clip_text = text
-        preview = text[:58].replace('\n', ' ')
+
+        preview = text[:58].replace("\n", " ")
+
         if len(text) > 58:
             preview += "…"
-        self._preview.setText(f'"{preview}"')
-        self.show(); self.raise_()
-        self._dismiss_timer.start(8000)
 
+        self._preview.setText(f'"{preview}"')
+
+        self.show()
+        self.raise_()
+
+        self._dismiss_timer.start(8000)
 
 class PluginSettingsOverlay(QWidget):
     """Floating overlay — renders per-plugin settings forms.
@@ -3434,6 +3804,306 @@ class RemoteKeyOverlay(QWidget):
         self.closed.emit()
 
 
+class _CmdInput(QLineEdit):
+    """Command line with shell-style history: Up / Down walk earlier messages."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._hist: list[str] = []
+        self._pos = 0
+        self._draft = ""
+
+    def remember(self, text: str) -> None:
+        text = text.strip()
+        if text and (not self._hist or self._hist[-1] != text):
+            self._hist.append(text)
+            del self._hist[:-100]
+        self._pos = len(self._hist)
+
+    def keyPressEvent(self, e):
+        k = e.key()
+        if k == Qt.Key.Key_Up and self._hist:
+            if self._pos == len(self._hist):
+                self._draft = self.text()
+            self._pos = max(0, self._pos - 1)
+            self.setText(self._hist[self._pos])
+            return
+        if k == Qt.Key.Key_Down and self._hist:
+            self._pos = min(len(self._hist), self._pos + 1)
+            self.setText(self._draft if self._pos == len(self._hist)
+                         else self._hist[self._pos])
+            return
+        super().keyPressEvent(e)
+
+
+class _Toast(_HudOverlay):
+    """A small non-blocking notification in the top-right corner."""
+
+    closed = pyqtSignal(object)
+    _W = 300
+    _COL = {"info": "PRI", "ok": "GREEN", "warn": "ACC2", "err": "RED"}
+
+    def __init__(self, title: str, text: str, level: str, ms: int, parent=None):
+        super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        col = getattr(C, self._COL.get(level, "PRI"))
+        self.setStyleSheet(f"""
+            _Toast {{
+                background: rgba(4, 14, 22, 246);
+                border: 1px solid rgba(255, 255, 255, 34);
+                border-left: 3px solid {col};
+                border-radius: 10px;
+            }}
+        """)
+        self.setFixedWidth(self._W)
+        self._done = False
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(12, 9, 12, 10)
+        lay.setSpacing(2)
+        t = QLabel(title)
+        t.setFont(QFont(_DISPLAY, 9, QFont.Weight.Bold))
+        t.setStyleSheet(f"color: {col}; background: transparent;")
+        lay.addWidget(t)
+        if text:
+            b = QLabel(text)
+            b.setWordWrap(True)
+            b.setFont(QFont(_FONT, 9))
+            b.setStyleSheet(f"color: {C.TEXT_MED}; background: transparent;")
+            lay.addWidget(b)
+        self.adjustSize()
+        # Owned by the toast, so it dies with it — no callback on a deleted widget.
+        self._tm = QTimer(self)
+        self._tm.setSingleShot(True)
+        self._tm.timeout.connect(self.dismiss)
+        self._tm.start(max(800, int(ms)))
+
+    def dismiss(self):
+        if self._done:
+            return
+        self._done = True
+        self.hide()
+        self.closed.emit(self)
+        self.deleteLater()
+
+    def mousePressEvent(self, e):
+        self.dismiss()
+
+
+class CommandPalette(_HudOverlay):
+    """Ctrl+K — type a few letters, press Enter.
+
+    Everything JARVIS can do from the interface is listed here, so no feature
+    depends on finding its button, and none of them needs a mouse."""
+
+    closed = pyqtSignal()
+    _OW = 540
+
+    def __init__(self, actions, parent=None, initial: str = ""):
+        super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setStyleSheet(f"""
+            CommandPalette {{
+                background: rgba(4, 14, 22, 248);
+                border: 1px solid {C.BORDER_B};
+                border-radius: 14px;
+            }}
+        """)
+        self.setFixedWidth(self._OW)
+        self._actions = list(actions)
+        self._shown: list = []
+        self._open = True
+
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(12, 12, 12, 10)
+        lay.setSpacing(8)
+
+        self._edit = QLineEdit()
+        self._edit.setPlaceholderText("Type a command…")
+        self._edit.setFont(QFont(_FONT, 11))
+        self._edit.setFixedHeight(36)
+        self._edit.setStyleSheet(f"""
+            QLineEdit {{ background: rgba(255, 255, 255, 14); color: {C.WHITE};
+                border: 1px solid {C.BORDER_B}; border-radius: 10px; padding: 0 12px; }}
+            QLineEdit:focus {{ border-color: {C.PRI}; }}
+        """)
+        self._edit.textChanged.connect(self._filter)
+        self._edit.installEventFilter(self)
+        lay.addWidget(self._edit)
+
+        self._list = QListWidget()
+        self._list.setFrameShape(QFrame.Shape.NoFrame)
+        self._list.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._list.setStyleSheet(f"""
+            QListWidget {{ background: transparent; border: none; outline: none; }}
+            QListWidget::item {{ border-radius: 8px; padding: 0px; }}
+            QListWidget::item:selected {{ background: {C.PRI_GHO}; }}
+            QListWidget::item:hover {{ background: rgba(255, 255, 255, 14); }}
+        """)
+        self._list.itemClicked.connect(lambda it: self._run(self._list.row(it)))
+        lay.addWidget(self._list)
+
+        foot = QLabel("↑ ↓  navigate      ⏎  run      Esc  close")
+        foot.setFont(QFont(_FONT, 8))
+        foot.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
+        lay.addWidget(foot)
+
+        self._edit.setText(initial)
+        self._filter(initial)
+
+    def focus_edit(self) -> None:
+        self._edit.setFocus()
+
+    def relayout(self) -> None:
+        self.adjustSize()
+        p = self.parentWidget()
+        if p is not None:
+            self.move(max(0, (p.width() - self.width()) // 2), 60)
+
+    def _filter(self, text: str) -> None:
+        words = text.lower().split()
+        self._shown = [a for a in self._actions
+                       if all(w in (a[0] + " " + a[1]).lower() for w in words)]
+        self._list.clear()
+        if not self._shown:
+            it = QListWidgetItem("   No matching command")
+            it.setFlags(Qt.ItemFlag.NoItemFlags)
+            it.setSizeHint(QSize(0, 30))
+            it.setForeground(QBrush(QColor(C.TEXT_DIM)))
+            self._list.addItem(it)
+        for title, hint, _fn in self._shown:
+            it = QListWidgetItem()
+            it.setSizeHint(QSize(0, 30))
+            self._list.addItem(it)
+            lbl = QLabel(
+                f"<table width='100%'><tr>"
+                f"<td style='color:{C.TEXT}'>{_html.escape(title)}</td>"
+                f"<td align='right' style='color:{C.TEXT_DIM}'>{_html.escape(hint)}</td>"
+                f"</tr></table>")
+            lbl.setFont(QFont(_FONT, 10))
+            lbl.setContentsMargins(10, 0, 10, 0)
+            lbl.setStyleSheet("background: transparent;")
+            lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+            self._list.setItemWidget(it, lbl)
+        if self._shown:
+            self._list.setCurrentRow(0)
+        rows = max(1, min(8, len(self._shown)))
+        self._list.setFixedHeight(rows * 30 + 6)
+        self.relayout()
+
+    def eventFilter(self, obj, ev):
+        if obj is self._edit and ev.type() == QEvent.Type.KeyPress:
+            k = ev.key()
+            if k in (Qt.Key.Key_Down, Qt.Key.Key_Up):
+                r = self._list.currentRow() + (1 if k == Qt.Key.Key_Down else -1)
+                self._list.setCurrentRow(max(0, min(self._list.count() - 1, r)))
+                return True
+            if k in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+                self._run(self._list.currentRow())
+                return True
+            if k == Qt.Key.Key_Escape:
+                self.close_palette()
+                return True
+        return super().eventFilter(obj, ev)
+
+    def _run(self, row: int) -> None:
+        if 0 <= row < len(self._shown):
+            fn = self._shown[row][2]
+            self.close_palette()
+            QTimer.singleShot(0, fn)
+
+    def close_palette(self) -> None:
+        if not self._open:
+            return
+        self._open = False
+        self.hide()
+        self.closed.emit()
+        self.deleteLater()
+
+
+class ShortcutsOverlay(_HudOverlay):
+    """F1 — every keyboard shortcut in one place."""
+
+    closed = pyqtSignal()
+    _OW = 450
+    _ROWS = (
+        ("Command palette",                      "Ctrl+K   ·   Ctrl+Shift+P"),
+        ("Mute / unmute the microphone",         "F4"),
+        ("Stop speaking · close an overlay",     "Esc"),
+        ("Mini orb window",                      "F9"),
+        ("Fullscreen",                           "F11"),
+        ("Left sidebar",                         "Ctrl+B"),
+        ("Right sidebar",                        "Ctrl+Shift+B"),
+        ("Focus mode — hide every panel",        "F8"),
+        ("Jump to the command line",             "Ctrl+L"),
+        ("Earlier messages in the command line", "↑   ↓"),
+        ("Run a palette command from the line",  "/ name"),
+        ("This list",                            "F1"),
+    )
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setStyleSheet(f"""
+            ShortcutsOverlay {{
+                background: rgba(4, 14, 22, 248);
+                border: 1px solid {C.BORDER_B};
+                border-radius: 14px;
+            }}
+        """)
+        self.setFixedWidth(self._OW)
+        self._open = True
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(20, 16, 20, 16)
+        lay.setSpacing(8)
+
+        hdr = QLabel("⌨  KEYBOARD SHORTCUTS")
+        hdr.setFont(QFont(_DISPLAY, 11, QFont.Weight.Bold))
+        hdr.setStyleSheet(f"color: {C.PRI}; background: transparent;")
+        lay.addWidget(hdr)
+        sep = QFrame(); sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setStyleSheet(f"color: {C.BORDER};")
+        lay.addWidget(sep)
+
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(14)
+        grid.setVerticalSpacing(7)
+        for i, (what, keys) in enumerate(self._ROWS):
+            a = QLabel(what)
+            a.setFont(QFont(_FONT, 10))
+            a.setStyleSheet(f"color: {C.TEXT_MED}; background: transparent;")
+            k = QLabel(keys)
+            k.setFont(QFont(_MONO, 9, QFont.Weight.Bold))
+            k.setStyleSheet(f"""
+                color: {C.PRI}; background: rgba(255, 255, 255, 14);
+                border: 1px solid rgba(255, 255, 255, 34);
+                border-radius: 6px; padding: 2px 8px;
+            """)
+            grid.addWidget(a, i, 0)
+            grid.addWidget(k, i, 1, Qt.AlignmentFlag.AlignRight)
+        grid.setColumnStretch(0, 1)
+        lay.addLayout(grid)
+
+        close = QPushButton("CLOSE   [Esc]")
+        close.setFixedHeight(30)
+        close.setFont(QFont(_FONT, 9, QFont.Weight.Bold))
+        close.setCursor(Qt.CursorShape.PointingHandCursor)
+        close.setStyleSheet(f"""
+            QPushButton {{ background: transparent; color: {C.TEXT_MED};
+                border: 1px solid {C.BORDER}; border-radius: 8px; }}
+            QPushButton:hover {{ color: {C.TEXT}; border-color: {C.BORDER_B}; }}
+        """)
+        close.clicked.connect(self.close_help)
+        lay.addWidget(close)
+
+    def close_help(self) -> None:
+        if not self._open:
+            return
+        self._open = False
+        self.hide()
+        self.closed.emit()
+        self.deleteLater()
+
+
 class MainWindow(QMainWindow):
     _log_sig        = pyqtSignal(str)
     _state_sig      = pyqtSignal(str)
@@ -3454,6 +4124,8 @@ class MainWindow(QMainWindow):
     _quiz_hide_sig  = pyqtSignal()
     _review_sig     = pyqtSignal(str, str, object, object)  # document review payload
     _mini_sig       = pyqtSignal(bool)       # enter / leave mini mode from any thread
+    _toast_sig      = pyqtSignal(str, str, str)   # title, text, level
+    _task_sig       = pyqtSignal(str)             # add a task from any thread
 
     def __init__(self, face_path: str):
         super().__init__()
@@ -3505,6 +4177,26 @@ class MainWindow(QMainWindow):
         self._vis_quiz        = False
         self._pending_panel   = False   # a result arrived while we were mini
 
+        # Sidebars, VS Code style: what the user chose, what the window width
+        # has collapsed on its own, what was opened by hand in a narrow window,
+        # and the width each sidebar was last dragged to.
+        self._side_pref   = {"left":  bool(_cfg.get("ui_left_open", True)),
+                             "right": bool(_cfg.get("ui_right_open", True))}
+        self._side_auto   = set()
+        self._side_forced = set()
+        self._side_w      = {"left": _LEFT_W, "right": _RIGHT_W}
+        self._split_inited = False
+        self._focus       = False
+        self._rail_btns   = {}
+        self._toasts      = []
+        self._palette     = None
+        self._help        = None
+        self._ignore_clip = False
+        self._born        = time.time()
+        self._ft_total    = 25 * 60
+        self._ft_left     = 25 * 60
+        self._ft_running  = False
+
         central = _AuroraRoot()
         self._aurora = central
         self.setCentralWidget(central)
@@ -3520,7 +4212,16 @@ class MainWindow(QMainWindow):
         body.setSpacing(0)
 
         self._left_panel = self._build_left_panel()
-        body.addWidget(self._left_panel, stretch=0)
+        self._left_rail = self._build_rail("left")
+        body.addWidget(self._left_rail)
+        self._body_split = QSplitter(Qt.Orientation.Horizontal)
+        self._body_split.setHandleWidth(3)
+        self._body_split.setChildrenCollapsible(False)
+        self._body_split.setStyleSheet(f"""
+            QSplitter::handle:horizontal {{ background: rgba(255, 255, 255, 12); }}
+            QSplitter::handle:horizontal:hover {{ background: {C.PRI_DIM}; }}
+        """)
+        self._body_split.addWidget(self._left_panel)
 
         # Center column: HUD + resizable content panel via QSplitter
         self.hud = HudCanvas(face_path, _display)
@@ -3706,10 +4407,17 @@ class MainWindow(QMainWindow):
         self._center_split.setStretchFactor(0, 3)
         self._center_split.setStretchFactor(1, 1)
         self._center_split.setCollapsible(0, False)
-        body.addWidget(self._center_split, stretch=5)
+        self._body_split.addWidget(self._center_split)
 
         self._right_panel = self._build_right_panel()
-        body.addWidget(self._right_panel, stretch=0)
+        self._body_split.addWidget(self._right_panel)
+        self._body_split.setStretchFactor(0, 0)
+        self._body_split.setStretchFactor(1, 1)
+        self._body_split.setStretchFactor(2, 0)
+        self._body_split.splitterMoved.connect(self._on_split_moved)
+        body.addWidget(self._body_split, 1)
+        self._right_rail = self._build_rail("right")
+        body.addWidget(self._right_rail)
 
         root.addLayout(body, stretch=1)
         self._footer_w = self._build_footer()
@@ -3753,6 +4461,8 @@ class MainWindow(QMainWindow):
         self._quiz_hide_sig.connect(self._hide_quiz)
         self._review_sig.connect(self._show_review)
         self._mini_sig.connect(self.set_mini)
+        self._toast_sig.connect(lambda t, x, l: self._toast(t, x, l))
+        self._task_sig.connect(lambda t: self._task_add(t))
         self._cam_stop = threading.Event()
 
         # Camera preview overlay (child of central widget, positioned in resizeEvent)
@@ -3776,11 +4486,621 @@ class MainWindow(QMainWindow):
         sc_intr.activated.connect(self._do_interrupt)
         sc_mini = QShortcut(QKeySequence("F9"), self)
         sc_mini.activated.connect(lambda: self.set_mini(not self._mini))
+        for _seq, _fn in (
+            ("Ctrl+B",       lambda: self._toggle_side("left")),
+            ("Ctrl+Shift+B", lambda: self._toggle_side("right")),
+            ("F8",           lambda: self._set_focus(not self._focus)),
+            ("Ctrl+K",       lambda: self._open_palette()),
+            ("Ctrl+Shift+P", lambda: self._open_palette()),
+            ("F1",           lambda: self._open_help()),
+            ("Ctrl+L",       lambda: self._focus_input()),
+        ):
+            QShortcut(QKeySequence(_seq), self).activated.connect(_fn)
+        self._apply_layout_state()
 
         # Pick up where the user left off: if JARVIS was last used as the small
         # orb, it comes back as the small orb (handy with auto-start).
         if self._ready and _cfg.get("mini_mode"):
             QTimer.singleShot(400, lambda: self.set_mini(True))
+
+    # ── Sidebars, rails, focus mode ──────────────────────────────────────────
+    # The model is VS Code's. Each sidebar has a *preference* the user sets (the
+    # rail, the header, Ctrl+B / Ctrl+Shift+B), and the window can override it:
+    # below a width it folds a sidebar away by itself, and one the user opens by
+    # hand in that narrow window is remembered as "forced" so the next resize
+    # does not snatch it back. Focus mode hides everything at once.
+
+    def _side_open(self, side: str) -> bool:
+        if self._focus or self._mini:
+            return False
+        if side in self._side_forced:
+            return True
+        return bool(self._side_pref[side]) and side not in self._side_auto
+
+    def _build_rail(self, side: str) -> QWidget:
+        """Thin icon strip beside a sidebar — VS Code's activity bar."""
+        name = "Rail" + side.capitalize()
+        rail = QFrame()
+        rail.setObjectName(name)
+        rail.setFixedWidth(_RAIL_W)
+        edge = "border-right" if side == "left" else "border-left"
+        mark = "border-left" if side == "left" else "border-right"
+        rail.setStyleSheet(f"""
+            QFrame#{name} {{
+                background: rgba(3, 10, 16, 150);
+                {edge}: 1px solid rgba(255, 255, 255, 18);
+            }}
+        """)
+        lay = QVBoxLayout(rail)
+        lay.setContentsMargins(0, 8, 0, 8)
+        lay.setSpacing(4)
+
+        def btn(key: str, sym: str, tip: str, fn, checkable: bool = True) -> None:
+            b = QPushButton(sym)
+            b.setFixedSize(_RAIL_W - 1, 34)
+            b.setFont(QFont("Segoe UI Symbol", 13))
+            b.setCursor(Qt.CursorShape.PointingHandCursor)
+            b.setToolTip(tip)
+            b.setCheckable(checkable)
+            b.setStyleSheet(f"""
+                QPushButton {{ color: {C.TEXT_DIM}; background: transparent;
+                    border: none; {mark}: 2px solid transparent; border-radius: 0px; }}
+                QPushButton:hover {{ color: {C.TEXT}; }}
+                QPushButton:checked {{ color: {C.PRI}; {mark}: 2px solid {C.PRI};
+                    background: rgba(255, 255, 255, 10); }}
+            """)
+            b.clicked.connect(lambda _=False: fn())
+            lay.addWidget(b)
+            self._rail_btns[key] = b
+
+        if side == "left":
+            btn("left:0", "▤", "System monitor  [Ctrl+B]", lambda: self._rail_click(0))
+            btn("left:1", "✓", "Tools — focus timer, tasks, quick actions",
+                lambda: self._rail_click(1))
+            lay.addStretch(1)
+            btn("palette", "⌘", "Command palette  [Ctrl+K]",
+                lambda: self._open_palette(), False)
+        else:
+            btn("right", "◨", "Log and command line  [Ctrl+Shift+B]",
+                lambda: self._toggle_side("right"))
+            lay.addStretch(1)
+            btn("help", "?", "Keyboard shortcuts  [F1]", lambda: self._open_help(), False)
+        return rail
+
+    def _rail_click(self, page: int) -> None:
+        """Same page as the open sidebar → close it; otherwise show that page."""
+        was_here = self._side_open("left") and self._left_stack.currentIndex() == page
+        self._left_stack.setCurrentIndex(page)
+        _save_cfg(ui_left_page=page)
+        if was_here or not self._side_open("left"):
+            self._toggle_side("left")
+        else:
+            self._apply_layout_state()
+
+    def _toggle_side(self, side: str) -> None:
+        if self._mini:
+            return
+        opening = not self._side_open(side)     # False→True also when focus mode hid it
+        if opening:
+            self._side_pref[side] = True
+            if side in self._side_auto:         # narrow window: keep it open anyway
+                self._side_auto.discard(side)
+                self._side_forced.add(side)
+        else:
+            self._side_pref[side] = False
+            self._side_forced.discard(side)
+        self._focus = False
+        _save_cfg(ui_left_open=self._side_pref["left"],
+                  ui_right_open=self._side_pref["right"])
+        self._apply_layout_state()
+
+    def _auto_collapse(self) -> None:
+        """Fold the sidebars away as the window narrows, bring them back when it
+        widens again (with a little hysteresis so it cannot flicker)."""
+        if self._mini or self.isMinimized():
+            return
+        w = self.width()
+        before = (set(self._side_auto), set(self._side_forced))
+        for side, thr in (("right", 1000), ("left", 780)):
+            if w >= thr + 40:
+                self._side_auto.discard(side)
+                self._side_forced.discard(side)
+            elif w < thr and side not in self._side_forced:
+                self._side_auto.add(side)
+        if before != (self._side_auto, self._side_forced):
+            self._apply_layout_state()
+
+    def _apply_layout_state(self) -> None:
+        """Make the widgets match the layout state: panels, rails, status bar,
+        the rail's highlighted buttons, and the splitter widths."""
+        if not hasattr(self, "_left_panel") or not hasattr(self, "_footer_w"):
+            return
+        if not getattr(self, "_layout_loaded", False):
+            self._layout_loaded = True
+            cfg = _read_full_config()
+            try:
+                self._side_w["left"] = max(260, min(360, int(cfg.get("ui_left_w", _LEFT_W))))
+                self._side_w["right"] = max(280, min(640, int(cfg.get("ui_right_w", _RIGHT_W))))
+                if int(cfg.get("ui_left_page", 0)) in (0, 1):
+                    self._left_stack.setCurrentIndex(int(cfg.get("ui_left_page", 0)))
+            except Exception:
+                pass
+        if self._mini:
+            return
+        lo, ro = self._side_open("left"), self._side_open("right")
+        self._left_panel.setVisible(lo)
+        self._right_panel.setVisible(ro)
+        self._left_rail.setVisible(not self._focus)
+        self._right_rail.setVisible(not self._focus)
+        self._footer_w.setVisible(not self._focus)
+        page = self._left_stack.currentIndex()
+        for key, on in (("left:0", lo and page == 0), ("left:1", lo and page == 1),
+                        ("right", ro)):
+            b = self._rail_btns.get(key)
+            if b is not None:
+                b.setChecked(bool(on))
+        QTimer.singleShot(0, self._apply_split_sizes)
+
+    def _apply_split_sizes(self) -> None:
+        if self._mini or not hasattr(self, "_body_split"):
+            return
+        total = self._body_split.width()
+        if total <= 0:
+            return
+        lw = self._side_w["left"] if self._side_open("left") else 0
+        rw = self._side_w["right"] if self._side_open("right") else 0
+        room = total - 320                      # the centre never gets squeezed below this
+        if lw + rw > room:
+            rw = min(rw, max(280 if rw else 0, room - lw))
+            lw = min(lw, max(176 if lw else 0, room - rw))
+        self._body_split.setSizes([lw, max(1, total - lw - rw), rw])
+        self._layout_toasts()
+
+    def _on_split_moved(self, _pos: int, _index: int) -> None:
+        s = self._body_split.sizes()
+        if self._side_open("left") and s[0] > 0:
+            self._side_w["left"] = s[0]
+        if self._side_open("right") and s[2] > 0:
+            self._side_w["right"] = s[2]
+        t = getattr(self, "_split_tmr", None)
+        if t is None:
+            t = self._split_tmr = QTimer(self)
+            t.setSingleShot(True)
+            t.setInterval(500)
+            t.timeout.connect(lambda: _save_cfg(ui_left_w=self._side_w["left"],
+                                                ui_right_w=self._side_w["right"]))
+        t.start()
+
+    def _right_inset(self) -> int:
+        """Pixels at the right edge that belong to the right sidebar and rail,
+        so floating things can stay inside the centre column."""
+        n = 0
+        for name in ("_right_panel", "_right_rail"):
+            w = getattr(self, name, None)
+            if w is not None and w.isVisible():
+                n += w.width()
+        return n
+
+    def _set_focus(self, on: bool) -> None:
+        if self._mini or bool(on) == self._focus:
+            return
+        self._focus = bool(on)
+        self._apply_layout_state()
+        if self._focus:
+            self._toast("FOCUS MODE", "Panels hidden — press F8 to bring them back.", "info")
+
+    def _focus_input(self) -> None:
+        if self._mini:
+            return
+        if not self._side_open("right"):
+            self._toggle_side("right")
+        self._input.setFocus()
+        self._input.selectAll()
+
+    # ── Toasts, palette, help ────────────────────────────────────────────────
+
+    def _toast(self, title: str, text: str = "", level: str = "info", ms: int = 3600) -> None:
+        """Small non-blocking notification. Nothing to show it on in mini mode."""
+        if self._mini:
+            return
+        for old in list(self._toasts)[:max(0, len(self._toasts) - 3)]:
+            old.dismiss()
+        t = _Toast(title, text, level, ms, self.centralWidget())
+        t.closed.connect(self._toast_closed)
+        self._toasts.append(t)
+        t.show()
+        t.raise_()
+        self._layout_toasts()
+
+    def _toast_closed(self, t) -> None:
+        if t in self._toasts:
+            self._toasts.remove(t)
+        self._layout_toasts()
+
+    def _layout_toasts(self) -> None:
+        cw = self.centralWidget()
+        if cw is None:
+            return
+        y = getattr(self, "_header_height_px", 46) + 10
+        right = cw.width() - self._right_inset()
+        for t in self._toasts:
+            t.move(max(8, right - t.width() - 12), y)
+            t.raise_()
+            y += t.height() + 8
+
+    def _palette_actions(self) -> list:
+        A = []
+
+        def add(title: str, hint: str, fn) -> None:
+            A.append((title, hint, fn))
+
+        add("Toggle left sidebar", "Ctrl+B", lambda: self._toggle_side("left"))
+        add("Toggle right sidebar", "Ctrl+Shift+B", lambda: self._toggle_side("right"))
+        add("Show system monitor", "", lambda: self._rail_show(0))
+        add("Show tools — timer, tasks, quick actions", "", lambda: self._rail_show(1))
+        add("Focus mode — hide every panel", "F8", lambda: self._set_focus(not self._focus))
+        add("Mini orb window", "F9", lambda: self.set_mini(True))
+        add("Mute / unmute the microphone", "F4", self._toggle_mute)
+        add("Stop speaking", "Esc", self._do_interrupt)
+        add("Fullscreen", "F11", self._toggle_fullscreen)
+        add("Jump to the command line", "Ctrl+L", self._focus_input)
+        add("Switch HUD: particle orb / animated face", "", self._toggle_hud_style)
+        add("Start / pause the focus timer", "", self._ft_toggle)
+        add("Customise assistant", "", self._open_customize)
+        add("Audio devices", "", self._open_audio_devices)
+        add("Memory — what JARVIS remembers", "", self._open_memory_panel)
+        add("Plugins", "", self._open_plugin_manager)
+        add("Plugin settings", "", self._open_plugin_settings)
+        add("Remote control", "", self._open_remote)
+        add("Copy the activity log", "", self._copy_log)
+        add("Clear the activity log", "", self._clear_log)
+        add("Keyboard shortcuts", "F1", self._open_help)
+        for _label, title, msg in _QUICK_ACTIONS:
+            add(title, "ask JARVIS", lambda m=msg: self._run_quick(m))
+        return A
+
+    def _rail_show(self, page: int) -> None:
+        self._left_stack.setCurrentIndex(page)
+        _save_cfg(ui_left_page=page)
+        if not self._side_open("left"):
+            self._toggle_side("left")
+        else:
+            self._apply_layout_state()
+
+    def _open_palette(self, initial: str = "") -> None:
+        if self._mini:
+            return
+        if self._palette is not None:
+            self._palette.close_palette()
+            if not initial:
+                return                           # Ctrl+K again closes it
+        self._close_controls()
+        self._close_setup()
+        ov = CommandPalette(self._palette_actions(), self.centralWidget(), initial)
+        ov.closed.connect(self._palette_closed)
+        self._palette = ov
+        ov.relayout()
+        ov.show()
+        ov.raise_()
+        ov.focus_edit()
+
+    def _palette_closed(self) -> None:
+        self._palette = None
+
+    def _open_help(self) -> None:
+        if self._mini:
+            return
+        if self._help is not None:
+            self._help.close_help()
+            return
+        self._close_controls()
+        self._close_setup()
+        cw = self.centralWidget()
+        ov = ShortcutsOverlay(cw)
+        ov.closed.connect(self._help_closed)
+        ov.adjustSize()
+        ov.move(max(0, (cw.width() - ov.width()) // 2),
+                max(10, (cw.height() - ov.height()) // 2))
+        ov.show()
+        ov.raise_()
+        self._help = ov
+
+    def _help_closed(self) -> None:
+        self._help = None
+
+    def _close_transient(self) -> bool:
+        """Esc closes the topmost floating thing before it stops the assistant.
+        Returns True if it closed something."""
+        if self._palette is not None:
+            self._palette.close_palette()
+            return True
+        if self._help is not None:
+            self._help.close_help()
+            return True
+        qd, cd = getattr(self, "_quick_drawer", None), getattr(self, "_ctrl_drawer", None)
+        if (qd is not None and qd.isVisible()) or (cd is not None and cd.isVisible()):
+            self._close_setup()
+            self._close_controls()
+            return True
+        return False
+
+    # ── Log helpers ──────────────────────────────────────────────────────────
+
+    def _flat_btn(self, text: str, tip: str, fn) -> QPushButton:
+        b = QPushButton(text)
+        b.setFixedHeight(20)
+        b.setFont(QFont(_DISPLAY, 7, QFont.Weight.Bold))
+        b.setCursor(Qt.CursorShape.PointingHandCursor)
+        b.setToolTip(tip)
+        b.setStyleSheet(f"""
+            QPushButton {{ color: {C.TEXT_DIM}; background: transparent;
+                border: 1px solid rgba(255, 255, 255, 26); border-radius: 7px;
+                padding: 0 8px; }}
+            QPushButton:hover {{ color: {C.PRI}; border-color: {C.PRI_DIM}; }}
+        """)
+        b.clicked.connect(lambda _=False: fn())
+        return b
+
+    def _copy_log(self) -> None:
+        # The clipboard watcher would answer our own copy with its "clipboard
+        # detected" panel, so it is told to look away for a moment.
+        self._ignore_clip = True
+        QApplication.clipboard().setText(self._log.toPlainText())
+        QTimer.singleShot(700, lambda: setattr(self, "_ignore_clip", False))
+        self._toast("LOG COPIED", "The activity log is on your clipboard.", "ok", 2200)
+
+    def _clear_log(self) -> None:
+        self._log.clear_all()
+
+    # ── Tools page: focus timer, tasks, quick actions ────────────────────────
+
+    def _build_tools_page(self) -> QWidget:
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        lay.setContentsMargins(10, 12, 10, 10)
+        lay.setSpacing(7)
+
+        # Focus timer
+        lay.addLayout(self._panel_header("FOCUS TIMER"))
+        card = QFrame()
+        card.setObjectName("FtCard")
+        card.setStyleSheet(_glass_css("FtCard"))
+        cl = QVBoxLayout(card)
+        cl.setContentsMargins(10, 8, 10, 10)
+        cl.setSpacing(7)
+        self._ft_lbl = QLabel("25:00")
+        self._ft_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._ft_lbl.setFont(QFont(_DISPLAY, 22, QFont.Weight.Bold))
+        self._ft_lbl.setStyleSheet(f"color: {C.PRI}; background: transparent;")
+        cl.addWidget(self._ft_lbl)
+        presets = QHBoxLayout()
+        presets.setSpacing(5)
+        for m in (15, 25, 45):
+            presets.addWidget(self._flat_btn(f"{m} MIN", f"Set the timer to {m} minutes",
+                                             lambda _m=m: self._ft_set(_m)))
+        cl.addLayout(presets)
+        ctl = QHBoxLayout()
+        ctl.setSpacing(5)
+        self._ft_btn = self._flat_btn("▶  START", "Start or pause", self._ft_toggle)
+        self._ft_btn.setFixedHeight(26)
+        ctl.addWidget(self._ft_btn, 1)
+        rst = self._flat_btn("RESET", "Back to the full time", self._ft_reset)
+        rst.setFixedHeight(26)
+        ctl.addWidget(rst)
+        cl.addLayout(ctl)
+        lay.addWidget(card)
+        self._ft_tmr = QTimer(self)
+        self._ft_tmr.setInterval(1000)
+        self._ft_tmr.timeout.connect(self._ft_tick)
+        self._ft_render()
+
+        # Tasks
+        lay.addSpacing(2)
+        _th = self._panel_header("TASKS", "0/0")
+        self._task_chip = _th.itemAt(_th.count() - 1).widget()
+        lay.addLayout(_th)
+        self._task_in = QLineEdit()
+        self._task_in.setPlaceholderText("Add a task and press Enter…")
+        self._task_in.setFont(QFont(_FONT, 9))
+        self._task_in.setFixedHeight(30)
+        self._task_in.setStyleSheet(f"""
+            QLineEdit {{ background: rgba(255, 255, 255, 14); color: {C.WHITE};
+                border: 1px solid rgba(255, 255, 255, 30); border-radius: 9px;
+                padding: 0 10px; }}
+            QLineEdit:focus {{ border-color: {C.PRI}; }}
+        """)
+        self._task_in.returnPressed.connect(self._task_submit)
+        lay.addWidget(self._task_in)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setStyleSheet(f"""
+            QScrollArea {{ background: transparent; }}
+            QScrollBar:vertical {{ background: transparent; width: 6px; border: none; }}
+            QScrollBar::handle:vertical {{ background: rgba(255, 255, 255, 50);
+                border-radius: 3px; min-height: 20px; }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0px; }}
+        """)
+        box = QWidget()
+        box.setStyleSheet("background: transparent;")
+        self._task_lay = QVBoxLayout(box)
+        self._task_lay.setContentsMargins(0, 0, 4, 0)
+        self._task_lay.setSpacing(4)
+        scroll.setWidget(box)
+        lay.addWidget(scroll, 1)
+
+        # Quick actions
+        lay.addSpacing(2)
+        lay.addLayout(self._panel_header("QUICK ACTIONS"))
+        grid = QGridLayout()
+        grid.setSpacing(5)
+        for i, (label, title, msg) in enumerate(_QUICK_ACTIONS):
+            b = QPushButton(label.replace("  ", " "))
+            b.setFixedHeight(28)
+            b.setFont(QFont(_FONT, 8, QFont.Weight.Bold))
+            b.setCursor(Qt.CursorShape.PointingHandCursor)
+            b.setToolTip(title)
+            b.setStyleSheet(f"""
+                QPushButton {{ color: {C.TEXT_MED}; background: rgba(255, 255, 255, 12);
+                    border: 1px solid rgba(255, 255, 255, 28); border-radius: 8px;
+                    padding: 0 4px; }}
+                QPushButton:hover {{ color: {C.PRI}; border-color: {C.PRI_DIM};
+                    background: {C.PRI_GHO}; }}
+            """)
+            b.clicked.connect(lambda _=False, m=msg: self._run_quick(m))
+            grid.addWidget(b, i // 2, i % 2)
+        lay.addLayout(grid)
+
+        self._tasks = self._tasks_load()
+        self._tasks_render()
+        return w
+
+    def _run_quick(self, msg: str) -> None:
+        """Send a canned prompt; "clip:" ones are templates over the clipboard."""
+        if msg.startswith("clip:"):
+            txt = QApplication.clipboard().text().strip()
+            if not txt:
+                self._toast("CLIPBOARD IS EMPTY", "Copy some text first, then run this again.",
+                            "warn")
+                return
+            msg = msg[5:].replace("{text}", txt[:1500])
+        self._submit_text(msg)
+
+    # focus timer
+    def _ft_render(self) -> None:
+        m, s = divmod(max(0, self._ft_left), 60)
+        self._ft_lbl.setText(f"{m:02d}:{s:02d}")
+        self._ft_btn.setText("❚❚  PAUSE" if self._ft_running else "▶  START")
+
+    def _ft_set(self, minutes: int) -> None:
+        self._ft_total = int(minutes) * 60
+        self._ft_reset()
+
+    def _ft_reset(self) -> None:
+        self._ft_left = self._ft_total
+        self._ft_running = False
+        self._ft_tmr.stop()
+        self._ft_render()
+
+    def _ft_toggle(self) -> None:
+        if self._ft_left <= 0:
+            self._ft_left = self._ft_total
+        self._ft_running = not self._ft_running
+        if self._ft_running:
+            self._ft_tmr.start()
+            self._toast("FOCUS TIMER STARTED", f"{self._ft_left // 60} min — go.", "info", 2000)
+        else:
+            self._ft_tmr.stop()
+        self._ft_render()
+
+    def _ft_tick(self) -> None:
+        self._ft_left -= 1
+        if self._ft_left <= 0:
+            self._ft_left = 0
+            self._ft_running = False
+            self._ft_tmr.stop()
+            self._log.append_log("SYS: Focus session complete.")
+            self._toast("FOCUS SESSION COMPLETE", "Take a short break.", "ok", 6000)
+        self._ft_render()
+
+    # tasks
+    def _tasks_load(self) -> list:
+        try:
+            raw = json.loads(_tasks_file().read_text(encoding="utf-8"))
+            return [{"text": str(t.get("text", ""))[:200], "done": bool(t.get("done"))}
+                    for t in raw if isinstance(t, dict) and str(t.get("text", "")).strip()]
+        except Exception:
+            return []
+
+    def _tasks_save(self) -> None:
+        try:
+            CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+            _tasks_file().write_text(json.dumps(self._tasks, ensure_ascii=False, indent=2),
+                                     encoding="utf-8")
+        except Exception:
+            pass
+
+    def _task_submit(self) -> None:
+        txt = self._task_in.text()
+        self._task_in.clear()
+        self._task_add(txt)
+
+    def _task_add(self, text: str) -> None:
+        text = (text or "").strip()
+        if not text or len(self._tasks) >= 100:
+            return
+        self._tasks.append({"text": text[:200], "done": False})
+        self._tasks_save()
+        self._tasks_render()
+        self._toast("TASK ADDED", text[:80], "ok", 2200)
+
+    def _task_toggle(self, task: dict) -> None:
+        task["done"] = not task["done"]
+        self._tasks_save()
+        QTimer.singleShot(0, self._tasks_render)     # not inside the clicked button's slot
+
+    def _task_remove(self, task: dict) -> None:
+        if task in self._tasks:
+            self._tasks.remove(task)
+        self._tasks_save()
+        QTimer.singleShot(0, self._tasks_render)
+
+    def _tasks_render(self) -> None:
+        lay = self._task_lay
+        while lay.count():
+            item = lay.takeAt(0)
+            wdg = item.widget()
+            if wdg is not None:
+                wdg.hide()
+                wdg.deleteLater()
+        if not self._tasks:
+            e = QLabel("No tasks yet. Add one above, or tell JARVIS “remind me to …”.")
+            e.setWordWrap(True)
+            e.setFont(QFont(_FONT, 9))
+            e.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
+            lay.addWidget(e)
+        for t in self._tasks:
+            row = QWidget()
+            row.setStyleSheet("background: transparent;")
+            h = QHBoxLayout(row)
+            h.setContentsMargins(0, 0, 0, 0)
+            h.setSpacing(6)
+            chk = QPushButton("☑" if t["done"] else "☐")
+            chk.setFixedSize(22, 22)
+            chk.setFont(QFont("Segoe UI Symbol", 12))
+            chk.setCursor(Qt.CursorShape.PointingHandCursor)
+            chk.setStyleSheet(
+                f"QPushButton {{ color: {C.GREEN if t['done'] else C.TEXT_MED}; "
+                f"background: transparent; border: none; }} "
+                f"QPushButton:hover {{ color: {C.PRI}; }}")
+            chk.clicked.connect(lambda _=False, t=t: self._task_toggle(t))
+            lbl = QLabel()
+            lbl.setWordWrap(True)
+            lbl.setFont(QFont(_FONT, 9))
+            if t["done"]:
+                lbl.setText(f"<s>{_html.escape(t['text'])}</s>")
+                lbl.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
+            else:
+                lbl.setTextFormat(Qt.TextFormat.PlainText)
+                lbl.setText(t["text"])
+                lbl.setStyleSheet(f"color: {C.TEXT}; background: transparent;")
+            rm = QPushButton("✕")
+            rm.setFixedSize(18, 18)
+            rm.setFont(QFont(_FONT, 8, QFont.Weight.Bold))
+            rm.setCursor(Qt.CursorShape.PointingHandCursor)
+            rm.setToolTip("Remove")
+            rm.setStyleSheet(
+                f"QPushButton {{ color: {C.TEXT_DIM}; background: transparent; border: none; }} "
+                f"QPushButton:hover {{ color: {C.RED}; }}")
+            rm.clicked.connect(lambda _=False, t=t: self._task_remove(t))
+            h.addWidget(chk, 0, Qt.AlignmentFlag.AlignTop)
+            h.addWidget(lbl, 1)
+            h.addWidget(rm, 0, Qt.AlignmentFlag.AlignTop)
+            lay.addWidget(row)
+        lay.addStretch(1)
+        done = sum(1 for t in self._tasks if t["done"])
+        self._task_chip.setText(f"{done}/{len(self._tasks)}")
 
     def _show_camera_frame(self, img_bytes: bytes):
         """Slot — display camera preview overlay (main thread)."""
@@ -3791,7 +5111,7 @@ class MainWindow(QMainWindow):
         pw = _CameraPreview._W
         ph = self._cam_preview.height()
         self._cam_preview.setGeometry(
-            cw.width() - _RIGHT_W - pw - 12,
+            cw.width() - self._right_inset() - pw - 12,
             cw.height() - ph - 28,
             pw, ph,
         )
@@ -3807,8 +5127,9 @@ class MainWindow(QMainWindow):
     # the pixels change — so JARVIS keeps listening while you work in an editor.
 
     def _mini_hidden(self) -> list:
-        return [self._header_w, self._left_panel, self._right_panel,
-                self._footer_w, self._content_panel, self._quiz_panel]
+        return [self._header_w, self._left_rail, self._right_rail,
+                self._left_panel, self._right_panel, self._footer_w,
+                self._content_panel, self._quiz_panel]
 
     def _mini_flags(self):
         f = Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint
@@ -3868,11 +5189,19 @@ class MainWindow(QMainWindow):
             self.showNormal()
 
         if on:
+            self._close_transient()
+            for _t in list(self._toasts):
+                _t.dismiss()
             self._normal_geom = self.geometry()
             self._vis_content = self._content_panel.isVisible()
             self._vis_quiz = self._quiz_panel.isVisible()
             self._cam_preview.hide()
-            self._clipboard_panel.hide()
+
+            # Clipboard remains available in mini mode.
+            # It will be positioned relative to the mini window.
+            if self._clipboard_panel.isVisible():
+                self._position_clipboard_panel()
+
             for w in self._mini_hidden():
                 w.hide()
             self._mini = True
@@ -3892,9 +5221,18 @@ class MainWindow(QMainWindow):
             self.setMinimumSize(_MIN_W, _MIN_H)
             geom = self._normal_geom or QRect(0, 0, _DEFAULT_W, _DEFAULT_H)
             self._reflag(Qt.WindowType.Window, False, geom)
-            for w in (self._header_w, self._left_panel, self._right_panel,
-                      self._footer_w):
-                w.show()
+            self._header_w.show()
+            self._header_w.setVisible(True)
+
+            # Restore everything hidden by mini mode.
+            self._header_w.show()
+            self._header_w.setVisible(True)
+
+            self._left_rail.show()
+            self._right_rail.show()
+            self._footer_w.show()
+            self._apply_layout_state()
+
             if self._vis_content or self._pending_panel:
                 self._content_panel.show()
             if self._quiz is not None or self._vis_quiz:
@@ -4547,7 +5885,7 @@ class MainWindow(QMainWindow):
         pw = _CameraPreview._W
         ph = self._cam_preview.height() or _CameraPreview._H
         self._cam_preview.setGeometry(
-            cw.width() - _RIGHT_W - pw - 12,
+            cw.width() - self._right_inset() - pw - 12,
             cw.height() - ph - 28,
             pw, ph,
         )
@@ -4568,11 +5906,22 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
         self._fit_video()
+        if hasattr(self, "_body_split"):
+            self._adapt_header()
+            self._auto_collapse()
+            self._layout_toasts()
+            if self._palette is not None:
+                self._palette.relayout()
+            if not self._split_inited and self.isVisible():
+                self._split_inited = True
+                QTimer.singleShot(0, self._apply_split_sizes)
 
     def _update_metrics(self):
-        # Nobody can see the monitor tiles in mini mode or while minimised, so
-        # don't spend repaints on them.
-        if self._mini or self.isMinimized():
+        # Nobody can see the monitor tiles in mini mode, while minimised, or
+        # with the sidebar closed or showing another page, so don't spend
+        # repaints on them.
+        if (self._mini or self.isMinimized() or not self._left_panel.isVisible()
+                or self._left_stack.currentIndex() != 0):
             return
         snap = _metrics.snapshot()
 
@@ -4600,14 +5949,6 @@ class MainWindow(QMainWindow):
         else:
             self._bar_gpu.set_value(0, "N/A")
 
-        # TMP
-        tmp = snap["tmp"]
-        if tmp >= 0:
-            tmp_pct = min(100, (tmp / 100) * 100)
-            self._bar_tmp.set_value(tmp_pct, f"{tmp:.0f}°C")
-        else:
-            self._bar_tmp.set_value(0, "N/A")
-
         try:
             boot_t  = psutil.boot_time()
             elapsed = time.time() - boot_t
@@ -4625,64 +5966,65 @@ class MainWindow(QMainWindow):
 
 
     def _build_header(self) -> QWidget:
-        self._header_height_px = 68
+        self._header_height_px = 54
         w = _GlassHeader()
         w.setFixedHeight(self._header_height_px)
         w.setObjectName("JarvisHeader")
 
         lay = QHBoxLayout(w)
-        lay.setContentsMargins(20, 0, 20, 0)
-        lay.setSpacing(0)
+        lay.setContentsMargins(14, 0, 14, 0)
+        lay.setSpacing(10)
 
-        # LEFT — brand mark, product name, live status
+        # LEFT — brand mark, product name, status. The left and right zones
+        # share the stretch equally, so the title stays centred at any width.
         left = QWidget()
-        left.setFixedWidth(340)
         ll = QHBoxLayout(left)
         ll.setContentsMargins(0, 0, 0, 0)
-        ll.setSpacing(12)
-        ll.addWidget(_OrbIcon(38), 0, Qt.AlignmentFlag.AlignVCenter)
+        ll.setSpacing(10)
+        ll.addWidget(_OrbIcon(30), 0, Qt.AlignmentFlag.AlignVCenter)
 
-        brand = QVBoxLayout()
-        brand.setSpacing(1)
+        self._hdr_brand = QWidget()
+        brand = QVBoxLayout(self._hdr_brand)
+        brand.setSpacing(0)
         brand.setContentsMargins(0, 0, 0, 0)
-        brand.addStretch(1)
         logo = QLabel("PERSONAL AI SYSTEM")
-        logo.setFont(QFont(_FONT, 10, QFont.Weight.Bold))
+        lf = QFont(_DISPLAY, 8, QFont.Weight.Bold)
+        lf.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 1.2)
+        logo.setFont(lf)
         logo.setStyleSheet(f"color: {C.WHITE}; background: transparent;")
         brand.addWidget(logo)
         sub = QLabel(f"PROTOCOL {APP_PROTOCOL.upper()}")
         sub.setFont(QFont(_FONT, 8))
         sub.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
         brand.addWidget(sub)
-        brand.addStretch(1)
-        ll.addLayout(brand)
-        ll.addStretch(1)
+        ll.addWidget(self._hdr_brand)
 
-        pill = QLabel("●  ONLINE")
-        pill.setFont(QFont(_FONT, 8, QFont.Weight.Bold))
-        pill.setFixedHeight(26)
-        pill.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        pill.setStyleSheet(f"""
+        self._hdr_pill = QLabel("●  ONLINE")
+        self._hdr_pill.setFont(QFont(_DISPLAY, 7, QFont.Weight.Bold))
+        self._hdr_pill.setFixedHeight(22)
+        self._hdr_pill.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._hdr_pill.setStyleSheet(f"""
             QLabel {{
                 color: {C.GREEN};
                 background: rgba(0, 255, 136, 24);
                 border: 1px solid rgba(0, 255, 136, 80);
-                border-radius: 13px;
-                padding: 0 12px;
+                border-radius: 11px;
+                padding: 0 11px;
             }}
         """)
-        ll.addWidget(pill, 0, Qt.AlignmentFlag.AlignVCenter)
-        lay.addWidget(left)
+        ll.addWidget(self._hdr_pill, 0, Qt.AlignmentFlag.AlignVCenter)
+        ll.addStretch(1)
+        lay.addWidget(left, 1)
 
         # CENTER — assistant name + tagline
         center = QVBoxLayout()
-        center.setSpacing(2)
+        center.setSpacing(0)
         center.setContentsMargins(0, 0, 0, 0)
         center.addStretch(1)
         self._title_lbl = QLabel(self._assistant_name.upper())
         self._title_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        tf = QFont(_FONT, 18, QFont.Weight.Bold)
-        tf.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 4.0)
+        tf = QFont(_DISPLAY, 14, QFont.Weight.Bold)
+        tf.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 5.0)
         self._title_lbl.setFont(tf)
         self._title_lbl.setStyleSheet(f"color: {C.PRI}; background: transparent;")
         center.addWidget(self._title_lbl)
@@ -4695,68 +6037,66 @@ class MainWindow(QMainWindow):
         self._sub_lbl.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
         center.addWidget(self._sub_lbl)
         center.addStretch(1)
-        lay.addLayout(center, stretch=1)
+        lay.addLayout(center)
 
-        # RIGHT — drawers + clock (same width as the left zone, so the title
-        # is truly centred)
+        # RIGHT — tools + clock
         right = QWidget()
-        right.setFixedWidth(340)
         rl = QHBoxLayout(right)
         rl.setContentsMargins(0, 0, 0, 0)
-        rl.setSpacing(14)
+        rl.setSpacing(10)
         rl.addStretch(1)
 
+        def hbtn(sym: str, tip: str, checkable: bool = False, size: int = 13) -> QPushButton:
+            b = QPushButton(sym)
+            b.setFixedSize(34, 30)
+            b.setFont(QFont("Segoe UI Symbol", size))
+            b.setCursor(Qt.CursorShape.PointingHandCursor)
+            b.setCheckable(checkable)
+            b.setToolTip(tip)
+            b.setStyleSheet(self._header_button_style())
+            return b
+
         nav = QHBoxLayout()
-        nav.setSpacing(8)
-
-        self._mini_btn = QPushButton("▭")
-        self._mini_btn.setFixedSize(40, 36)
-        self._mini_btn.setFont(QFont("Segoe UI Symbol", 13))
-        self._mini_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._mini_btn.setToolTip("Mini orb window  [F9]")
-        self._mini_btn.setStyleSheet(self._header_button_style())
-        self._mini_btn.clicked.connect(lambda: self.set_mini(True))
+        nav.setSpacing(6)
+        self._pal_btn = hbtn("⌘", "Command palette  [Ctrl+K]")
+        self._pal_btn.clicked.connect(lambda _=False: self._open_palette())
+        nav.addWidget(self._pal_btn)
+        self._mini_btn = hbtn("▭", "Mini orb window  [F9]")
+        self._mini_btn.clicked.connect(lambda _=False: self.set_mini(True))
         nav.addWidget(self._mini_btn)
-
-        self._drawer_btn = QPushButton("⚙")
-        self._drawer_btn.setFixedSize(40, 36)
-        self._drawer_btn.setFont(QFont("Segoe UI Symbol", 13))
-        self._drawer_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._drawer_btn.setCheckable(True)
-        self._drawer_btn.setToolTip("Setup")
-        self._drawer_btn.setStyleSheet(self._header_button_style())
+        self._drawer_btn = hbtn("⚙", "Setup", True)
         self._drawer_btn.clicked.connect(self._toggle_drawer)
         nav.addWidget(self._drawer_btn)
-
-        self._ctrl_btn = QPushButton("☷")
-        self._ctrl_btn.setFixedSize(40, 36)
-        self._ctrl_btn.setFont(QFont("Segoe UI Symbol", 14))
-        self._ctrl_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._ctrl_btn.setCheckable(True)
-        self._ctrl_btn.setToolTip("Controls")
-        self._ctrl_btn.setStyleSheet(self._header_button_style())
+        self._ctrl_btn = hbtn("☷", "Controls", True, 14)
         self._ctrl_btn.clicked.connect(self._toggle_controls)
         nav.addWidget(self._ctrl_btn)
         rl.addLayout(nav)
 
-        clock_col = QVBoxLayout()
-        clock_col.setSpacing(0)
-        clock_col.setContentsMargins(0, 0, 0, 0)
-        clock_col.addStretch(1)
+        self._hdr_clock = QWidget()
+        cc = QVBoxLayout(self._hdr_clock)
+        cc.setSpacing(0)
+        cc.setContentsMargins(0, 0, 0, 0)
         self._clock_lbl = QLabel("00:00:00")
-        self._clock_lbl.setFont(QFont(_MONO, 17, QFont.Weight.Bold))
+        self._clock_lbl.setFont(QFont(_MONO, 13, QFont.Weight.Bold))
         self._clock_lbl.setAlignment(Qt.AlignmentFlag.AlignRight)
         self._clock_lbl.setStyleSheet(f"color: {C.PRI}; background: transparent;")
-        clock_col.addWidget(self._clock_lbl)
+        cc.addWidget(self._clock_lbl)
         self._date_lbl = QLabel("")
-        self._date_lbl.setFont(QFont(_FONT, 8))
+        self._date_lbl.setFont(QFont(_FONT, 7))
         self._date_lbl.setAlignment(Qt.AlignmentFlag.AlignRight)
         self._date_lbl.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
-        clock_col.addWidget(self._date_lbl)
-        clock_col.addStretch(1)
-        rl.addLayout(clock_col)
-        lay.addWidget(right)
+        cc.addWidget(self._date_lbl)
+        rl.addWidget(self._hdr_clock)
+        lay.addWidget(right, 1)
         return w
+
+    def _adapt_header(self) -> None:
+        """Shed the least important header parts as the window narrows."""
+        w = self.width()
+        self._hdr_brand.setVisible(w >= 900)
+        self._hdr_pill.setVisible(w >= 1000)
+        self._hdr_clock.setVisible(w >= 820)
+        self._sub_lbl.setVisible(w >= 640)
 
     def _header_button_style(self) -> str:
         return f"""
@@ -4783,6 +6123,7 @@ class MainWindow(QMainWindow):
             return
         self._clock_lbl.setText(time.strftime("%H:%M:%S"))
         self._date_lbl.setText(time.strftime("%a %d %b %Y"))
+        self._update_session()
 
     def _panel_header(self, text: str, tag: str = "", live: bool = False) -> QHBoxLayout:
         """Section header: accent bar, title, optional chip on the right."""
@@ -4813,32 +6154,58 @@ class MainWindow(QMainWindow):
         return row
 
     def _build_left_panel(self) -> QWidget:
+        """Left sidebar: pages picked from the left rail (VS Code's activity
+        bar). 0 = system monitor, 1 = tools (timer, tasks, quick actions)."""
         w = QWidget()
-        w.setFixedWidth(_LEFT_W)
         w.setObjectName("SystemPanel")
+        w.setMinimumWidth(260)
+        w.setMaximumWidth(360)
         w.setStyleSheet(
             "QWidget#SystemPanel { background: rgba(3, 12, 20, 110); "
             "border-right: 1px solid rgba(255, 255, 255, 20); }"
         )
         lay = QVBoxLayout(w)
-        lay.setContentsMargins(12, 14, 12, 12)
-        lay.setSpacing(8)
-        lay.addLayout(self._panel_header("SYSTEM MONITOR", "LIVE", live=True))
+        lay.setContentsMargins(0, 0, 0, 0)
+        self._left_stack = QStackedWidget()
+        self._left_stack.addWidget(self._build_monitor_page())
+        self._left_stack.addWidget(self._build_tools_page())
+        lay.addWidget(self._left_stack)
+        return w
 
-        # Ring + sparkline tiles. They stretch with the window instead of having
-        # a fixed height, which is what stops the column from being squashed.
+    def _build_monitor_page(self) -> QWidget:
+        w = QWidget()
+
+        lay = QVBoxLayout(w)
+        lay.setContentsMargins(10, 7, 10, 10)
+        lay.setSpacing(6)
+        lay.addLayout(self._panel_header("SYSTEM MONITOR"))
+
+        grid = QGridLayout()
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setHorizontalSpacing(8)
+        grid.setVerticalSpacing(8)
+
         self._bar_cpu = MetricBar("CPU", C.PRI)
         self._bar_mem = MetricBar("MEMORY", C.ACC2)
         self._bar_net = MetricBar("NETWORK", C.GREEN)
         self._bar_gpu = MetricBar("GPU", C.ACC)
-        self._bar_tmp = MetricBar("TEMP", "#ff6688")
-        for bar in (self._bar_cpu, self._bar_mem, self._bar_net,
-                    self._bar_gpu, self._bar_tmp):
-            lay.addWidget(bar, 1)
 
+        grid.addWidget(self._bar_cpu, 0, 0)
+        grid.addWidget(self._bar_mem, 0, 1)
+        grid.addWidget(self._bar_net, 1, 0)
+        grid.addWidget(self._bar_gpu, 1, 1)
+
+        grid.setColumnStretch(0, 1)
+        grid.setColumnStretch(1, 1)
+        lay.addLayout(grid, 0)
+
+        lay.addSpacing(8)
+
+        # System information
         card = QFrame()
         card.setObjectName("SysCard")
         card.setStyleSheet(_glass_css("SysCard"))
+
         cl = QVBoxLayout(card)
         cl.setContentsMargins(14, 11, 14, 11)
         cl.setSpacing(6)
@@ -4846,50 +6213,77 @@ class MainWindow(QMainWindow):
         def kv(key: str, val: str, col: str, mono: bool = True) -> QLabel:
             h = QHBoxLayout()
             h.setSpacing(6)
+
             k = QLabel(key)
             k.setFont(QFont(_FONT, 8))
-            k.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
+            k.setStyleSheet(
+                f"color: {C.TEXT_DIM}; background: transparent;"
+            )
+
             v = QLabel(val)
-            v.setFont(QFont(_MONO if mono else _FONT, 9, QFont.Weight.Bold))
-            v.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-            v.setStyleSheet(f"color: {col}; background: transparent;")
+            v.setFont(
+                QFont(
+                    _MONO if mono else _FONT,
+                    9,
+                    QFont.Weight.Bold
+                )
+            )
+            v.setAlignment(
+                Qt.AlignmentFlag.AlignRight |
+                Qt.AlignmentFlag.AlignVCenter
+            )
+            v.setStyleSheet(
+                f"color: {col}; background: transparent;"
+            )
+
             h.addWidget(k)
             h.addStretch(1)
             h.addWidget(v)
+
             cl.addLayout(h)
             return v
 
         self._uptime_lbl = kv("UPTIME", "--:--", C.GREEN)
         self._proc_lbl = kv("PROCESSES", "--", C.TEXT_MED)
-        os_name = {"Windows": "Windows", "Darwin": "macOS", "Linux": "Linux"}.get(_OS, _OS)
-        kv("SYSTEM", os_name, C.ACC2, mono=False)
 
-        sep = QFrame()
-        sep.setFixedHeight(1)
-        sep.setStyleSheet("background: rgba(255, 255, 255, 22); border: none;")
-        cl.addWidget(sep)
+        os_name = {
+            "Windows": "Windows",
+            "Darwin": "macOS",
+            "Linux": "Linux",
+        }.get(_OS, _OS)
 
-        kv("AI CORE", "● ACTIVE", C.GREEN)
-        kv("SECURITY", "● CLEARED", C.PRI)
-        kv("PROTOCOL", APP_PROTOCOL, C.TEXT_MED)
+        kv("SYSTEM", os_name, C.ACC2)
+
+        self._ai_core_lbl = kv("AI CORE", "ACTIVE", C.GREEN)
+        self._security_lbl = kv("SECURITY", "CLEARED", C.PRI)
+        kv("PROTOCOL", APP_PROTOCOL.upper(), C.TEXT_MED)
+
         lay.addWidget(card)
+
+        lay.addStretch(1)
+
         return w
 
     def _build_right_panel(self) -> QWidget:
         w = QWidget()
-        w.setFixedWidth(_RIGHT_W)
+        w.setMinimumWidth(280)
+        w.setMaximumWidth(640)
         w.setObjectName("CommandPanel")
         w.setStyleSheet(
             "QWidget#CommandPanel { background: rgba(3, 12, 20, 110); "
             "border-left: 1px solid rgba(255, 255, 255, 20); }"
         )
         lay = QVBoxLayout(w)
-        lay.setContentsMargins(14, 14, 14, 14)
-        lay.setSpacing(8)
+        lay.setContentsMargins(12, 12, 12, 12)
+        lay.setSpacing(7)
 
-        lay.addLayout(self._panel_header("ACTIVITY LOG", "LIVE", live=True))
+        _hl = self._panel_header("ACTIVITY LOG")
+        for _t, _tip, _fn in (("COPY", "Copy the log to the clipboard", self._copy_log),
+                              ("CLEAR", "Clear the log", self._clear_log)):
+            _hl.addWidget(self._flat_btn(_t, _tip, _fn))
+        lay.addLayout(_hl)
         self._log = LogWidget()
-        self._log.setMinimumHeight(120)
+        self._log.setMinimumHeight(90)
         self._log.setFont(QFont(_MONO, 9))
         self._log.setStyleSheet(f"""
             QTextEdit {{
@@ -4913,7 +6307,7 @@ class MainWindow(QMainWindow):
         lay.addSpacing(2)
         lay.addLayout(self._panel_header("FILE UPLOAD", "INPUT"))
         self._drop_zone = FileDropZone()
-        self._drop_zone.setFixedHeight(104)
+        self._drop_zone.setFixedHeight(96)
         self._drop_zone.file_selected.connect(self._on_file_selected)
         lay.addWidget(self._drop_zone)
 
@@ -5134,8 +6528,8 @@ class MainWindow(QMainWindow):
     def _build_input_row(self) -> QHBoxLayout:
         row = QHBoxLayout()
         row.setSpacing(8)
-        self._input = QLineEdit()
-        self._input.setPlaceholderText("Type a command or question…")
+        self._input = _CmdInput()
+        self._input.setPlaceholderText("Type a command or question…     ( / opens commands )")
         self._input.setFont(QFont(_FONT, 10))
         self._input.setFixedHeight(42)
         self._input.setStyleSheet(f"""
@@ -5648,30 +7042,74 @@ class MainWindow(QMainWindow):
             threading.Thread(target=self.on_text_command, args=(msg,), daemon=True).start()
 
     def _build_footer(self) -> QWidget:
+        """VS Code-style status bar. Segments are live; the clickable ones act."""
         w = QWidget()
-        w.setFixedHeight(28)
+        w.setFixedHeight(26)
         w.setObjectName("JarvisFooter")
         w.setStyleSheet(f"""
             QWidget#JarvisFooter {{
-                background: rgba(3, 10, 16, 150);
+                background: rgba(3, 10, 16, 170);
                 border-top: 1px solid {C.BORDER};
             }}
-            QLabel {{ background: transparent; border: none; }}
+            QPushButton {{
+                color: {C.TEXT_DIM}; background: transparent; border: none;
+                padding: 0 10px; text-align: left;
+            }}
+            QPushButton:hover {{ color: {C.PRI}; background: rgba(255, 255, 255, 14); }}
+            QLabel {{ color: {C.TEXT_DIM}; background: transparent; border: none;
+                padding: 0 10px; }}
         """)
-        lay = QHBoxLayout(w); lay.setContentsMargins(18, 0, 18, 0)
-        def f(txt, col=C.TEXT_DIM):
-            l = QLabel(txt); l.setFont(QFont(_FONT, 8, QFont.Weight.Bold)); l.setStyleSheet(f"color: {col}; letter-spacing: 1px;")
-            return l
-        lay.addWidget(f("[F4] MUTE"))
-        lay.addSpacing(18)
-        lay.addWidget(f("[F9] MINI"))
-        lay.addSpacing(18)
-        lay.addWidget(f("[F11] FULLSCREEN"))
-        lay.addSpacing(18)
-        lay.addWidget(f("[ESC] INTERRUPT", C.RED))
-        lay.addStretch()
-        lay.addWidget(f(f"{self._assistant_name.upper()}  •  READY", C.PRI))
+        lay = QHBoxLayout(w)
+        lay.setContentsMargins(4, 0, 6, 0)
+        lay.setSpacing(0)
+        fnt = QFont(_DISPLAY, 8, QFont.Weight.Bold)
+        fnt.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 0.8)
+
+        def seg(text: str, tip: str, fn=None):
+            if fn is None:
+                b = QLabel(text)
+            else:
+                b = QPushButton(text)
+                b.setCursor(Qt.CursorShape.PointingHandCursor)
+                b.clicked.connect(lambda _=False: fn())
+            b.setFont(fnt)
+            b.setFixedHeight(26)
+            b.setToolTip(tip)
+            lay.addWidget(b)
+            return b
+
+        self._sb_state = seg("●  STARTING", "Assistant state")
+        self._sb_mic   = seg("MIC ON", "Click to mute / unmute  [F4]", self._toggle_mute)
+        self._sb_hud   = seg("ORB", "Switch between the particle orb and the animated face",
+                             self._toggle_hud_style)
+        lay.addStretch(1)
+        self._sb_sess  = seg("SESSION 00:00", "Time since JARVIS started")
+        seg("▭  MINI", "Mini orb window  [F9]", lambda: self.set_mini(True))
+        seg("⌘  COMMANDS", "Command palette  [Ctrl+K]", lambda: self._open_palette())
+        self._sb_name  = seg(self._assistant_name.upper(), "Assistant name")
+        self._sb_name.setStyleSheet(f"color: {C.PRI};")
         return w
+
+    def _update_statusbar(self) -> None:
+        if not hasattr(self, "_sb_state"):
+            return
+        try:
+            txt, col = self.hud._status()
+            self._sb_state.setText(f"●  {txt}")
+            self._sb_state.setStyleSheet(f"color: {col.name()};")
+            self._sb_mic.setText("MIC MUTED" if self._muted else "MIC ON")
+            self._sb_mic.setStyleSheet(
+                f"QPushButton {{ color: {C.MUTED_C if self._muted else C.GREEN_D}; }}")
+            self._sb_hud.setText("FACE" if self.hud.hud_style == "face" else "ORB")
+        except Exception:
+            pass
+
+    def _update_session(self) -> None:
+        if not hasattr(self, "_sb_sess"):
+            return
+        up = int(time.time() - self._born)
+        self._sb_sess.setText(f"SESSION {up // 3600:02d}:{up % 3600 // 60:02d}")
+
     def _on_file_selected(self, path: str):
         self._current_file = path
         p    = Path(path)
@@ -5947,6 +7385,7 @@ class MainWindow(QMainWindow):
         self._log.append_log(
             "SYS: HUD switched to the animated face." if want == "face"
             else "SYS: HUD switched to the particle orb.")
+        self._update_statusbar()
 
     def _toggle_ptt(self):
         from memory.config_manager import (get_push_to_talk_enabled,
@@ -6118,6 +7557,8 @@ class MainWindow(QMainWindow):
             self._sub_lbl.setText("Personal AI Assistant")
         self._log._ai_name_lc = self._assistant_name.lower()
         self.hud._assistant_name = display
+        if hasattr(self, "_sb_name"):
+            self._sb_name.setText(display)
 
         color_changed = False
         if ui_color:
@@ -6252,6 +7693,8 @@ class MainWindow(QMainWindow):
     # ── Clipboard intelligence ───────────────────────────────────────────────────
 
     def _on_clipboard_changed(self):
+        if self._ignore_clip:
+            return
         try:
             text = QApplication.clipboard().text().strip()
             if len(text) >= 10:
@@ -6268,11 +7711,30 @@ class MainWindow(QMainWindow):
 
     def _position_clipboard_panel(self):
         cw = self.centralWidget()
+
         pw = ClipboardPanel._W
         ph = self._clipboard_panel.sizeHint().height() or ClipboardPanel._H
-        x = (cw.width() - pw) // 2
-        y = cw.height() - ph - 6
-        self._clipboard_panel.setGeometry(x, y, pw, ph)
+
+        # Keep current position if the user already moved the panel.
+        if self._clipboard_panel.isVisible():
+            x = self._clipboard_panel.x()
+            y = self._clipboard_panel.y()
+        else:
+            # Initial position: lower-center, but fully visible.
+            x = (cw.width() - pw) // 2
+            y = max(20, (cw.height() * 2) // 3 - ph // 2)
+
+        # Keep the panel inside the central widget.
+        x = max(0, min(x, cw.width() - pw))
+        y = max(0, min(y, cw.height() - ph))
+
+        self._clipboard_panel.setGeometry(
+            x,
+            y,
+            pw,
+            ph,
+        )
+
         self._clipboard_panel.raise_()
 
     def _on_clipboard_action(self, cmd: str):
@@ -6282,6 +7744,8 @@ class MainWindow(QMainWindow):
     # ────────────────────────────────────────────────────────────────────────────
 
     def _do_interrupt(self):
+        if self._close_transient():
+            return
         if self.on_interrupt:
             self.on_interrupt()
 
@@ -6323,11 +7787,21 @@ class MainWindow(QMainWindow):
             self.hud.mini_bar.set_muted(self._muted)
         except Exception:
             pass
+        self._update_statusbar()
 
     def _send(self):
         txt = self._input.text().strip()
-        if not txt: return
+        if not txt:
+            return
         self._input.clear()
+        if txt.startswith("/"):
+            self._open_palette(txt[1:].strip())
+            return
+        self._input.remember(txt)
+        self._submit_text(txt)
+
+    def _submit_text(self, txt: str) -> None:
+        """Send a message to JARVIS exactly as if it had been typed."""
         self._log.append_log(f"You: {txt}")
         if self.on_text_command:
             threading.Thread(target=self.on_text_command, args=(txt,), daemon=True).start()
@@ -6335,6 +7809,7 @@ class MainWindow(QMainWindow):
     def _apply_state(self, state: str):
         self.hud.state    = state
         self.hud.speaking = (state == "SPEAKING")
+        self._update_statusbar()
 
     def _check_config(self) -> bool:
         if not API_FILE.exists(): return False
@@ -6385,6 +7860,8 @@ class JarvisUI:
     def __init__(self, face_path: str, size=None):
         self._app = QApplication.instance() or QApplication(sys.argv)
         self._app.setStyle("Fusion")
+        _init_fonts()
+        self._app.setFont(QFont(_FONT, 10))
         self._win = MainWindow(face_path)
         self.root = _RootShim(self._app)
         self._win.show()
@@ -6625,6 +8102,22 @@ class JarvisUI:
         """Thread-safe: switch between the full window and the small orb."""
         self._win._mini_sig.emit(bool(on))
 
+    def notify(self, title: str, text: str = "", level: str = "info") -> None:
+        """Thread-safe: show a toast. level: info | ok | warn | err."""
+        self._win._toast_sig.emit(str(title)[:80], str(text)[:240], str(level))
+
+    def add_task(self, text: str) -> None:
+        """Thread-safe: add an item to the Tasks list (e.g. when the user says
+        "remind me to ..."). The list is saved in config/ui_tasks.json."""
+        self._win._task_sig.emit(str(text)[:200])
+
+    def get_tasks(self) -> list:
+        """Current tasks as [{"text": str, "done": bool}, ...]."""
+        try:
+            return json.loads(_tasks_file().read_text(encoding="utf-8"))
+        except Exception:
+            return []
+
     @property
     def is_mini(self) -> bool:
         return bool(self._win._mini)
@@ -6639,3 +8132,4 @@ class JarvisUI:
     def stop_speaking(self):
         if not self.muted:
             self.set_state("LISTENING")
+
