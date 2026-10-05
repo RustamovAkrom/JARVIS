@@ -11,13 +11,8 @@ import sys
 import threading
 import time
 from pathlib import Path
-
 import psutil
 
-if platform.system() == "Windows":
-    _WIN_HIDE: dict = {"creationflags": subprocess.CREATE_NO_WINDOW}
-else:
-    _WIN_HIDE: dict = {}
 
 # Qt's video backend prints the ffmpeg stream banner — codec, bitrate, the
 # whole signed googlevideo URL — to the console for every stream it opens. That
@@ -28,8 +23,8 @@ else:
 os.environ.setdefault("QT_LOGGING_RULES", "qt.multimedia.*=false")
 
 from PyQt6.QtCore import (
-    QEasingCurve, QEvent, QLineF, QMimeData, QObject, QParallelAnimationGroup, QPointF,
-    QPoint, QPropertyAnimation, QRect, QRectF, QSize, QSizeF, Qt, QTimer,
+    QEvent, QLineF, QPointF,
+    QPoint, QRect, QRectF, QSize, QSizeF, Qt, QTimer,
     QUrl, pyqtSignal,
 )
 from PyQt6.QtGui import (
@@ -55,7 +50,7 @@ from PyQt6.QtWidgets import (
     QLineEdit, QListWidget, QListWidgetItem,
     QMainWindow, QMenu, QPushButton, QScrollArea, QSizeGrip, QSizePolicy,
     QSplitter, QGraphicsScene, QGraphicsView,
-    QStackedWidget, QTextEdit, QVBoxLayout, QWidget, QProgressBar,
+    QStackedWidget, QTextEdit, QVBoxLayout, QWidget
 )
 
 try:
@@ -109,7 +104,7 @@ APP_PROTOCOL = APP_VERSION.split()[-1]
 
 _DEFAULT_W, _DEFAULT_H = 1360, 820
 _MIN_W,     _MIN_H     = 700, 520
-_LEFT_W  = 292
+_LEFT_W  = 244
 _RIGHT_W = 350
 _RAIL_W  = 36
 
@@ -239,7 +234,7 @@ def retheme_all_widgets(old: dict[str, str], new: dict[str, str]) -> None:
 
 
 def qcol(h: str, a: int = 255) -> QColor:
-    c = QColor(h); c.setAlpha(a); return c
+    c = QColor(h); c.setAlpha(max(0, min(255, int(a)))); return c
 
 
 # ── Typography + glass helpers (added by the UI refresh) ─────────────────────
@@ -619,20 +614,23 @@ _metrics = _SysMetrics()
 # decided ONCE, here, on the unit sphere — so a frame costs a rotation and a
 # batch of line draws, never an O(n²) neighbour search. Stars are generated the
 # same way: fixed seed, so the sky does not reshuffle between launches.
-_ORB_N = 230
+_ORB_N = 340
 _ORB_CACHE = None
+_ORB_EDGE_Y: list = []     # object-space height of every edge (scan highlight)
 
 # Satellites: (orbit radius in sphere radii, inclination, node angle, angular
 # speed, start phase, head size). Each leaves a short fading trail of dots —
 # there is deliberately no orbit *line*.
 _SATS = (
-    (1.30,  0.55, 0.00,  0.65, 0.0, 3.4),
-    (1.18, -0.80, 2.10, -0.88, 2.0, 3.0),
-    (1.42,  1.25, 4.00,  0.48, 4.1, 2.8),
+    (1.30,  0.55, 0.00,  0.75, 0.0, 3.4),
+    (1.18, -0.80, 2.10, -0.95, 2.0, 3.0),
+    (1.42,  1.25, 4.00,  0.52, 4.1, 2.8),
+    (1.56, -0.35, 5.20,  0.66, 1.3, 2.6),
 )
 
 
 def _build_orb():
+    global _ORB_EDGE_Y
     rnd = random.Random(7)
     ga = math.pi * (3.0 - math.sqrt(5.0))
     pts, phs = [], []
@@ -643,7 +641,7 @@ def _build_orb():
         pts.append((math.cos(th) * r, y, math.sin(th) * r))
         phs.append(rnd.uniform(0.0, 6.2832))
     edges = []
-    lim = 0.36 * 0.36
+    lim = 0.28 * 0.28
     for i in range(_ORB_N):
         xi, yi, zi = pts[i]
         for j in range(i + 1, _ORB_N):
@@ -651,6 +649,7 @@ def _build_orb():
             dx, dy, dz = xi - xj, yi - yj, zi - zj
             if dx * dx + dy * dy + dz * dz < lim:
                 edges.append((i, j))
+    _ORB_EDGE_Y = [(pts[a][1] + pts[b][1]) * 0.5 for a, b in edges]
     stars = []
     for _ in range(80):
         stars.append((rnd.uniform(-1.0, 1.0), rnd.uniform(-1.0, 1.0),
@@ -766,7 +765,13 @@ class HudCanvas(QWidget):
         self._orb = _get_orb()
         _ne = max(1, len(self._orb[2]))
         self._pulses = [[random.randrange(_ne), random.random(),
-                         random.uniform(0.5, 1.2)] for _ in range(12)]
+                         random.uniform(0.5, 1.2)] for _ in range(14)]
+        # Spin angle is integrated frame by frame, never "time x rate": a rate
+        # that changes with the state would make the sphere jump the instant
+        # JARVIS starts to speak.
+        self._spin = 0.0
+        self._shoot = None                      # the shooting star, if one is out
+        self._shoot_next = time.time() + 3.0
 
         self._tick       = 0
         self._born       = time.time()
@@ -1013,6 +1018,10 @@ class HudCanvas(QWidget):
         # a rate that changes with state jumps the rings the instant JARVIS
         # starts talking. Same lesson the head's sway taught.
         self._core_phase += min(0.10, max(0.0, dt))
+        self._spin += min(0.10, max(0.0, dt)) * (
+            0.42 + (0.30 if self.speaking else 0.0)
+            + (0.16 if self.state in ("THINKING", "PROCESSING") else 0.0)
+            + 0.6 * amp)
 
         use_face = self._avatar is not None and self.hud_style == "face"
         if use_face:
@@ -1034,6 +1043,20 @@ class HudCanvas(QWidget):
                     pl[0] = random.randrange(ne)
                     pl[1] = 0.0
                     pl[2] = random.uniform(0.5, 1.2)
+            # A shooting star now and then.
+            sh = self._shoot
+            if sh is None:
+                if now >= self._shoot_next:
+                    self._shoot = {"x": random.uniform(0.05, 0.55),
+                                   "y": random.uniform(0.04, 0.35),
+                                   "a": random.uniform(0.35, 0.8),
+                                   "v": random.uniform(0.55, 0.9),
+                                   "t": 0.0, "life": random.uniform(0.7, 1.1)}
+            else:
+                sh["t"] += min(0.10, max(0.0, dt))
+                if sh["t"] >= sh["life"]:
+                    self._shoot = None
+                    self._shoot_next = now + random.uniform(3.0, 7.0)
 
         self._blink_tick += 1
         if self._blink_tick >= 38:
@@ -1147,13 +1170,24 @@ class HudCanvas(QWidget):
             p.setPen(pen(qcol(C.WHITE, star_alpha[lvl]), 2.6 if big else 1.4, True))
             _draw_points(p, lst)
 
+        # ── shooting star ────────────────────────────────────────────────────
+        sh = self._shoot
+        if sh is not None:
+            fr = sh["t"] / sh["life"]
+            fade = math.sin(math.pi * min(1.0, max(0.0, fr)))
+            ca, sa = math.cos(sh["a"]), math.sin(sh["a"])
+            hx = x + sh["x"] * w + ca * sh["v"] * sh["t"] * w
+            hy = y + sh["y"] * h + sa * sh["v"] * sh["t"] * w
+            tl = 0.14 * w
+            for i in range(10):
+                f0, f1 = i / 10.0, (i + 1) / 10.0
+                p.setPen(pen(qcol(C.WHITE, 230 * (1.0 - f0) * fade), 1.9 * (1.0 - f0 * 0.8), True))
+                p.drawLine(QLineF(hx - ca * tl * f0, hy - sa * tl * f0,
+                                  hx - ca * tl * f1, hy - sa * tl * f1))
+
         # ── view rotation ────────────────────────────────────────────────────
-        ry = t * (
-            0.38
-            + (0.30 if self.speaking else 0.0)
-            + (0.16 if thinking else 0.0)
-        )
-        rx = -0.28 + math.sin(t * 0.21) * 0.10
+        ry = self._spin
+        rx = -0.28 + math.sin(t * 0.27) * 0.16 + math.sin(t * 0.11) * 0.05
         cyr, syr = math.cos(ry), math.sin(ry)
         cxr, sxr = math.cos(rx), math.sin(rx)
         persp = 0.28
@@ -1197,7 +1231,7 @@ class HudCanvas(QWidget):
         draw_sats(back)
 
         # ── ambient glow + glass body (light from the upper left) ────────────
-        lift = 1.0 + 0.9 * amp + (0.25 if self.speaking else 0.0)
+        lift = 1.0 + 0.9 * amp + (0.25 if self.speaking else 0.0) + 0.12 * math.sin(t * 1.15)
         gr = R * 2.1
         g = QRadialGradient(cx, cy, gr)
         g.setColorAt(0.0, tint(main, 60 * lift))
@@ -1207,7 +1241,7 @@ class HudCanvas(QWidget):
         p.setBrush(QBrush(g))
         p.drawEllipse(QRectF(cx - gr, cy - gr, gr * 2, gr * 2))
 
-        Rb = R * (1.0 + amp * 0.04)
+        Rb = R * (1.0 + 0.018 * math.sin(t * 1.15) + amp * 0.05)
         g2 = QRadialGradient(cx - Rb * 0.30, cy - Rb * 0.35, Rb * 1.3)
         g2.setColorAt(0.0, tint(main, 46))
         g2.setColorAt(0.6, tint(main, 14))
@@ -1224,7 +1258,9 @@ class HudCanvas(QWidget):
             px0, py0, pz0 = pts[i]
             ph = phs[i]
             k = (1.0 + 0.022 * math.sin(slow_t + ph)
-                 + amp * 0.20 * (0.5 + 0.5 * math.sin(wob_t + ph * 2.0)))
+                 + amp * 0.20 * (0.5 + 0.5 * math.sin(wob_t + ph * 2.0))
+                 # a ripple that travels up the sphere, stronger with the voice
+                 + (0.016 + 0.045 * amp) * math.sin(py0 * 6.0 - t * 2.8 + ph * 0.2))
             px0 *= k; py0 *= k; pz0 *= k
             x1 = px0 * cyr + pz0 * syr
             z1 = -px0 * syr + pz0 * cyr
@@ -1237,16 +1273,26 @@ class HudCanvas(QWidget):
         # ── mesh edges, four depth buckets ───────────────────────────────────
         NB = 4
         elines = [[] for _ in range(NB)]
-        for a, b in edges:
+        hot = []                                # edges the scan band is crossing
+        scan = math.sin(t * 0.85) * 0.92
+        ey = _ORB_EDGE_Y
+        for ei, (a, b) in enumerate(edges):
             dn = ((zs[a] + zs[b]) * 0.25) + 0.5
             bi = 0 if dn < 0.0 else (NB - 1 if dn >= 1.0 else int(dn * NB))
-            elines[bi].append(QLineF(proj[a], proj[b]))
-        e_alpha = (28, 58, 100, 155)
-        e_width = (0.7, 0.85, 1.05, 1.3)
+            ln = QLineF(proj[a], proj[b])
+            if bi >= 2 and abs(ey[ei] - scan) < 0.07:
+                hot.append(ln)
+            else:
+                elines[bi].append(ln)
+        e_alpha = (22, 48, 86, 134)
+        e_width = (0.7, 0.8, 1.0, 1.2)
         elift = 1.0 + 0.8 * amp
         for bi in range(NB):
             p.setPen(QPen(tint(main, e_alpha[bi] * elift), e_width[bi]))
             _draw_lines(p, elines[bi])
+        if hot:
+            p.setPen(QPen(tint(acc, 120 + 70 * amp), 1.1))
+            _draw_lines(p, hot)
 
         # ── the dots themselves ──────────────────────────────────────────────
         dpts = [[] for _ in range(NB)]
@@ -1254,8 +1300,8 @@ class HudCanvas(QWidget):
             dn = (zs[i] + 1.0) * 0.5
             bi = 0 if dn < 0.0 else (NB - 1 if dn >= 1.0 else int(dn * NB))
             dpts[bi].append(proj[i])
-        d_alpha = (80, 135, 205, 255)
-        d_size = (1.5, 2.0, 2.8, 3.8)
+        d_alpha = (70, 120, 190, 255)
+        d_size = (1.6, 2.2, 3.0, 4.0)
         bright = QColor(main).lighter(140)
         for bi in range(NB):
             col = bright if bi == NB - 1 else main
@@ -1271,12 +1317,21 @@ class HudCanvas(QWidget):
             if z < -0.25:
                 continue
             pa, pb = proj[a], proj[b]
-            pt = QPointF(pa.x() + (pb.x() - pa.x()) * pr,
-                         pa.y() + (pb.y() - pa.y()) * pr)
-            p.setBrush(QBrush(tint(acc, 70)))
-            p.drawEllipse(pt, 5.0, 5.0)
-            p.setBrush(QBrush(tint(QColor(C.WHITE), 235)))
-            p.drawEllipse(pt, 2.1, 2.1)
+            for k in range(4):                  # head plus a short fading tail
+                q = pr - 0.07 * k
+                if q < 0.0:
+                    break
+                pt = QPointF(pa.x() + (pb.x() - pa.x()) * q,
+                             pa.y() + (pb.y() - pa.y()) * q)
+                if k == 0:
+                    p.setBrush(QBrush(tint(acc, 70)))
+                    p.drawEllipse(pt, 5.0, 5.0)
+                    p.setBrush(QBrush(tint(QColor(C.WHITE), 235)))
+                    p.drawEllipse(pt, 2.1, 2.1)
+                else:
+                    fd = 1.0 - k * 0.25
+                    p.setBrush(QBrush(tint(acc, 160 * fd)))
+                    p.drawEllipse(pt, 1.2 + 0.7 * fd, 1.2 + 0.7 * fd)
 
         draw_sats(front)
 
@@ -1467,80 +1522,299 @@ class HudCanvas(QWidget):
 
         p.end()   # end deterministically so the backing store never flushes an active painter
 
+
+class RingGauge(QWidget):
+    """Round load gauge for the system monitor.
+
+    A ring of ticks that light up as the value climbs (the newest ones
+    brightest, so a rising load leaves a trail), a thick arc with a glowing
+    head, a short scanner sweeping the outside, and the number in the middle.
+    The displayed value eases toward the real one instead of jumping, so a
+    reading that arrives every two seconds still moves smoothly on screen, and
+    the scanner turns faster the harder the machine is working.
+
+    Same set_value(pct, text) as the old tile; MainWindow ticks the animation
+    from a single shared timer and only while the gauge can actually be seen."""
+
+    def __init__(self, label: str, color: str = C.PRI, parent=None):
+        super().__init__(parent)
+        self._label = label
+        self._color = color
+        self._target = 0.0
+        self._disp = 0.0
+        self._text = "--"
+        self._phase = random.uniform(0.0, 6.28)
+        self._last = time.time()
+        sp = QSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        sp.setHeightForWidth(True)
+        self.setSizePolicy(sp)
+        self.setMinimumSize(64, 64)
+
+    # keep the gauge a circle: its height follows its width
+    def hasHeightForWidth(self) -> bool:
+        return True
+
+    def heightForWidth(self, w: int) -> int:
+        return int(w)
+
+    def sizeHint(self) -> QSize:
+        return QSize(96, 96)
+
+    def set_value(self, pct: float, text: str) -> None:
+        self._target = max(0.0, min(100.0, float(pct)))
+        self._text = text
+
+    def tick(self) -> None:
+        now = time.time()
+        dt = min(0.1, max(0.0, now - self._last))
+        self._last = now
+        self._disp += (self._target - self._disp) * (1.0 - math.exp(-dt * 4.5))
+        if abs(self._target - self._disp) < 0.02:
+            self._disp = self._target
+        self._phase += dt * (0.9 + 2.6 * self._disp / 100.0)
+        self.update()
+
+    def _accent(self) -> str:
+        c = str(self._color).lower()
+        for k, v in _PALETTE_DEFAULTS.items():
+            if v.lower() == c:
+                return getattr(C, k)
+        return self._color
+
+    def paintEvent(self, _):
+        p = QPainter(self)
+        if not p.isActive():
+            return
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        W, H = self.width(), self.height()
+        cx, cy = W / 2.0, H / 2.0
+        R = max(10.0, min(W, H) / 2.0 - 3.0)
+        v = self._disp
+        if v > 85:
+            col = qcol(C.RED)
+        elif v > 65:
+            col = qcol(C.ACC)
+        else:
+            col = qcol(self._accent())
+        pulse = (0.5 + 0.5 * math.sin(self._phase * 3.0)) if v > 85 else 0.0
+
+        def tint(c: QColor, a: float) -> QColor:
+            c2 = QColor(c)
+            c2.setAlpha(max(0, min(255, int(a))))
+            return c2
+
+        # glass disc
+        g = QRadialGradient(cx, cy - R * 0.25, R)
+        g.setColorAt(0.0, QColor(255, 255, 255, 10))
+        g.setColorAt(1.0, QColor(255, 255, 255, 32))
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QBrush(g))
+        p.drawEllipse(QPointF(cx, cy), R, R)
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.setPen(QPen(QColor(255, 255, 255, 30), 1))
+        p.drawEllipse(QPointF(cx, cy), R - 0.5, R - 0.5)
+
+        # tick ring — lit up to the value, brightest at the leading edge
+        N = 48
+        r0, r1 = R * 0.84, R * 0.93
+        lit = v / 100.0 * N
+        off = []
+        for i in range(N):
+            a = math.radians(-90.0 + i * 360.0 / N)
+            ca, sa = math.cos(a), math.sin(a)
+            ln = QLineF(cx + ca * r0, cy + sa * r0, cx + ca * r1, cy + sa * r1)
+            if i < lit:
+                f = (i + 1) / max(1.0, lit)
+                p.setPen(QPen(tint(col, 55 + 200 * f * f), 1.6))
+                p.drawLine(ln)
+            else:
+                off.append(ln)
+        p.setPen(QPen(QColor(255, 255, 255, 34), 1.1))
+        _draw_lines(p, off)
+
+        # arc with a glowing head
+        ra = R * 0.68
+        rect = QRectF(cx - ra, cy - ra, ra * 2, ra * 2)
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.setPen(QPen(QColor(255, 255, 255, 30), 4))
+        p.drawEllipse(rect)
+        if v > 0.4:
+            span = -int(v * 3.6 * 16)
+            pen = QPen(tint(col, 46 + 50 * pulse), 9)
+            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+            p.setPen(pen)
+            p.drawArc(rect, 90 * 16, span)
+            pen = QPen(col, 4)
+            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+            p.setPen(pen)
+            p.drawArc(rect, 90 * 16, span)
+            ang = math.radians(90.0 - v * 3.6)
+            hx, hy = cx + ra * math.cos(ang), cy - ra * math.sin(ang)
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(QBrush(tint(col, 90 + 60 * pulse)))
+            p.drawEllipse(QPointF(hx, hy), 6.0, 6.0)
+            p.setBrush(QBrush(tint(QColor(C.WHITE), 245)))
+            p.drawEllipse(QPointF(hx, hy), 2.4, 2.4)
+
+        # scanner on the outside edge: a short comet turning clockwise
+        srect = QRectF(cx - R + 1.5, cy - R + 1.5, (R - 1.5) * 2, (R - 1.5) * 2)
+        deg = math.degrees(self._phase)
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        for k in range(4):
+            p.setPen(QPen(tint(col, 130 - k * 30), 1.8))
+            p.drawArc(srect, int((-deg + k * 9.0) * 16), 9 * 16)
+
+        # label + value in the middle; the number counts up with the arc
+        r_in = ra - 5.0
+        maxw = max(20.0, r_in * 1.55)
+        lsz = 7
+        while True:
+            lf = QFont(_FONT, lsz, QFont.Weight.Bold)
+            lf.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 0.7)
+            if QFontMetrics(lf).horizontalAdvance(self._label) <= maxw or lsz <= 5:
+                break
+            lsz -= 1
+        p.setFont(lf)
+        p.setPen(QPen(qcol(C.TEXT_MED), 1))
+        p.drawText(QRectF(cx - maxw / 2, cy - r_in * 0.42 - 8, maxw, 16),
+                   Qt.AlignmentFlag.AlignCenter, self._label)
+        txt = self._text
+        if txt.endswith("%"):
+            txt = f"{self._disp:.0f}%"
+        fs = 13
+        while fs > 6:
+            vf = QFont(_MONO, fs, QFont.Weight.Bold)
+            if QFontMetrics(vf).horizontalAdvance(txt) <= maxw:
+                break
+            fs -= 1
+        vf = QFont(_MONO, fs, QFont.Weight.Bold)
+        p.setFont(vf)
+        p.setPen(QPen(col if self._text not in ("--", "N/A") else qcol(C.TEXT_DIM), 1))
+        p.drawText(QRectF(cx - maxw / 2, cy + r_in * 0.14 - 11, maxw, 22),
+                   Qt.AlignmentFlag.AlignCenter, txt)
+        p.end()
+
+
+class _LoadGraph(QWidget):
+    """Two minutes of CPU and memory load as a pair of filled lines."""
+
+    _N = 60
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._cpu = [0.0] * self._N
+        self._mem = [0.0] * self._N
+        self.setMinimumHeight(70)
+        self.setMaximumHeight(110)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+
+    def push(self, cpu: float, mem: float) -> None:
+        self._cpu.append(max(0.0, min(100.0, cpu))); del self._cpu[0]
+        self._mem.append(max(0.0, min(100.0, mem))); del self._mem[0]
+        self.update()
+
+    def paintEvent(self, _):
+        p = QPainter(self)
+        if not p.isActive():
+            return
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        W, H = self.width(), self.height()
+        card = QPainterPath()
+        card.addRoundedRect(QRectF(0.5, 0.5, W - 1, H - 1), 12, 12)
+        p.fillPath(card, QColor(255, 255, 255, 12))
+        p.setPen(QPen(QColor(255, 255, 255, 26), 1))
+        p.drawPath(card)
+        p.save()
+        p.setClipPath(card)
+        for f in (0.25, 0.5, 0.75):
+            y = 8 + (H - 16) * f
+            p.setPen(QPen(QColor(255, 255, 255, 14), 1))
+            p.drawLine(QLineF(0, y, W, y))
+        n = self._N
+        step = W / float(n - 1)
+        for series, col in ((self._mem, qcol(C.ACC2)), (self._cpu, qcol(C.PRI))):
+            pts = [QPointF(i * step, H - 8 - (v / 100.0) * (H - 22)) for i, v in enumerate(series)]
+            line = QPainterPath(pts[0])
+            for pt in pts[1:]:
+                line.lineTo(pt)
+            area = QPainterPath(line)
+            area.lineTo(W, H); area.lineTo(0, H); area.closeSubpath()
+            g = QLinearGradient(0, 0, 0, H)
+            top = QColor(col); top.setAlpha(70)
+            bot = QColor(col); bot.setAlpha(0)
+            g.setColorAt(0.0, top); g.setColorAt(1.0, bot)
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(QBrush(g))
+            p.drawPath(area)
+            lc = QColor(col); lc.setAlpha(210)
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.setPen(QPen(lc, 1.4))
+            p.drawPath(line)
+        p.restore()
+        f = QFont(_FONT, 7, QFont.Weight.Bold)
+        f.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 0.8)
+        p.setFont(f)
+        p.setPen(QPen(qcol(C.PRI), 1)); p.drawText(QPointF(10, 14), "CPU")
+        p.setPen(QPen(qcol(C.ACC2), 1)); p.drawText(QPointF(38, 14), "MEM")
+        p.setPen(QPen(qcol(C.TEXT_DIM), 1))
+        p.drawText(QRectF(0, 3, W - 8, 14), Qt.AlignmentFlag.AlignRight, "2 MIN")
+        p.end()
+
+
 class MetricBar(QWidget):
-    """Circular futuristic system metric."""
+    """Glass tile: ring gauge + live value + sparkline of recent history.
+
+    Same constructor and set_value(pct, text) as the old progress bar, so the
+    rest of the app does not change."""
 
     _HIST = 48
 
     def __init__(self, label: str, color: str = C.PRI, parent=None):
         super().__init__(parent)
-
         self._label = label
         self._color = color
         self._value = 0.0
         self._text = "--"
         self._hist = [0.0] * self._HIST
-
-        self.setMinimumSize(118, 130)
-        self.setMaximumHeight(138)
-        self.setSizePolicy(
-            QSizePolicy.Policy.Expanding,
-            QSizePolicy.Policy.Fixed
-        )
+        self.setMinimumHeight(46)
+        self.setMaximumHeight(70)
+        self.setMinimumWidth(100)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
     def set_value(self, pct: float, text: str):
         v = max(0.0, min(100.0, pct))
-
         self._hist.append(v)
         del self._hist[0]
-
         self._value = v
         self._text = text
-
         self.update()
 
     def _accent(self) -> str:
+        """The colour was stored as a hex at build time; map it back to the live
+        palette so a theme change recolours the tile too."""
         c = str(self._color).lower()
-
         for k, v in _PALETTE_DEFAULTS.items():
             if v.lower() == c:
                 return getattr(C, k)
-
         return self._color
 
     def paintEvent(self, _):
         p = QPainter(self)
-
         if not p.isActive():
             return
-
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        W, H = self.width(), self.height()
 
-        W = self.width()
-        H = self.height()
-
-        cx = W / 2.0
-        cy = H / 2.0
-
-        # ── Card ────────────────────────────────────────────────────────
         card = QPainterPath()
-        card.addRoundedRect(
-            QRectF(0.5, 0.5, W - 1, H - 1),
-            18,
-            18
-        )
-
+        card.addRoundedRect(QRectF(0.5, 0.5, W - 1, H - 1), 14, 14)
         g = QLinearGradient(0, 0, 0, H)
         g.setColorAt(0.0, QColor(255, 255, 255, 24))
-        g.setColorAt(1.0, QColor(255, 255, 255, 7))
-
-        p.setPen(QPen(QColor(255, 255, 255, 24), 1))
+        g.setColorAt(1.0, QColor(255, 255, 255, 8))
+        p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(QBrush(g))
         p.drawPath(card)
 
-        # ── Colour state ────────────────────────────────────────────────
         v = self._value
-
         if v > 85:
             col = qcol(C.RED)
         elif v > 65:
@@ -1548,189 +1822,69 @@ class MetricBar(QWidget):
         else:
             col = qcol(self._accent())
 
-        # ── Label ────────────────────────────────────────────────────────
-        lf = QFont(_FONT, 8, QFont.Weight.Bold)
-        lf.setLetterSpacing(
-            QFont.SpacingType.AbsoluteSpacing,
-            1.2
-        )
+        # ── sparkline, clipped to the card ───────────────────────────────────
+        p.save()
+        p.setClipPath(card)
+        n = len(self._hist)
+        step = W / float(n - 1)
+        top, bot = H * 0.46, H - 5.0
+        peak = max(25.0, max(self._hist))
+        pts = [QPointF(i * step, bot - (val / peak) * (bot - top))
+               for i, val in enumerate(self._hist)]
+        line = QPainterPath(pts[0])
+        for pt in pts[1:]:
+            line.lineTo(pt)
+        area = QPainterPath(line)
+        area.lineTo(W, H)
+        area.lineTo(0, H)
+        area.closeSubpath()
+        ag = QLinearGradient(0, top, 0, H)
+        c_top = QColor(col); c_top.setAlpha(80)
+        c_bot = QColor(col); c_bot.setAlpha(0)
+        ag.setColorAt(0.0, c_top)
+        ag.setColorAt(1.0, c_bot)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QBrush(ag))
+        p.drawPath(area)
+        lc = QColor(col); lc.setAlpha(150)
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.setPen(QPen(lc, 1.4))
+        p.drawPath(line)
+        p.restore()
 
+        # ── ring gauge ───────────────────────────────────────────────────────
+        rcx, rcy, rr = 34.0, H / 2.0, 16.0
+        ring = QRectF(rcx - rr, rcy - rr, rr * 2, rr * 2)
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.setPen(QPen(QColor(255, 255, 255, 34), 4))
+        p.drawEllipse(ring)
+        if v > 0.5:
+            pen = QPen(col, 4)
+            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+            p.setPen(pen)
+            p.drawArc(ring, 90 * 16, -int(v * 3.6 * 16))
+        p.setPen(Qt.PenStyle.NoPen)
+        dc = QColor(col); dc.setAlpha(210)
+        p.setBrush(QBrush(dc))
+        p.drawEllipse(QPointF(rcx, rcy), 2.6, 2.6)
+
+        # ── text ─────────────────────────────────────────────────────────────
+        x0 = 62.0
+        tw = max(10.0, W - x0 - 10.0)
+        lf = QFont(_FONT, 8, QFont.Weight.Bold)
+        lf.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 1.0)
         p.setFont(lf)
         p.setPen(QPen(qcol(C.TEXT_MED), 1))
+        lbl = QFontMetrics(lf).elidedText(self._label, Qt.TextElideMode.ElideRight, int(tw))
+        p.drawText(QRectF(x0, H / 2 - 22, tw, 16),
+                   Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, lbl)
 
-        p.drawText(
-            QRectF(8, 10, W - 16, 18),
-            Qt.AlignmentFlag.AlignCenter,
-            self._label
-        )
-
-        # ── Main circular gauge ─────────────────────────────────────────
-        radius = min(W, H) * 0.25
-
-        ring = QRectF(
-            cx - radius,
-            cy - radius + 5,
-            radius * 2,
-            radius * 2
-        )
-
-        # Outer glow
-        glow = QRadialGradient(
-            cx,
-            cy + 5,
-            radius * 1.7
-        )
-
-        glow.setColorAt(
-            0.0,
-            QColor(col.red(), col.green(), col.blue(), 40)
-        )
-        glow.setColorAt(
-            0.65,
-            QColor(col.red(), col.green(), col.blue(), 10)
-        )
-        glow.setColorAt(
-            1.0,
-            QColor(col.red(), col.green(), col.blue(), 0)
-        )
-
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QBrush(glow))
-
-        p.drawEllipse(
-            QRectF(
-                cx - radius * 1.7,
-                cy - radius * 1.7 + 5,
-                radius * 3.4,
-                radius * 3.4
-            )
-        )
-
-        # Base ring
-        p.setBrush(Qt.BrushStyle.NoBrush)
-        p.setPen(QPen(QColor(255, 255, 255, 30), 5))
-
-        p.drawEllipse(ring)
-
-        # Progress ring
-        if v > 0.1:
-            progress_pen = QPen(col, 5)
-            progress_pen.setCapStyle(
-                Qt.PenCapStyle.RoundCap
-            )
-
-            p.setPen(progress_pen)
-
-            p.drawArc(
-                ring,
-                90 * 16,
-                -int(v * 3.6 * 16)
-            )
-
-        # Inner ring
-        inner_radius = radius * 0.70
-
-        inner_ring = QRectF(
-            cx - inner_radius,
-            cy - inner_radius + 5,
-            inner_radius * 2,
-            inner_radius * 2
-        )
-
-        p.setPen(
-            QPen(
-                QColor(col.red(), col.green(), col.blue(), 55),
-                1
-            )
-        )
-
-        p.drawEllipse(inner_ring)
-
-        # Centre point
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QBrush(col))
-
-        p.drawEllipse(
-            QPointF(cx, cy + 5),
-            3.0,
-            3.0
-        )
-
-        # ── Value ───────────────────────────────────────────────────────
-        vf = QFont(_MONO, 13, QFont.Weight.Bold)
-
+        vf = QFont(_MONO, 14, QFont.Weight.Bold)
         p.setFont(vf)
-
-        p.setPen(
-            QPen(
-                col if self._text != "--"
-                else qcol(C.TEXT_DIM),
-                1
-            )
-        )
-
-        value_y = cy + radius * 0.48
-
-        p.drawText(
-            QRectF(
-                5,
-                value_y,
-                W - 10,
-                24
-            ),
-            Qt.AlignmentFlag.AlignCenter,
-            self._text
-        )
-
-        # ── Tiny activity graph ─────────────────────────────────────────
-        graph_y = H - 15
-        graph_left = 12
-        graph_right = W - 12
-
-        n = len(self._hist)
-
-        if n > 1:
-            step = (
-                graph_right - graph_left
-            ) / float(n - 1)
-
-            peak = max(
-                25.0,
-                max(self._hist)
-            )
-
-            points = []
-
-            for i, val in enumerate(self._hist):
-                px = graph_left + i * step
-                py = graph_y - (
-                    val / peak
-                ) * 7.0
-
-                points.append(
-                    QPointF(px, py)
-                )
-
-            spark = QPainterPath(points[0])
-
-            for pt in points[1:]:
-                spark.lineTo(pt)
-
-            spark_pen = QPen(
-                QColor(
-                    col.red(),
-                    col.green(),
-                    col.blue(),
-                    120
-                ),
-                1.0
-            )
-
-            p.setPen(spark_pen)
-            p.setBrush(Qt.BrushStyle.NoBrush)
-
-            p.drawPath(spark)
-
+        p.setPen(QPen(col if self._text != "--" else qcol(C.TEXT_DIM), 1))
+        val = QFontMetrics(vf).elidedText(self._text, Qt.TextElideMode.ElideRight, int(tw))
+        p.drawText(QRectF(x0, H / 2 - 6, tw, 26),
+                   Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, val)
         p.end()
 
 
@@ -1847,6 +2001,7 @@ class LogWidget(QTextEdit):
             self.ensureCursorVisible()
             QTimer.singleShot(20, self._next)
 
+
 _FILE_ICONS = {
     "image":   ("🖼", "#00d4ff"), "video":   ("🎬", "#ff6b00"),
     "audio":   ("🎵", "#cc44ff"), "pdf":     ("📄", "#ff4444"),
@@ -1855,6 +2010,7 @@ _FILE_ICONS = {
     "pptx":    ("📊", "#ff6622"), "text":    ("📃", "#aaaaaa"),
     "data":    ("🔧", "#88ddff"), "unknown": ("📎", "#888888"),
 }
+
 _EXT_TO_CAT = {
     **dict.fromkeys(["jpg","jpeg","png","gif","webp","bmp","tiff","svg","ico"], "image"),
     **dict.fromkeys(["mp4","avi","mov","mkv","wmv","flv","webm","m4v"],         "video"),
@@ -1870,8 +2026,10 @@ _EXT_TO_CAT = {
     **dict.fromkeys(["csv","tsv","json","xml"],                                  "data"),
 }
 
+
 def _file_category(path: Path) -> str:
     return _EXT_TO_CAT.get(path.suffix.lower().lstrip("."), "unknown")
+
 
 def _fmt_size(size: int) -> str:
     if   size < 1024:    return f"{size} B"
@@ -3130,7 +3288,6 @@ class ClipboardPanel(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(f"""
             ClipboardPanel {{
@@ -3139,186 +3296,75 @@ class ClipboardPanel(QWidget):
                 border-radius: 14px;
             }}
         """)
-
         self.setFixedWidth(self._W)
-
         self._clip_text = ""
-        self._drag_pos = None
 
         lay = QVBoxLayout(self)
         lay.setContentsMargins(8, 6, 8, 7)
         lay.setSpacing(4)
 
-        # ── Draggable header ─────────────────────────────────────────────
-        self._drag_header = QWidget()
-
-        hdr = QHBoxLayout(self._drag_header)
-        hdr.setContentsMargins(0, 0, 0, 0)
-        hdr.setSpacing(4)
-
+        hdr = QHBoxLayout(); hdr.setSpacing(4)
         icon_lbl = QLabel("◈  CLIPBOARD DETECTED")
         icon_lbl.setFont(QFont(_FONT, 8, QFont.Weight.Bold))
-        icon_lbl.setStyleSheet(
-            f"color: {C.ACC2}; background: transparent;"
-        )
-
-        hdr.addWidget(icon_lbl)
-        hdr.addStretch()
-
+        icon_lbl.setStyleSheet(f"color: {C.ACC2}; background: transparent;")
+        hdr.addWidget(icon_lbl); hdr.addStretch()
         x_btn = QPushButton("✕")
         x_btn.setFixedSize(16, 16)
         x_btn.setFont(QFont(_FONT, 9))
-        x_btn.setStyleSheet(
-            f"color: {C.TEXT_DIM}; "
-            f"background: transparent; "
-            f"border: none;"
-        )
+        x_btn.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent; border: none;")
         x_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         x_btn.clicked.connect(self.hide)
-
         hdr.addWidget(x_btn)
+        lay.addLayout(hdr)
 
-        lay.addWidget(self._drag_header)
-
-        # ── Clipboard preview ────────────────────────────────────────────
         self._preview = QLabel()
         self._preview.setFont(QFont(_FONT, 9))
         self._preview.setStyleSheet(f"""
-            color: {C.TEXT};
-            background: {C.PANEL2};
-            border: 1px solid {C.BORDER};
-            border-radius: 8px;
-            padding: 4px 6px;
+            color: {C.TEXT}; background: {C.PANEL2};
+            border: 1px solid {C.BORDER}; border-radius: 8px; padding: 4px 6px;
         """)
         self._preview.setWordWrap(False)
         self._preview.setFixedHeight(28)
-
         lay.addWidget(self._preview)
 
-        # ── Action buttons ────────────────────────────────────────────────
-        btn_row = QHBoxLayout()
-        btn_row.setSpacing(4)
-
-        _bs = (
-            f"QPushButton {{ "
-            f"background: {C.PANEL2}; "
-            f"color: {C.TEXT_MED}; "
-            f"border: 1px solid {C.BORDER}; "
-            f"border-radius: 6px; "
-            f"}}"
-            f"QPushButton:hover {{ "
-            f"color: {C.PRI}; "
-            f"border-color: {C.BORDER_B}; "
-            f"}}"
-        )
-
+        btn_row = QHBoxLayout(); btn_row.setSpacing(4)
+        _bs = (f"QPushButton {{ background: {C.PANEL2}; color: {C.TEXT_MED}; "
+               f"border: 1px solid {C.BORDER}; border-radius: 6px; }}"
+               f"QPushButton:hover {{ color: {C.PRI}; border-color: {C.BORDER_B}; }}")
         for label, cmd_fmt in [
             ("TRANSLATE", "Translate this text to English: {text}"),
             ("SUMMARISE", "Summarise this: {text}"),
-            ("EXPLAIN", "Explain this: {text}"),
-            ("FIX", "Fix grammar and spelling: {text}"),
+            ("EXPLAIN",   "Explain this: {text}"),
+            ("FIX",       "Fix grammar and spelling: {text}"),
         ]:
             b = QPushButton(label)
             b.setFixedHeight(22)
             b.setFont(QFont(_FONT, 8, QFont.Weight.Bold))
             b.setCursor(Qt.CursorShape.PointingHandCursor)
             b.setStyleSheet(_bs)
-            b.clicked.connect(
-                lambda _, c=cmd_fmt: self._trigger(c)
-            )
+            b.clicked.connect(lambda _, c=cmd_fmt: self._trigger(c))
             btn_row.addWidget(b)
-
         lay.addLayout(btn_row)
 
         self._dismiss_timer = QTimer(self)
         self._dismiss_timer.setSingleShot(True)
         self._dismiss_timer.timeout.connect(self.hide)
-
         self.hide()
-
-    # ── Dragging ─────────────────────────────────────────────────────────
-
-    def mousePressEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton:
-            if self._drag_header.geometry().contains(
-                event.position().toPoint()
-            ):
-                self._drag_pos = (
-                    event.globalPosition().toPoint()
-                    - self.frameGeometry().topLeft()
-                )
-                event.accept()
-                return
-
-        super().mousePressEvent(event)
-
-    def mouseMoveEvent(self, event):
-        if (
-            self._drag_pos is not None
-            and (event.buttons() & Qt.MouseButton.LeftButton)
-        ):
-            parent = self.parentWidget()
-
-            if parent is not None:
-                pos = (
-                    event.globalPosition().toPoint()
-                    - self._drag_pos
-                )
-
-                local = parent.mapFromGlobal(pos)
-
-                x = max(
-                    0,
-                    min(
-                        local.x(),
-                        parent.width() - self.width()
-                    )
-                )
-
-                y = max(
-                    0,
-                    min(
-                        local.y(),
-                        parent.height() - self.height()
-                    )
-                )
-
-                self.move(x, y)
-
-            event.accept()
-            return
-
-        super().mouseMoveEvent(event)
-
-    def mouseReleaseEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton:
-            self._drag_pos = None
-
-        super().mouseReleaseEvent(event)
-
-    # ── Actions ──────────────────────────────────────────────────────────
 
     def _trigger(self, cmd_fmt: str):
         if self._clip_text:
-            self.action_requested.emit(
-                cmd_fmt.format(text=self._clip_text[:800])
-            )
+            self.action_requested.emit(cmd_fmt.format(text=self._clip_text[:800]))
         self.hide()
 
     def show_clipboard(self, text: str):
         self._clip_text = text
-
-        preview = text[:58].replace("\n", " ")
-
+        preview = text[:58].replace('\n', ' ')
         if len(text) > 58:
             preview += "…"
-
         self._preview.setText(f'"{preview}"')
-
-        self.show()
-        self.raise_()
-
+        self.show(); self.raise_()
         self._dismiss_timer.start(8000)
+
 
 class PluginSettingsOverlay(QWidget):
     """Floating overlay — renders per-plugin settings forms.
@@ -4619,7 +4665,7 @@ class MainWindow(QMainWindow):
             self._layout_loaded = True
             cfg = _read_full_config()
             try:
-                self._side_w["left"] = max(260, min(360, int(cfg.get("ui_left_w", _LEFT_W))))
+                self._side_w["left"] = max(176, min(340, int(cfg.get("ui_left_w", _LEFT_W))))
                 self._side_w["right"] = max(280, min(640, int(cfg.get("ui_right_w", _RIGHT_W))))
                 if int(cfg.get("ui_left_page", 0)) in (0, 1):
                     self._left_stack.setCurrentIndex(int(cfg.get("ui_left_page", 0)))
@@ -4627,6 +4673,10 @@ class MainWindow(QMainWindow):
                 pass
         if self._mini:
             return
+        # The header is hidden with everything else when the window shrinks to
+        # the orb, and nothing but this brings it back.
+        self._header_w.setVisible(True)
+        self._adapt_header()
         lo, ro = self._side_open("left"), self._side_open("right")
         self._left_panel.setVisible(lo)
         self._right_panel.setVisible(ro)
@@ -5196,12 +5246,7 @@ class MainWindow(QMainWindow):
             self._vis_content = self._content_panel.isVisible()
             self._vis_quiz = self._quiz_panel.isVisible()
             self._cam_preview.hide()
-
-            # Clipboard remains available in mini mode.
-            # It will be positioned relative to the mini window.
-            if self._clipboard_panel.isVisible():
-                self._position_clipboard_panel()
-
+            self._clipboard_panel.hide()
             for w in self._mini_hidden():
                 w.hide()
             self._mini = True
@@ -5221,18 +5266,7 @@ class MainWindow(QMainWindow):
             self.setMinimumSize(_MIN_W, _MIN_H)
             geom = self._normal_geom or QRect(0, 0, _DEFAULT_W, _DEFAULT_H)
             self._reflag(Qt.WindowType.Window, False, geom)
-            self._header_w.show()
-            self._header_w.setVisible(True)
-
-            # Restore everything hidden by mini mode.
-            self._header_w.show()
-            self._header_w.setVisible(True)
-
-            self._left_rail.show()
-            self._right_rail.show()
-            self._footer_w.show()
             self._apply_layout_state()
-
             if self._vis_content or self._pending_panel:
                 self._content_panel.show()
             if self._quiz is not None or self._vis_quiz:
@@ -5933,6 +5967,8 @@ class MainWindow(QMainWindow):
         mem = snap["mem"]
         self._bar_mem.set_value(mem, f"{mem:.0f}%")
 
+        self._load_graph.push(cpu, mem)
+
         # NET
         net = snap["net"]
         if net < 1.0:
@@ -5948,6 +5984,16 @@ class MainWindow(QMainWindow):
             self._bar_gpu.set_value(gpu, f"{gpu:.0f}%")
         else:
             self._bar_gpu.set_value(0, "N/A")
+
+        # TMP — a line in the list now, not a gauge
+        tmp = snap["tmp"]
+        if tmp >= 0:
+            self._temp_lbl.setText(f"{tmp:.0f}°C")
+            self._temp_lbl.setStyleSheet(
+                f"color: {C.RED if tmp > 85 else (C.ACC if tmp > 70 else C.TEXT_MED)};"
+                " background: transparent;")
+        else:
+            self._temp_lbl.setText("N/A")
 
         try:
             boot_t  = psutil.boot_time()
@@ -6158,8 +6204,8 @@ class MainWindow(QMainWindow):
         bar). 0 = system monitor, 1 = tools (timer, tasks, quick actions)."""
         w = QWidget()
         w.setObjectName("SystemPanel")
-        w.setMinimumWidth(260)
-        w.setMaximumWidth(360)
+        w.setMinimumWidth(176)
+        w.setMaximumWidth(340)
         w.setStyleSheet(
             "QWidget#SystemPanel { background: rgba(3, 12, 20, 110); "
             "border-right: 1px solid rgba(255, 255, 255, 20); }"
@@ -6174,95 +6220,86 @@ class MainWindow(QMainWindow):
 
     def _build_monitor_page(self) -> QWidget:
         w = QWidget()
-
         lay = QVBoxLayout(w)
-        lay.setContentsMargins(10, 7, 10, 10)
-        lay.setSpacing(6)
+        lay.setContentsMargins(10, 12, 10, 10)
+        lay.setSpacing(8)
         lay.addLayout(self._panel_header("SYSTEM MONITOR"))
 
+        # Four round gauges, two by two. Temperature moved into the list below:
+        # most Windows machines cannot report it, and a whole gauge reading
+        # "N/A" is a bad use of a quarter of the panel.
+        self._bar_cpu = RingGauge("CPU", C.PRI)
+        self._bar_mem = RingGauge("MEMORY", C.ACC2)
+        self._bar_net = RingGauge("NETWORK", C.GREEN)
+        self._bar_gpu = RingGauge("GPU", C.ACC)
+        self._bar_tmp = None
+        self._gauges = [self._bar_cpu, self._bar_mem, self._bar_net, self._bar_gpu]
         grid = QGridLayout()
         grid.setContentsMargins(0, 0, 0, 0)
-        grid.setHorizontalSpacing(8)
-        grid.setVerticalSpacing(8)
-
-        self._bar_cpu = MetricBar("CPU", C.PRI)
-        self._bar_mem = MetricBar("MEMORY", C.ACC2)
-        self._bar_net = MetricBar("NETWORK", C.GREEN)
-        self._bar_gpu = MetricBar("GPU", C.ACC)
-
+        grid.setSpacing(8)
         grid.addWidget(self._bar_cpu, 0, 0)
         grid.addWidget(self._bar_mem, 0, 1)
         grid.addWidget(self._bar_net, 1, 0)
         grid.addWidget(self._bar_gpu, 1, 1)
+        lay.addLayout(grid)
+        self._load_graph = _LoadGraph()
+        lay.addWidget(self._load_graph)
+        # Spare height goes here, not into the header row above the gauges.
+        lay.addStretch(1)
 
-        grid.setColumnStretch(0, 1)
-        grid.setColumnStretch(1, 1)
-        lay.addLayout(grid, 0)
-
-        lay.addSpacing(8)
-
-        # System information
         card = QFrame()
         card.setObjectName("SysCard")
         card.setStyleSheet(_glass_css("SysCard"))
-
         cl = QVBoxLayout(card)
-        cl.setContentsMargins(14, 11, 14, 11)
-        cl.setSpacing(6)
+        cl.setContentsMargins(14, 10, 14, 10)
+        cl.setSpacing(5)
 
         def kv(key: str, val: str, col: str, mono: bool = True) -> QLabel:
             h = QHBoxLayout()
             h.setSpacing(6)
-
             k = QLabel(key)
             k.setFont(QFont(_FONT, 8))
-            k.setStyleSheet(
-                f"color: {C.TEXT_DIM}; background: transparent;"
-            )
-
+            k.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
             v = QLabel(val)
-            v.setFont(
-                QFont(
-                    _MONO if mono else _FONT,
-                    9,
-                    QFont.Weight.Bold
-                )
-            )
-            v.setAlignment(
-                Qt.AlignmentFlag.AlignRight |
-                Qt.AlignmentFlag.AlignVCenter
-            )
-            v.setStyleSheet(
-                f"color: {col}; background: transparent;"
-            )
-
+            v.setFont(QFont(_MONO if mono else _FONT, 9, QFont.Weight.Bold))
+            v.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            v.setStyleSheet(f"color: {col}; background: transparent;")
             h.addWidget(k)
             h.addStretch(1)
             h.addWidget(v)
-
             cl.addLayout(h)
             return v
 
         self._uptime_lbl = kv("UPTIME", "--:--", C.GREEN)
         self._proc_lbl = kv("PROCESSES", "--", C.TEXT_MED)
+        self._temp_lbl = kv("CPU TEMP", "N/A", C.TEXT_MED)
+        os_name = {"Windows": "Windows", "Darwin": "macOS", "Linux": "Linux"}.get(_OS, _OS)
+        kv("SYSTEM", os_name, C.ACC2, mono=False)
 
-        os_name = {
-            "Windows": "Windows",
-            "Darwin": "macOS",
-            "Linux": "Linux",
-        }.get(_OS, _OS)
+        sep = QFrame()
+        sep.setFixedHeight(1)
+        sep.setStyleSheet("background: rgba(255, 255, 255, 22); border: none;")
+        cl.addWidget(sep)
 
-        kv("SYSTEM", os_name, C.ACC2)
-
-        self._ai_core_lbl = kv("AI CORE", "ACTIVE", C.GREEN)
-        self._security_lbl = kv("SECURITY", "CLEARED", C.PRI)
-        kv("PROTOCOL", APP_PROTOCOL.upper(), C.TEXT_MED)
-
+        kv("AI CORE", "● ACTIVE", C.GREEN)
+        kv("SECURITY", "● CLEARED", C.PRI)
+        kv("PROTOCOL", APP_PROTOCOL, C.TEXT_MED)
         lay.addWidget(card)
 
-        lay.addStretch(1)
-
+        # One timer animates all four gauges (ease + scanner), and does nothing
+        # at all while the monitor cannot be seen.
+        self._gauge_tmr = QTimer(self)
+        self._gauge_tmr.setInterval(33)
+        self._gauge_tmr.timeout.connect(self._tick_gauges)
+        self._gauge_tmr.start()
         return w
+
+    def _tick_gauges(self) -> None:
+        if (self._mini or self.isMinimized() or not self._left_panel.isVisible()
+                or self._left_stack.currentIndex() != 0):
+            return
+        for g in self._gauges:
+            g.tick()
 
     def _build_right_panel(self) -> QWidget:
         w = QWidget()
@@ -7711,30 +7748,11 @@ class MainWindow(QMainWindow):
 
     def _position_clipboard_panel(self):
         cw = self.centralWidget()
-
         pw = ClipboardPanel._W
         ph = self._clipboard_panel.sizeHint().height() or ClipboardPanel._H
-
-        # Keep current position if the user already moved the panel.
-        if self._clipboard_panel.isVisible():
-            x = self._clipboard_panel.x()
-            y = self._clipboard_panel.y()
-        else:
-            # Initial position: lower-center, but fully visible.
-            x = (cw.width() - pw) // 2
-            y = max(20, (cw.height() * 2) // 3 - ph // 2)
-
-        # Keep the panel inside the central widget.
-        x = max(0, min(x, cw.width() - pw))
-        y = max(0, min(y, cw.height() - ph))
-
-        self._clipboard_panel.setGeometry(
-            x,
-            y,
-            pw,
-            ph,
-        )
-
+        x = (cw.width() - pw) // 2
+        y = cw.height() - ph - 6
+        self._clipboard_panel.setGeometry(x, y, pw, ph)
         self._clipboard_panel.raise_()
 
     def _on_clipboard_action(self, cmd: str):
@@ -8132,4 +8150,3 @@ class JarvisUI:
     def stop_speaking(self):
         if not self.muted:
             self.set_state("LISTENING")
-
