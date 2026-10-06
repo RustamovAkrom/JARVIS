@@ -69,6 +69,7 @@ _state = {"running": False, "thread": None, "stop": None}
 
 # ── persistent state (settings persist; intake resets daily) ─────────────────
 
+
 def _load() -> dict:
     try:
         data = json.loads(STATE_FILE.read_text(encoding="utf-8"))
@@ -77,7 +78,8 @@ def _load() -> dict:
     today = date.today().isoformat()
     if data.get("date") != today:
         data = {
-            "date": today, "ml": 0,
+            "date": today,
+            "ml": 0,
             "goal": data.get("goal", 2000),
             "interval": data.get("interval", 60),
         }
@@ -96,6 +98,7 @@ def _save(data: dict) -> None:
 
 
 # ── HUD helpers (no-ops when player is None) ─────────────────────────────────
+
 
 def _log(player, msg: str) -> None:
     if player:
@@ -120,8 +123,7 @@ def _panel(player, ml: int, goal: int) -> None:
     filled = pct // 10
     bar = "🟦" * filled + "⬜" * (10 - filled)
     try:
-        player.show_content("💧 HYDRATION",
-                            f"{bar}  {pct}%\n{ml} / {goal} ml today")
+        player.show_content("💧 HYDRATION", f"{bar}  {pct}%\n{ml} / {goal} ml today")
     except Exception:
         pass
 
@@ -129,7 +131,7 @@ def _panel(player, ml: int, goal: int) -> None:
 def _clamp(val, default, lo, hi):
     try:
         return max(lo, min(hi, int(val)))
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return default
 
 
@@ -139,17 +141,22 @@ def _remember(data: dict) -> None:
     → it replaces the previous value each time (memory never accumulates)."""
     try:
         from memory.memory_manager import remember
+
         ml, goal = data["ml"], data["goal"]
         glasses = round(ml / 250)
-        remember("water_today",
-                 f"Drank {ml} ml (~{glasses} glass{'' if glasses == 1 else 'es'}) of "
-                 f"water on {data['date']}; daily goal {goal} ml"
-                 f"{' — goal reached' if ml >= goal else ''}.", "notes")
+        remember(
+            "water_today",
+            f"Drank {ml} ml (~{glasses} glass{'' if glasses == 1 else 'es'}) of "
+            f"water on {data['date']}; daily goal {goal} ml"
+            f"{' — goal reached' if ml >= goal else ''}.",
+            "notes",
+        )
     except Exception:
         pass
 
 
 # ── background reminder loop ─────────────────────────────────────────────────
+
 
 def _worker(player, stop: threading.Event) -> None:
     try:
@@ -160,16 +167,20 @@ def _worker(player, stop: threading.Event) -> None:
             data = _load()
             ml, goal = data["ml"], data["goal"]
             if ml >= goal:
-                _say(player,
-                     "The user has already reached their daily water goal. "
-                     "Briefly congratulate them and say you'll stop the water "
-                     "reminders for today. One short sentence.")
+                _say(
+                    player,
+                    "The user has already reached their daily water goal. "
+                    "Briefly congratulate them and say you'll stop the water "
+                    "reminders for today. One short sentence.",
+                )
                 break
             remaining = goal - ml
-            _say(player,
-                 f"Remind the user to drink a glass of water now. Mention they've "
-                 f"had {ml} of {goal} millilitres today, {remaining} to go. "
-                 f"Keep it to one short, friendly sentence.")
+            _say(
+                player,
+                f"Remind the user to drink a glass of water now. Mention they've "
+                f"had {ml} of {goal} millilitres today, {remaining} to go. "
+                f"Keep it to one short, friendly sentence.",
+            )
             _log(player, f"JARVIS: Hydration reminder — {ml}/{goal} ml so far.")
     finally:
         with _lock:
@@ -177,6 +188,7 @@ def _worker(player, stop: threading.Event) -> None:
 
 
 # ── entry point ───────────────────────────────────────────────────────────────
+
 
 def run(parameters: dict, player=None, session_memory=None) -> str:
     action = (parameters.get("action") or "start").strip().lower()
@@ -191,10 +203,14 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
         _panel(player, data["ml"], data["goal"])
         ml, goal = data["ml"], data["goal"]
         if ml >= goal:
-            return (f"Logged {amount} ml. That's {ml} ml — you've reached your "
-                    f"{goal} ml goal for today. Well done!")
-        return (f"Logged {amount} ml. You've had {ml} of {goal} ml today, "
-                f"{goal - ml} ml to go.")
+            return (
+                f"Logged {amount} ml. That's {ml} ml — you've reached your "
+                f"{goal} ml goal for today. Well done!"
+            )
+        return (
+            f"Logged {amount} ml. You've had {ml} of {goal} ml today, "
+            f"{goal - ml} ml to go."
+        )
 
     # -------- STATUS --------
     if action in ("status", "stats"):
@@ -239,12 +255,15 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
     stop = threading.Event()
     with _lock:
         _state.update({"running": True, "stop": stop})
-    thread = threading.Thread(target=_worker, args=(player, stop),
-                              daemon=True, name="water-reminder")
+    thread = threading.Thread(
+        target=_worker, args=(player, stop), daemon=True, name="water-reminder"
+    )
     with _lock:
         _state["thread"] = thread
     thread.start()
 
     _panel(player, data["ml"], data["goal"])
-    return (f"I'll remind you to drink water every {interval} minutes. "
-            f"You've had {data['ml']} of {data['goal']} ml so far today.")
+    return (
+        f"I'll remind you to drink water every {interval} minutes. "
+        f"You've had {data['ml']} of {data['goal']} ml so far today."
+    )

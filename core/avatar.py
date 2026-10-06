@@ -66,10 +66,10 @@ _BROW_LIFT = 0.14
 # the closures the mouth visibly makes across a test paragraph, 5 of 21 to 10,
 # with no loss of opening on the vowels. Only the return to rest, once talking
 # has actually stopped, is leisurely.
-_TAU_OPEN = 0.022     # jaw dropping toward a vowel
-_TAU_SHUT = 0.012     # lips closing on a consonant, mid-word
-_TAU_REST = 0.055     # settling back to rest after speech ends
-_TAU_SHAPE = 0.018    # viseme openness following the schedule
+_TAU_OPEN = 0.022  # jaw dropping toward a vowel
+_TAU_SHUT = 0.012  # lips closing on a consonant, mid-word
+_TAU_REST = 0.055  # settling back to rest after speech ends
+_TAU_SHAPE = 0.018  # viseme openness following the schedule
 
 # Only the microphone path needs a level floor: it has one coarse RMS and no way
 # to tell speech from room tone. JARVIS's own voice arrives as a per-20 ms
@@ -106,9 +106,11 @@ def _blend(bg: QColor, col: QColor, a: float) -> QColor:
     so mixing the alpha in by hand is visually equivalent and three times cheaper.
     """
     f = max(0.0, min(1.0, a / 255.0))
-    return QColor(int(bg.red() + (col.red() - bg.red()) * f),
-                  int(bg.green() + (col.green() - bg.green()) * f),
-                  int(bg.blue() + (col.blue() - bg.blue()) * f))
+    return QColor(
+        int(bg.red() + (col.red() - bg.red()) * f),
+        int(bg.green() + (col.green() - bg.green()) * f),
+        int(bg.blue() + (col.blue() - bg.blue()) * f),
+    )
 
 
 class HoloAvatar:
@@ -156,13 +158,13 @@ class HoloAvatar:
         self._v = np.empty((n, 3), dtype=np.float32)
 
         self._t = 0.0
-        self._sway = 0.0           # integrated sway phase — see step()
+        self._sway = 0.0  # integrated sway phase — see step()
         self._yaw = 0.0
         self._pitch = 0.0
-        self._mouth = 0.0          # 0..1 smoothed jaw opening
-        self._glow = 0.0           # 0..1 smoothed overall energy
-        self._scan = -1.6          # vertical position of the energy sweep
-        self._blink = 0.0          # 0 = open, 1 = shut
+        self._mouth = 0.0  # 0..1 smoothed jaw opening
+        self._glow = 0.0  # 0..1 smoothed overall energy
+        self._scan = -1.6  # vertical position of the energy sweep
+        self._blink = 0.0  # 0 = open, 1 = shut
         self._blink_at = 3.0
 
         # ── expression ──────────────────────────────────────────────────────
@@ -174,8 +176,8 @@ class HoloAvatar:
         self._expr = 0.0
         self._expr_tgt = 0.0
         self._expr_at = 0.0
-        self._brow = 0.0           # smoothed brow lift, -0.4 .. 1.2
-        self._emph = 0.0           # syllable emphasis, drives the head nod
+        self._brow = 0.0  # smoothed brow lift, -0.4 .. 1.2
+        self._emph = 0.0  # syllable emphasis, drives the head nod
         self._gaze = [0.0, 0.0]
         self._gaze_tgt = [0.0, 0.0]
         self._gaze_at = 0.0
@@ -188,9 +190,9 @@ class HoloAvatar:
         self._gaze_bias = [0.0, 0.0]
         self._bias_tgt = [0.0, 0.0]
         self._bias_at = 0.0
-        self._lids = 1.0           # 1 = wide, 0 = shut; low while asleep
-        self._brow_bias = 0.0      # concentration pulls the brows down
-        self._glance = None        # (dx, dy, until_t) — a deliberate look
+        self._lids = 1.0  # 1 = wide, 0 = shut; low while asleep
+        self._brow_bias = 0.0  # concentration pulls the brows down
+        self._glance = None  # (dx, dy, until_t) — a deliberate look
 
         # ── viseme ──────────────────────────────────────────────────────────
         # Loudness alone only answers "how far open", which is why an RMS-driven
@@ -200,13 +202,19 @@ class HoloAvatar:
         # being played — see `_pcm_visemes` in main.py.
         self._v_open = 1.0
         self._v_wide = 0.0
-        self._wide = 0.0           # smoothed lip spread, -1 round .. +1 spread
-        self._v_peak = 0.18        # running estimate of this voice's loud level
+        self._wide = 0.0  # smoothed lip spread, -1 round .. +1 spread
+        self._v_peak = 0.18  # running estimate of this voice's loud level
 
     # ── animation ───────────────────────────────────────────────────────────
 
-    def _mouth_step(self, dt: float, amp: float, live: bool,
-                    v_open: float | None, v_level: float | None) -> None:
+    def _mouth_step(
+        self,
+        dt: float,
+        amp: float,
+        live: bool,
+        v_open: float | None,
+        v_level: float | None,
+    ) -> None:
         """One increment of the jaw. Called once per viseme frame while JARVIS
         speaks, once per rendered frame otherwise."""
         if v_open is None:
@@ -217,7 +225,7 @@ class HoloAvatar:
 
         if v_level is None:
             gated = max(0.0, (amp - _MIC_FLOOR) / (1.0 - _MIC_FLOOR))
-            drive = (gated ** 0.6) * (shape ** 0.75)
+            drive = (gated**0.6) * (shape**0.75)
         else:
             # Speech RMS spends most of its time well below full scale, so the
             # raw value alone would only ever half-open the jaw. Normalise it
@@ -234,24 +242,32 @@ class HoloAvatar:
             # would otherwise lift back up. That lift is what kept the mouth
             # from ever quite shutting between words.
             q = (v_level - _CLOSE_FRAC * ref) / (ref * (1.0 - _CLOSE_FRAC))
-            drive = max(0.0, min(1.0, q)) ** 0.85 * (shape ** 0.75)
+            drive = max(0.0, min(1.0, q)) ** 0.85 * (shape**0.75)
 
         target = min(1.0, drive) if live else 0.0
         if target > self._mouth:
             tau = _TAU_OPEN
         elif live:
-            tau = _TAU_SHUT      # mid-word: a consonant, and it must shut now
+            tau = _TAU_SHUT  # mid-word: a consonant, and it must shut now
         else:
-            tau = _TAU_REST      # speech is over; settle, don't snap
+            tau = _TAU_REST  # speech is over; settle, don't snap
         self._mouth += (target - self._mouth) * _rate(dt, tau)
         if self._mouth < 0.002:
             self._mouth = 0.0
 
-    def step(self, dt: float, amp: float, speaking: bool = False,
-             muted: bool = False, state: str = "",
-             v_open: float | None = None, v_wide: float = 0.0,
-             v_level: float | None = None,
-             v_seq: list | None = None, v_hop: float = 0.02) -> None:
+    def step(
+        self,
+        dt: float,
+        amp: float,
+        speaking: bool = False,
+        muted: bool = False,
+        state: str = "",
+        v_open: float | None = None,
+        v_wide: float = 0.0,
+        v_level: float | None = None,
+        v_seq: list | None = None,
+        v_hop: float = 0.02,
+    ) -> None:
         """Advance the animation.
 
         `amp` is the 0..1 display audio level. `v_open` / `v_wide` / `v_level`
@@ -275,8 +291,7 @@ class HoloAvatar:
         self._sway += dt * speed
         s = self._sway
         self._yaw = 0.26 * math.sin(s * 0.31) + 0.09 * math.sin(s * 0.73 + 1.3)
-        self._pitch = (0.060 * math.sin(s * 0.23 + 0.7)
-                       + 0.024 * math.sin(s * 0.61))
+        self._pitch = 0.060 * math.sin(s * 0.23 + 0.7) + 0.024 * math.sin(s * 0.61)
 
         # Mouth. Which level is driving it matters more than any rate here.
         #
@@ -314,7 +329,8 @@ class HoloAvatar:
         # its own once the mouth closes, whereas gating it on `live` deleted the
         # whole offset in a single frame and snapped the head at sentence end.
         self._emph += (self._mouth - self._emph) * _rate(
-            dt, 0.055 if self._mouth > self._emph else 0.32)
+            dt, 0.055 if self._mouth > self._emph else 0.32
+        )
         self._pitch -= self._emph * 0.028
         self._yaw += 0.018 * math.sin(t * 1.7) * self._emph
 
@@ -322,7 +338,8 @@ class HoloAvatar:
         # shape of a phrase, not individual syllables.
         env = amp if live else 0.0
         self._amp_slow += (env - self._amp_slow) * _rate(
-            dt, 0.16 if env > self._amp_slow else 0.36)
+            dt, 0.16 if env > self._amp_slow else 0.36
+        )
 
         if live:
             if t >= self._expr_at:
@@ -345,8 +362,10 @@ class HoloAvatar:
             # People look away to think, and hold it. The direction re-rolls
             # slowly so it reads as thought rather than as scanning.
             if t >= self._bias_at:
-                self._bias_tgt = [random.choice((-1.0, 1.0)) * random.uniform(0.45, 0.8),
-                                  random.uniform(0.25, 0.55)]
+                self._bias_tgt = [
+                    random.choice((-1.0, 1.0)) * random.uniform(0.45, 0.8),
+                    random.uniform(0.25, 0.55),
+                ]
                 self._bias_at = t + 1.4 + 1.6 * random.random()
             brow_bias, lid_tgt = -0.28, 0.94
         elif asleep:
@@ -369,8 +388,10 @@ class HoloAvatar:
         # right down — a darting eye reads as nervous, not thoughtful.
         if t >= self._gaze_at:
             reach = 0.9 if live else (0.35 if thinking else 0.55)
-            self._gaze_tgt = [random.uniform(-1.0, 1.0) * reach,
-                              random.uniform(-1.0, 1.0) * reach * 0.55]
+            self._gaze_tgt = [
+                random.uniform(-1.0, 1.0) * reach,
+                random.uniform(-1.0, 1.0) * reach * 0.55,
+            ]
             if live:
                 self._gaze_at = t + 0.55 + 1.7 * random.random()
             elif thinking:
@@ -397,7 +418,8 @@ class HoloAvatar:
         self._wide += (max(-1.0, min(1.0, wide_t)) - self._wide) * _rate(dt, 0.030)
 
         self._glow += ((0.0 if muted else amp) - self._glow) * (
-            0.35 if (0.0 if muted else amp) > self._glow else 0.10)
+            0.35 if (0.0 if muted else amp) > self._glow else 0.10
+        )
 
         self._scan += dt * (0.55 + 1.5 * self._glow)
         if self._scan > 1.35:
@@ -421,9 +443,11 @@ class HoloAvatar:
         Used when something appears on screen: a face that looks at what just
         showed up tells the user it landed, without a word being spoken.
         """
-        self._glance = (max(-1.0, min(1.0, float(dx))),
-                        max(-1.0, min(1.0, float(dy))),
-                        self._t + max(0.1, float(hold)))
+        self._glance = (
+            max(-1.0, min(1.0, float(dx))),
+            max(-1.0, min(1.0, float(dy))),
+            self._t + max(0.1, float(hold)),
+        )
 
     # ── posing ──────────────────────────────────────────────────────────────
 
@@ -458,11 +482,14 @@ class HoloAvatar:
 
         cy, sy = math.cos(self._yaw), math.sin(self._yaw)
         cp, sp = math.cos(self._pitch), math.sin(self._pitch)
-        m = np.array([
-            [cy, 0.0, sy],
-            [sp * sy, cp, -sp * cy],
-            [-cp * sy, sp, cp * cy],
-        ], dtype=np.float32)
+        m = np.array(
+            [
+                [cy, 0.0, sy],
+                [sp * sy, cp, -sp * cy],
+                [-cp * sy, sp, cp * cy],
+            ],
+            dtype=np.float32,
+        )
 
         return v @ m.T, self._n0 @ m.T
 
@@ -472,13 +499,23 @@ class HoloAvatar:
         """Cached ramp of opaque surface brushes from `bg` to `primary`."""
         key = (bg.rgb(), primary.rgb())
         if self._lut_key != key:
-            self._lut_cache = [QBrush(_blend(bg, primary, 255.0 * (i + 0.5) / _LUT_N))
-                               for i in range(_LUT_N)]
+            self._lut_cache = [
+                QBrush(_blend(bg, primary, 255.0 * (i + 0.5) / _LUT_N))
+                for i in range(_LUT_N)
+            ]
             self._lut_key = key
         return self._lut_cache
 
-    def paint(self, p: QPainter, cx: float, cy: float, r: float,
-              primary: QColor, accent: QColor, bg: QColor | None = None) -> None:
+    def paint(
+        self,
+        p: QPainter,
+        cx: float,
+        cy: float,
+        r: float,
+        primary: QColor,
+        accent: QColor,
+        bg: QColor | None = None,
+    ) -> None:
         """Draw the avatar with its head centre at (cx, cy).
 
         `r` is the head's half-height in pixels — the caller owns the layout, so
@@ -511,8 +548,9 @@ class HoloAvatar:
         self._paint_wire(p, xs, ys, norms, verts, primary, bg, amp)
         self._paint_features(p, xs, ys, norms, r, primary, accent, bg, amp)
 
-    def _paint_surface(self, p: QPainter, xs, ys, norms, verts,
-                       primary: QColor, bg: QColor, amp: float) -> None:
+    def _paint_surface(
+        self, p: QPainter, xs, ys, norms, verts, primary: QColor, bg: QColor, amp: float
+    ) -> None:
         """Fill the camera-facing triangles so the head reads as a lit volume."""
         a, b, c = self._fa, self._fb, self._fc
 
@@ -530,8 +568,9 @@ class HoloAvatar:
         fn *= np.sign((fn * ref).sum(1))[:, None]
 
         nz = fn[:, 2]
-        area = np.abs((xs[b] - xs[a]) * (ys[c] - ys[a])
-                      - (xs[c] - xs[a]) * (ys[b] - ys[a]))
+        area = np.abs(
+            (xs[b] - xs[a]) * (ys[c] - ys[a]) - (xs[c] - xs[a]) * (ys[b] - ys[a])
+        )
         vis = np.flatnonzero((nz > 0.015) & (area > 3.0))
         if vis.size == 0:
             return
@@ -547,7 +586,7 @@ class HoloAvatar:
         # every front-facing facet returns the same value, which is a flat mask.
         fres = np.clip(1.0 - nz, 0.0, 2.0) ** 1.7
         lam = np.clip(fn[:, 0] * -0.55 + fn[:, 1] * 0.50 + nz * 0.52, 0.0, 1.0)
-        bright = 0.26 + 0.20 * fres + 0.66 * lam ** 1.05
+        bright = 0.26 + 0.20 * fres + 0.66 * lam**1.05
         bright *= (self._fade[a][vis] + self._fade[b][vis] + self._fade[c][vis]) / 3.0
         bright *= 0.88 + 0.24 * amp
 
@@ -571,12 +610,16 @@ class HoloAvatar:
         p.setPen(Qt.PenStyle.NoPen)
         for q, sh in zip(tris, shade):
             p.setBrush(lut[sh])
-            p.drawPolygon(QPolygonF([QPointF(q[0], q[1]), QPointF(q[2], q[3]),
-                                     QPointF(q[4], q[5])]))
+            p.drawPolygon(
+                QPolygonF(
+                    [QPointF(q[0], q[1]), QPointF(q[2], q[3]), QPointF(q[4], q[5])]
+                )
+            )
         p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
 
-    def _paint_wire(self, p: QPainter, xs, ys, norms, verts,
-                    primary: QColor, bg: QColor, amp: float) -> None:
+    def _paint_wire(
+        self, p: QPainter, xs, ys, norms, verts, primary: QColor, bg: QColor, amp: float
+    ) -> None:
         nz = norms[:, 2]
         fres = np.abs(1.0 - np.abs(nz)) ** 1.5
         if self.shaded:
@@ -585,10 +628,10 @@ class HoloAvatar:
             # structure lines over skin.
             front = nz > -0.05
             va = np.where(front, 0.10 + 0.42 * fres, 0.0)
-            va += 0.30 * np.exp(-((verts[:, 1] - self._scan) / 0.13) ** 2) * front
+            va += 0.30 * np.exp(-(((verts[:, 1] - self._scan) / 0.13) ** 2)) * front
         else:
             va = np.where(nz < 0.0, 0.13 + 0.26 * fres, 0.28 + 0.72 * fres)
-            va += 0.42 * np.exp(-((verts[:, 1] - self._scan) / 0.13) ** 2)
+            va += 0.42 * np.exp(-(((verts[:, 1] - self._scan) / 0.13) ** 2))
         va *= self._fade * (0.80 + 0.45 * amp)
 
         ea = 0.5 * (va[self._e0] + va[self._e1])
@@ -628,12 +671,22 @@ class HoloAvatar:
     # ── face ────────────────────────────────────────────────────────────────
 
     def _ring(self, xs, ys, idx) -> QPolygonF:
-        return QPolygonF([QPointF(float(x), float(y))
-                          for x, y in zip(xs[idx], ys[idx])])
+        return QPolygonF(
+            [QPointF(float(x), float(y)) for x, y in zip(xs[idx], ys[idx])]
+        )
 
-    def _paint_features(self, p: QPainter, xs, ys, norms, r: float,
-                        primary: QColor, accent: QColor, bg: QColor,
-                        amp: float) -> None:
+    def _paint_features(
+        self,
+        p: QPainter,
+        xs,
+        ys,
+        norms,
+        r: float,
+        primary: QColor,
+        accent: QColor,
+        bg: QColor,
+        amp: float,
+    ) -> None:
         """Eyes, brows and the mouth cavity, drawn from the real landmark rings.
 
         The canonical model's eyes and lips are closed skin — the geometry gives
@@ -657,10 +710,10 @@ class HoloAvatar:
             poly = QPolygonF([QPointF(float(a), float(b)) for a, b in zip(ex, ey)])
 
             p.setPen(Qt.PenStyle.NoPen)
-            p.setBrush(QBrush(_blend(bg, primary, 22)))       # socket shadow
+            p.setBrush(QBrush(_blend(bg, primary, 22)))  # socket shadow
             p.drawPolygon(poly)
             p.setBrush(Qt.BrushStyle.NoBrush)
-            p.setPen(QPen(_c(primary, 210 * face), 1.3))      # lid line
+            p.setPen(QPen(_c(primary, 210 * face), 1.3))  # lid line
             p.drawPolygon(poly)
 
             if vis > 0.35:
@@ -671,9 +724,9 @@ class HoloAvatar:
                 rad = min(br.height() * 0.62, br.width() * 0.20)
                 p.setPen(Qt.PenStyle.NoPen)
                 p.setBrush(QBrush(_c(accent, (70 + 60 * amp) * face * vis)))
-                p.drawEllipse(cpt, rad, rad * vis)            # iris
+                p.drawEllipse(cpt, rad, rad * vis)  # iris
                 p.setBrush(QBrush(_c(accent, 245 * face * vis)))
-                p.drawEllipse(cpt, rad * 0.42, rad * 0.42 * vis)   # pupil
+                p.drawEllipse(cpt, rad * 0.42, rad * 0.42 * vis)  # pupil
 
         # ── brows ───────────────────────────────────────────────────────────
         p.setBrush(Qt.BrushStyle.NoBrush)
@@ -699,8 +752,9 @@ class HoloAvatar:
             ux, uy = xs[self._lip_up], ys[self._lip_up]
             th = open_h * 0.30
             pts = [QPointF(float(x), float(y)) for x, y in zip(ux, uy)]
-            pts += [QPointF(float(x), float(y) + th)
-                    for x, y in zip(ux[::-1], uy[::-1])]
+            pts += [
+                QPointF(float(x), float(y) + th) for x, y in zip(ux[::-1], uy[::-1])
+            ]
             p.setBrush(QBrush(_blend(bg, primary, 150 + 60 * self._mouth)))
             p.drawPolygon(QPolygonF(pts))
 
@@ -710,6 +764,6 @@ class HoloAvatar:
 
         p.setBrush(Qt.BrushStyle.NoBrush)
         p.setPen(QPen(_c(primary, (150 + 70 * self._mouth) * face), 1.3))
-        p.drawPolygon(inner)                       # lip edge
+        p.drawPolygon(inner)  # lip edge
         p.setPen(QPen(_c(primary, 110 * face), 1.1))
         p.drawPolygon(self._ring(xs, ys, lm["lips_out"]))

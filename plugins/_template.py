@@ -6,7 +6,7 @@ No other file needs to change — JARVIS discovers this automatically at startup
 """
 
 PLUGIN = {
-    "name": "my_plugin",                     # snake_case, unique, ^[a-zA-Z_][a-zA-Z0-9_]{0,63}$
+    "name": "my_plugin",  # snake_case, unique, ^[a-zA-Z_][a-zA-Z0-9_]{0,63}$
     "description": (
         "One or two sentences Gemini uses to decide when to call this tool. "
         "Be explicit about trigger phrases and, if it could be confused with "
@@ -16,11 +16,15 @@ PLUGIN = {
     "parameters": {
         "type": "OBJECT",
         "properties": {
-            "example_arg": {"type": "STRING", "description": "What this argument means"},
+            "example_arg": {
+                "type": "STRING",
+                "description": "What this argument means",
+            },
         },
-        "required": [],   # omit or leave empty for a zero-argument tool
+        "required": [],  # omit or leave empty for a zero-argument tool
     },
 }
+
 
 def run(parameters: dict, player=None, session_memory=None) -> str:
     """

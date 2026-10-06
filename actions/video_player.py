@@ -22,6 +22,7 @@ SOUND IS OFF UNTIL ASKED FOR
     plays. So it starts muted, and the user turns sound on — from the button in
     the video header, or by saying so. Closing it works both ways too.
 """
+
 from __future__ import annotations
 
 import re
@@ -86,15 +87,26 @@ def _resolve_youtube(url_or_query: str) -> tuple[str, str, str, str]:
     try:
         import yt_dlp
     except Exception:
-        return "", "", "", ("yt-dlp is not installed, so a YouTube video "
-                            "cannot be played inside the HUD. "
-                            "Run: pip install yt-dlp")
+        return (
+            "",
+            "",
+            "",
+            (
+                "yt-dlp is not installed, so a YouTube video "
+                "cannot be played inside the HUD. "
+                "Run: pip install yt-dlp"
+            ),
+        )
 
     query = url_or_query if _YT.search(url_or_query) else f"ytsearch1:{url_or_query}"
     # No "format" here on purpose: ask for everything and choose below, so a
     # video that lacks whatever was requested cannot fail outright.
-    opts = {"quiet": True, "no_warnings": True, "skip_download": True,
-            "noplaylist": True}
+    opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "skip_download": True,
+        "noplaylist": True,
+    }
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(query, download=False)
@@ -105,8 +117,11 @@ def _resolve_youtube(url_or_query: str) -> tuple[str, str, str, str]:
     except Exception as e:
         return "", "", "", f"the video could not be resolved: {e}"
 
-    formats = [f for f in (info.get("formats") or [])
-               if str(f.get("protocol") or "").startswith("http") and f.get("url")]
+    formats = [
+        f
+        for f in (info.get("formats") or [])
+        if str(f.get("protocol") or "").startswith("http") and f.get("url")
+    ]
 
     def has(f, key):
         return f.get(key) not in (None, "none")
@@ -129,9 +144,10 @@ def _resolve_youtube(url_or_query: str) -> tuple[str, str, str, str]:
         """
         if not candidates:
             return None
-        return max(candidates,
-                   key=lambda f: (f.get("language_preference") or 0,
-                                  f.get("tbr") or 0))
+        return max(
+            candidates,
+            key=lambda f: (f.get("language_preference") or 0, f.get("tbr") or 0),
+        )
 
     # Combined first — if a video still has one, one player is simpler and
     # cannot drift. Then picture and sound separately.
@@ -141,34 +157,47 @@ def _resolve_youtube(url_or_query: str) -> tuple[str, str, str, str]:
 
     # 720p is the ceiling on purpose: the HUD panel is nowhere near 4K, and a
     # smaller stream starts sooner and drifts less.
-    video = best([f for f in formats
-                  if has(f, "vcodec") and not has(f, "acodec")
-                  and f.get("ext") == "mp4" and (f.get("height") or 0) <= 720])
+    video = best(
+        [
+            f
+            for f in formats
+            if has(f, "vcodec")
+            and not has(f, "acodec")
+            and f.get("ext") == "mp4"
+            and (f.get("height") or 0) <= 720
+        ]
+    )
     if not video:
-        video = best([f for f in formats
-                      if has(f, "vcodec") and not has(f, "acodec")])
-    audio = best([f for f in formats
-                  if has(f, "acodec") and not has(f, "vcodec")
-                  and f.get("ext") == "m4a"])
+        video = best([f for f in formats if has(f, "vcodec") and not has(f, "acodec")])
+    audio = best(
+        [
+            f
+            for f in formats
+            if has(f, "acodec") and not has(f, "vcodec") and f.get("ext") == "m4a"
+        ]
+    )
     if not audio:
-        audio = best([f for f in formats
-                      if has(f, "acodec") and not has(f, "vcodec")])
+        audio = best([f for f in formats if has(f, "acodec") and not has(f, "vcodec")])
 
     if not video:
         return "", "", "", "no playable stream was offered for that video."
     if audio and audio.get("language"):
-        print(f"[Video] audio track: {audio.get('language')} "
-              f"({audio.get('format_note') or audio.get('format_id')})")
+        print(
+            f"[Video] audio track: {audio.get('language')} "
+            f"({audio.get('format_note') or audio.get('format_id')})"
+        )
     return video["url"], (audio or {}).get("url", ""), info.get("title") or "", ""
 
 
 def _search_page(query: str) -> str:
     from urllib.parse import quote_plus
+
     return f"https://www.youtube.com/results?search_query={quote_plus(query)}"
 
 
-def video_player(parameters: dict = None, response=None, player=None,
-                 session_memory=None) -> str:
+def video_player(
+    parameters: dict = None, response=None, player=None, session_memory=None
+) -> str:
     params = parameters or {}
     action = (params.get("action") or "play").strip().lower()
     source = (params.get("source") or "").strip()
@@ -220,8 +249,12 @@ def video_player(parameters: dict = None, response=None, player=None,
     # So the seconds stay, and what changes is where the user spends them:
     # listening to JARVIS say it is coming, instead of watching nothing happen.
     # The same shape whatsapp_call uses, and for the same reason.
-    threading.Thread(target=_play_youtube, args=(player, source, _begin_open()),
-                     daemon=True, name="video-open").start()
+    threading.Thread(
+        target=_play_youtube,
+        args=(player, source, _begin_open()),
+        daemon=True,
+        name="video-open",
+    ).start()
     # Deliberately a status line rather than a finished English sentence: the
     # model writes the words, in the user's own language.
     return f"status=opening source={source}"
@@ -233,19 +266,18 @@ def _play_youtube(player, source: str, token: int) -> None:
     themselves."""
     try:
         url, audio_url, title, err = _resolve_youtube(source)
-    except Exception as e:                                  # noqa: BLE001
+    except Exception as e:  # noqa: BLE001
         url = audio_url = title = ""
         err = str(e)
 
     if not _still_wanted(token):
-        return                       # the user closed it while it was resolving
+        return  # the user closed it while it was resolving
 
     if url:
         try:
-            player.show_video(url, title or source, muted=True,
-                              audio_source=audio_url)
+            player.show_video(url, title or source, muted=True, audio_source=audio_url)
             return
-        except Exception as e:                              # noqa: BLE001
+        except Exception as e:  # noqa: BLE001
             err = str(e)
 
     # Resolution failed. Opening it in a browser is worse than playing it in the
@@ -258,9 +290,12 @@ def _play_youtube(player, source: str, token: int) -> None:
         opened = " and it has been opened in the browser instead"
     except Exception:
         pass
-    _say(player, "Tell the user, in one short sentence in their own language: "
-                 f"'{source}' could not be played on the display "
-                 f"({err}){opened}.")
+    _say(
+        player,
+        "Tell the user, in one short sentence in their own language: "
+        f"'{source}' could not be played on the display "
+        f"({err}){opened}.",
+    )
 
 
 def _say(player, instruction: str) -> None:
@@ -298,8 +333,10 @@ TOOL = {
         "properties": {
             "action": {
                 "type": "STRING",
-                "description": ("'play' (default), 'stop' to close it, 'unmute' "
-                                "to turn the sound on, 'mute' to silence it."),
+                "description": (
+                    "'play' (default), 'stop' to close it, 'unmute' "
+                    "to turn the sound on, 'mute' to silence it."
+                ),
                 "enum": ["play", "stop", "mute", "unmute"],
             },
             "source": {

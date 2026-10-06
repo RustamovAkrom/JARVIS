@@ -52,6 +52,7 @@ _MODEL = "gemini-flash-latest"
 
 # ── output location ───────────────────────────────────────────────────────────
 
+
 def _output_dir() -> Path:
     desktop = Path.home() / "Desktop"
     return desktop if desktop.is_dir() else Path.home()
@@ -64,13 +65,16 @@ def _safe_name(name: str) -> str:
 
 # ── Gemini: request → structured spec ────────────────────────────────────────
 
+
 def _build_spec(request: str) -> dict:
     from memory.config_manager import get_gemini_key
+
     api_key = get_gemini_key()
     if not api_key:
         raise RuntimeError("no API key configured")
 
     from google import genai
+
     prompt = (
         "Convert the user's request into a spreadsheet specification.\n"
         f'USER REQUEST: "{request}"\n'
@@ -91,11 +95,12 @@ def _build_spec(request: str) -> dict:
     resp = client.models.generate_content(model=_MODEL, contents=prompt)
     text = (resp.text or "").strip()
     if "{" in text and "}" in text:
-        text = text[text.find("{"): text.rfind("}") + 1]
+        text = text[text.find("{") : text.rfind("}") + 1]
     return json.loads(text)
 
 
 # ── openpyxl: spec → .xlsx file ───────────────────────────────────────────────
+
 
 def _build_xlsx(spec: dict, path: Path) -> dict:
     """Writes the workbook. Returns a small summary dict. Raises on hard errors."""
@@ -134,14 +139,18 @@ def _build_xlsx(spec: dict, path: Path) -> dict:
     last_data_row = r - 1
 
     # total row (SUM) for requested numeric columns
-    total_cols = [i for i in (spec.get("total_columns") or [])
-                  if isinstance(i, int) and 0 <= i < ncols]
+    total_cols = [
+        i
+        for i in (spec.get("total_columns") or [])
+        if isinstance(i, int) and 0 <= i < ncols
+    ]
     if total_cols and last_data_row >= 2:
         ws.cell(row=r, column=1, value="TOTAL").font = Font(bold=True)
         for i in total_cols:
             col = get_column_letter(i + 1)
-            cell = ws.cell(row=r, column=i + 1,
-                           value=f"=SUM({col}2:{col}{last_data_row})")
+            cell = ws.cell(
+                row=r, column=i + 1, value=f"=SUM({col}2:{col}{last_data_row})"
+            )
             cell.font = Font(bold=True)
         total_row = r
         r += 1
@@ -151,8 +160,16 @@ def _build_xlsx(spec: dict, path: Path) -> dict:
     # auto column width
     for c in range(1, ncols + 1):
         col = get_column_letter(c)
-        width = max([len(str(ws.cell(row=rr, column=c).value or ""))
-                     for rr in range(1, last_data_row + 1)] + [8]) + 2
+        width = (
+            max(
+                [
+                    len(str(ws.cell(row=rr, column=c).value or ""))
+                    for rr in range(1, last_data_row + 1)
+                ]
+                + [8]
+            )
+            + 2
+        )
         ws.column_dimensions[col].width = min(40, width)
 
     # optional chart
@@ -166,8 +183,12 @@ def _build_xlsx(spec: dict, path: Path) -> dict:
             if 0 <= cat_col < ncols and 0 <= val_col < ncols:
                 ch = {"line": LineChart, "pie": PieChart}.get(ctype, BarChart)()
                 ch.title = chart.get("title") or ws.title
-                data_ref = Reference(ws, min_col=val_col + 1, min_row=1, max_row=last_data_row)
-                cats_ref = Reference(ws, min_col=cat_col + 1, min_row=2, max_row=last_data_row)
+                data_ref = Reference(
+                    ws, min_col=val_col + 1, min_row=1, max_row=last_data_row
+                )
+                cats_ref = Reference(
+                    ws, min_col=cat_col + 1, min_row=2, max_row=last_data_row
+                )
                 ch.add_data(data_ref, titles_from_data=True)
                 ch.set_categories(cats_ref)
                 anchor = f"{get_column_letter(ncols + 2)}2"
@@ -178,11 +199,16 @@ def _build_xlsx(spec: dict, path: Path) -> dict:
 
     path.parent.mkdir(parents=True, exist_ok=True)
     wb.save(path)
-    return {"rows": last_data_row - 1, "cols": ncols,
-            "total": total_row is not None, "chart": chart_added}
+    return {
+        "rows": last_data_row - 1,
+        "cols": ncols,
+        "total": total_row is not None,
+        "chart": chart_added,
+    }
 
 
 # ── entry point ───────────────────────────────────────────────────────────────
+
 
 def run(parameters: dict, player=None, session_memory=None) -> str:
     request = (parameters.get("request") or "").strip()
@@ -193,8 +219,10 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
     try:
         import openpyxl  # noqa: F401
     except ImportError:
-        return ("I need the openpyxl library to build Excel files. "
-                "Please install it with: pip install openpyxl")
+        return (
+            "I need the openpyxl library to build Excel files. "
+            "Please install it with: pip install openpyxl"
+        )
 
     try:
         spec = _build_spec(request)
@@ -202,9 +230,13 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
         return f"I couldn't work out the spreadsheet layout: {e}"
 
     if not (spec.get("headers") or spec.get("rows")):
-        return "I couldn't turn that into a table — try describing the columns and data."
+        return (
+            "I couldn't turn that into a table — try describing the columns and data."
+        )
 
-    fname = _safe_name(parameters.get("filename") or spec.get("filename") or "spreadsheet")
+    fname = _safe_name(
+        parameters.get("filename") or spec.get("filename") or "spreadsheet"
+    )
     stamp = datetime.now().strftime("%Y%m%d_%H%M")
     path = _output_dir() / f"{fname}_{stamp}.xlsx"
 
@@ -220,7 +252,8 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
                 f"{path.name}\n\n{info['rows']} rows × {info['cols']} columns"
                 + ("\n• total row" if info["total"] else "")
                 + ("\n• chart" if info["chart"] else "")
-                + f"\n\nSaved to:\n{path}")
+                + f"\n\nSaved to:\n{path}",
+            )
         except Exception:
             pass
 
@@ -230,5 +263,7 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
     if info["chart"]:
         extras.append("a chart")
     extra_str = f" including {' and '.join(extras)}" if extras else ""
-    return (f"Done — I've created {path.name} with {info['rows']} rows{extra_str}, "
-            f"and saved it to your Desktop.")
+    return (
+        f"Done — I've created {path.name} with {info['rows']} rows{extra_str}, "
+        f"and saved it to your Desktop."
+    )

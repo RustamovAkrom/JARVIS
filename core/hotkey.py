@@ -42,15 +42,29 @@ DEFAULT_CHORD = ("ctrl", "space")
 
 # Windows virtual-key codes for the names we accept.
 _VK = {
-    "ctrl": 0x11, "shift": 0x10, "alt": 0x12,
-    "space": 0x20, "f8": 0x77, "f9": 0x78, "f10": 0x79,
-    "capslock": 0x14, "insert": 0x2D,
+    "ctrl": 0x11,
+    "shift": 0x10,
+    "alt": 0x12,
+    "space": 0x20,
+    "f8": 0x77,
+    "f9": 0x78,
+    "f10": 0x79,
+    "capslock": 0x14,
+    "insert": 0x2D,
 }
 
 # Qt key sequence text for the same chord, used by the windowed fallback.
-_QT_NAME = {"ctrl": "Ctrl", "shift": "Shift", "alt": "Alt", "space": "Space",
-            "f8": "F8", "f9": "F9", "f10": "F10",
-            "capslock": "CapsLock", "insert": "Ins"}
+_QT_NAME = {
+    "ctrl": "Ctrl",
+    "shift": "Shift",
+    "alt": "Alt",
+    "space": "Space",
+    "f8": "F8",
+    "f9": "F9",
+    "f10": "F10",
+    "capslock": "CapsLock",
+    "insert": "Ins",
+}
 
 _POLL_HZ = 30.0
 # A key has to be down this long before we call it speech. It stops a stray
@@ -107,7 +121,8 @@ class PushToTalk:
         if _OS == "Windows" and self._can_poll():
             self._scope = "global"
             self._thread = threading.Thread(
-                target=self._poll_loop, name="push-to-talk", daemon=True)
+                target=self._poll_loop, name="push-to-talk", daemon=True
+            )
             self._thread.start()
         else:
             self._scope = "window"
@@ -131,6 +146,7 @@ class PushToTalk:
     def _can_poll(self) -> bool:
         try:
             import ctypes
+
             ctypes.windll.user32.GetAsyncKeyState  # noqa: B018 — presence check
             return all(k in _VK for k in self._chord)
         except Exception:
@@ -143,10 +159,11 @@ class PushToTalk:
         try:
             self._on_change(held)
         except Exception:
-            pass          # a listener fault must never kill the watcher
+            pass  # a listener fault must never kill the watcher
 
     def _poll_loop(self) -> None:
         import ctypes
+
         user32 = ctypes.windll.user32
         codes = [_VK[k] for k in self._chord]
         period = 1.0 / _POLL_HZ
@@ -157,7 +174,7 @@ class PushToTalk:
                 # The high bit of the return value is "currently down".
                 down = all(user32.GetAsyncKeyState(c) & 0x8000 for c in codes)
             except Exception:
-                break     # driver or session teardown — fall back to windowed
+                break  # driver or session teardown — fall back to windowed
             now = time.monotonic()
             if down:
                 if down_since == 0.0:

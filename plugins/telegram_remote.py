@@ -139,6 +139,7 @@ WHAT IT DELIBERATELY DOES NOT DO
     remote commands a smaller tool set than local ones. What it CAN gate, it
     gates here — at the door, before the model ever sees the request.
 """
+
 from __future__ import annotations
 
 import hmac
@@ -158,18 +159,20 @@ try:
         get_plugin_config,
         save_plugin_config,
     )
+
     _HAS_CONFIG = True
 except ImportError:
     _HAS_CONFIG = False
 
-    def get_assistant_name():                        # type: ignore[misc]
+    def get_assistant_name():  # type: ignore[misc]
         return "JARVIS"
 
-    def get_plugin_config(namespace):                # type: ignore[misc]
+    def get_plugin_config(namespace):  # type: ignore[misc]
         return {}
 
-    def save_plugin_config(namespace, values):       # type: ignore[misc]
+    def save_plugin_config(namespace, values):  # type: ignore[misc]
         raise RuntimeError("this Mark has no plugin settings store")
+
 
 # The extras (screen, hardware readout) live in a sibling helper so this file
 # stays the size of the thing it is: a security boundary. Plugins are shared one
@@ -177,44 +180,44 @@ except ImportError:
 # the ops it declares simply never appear in the schema, the menu or /help.
 try:
     from plugins import _telegram_ops as _ops
-except Exception:                                     # noqa: BLE001 — see above
-    _ops = None                                       # type: ignore[assignment]
+except Exception:  # noqa: BLE001 — see above
+    _ops = None  # type: ignore[assignment]
 
 _NS = "telegram_remote"
 
-_API           = "https://api.telegram.org/bot{token}/{method}"
-_FILE_API      = "https://api.telegram.org/file/bot{token}/{path}"
-_POLL_TIMEOUT  = 20      # long-poll seconds; also the worst-case stop latency
-_HTTP_TIMEOUT  = 35      # must exceed _POLL_TIMEOUT
-_MAX_AGE       = 120     # refuse messages older than this (seconds)
-_FUTURE_SKEW   = 60      # tolerate this much clock skew the other way
-_START_GRACE   = 2       # seconds of slack on the start floor
-_MAX_TEXT      = 1000    # refuse absurdly long messages
-_RATE_MAX      = 20      # messages per window, per chat
-_RATE_WINDOW   = 60
-_RATE_KEYS     = 512     # prune the rate table past this many chats
-_REPLY_WINDOW  = 90      # hard ceiling on how long one turn may keep replying
-_TURN_FIRST    = 25      # wait this long for the turn's first sentence
-_TURN_QUIET    = 12      # ...then this long after each one, before closing
-_PAIR_WINDOW   = 600     # pairing stays armed this long
-_PAIR_TRIES    = 10      # wrong codes, in total, before pairing closes itself
-_REFUSE_NOTICE = 600     # seconds between "someone tried" notices at the desk
-_SKEW_REFRESH  = 900     # re-measure the clock at least this often
-_DRAIN_SECS    = 3       # how long the sender keeps posting after a stop
-_TG_CHUNK      = 3800    # Telegram's own limit is 4096; leave room
-_REPEAT_WINDOW = 60      # a confirm-op must be sent twice inside this
-_WATCH_TICK    = 10      # how often the watcher looks at the desk
-_LEASE_GRACE   = 15      # keep relaying this long after a banner clears
-_LEASE_MAX     = 150     # ...and never longer than this in total
-_AWAY_IDLE     = 600     # no desk activity for this long means nobody is there
-_VOICE_SECS    = 90      # refuse a voice note longer than this
-_VOICE_BYTES   = 5_000_000
-_SPEAK_CHARS   = 700     # never synthesise more than this in one go
-_SPEAK_MAX     = 3       # ...nor more than this many answers in one turn
-_FILE_BYTES    = 20_000_000   # refuse an incoming file bigger than this
-_FILE_HOLD     = 900     # a file the phone sent stays attached to the next command
-_AUTOSTART_WAIT   = 300  # how long to wait for the interface to appear
-_AUTOSTART_POLL   = 2.0
+_API = "https://api.telegram.org/bot{token}/{method}"
+_FILE_API = "https://api.telegram.org/file/bot{token}/{path}"
+_POLL_TIMEOUT = 20  # long-poll seconds; also the worst-case stop latency
+_HTTP_TIMEOUT = 35  # must exceed _POLL_TIMEOUT
+_MAX_AGE = 120  # refuse messages older than this (seconds)
+_FUTURE_SKEW = 60  # tolerate this much clock skew the other way
+_START_GRACE = 2  # seconds of slack on the start floor
+_MAX_TEXT = 1000  # refuse absurdly long messages
+_RATE_MAX = 20  # messages per window, per chat
+_RATE_WINDOW = 60
+_RATE_KEYS = 512  # prune the rate table past this many chats
+_REPLY_WINDOW = 90  # hard ceiling on how long one turn may keep replying
+_TURN_FIRST = 25  # wait this long for the turn's first sentence
+_TURN_QUIET = 12  # ...then this long after each one, before closing
+_PAIR_WINDOW = 600  # pairing stays armed this long
+_PAIR_TRIES = 10  # wrong codes, in total, before pairing closes itself
+_REFUSE_NOTICE = 600  # seconds between "someone tried" notices at the desk
+_SKEW_REFRESH = 900  # re-measure the clock at least this often
+_DRAIN_SECS = 3  # how long the sender keeps posting after a stop
+_TG_CHUNK = 3800  # Telegram's own limit is 4096; leave room
+_REPEAT_WINDOW = 60  # a confirm-op must be sent twice inside this
+_WATCH_TICK = 10  # how often the watcher looks at the desk
+_LEASE_GRACE = 15  # keep relaying this long after a banner clears
+_LEASE_MAX = 150  # ...and never longer than this in total
+_AWAY_IDLE = 600  # no desk activity for this long means nobody is there
+_VOICE_SECS = 90  # refuse a voice note longer than this
+_VOICE_BYTES = 5_000_000
+_SPEAK_CHARS = 700  # never synthesise more than this in one go
+_SPEAK_MAX = 3  # ...nor more than this many answers in one turn
+_FILE_BYTES = 20_000_000  # refuse an incoming file bigger than this
+_FILE_HOLD = 900  # a file the phone sent stays attached to the next command
+_AUTOSTART_WAIT = 300  # how long to wait for the interface to appear
+_AUTOSTART_POLL = 2.0
 _AUTOSTART_SETTLE = 3.0  # ...then this, so the first line is not stepped on
 
 
@@ -228,30 +231,86 @@ _AUTOSTART_SETTLE = 3.0  # ...then this, so the first line is not stepped on
 # gets the same line in its command menu, which keeps the two from drifting.
 
 _CORE_OPS = (
-    {"action": "start",   "cmd": None,     "icon": "▶", "button": False,
-     "desc": "begin listening for commands from the paired phone",
-     "where": "desk",   "gate": None, "arg": None},
-    {"action": "stop",    "cmd": "stop",   "icon": "⏹", "button": False,
-     "desc": "stop listening, so nothing outside can reach this computer",
-     "where": "both",   "gate": None, "arg": None},
-    {"action": "status",  "cmd": "status", "icon": "ℹ", "button": True,
-     "desc": "report whether the bridge is listening and how many phones are approved",
-     "where": "both",   "gate": None, "arg": None},
-    {"action": "pair",    "cmd": None,     "icon": "🔑", "button": False,
-     "desc": "open the pairing window for ten minutes so one more phone can be approved",
-     "where": "desk",   "gate": None, "arg": None},
-    {"action": "unpair",  "cmd": None,     "icon": "🚫", "button": False,
-     "desc": "erase every approved phone, for one that has been lost",
-     "where": "desk",   "gate": None, "arg": None},
-    {"action": "panic",   "cmd": "panic",  "icon": "🚨", "button": False,
-     "desc": "stop the bridge AND erase every approved phone in one step",
-     "where": "both",   "gate": None, "arg": None},
-    {"action": None,      "cmd": "help",   "icon": "❓", "button": True,
-     "desc": "list what this bot can do",
-     "where": "remote", "gate": None, "arg": None},
-    {"action": None,      "cmd": "id",     "icon": "🆔", "button": False,
-     "desc": "show this chat's numeric ID",
-     "where": "remote", "gate": None, "arg": None},
+    {
+        "action": "start",
+        "cmd": None,
+        "icon": "▶",
+        "button": False,
+        "desc": "begin listening for commands from the paired phone",
+        "where": "desk",
+        "gate": None,
+        "arg": None,
+    },
+    {
+        "action": "stop",
+        "cmd": "stop",
+        "icon": "⏹",
+        "button": False,
+        "desc": "stop listening, so nothing outside can reach this computer",
+        "where": "both",
+        "gate": None,
+        "arg": None,
+    },
+    {
+        "action": "status",
+        "cmd": "status",
+        "icon": "ℹ",
+        "button": True,
+        "desc": "report whether the bridge is listening and how many phones are approved",
+        "where": "both",
+        "gate": None,
+        "arg": None,
+    },
+    {
+        "action": "pair",
+        "cmd": None,
+        "icon": "🔑",
+        "button": False,
+        "desc": "open the pairing window for ten minutes so one more phone can be approved",
+        "where": "desk",
+        "gate": None,
+        "arg": None,
+    },
+    {
+        "action": "unpair",
+        "cmd": None,
+        "icon": "🚫",
+        "button": False,
+        "desc": "erase every approved phone, for one that has been lost",
+        "where": "desk",
+        "gate": None,
+        "arg": None,
+    },
+    {
+        "action": "panic",
+        "cmd": "panic",
+        "icon": "🚨",
+        "button": False,
+        "desc": "stop the bridge AND erase every approved phone in one step",
+        "where": "both",
+        "gate": None,
+        "arg": None,
+    },
+    {
+        "action": None,
+        "cmd": "help",
+        "icon": "❓",
+        "button": True,
+        "desc": "list what this bot can do",
+        "where": "remote",
+        "gate": None,
+        "arg": None,
+    },
+    {
+        "action": None,
+        "cmd": "id",
+        "icon": "🆔",
+        "button": False,
+        "desc": "show this chat's numeric ID",
+        "where": "remote",
+        "gate": None,
+        "arg": None,
+    },
 )
 
 _OPS = _CORE_OPS + (tuple(getattr(_ops, "EXTRA_OPS", ()) or ()) if _ops else ())
@@ -270,13 +329,14 @@ def _gate_notice(op: dict | None) -> str:
     through a settings drawer for a toggle whose name they are guessing at.
     """
     what = f"/{op.get('cmd')}" if op and op.get("cmd") else "That"
-    return (f"{what} is switched off. It can only be turned on at the computer: "
-            f"settings → TELEGRAM REMOTE.")
+    return (
+        f"{what} is switched off. It can only be turned on at the computer: "
+        f"settings → TELEGRAM REMOTE."
+    )
 
 
 def _ops_for(where: str, cfg: dict) -> list[dict]:
-    return [o for o in _OPS
-            if o.get("where") in (where, "both") and _gate_ok(o, cfg)]
+    return [o for o in _OPS if o.get("where") in (where, "both") and _gate_ok(o, cfg)]
 
 
 def _remote_ops(cfg: dict) -> list[dict]:
@@ -304,7 +364,7 @@ def _split_command(text: str) -> tuple[str, str]:
     """Find a slash token in the first two words; return (name, argument).
 
     Two words rather than one because the phone keyboard's buttons are labelled
-    with an icon in front of the token — pressing one sends "\U0001F4F8 /screen",
+    with an icon in front of the token — pressing one sends "\U0001f4f8 /screen",
     and a parser that only looked at the first word would see the icon and give
     up. Anything further in than that is prose, and prose belongs to the model.
     """
@@ -313,7 +373,7 @@ def _split_command(text: str) -> tuple[str, str]:
         if tok.startswith("/") and len(tok) > 1:
             name = tok[1:].split("@", 1)[0].strip().lower()
             if name:
-                return name, " ".join(parts[i + 1:]).strip()
+                return name, " ".join(parts[i + 1 :]).strip()
     return "", ""
 
 
@@ -328,61 +388,71 @@ _MODEL_OPS = [o for o in _OPS if o.get("action") and o.get("where") in ("desk", 
 # Everything the helper contributes, whoever may trigger it. Used only for
 # ordering: the things a phone reaches for are the things this file did not
 # already have, so they go at the front of the menu and the keyboard.
-_EXTRA_ACTIONS = {o["action"] for o in (getattr(_ops, "EXTRA_OPS", ()) or ())
-                  if o.get("action")} if _ops else set()
+_EXTRA_ACTIONS = (
+    {o["action"] for o in (getattr(_ops, "EXTRA_OPS", ()) or ()) if o.get("action")}
+    if _ops
+    else set()
+)
 
-_PUSH_ACTIONS = {o["action"] for o in (getattr(_ops, "EXTRA_OPS", ()) or ())
-                 if o.get("action") and o.get("where") in ("desk", "both")} \
-    if _ops else set()
+_PUSH_ACTIONS = (
+    {
+        o["action"]
+        for o in (getattr(_ops, "EXTRA_OPS", ()) or ())
+        if o.get("action") and o.get("where") in ("desk", "both")
+    }
+    if _ops
+    else set()
+)
 
 
 # ── shared state ─────────────────────────────────────────────────────────────
 
 _lock = threading.Lock()
 _state: dict = {
-    "running":     False,
-    "stopping":    False,  # stop asked for, poller not yet wound down
-    "stop":        None,   # threading.Event
-    "thread":      None,
-    "sender":      None,
-    "outbox":      None,   # queue.Queue of job dicts
-    "orig_log":    None,   # the player's real write_log, while relaying
-    "wrapped":     None,   # the wrapper we installed, for identity on removal
-    "player":      None,
-    "turn_chat":   None,   # chat_id whose turn is currently open
-    "turn_open":   False,
-    "turn_end":    0.0,    # hard ceiling for this turn
-    "turn_quiet":  0.0,    # closes early once the answer has gone quiet
-    "bot":         "",
-    "started":     0.0,
-    "floor_ts":    0.0,    # Telegram-clock moment the bridge began listening
-    "pair_until":  0.0,    # monotonic; pairing is armed until then
-    "pair_tries":  0,      # wrong codes during the current armed window
-    "refused_at":  0.0,    # last time the desk was told about a refused chat
-    "stale_at":    0.0,    # last time the desk was told about a clock-dropped message
-    "skew":        0.0,    # this machine's clock minus Telegram's, in seconds
-    "skew_seen":   [],     # recent samples; the median is used
-    "skew_at":     0.0,    # monotonic, last measurement
-    "seen":        0,      # accepted commands this run
-    "shots":       0,      # pictures sent this run
-    "watch":       None,   # the desk watcher thread
-    "repeat":      None,   # (chat_id, cmd, expires) — a confirm-op awaiting its second press
-    "lease_chat":  None,   # chat still hearing system lines about a pending confirmation
+    "running": False,
+    "stopping": False,  # stop asked for, poller not yet wound down
+    "stop": None,  # threading.Event
+    "thread": None,
+    "sender": None,
+    "outbox": None,  # queue.Queue of job dicts
+    "orig_log": None,  # the player's real write_log, while relaying
+    "wrapped": None,  # the wrapper we installed, for identity on removal
+    "player": None,
+    "turn_chat": None,  # chat_id whose turn is currently open
+    "turn_open": False,
+    "turn_end": 0.0,  # hard ceiling for this turn
+    "turn_quiet": 0.0,  # closes early once the answer has gone quiet
+    "bot": "",
+    "started": 0.0,
+    "floor_ts": 0.0,  # Telegram-clock moment the bridge began listening
+    "pair_until": 0.0,  # monotonic; pairing is armed until then
+    "pair_tries": 0,  # wrong codes during the current armed window
+    "refused_at": 0.0,  # last time the desk was told about a refused chat
+    "stale_at": 0.0,  # last time the desk was told about a clock-dropped message
+    "skew": 0.0,  # this machine's clock minus Telegram's, in seconds
+    "skew_seen": [],  # recent samples; the median is used
+    "skew_at": 0.0,  # monotonic, last measurement
+    "seen": 0,  # accepted commands this run
+    "shots": 0,  # pictures sent this run
+    "watch": None,  # the desk watcher thread
+    "repeat": None,  # (chat_id, cmd, expires) — a confirm-op awaiting its second press
+    "lease_chat": None,  # chat still hearing system lines about a pending confirmation
     "lease_until": 0.0,
-    "confirm_at":  "",     # the banner title the watcher last saw
-    "desk_seen":   0.0,    # last activity-log line that was not ours
-    "alerts":      0,      # away alerts pushed this run
-    "alert_last":  "",     # the last one, so it is never repeated back to back
-    "turn_voice":  False,  # this turn arrived as speech, so answer in kind
-    "spoken":      0,      # answers synthesised during this turn
-    "heard":       0,      # voice notes understood this run
-    "last_file":   None,   # (chat_id, path, expires) — sent from a phone, not yet used
-    "files":       0,      # files received this run
+    "confirm_at": "",  # the banner title the watcher last saw
+    "desk_seen": 0.0,  # last activity-log line that was not ours
+    "alerts": 0,  # away alerts pushed this run
+    "alert_last": "",  # the last one, so it is never repeated back to back
+    "turn_voice": False,  # this turn arrived as speech, so answer in kind
+    "spoken": 0,  # answers synthesised during this turn
+    "heard": 0,  # voice notes understood this run
+    "last_file": None,  # (chat_id, path, expires) — sent from a phone, not yet used
+    "files": 0,  # files received this run
 }
 _rate: dict[int, list[float]] = {}
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
+
 
 def _http():
     """`requests` is imported on first use, never at module scope.
@@ -392,7 +462,8 @@ def _http():
     channel that is off by default must not be charged to every boot. The same
     mistake the 2.1-second openwakeword import made on the settings drawer.
     """
-    import requests                       # noqa: PLC0415 — deliberate, see above
+    import requests  # noqa: PLC0415 — deliberate, see above
+
     return requests
 
 
@@ -415,11 +486,17 @@ def _api(sess, token: str, method: str, **kw):
     url = _API.format(token=token, method=method)
     kw.setdefault("timeout", 20)
     if sess is not None:
-        return sess.post(url, **kw) if ("json" in kw or "data" in kw or "files" in kw) \
+        return (
+            sess.post(url, **kw)
+            if ("json" in kw or "data" in kw or "files" in kw)
             else sess.get(url, **kw)
+        )
     http = _http()
-    return http.post(url, **kw) if ("json" in kw or "data" in kw or "files" in kw) \
+    return (
+        http.post(url, **kw)
+        if ("json" in kw or "data" in kw or "files" in kw)
         else http.get(url, **kw)
+    )
 
 
 def _scrub(text, token: str) -> str:
@@ -462,6 +539,7 @@ def _code_matches(sent: str, code: str) -> bool:
     guesses from anywhere at all. The allowlist, not this string, is what keeps
     the channel shut afterwards.
     """
+
     def _reduce(v: str) -> bytes:
         flat = " ".join(str(v or "").split())
         decomposed = unicodedata.normalize("NFKD", flat)
@@ -491,7 +569,7 @@ def _note_skew(response) -> None:
     # bridge is actually talking to Telegram, so it is not paid by a launch that
     # never opens the remote — the same reasoning `requests` gets above.
     try:
-        from email.utils import parsedate_to_datetime   # noqa: PLC0415
+        from email.utils import parsedate_to_datetime  # noqa: PLC0415
 
         server = parsedate_to_datetime(response.headers["Date"]).timestamp()
     except Exception:
@@ -562,8 +640,7 @@ def _rate_ok(chat_id: int) -> bool:
     """
     now = time.monotonic()
     if len(_rate) > _RATE_KEYS:
-        for key in [k for k, v in _rate.items()
-                    if not v or now - v[-1] > _RATE_WINDOW]:
+        for key in [k for k, v in _rate.items() if not v or now - v[-1] > _RATE_WINDOW]:
             _rate.pop(key, None)
     hits = [t for t in _rate.get(chat_id, []) if now - t < _RATE_WINDOW]
     if len(hits) >= _RATE_MAX:
@@ -575,6 +652,7 @@ def _rate_ok(chat_id: int) -> bool:
 
 
 # ── settings (⚙ → PLUGIN SETTINGS) ───────────────────────────────────────────
+
 
 def _test_connection(values: dict) -> tuple[bool, str]:
     """TEST button: prove the token works and name the bot, without saving state.
@@ -595,18 +673,25 @@ def _test_connection(values: dict) -> tuple[bool, str]:
     except Exception as e:
         return False, f"Could not reach Telegram: {_scrub(e, token)}"
     if not data.get("ok"):
-        return False, f"Telegram refused the token ({data.get('description', 'unknown error')})."
+        return (
+            False,
+            f"Telegram refused the token ({data.get('description', 'unknown error')}).",
+        )
     who = "@" + (data.get("result", {}).get("username") or "bot")
     ids = _parse_ids(values.get("allowed_chat_ids", ""))
     if ids:
-        return True, (f"Connected as {who}. {len(ids)} approved chat(s). "
-                      f"Say \"start the telegram remote\" to begin listening.")
+        return True, (
+            f"Connected as {who}. {len(ids)} approved chat(s). "
+            f'Say "start the telegram remote" to begin listening.'
+        )
     if (values.get("pairing_code") or "").strip():
-        return True, (f"Connected as {who}. No approved chats yet. "
-                      f"SAVE, then say \"start the telegram remote\" — and ONLY THEN "
-                      f"send your pairing code to {who}. A code sent before it is "
-                      f"listening is discarded, and pairing closes 10 minutes "
-                      f"after it starts.")
+        return True, (
+            f"Connected as {who}. No approved chats yet. "
+            f'SAVE, then say "start the telegram remote" — and ONLY THEN '
+            f"send your pairing code to {who}. A code sent before it is "
+            f"listening is discarded, and pairing closes 10 minutes "
+            f"after it starts."
+        )
     return True, f"Connected as {who}. Set a pairing code, or nothing will be accepted."
 
 
@@ -614,22 +699,41 @@ PLUGIN_SETTINGS = {
     "namespace": _NS,
     "title": "✈️  TELEGRAM REMOTE",
     "fields": [
-        {"key": "bot_token", "label": "Bot Token", "type": "password",
-         "placeholder": "Telegram → @BotFather → /newbot → the token it gives you"},
-        {"key": "pairing_code", "label": "Pairing Code (one-time)", "type": "password",
-         "placeholder": "Any secret phrase. Send it to the bot once to approve your phone."},
-        {"key": "allowed_chat_ids", "label": "Approved Chat IDs", "type": "text",
-         "placeholder": "Filled in by pairing. Comma-separated. Empty = nothing is accepted."},
-        {"key": "relay_replies", "label": "Send JARVIS's answers back to Telegram",
-         "type": "toggle", "default": True},
+        {
+            "key": "bot_token",
+            "label": "Bot Token",
+            "type": "password",
+            "placeholder": "Telegram → @BotFather → /newbot → the token it gives you",
+        },
+        {
+            "key": "pairing_code",
+            "label": "Pairing Code (one-time)",
+            "type": "password",
+            "placeholder": "Any secret phrase. Send it to the bot once to approve your phone.",
+        },
+        {
+            "key": "allowed_chat_ids",
+            "label": "Approved Chat IDs",
+            "type": "text",
+            "placeholder": "Filled in by pairing. Comma-separated. Empty = nothing is accepted.",
+        },
+        {
+            "key": "relay_replies",
+            "label": "Send JARVIS's answers back to Telegram",
+            "type": "toggle",
+            "default": True,
+        },
         # Off by default, and deliberately so. Updating a plugin must never hand
         # a remote channel a view of your screen because you were not asked.
         # Once this is on there is no cooldown and no second question — that is
         # the whole point of it — so the decision belongs here, at the machine,
         # once.
-        {"key": "allow_screenshot",
-         "label": "Allow /screen — send screenshots to approved phones",
-         "type": "toggle", "default": False},
+        {
+            "key": "allow_screenshot",
+            "label": "Allow /screen — send screenshots to approved phones",
+            "type": "toggle",
+            "default": False,
+        },
         # main.py's own monitor speaks its alerts out loud, and only while
         # JARVIS is awake — so a machine in trouble while the house is empty
         # says nothing at all. This is the half that was missing, and it is
@@ -637,34 +741,55 @@ PLUGIN_SETTINGS = {
         # else's phone buzzing at three in the morning.
         # A camera is a stronger thing to hand out than a screen, so it gets its
         # own switch rather than riding on that one.
-        {"key": "allow_camera",
-         "label": "Allow /cam — send webcam pictures to approved phones",
-         "type": "toggle", "default": False},
+        {
+            "key": "allow_camera",
+            "label": "Allow /cam — send webcam pictures to approved phones",
+            "type": "toggle",
+            "default": False,
+        },
         # These two are folders, not switches, and empty means the feature does
         # not exist. Naming a folder is the whole permission: it is the only
         # place files may be written to, and the only place they may be read
         # from. Nothing arriving from Telegram can change either one.
-        {"key": "inbox_folder", "label": "Folder for files sent from the phone",
-         "type": "text",
-         "placeholder": "Empty = files from the phone are ignored"},
-        {"key": "share_folder", "label": "Folder /get may send files out of",
-         "type": "text",
-         "placeholder": "Empty = /get does not exist"},
+        {
+            "key": "inbox_folder",
+            "label": "Folder for files sent from the phone",
+            "type": "text",
+            "placeholder": "Empty = files from the phone are ignored",
+        },
+        {
+            "key": "share_folder",
+            "label": "Folder /get may send files out of",
+            "type": "text",
+            "placeholder": "Empty = /get does not exist",
+        },
         # Off by default, and it has to be: a plugin that is merely PRESENT must
         # never open a way in. On, it is the owner of the machine saying they
         # would rather not repeat themselves every morning — which is a
         # different thing entirely, and theirs to decide.
-        {"key": "start_on_launch",
-         "label": "Start listening when JARVIS launches (no need to ask each time)",
-         "type": "toggle", "default": False},
-        {"key": "voice_replies",
-         "label": "Speak answers to typed commands too (spoken ones always are)",
-         "type": "toggle", "default": False},
-        {"key": "away_alerts",
-         "label": "Alert my phone when this computer is in trouble and nobody is here",
-         "type": "toggle", "default": False},
+        {
+            "key": "start_on_launch",
+            "label": "Start listening when JARVIS launches (no need to ask each time)",
+            "type": "toggle",
+            "default": False,
+        },
+        {
+            "key": "voice_replies",
+            "label": "Speak answers to typed commands too (spoken ones always are)",
+            "type": "toggle",
+            "default": False,
+        },
+        {
+            "key": "away_alerts",
+            "label": "Alert my phone when this computer is in trouble and nobody is here",
+            "type": "toggle",
+            "default": False,
+        },
     ],
-    "action": {"label": "TEST CONNECTION", "run": lambda values: _test_connection(values or {})},
+    "action": {
+        "label": "TEST CONNECTION",
+        "run": lambda values: _test_connection(values or {}),
+    },
 }
 
 PLUGIN = {
@@ -683,22 +808,24 @@ PLUGIN = {
     ),
     # Used in place of `description` only when a small model is on a tool
     # budget - Gemini still gets the full text. See providers/schema.py.
-    "brief": (
-        "Sends and reads Telegram messages remotely."
-    ),
+    "brief": ("Sends and reads Telegram messages remotely."),
     "parameters": {
         "type": "OBJECT",
         "properties": {
             "action": {
                 "type": "STRING",
                 "enum": [o["action"] for o in _MODEL_OPS],
-                "description": "; ".join(f"{o['action']} = {o['desc']}" for o in _MODEL_OPS),
+                "description": "; ".join(
+                    f"{o['action']} = {o['desc']}" for o in _MODEL_OPS
+                ),
             },
             "target": {
                 "type": "STRING",
-                "description": ("Optional detail for the action. For screenshot: "
-                                "a monitor number such as '2', or 'all' for every "
-                                "monitor at once. Leave empty for the main screen."),
+                "description": (
+                    "Optional detail for the action. For screenshot: "
+                    "a monitor number such as '2', or 'all' for every "
+                    "monitor at once. Leave empty for the main screen."
+                ),
             },
         },
         "required": [],
@@ -707,6 +834,7 @@ PLUGIN = {
 
 
 # ── outbound: a queue, because write_log must never block on the network ─────
+
 
 def _put(job: dict) -> None:
     q = _state.get("outbox")
@@ -766,23 +894,30 @@ def _keyboard(cfg: dict) -> dict:
     allowlist, from the one place you cannot walk over and fix it.
     """
     labels = [f"{o['icon']} /{o['cmd']}" for o in _remote_ops(cfg) if o.get("button")]
-    rows = [labels[i:i + 2] for i in range(0, len(labels), 2)]
+    rows = [labels[i : i + 2] for i in range(0, len(labels), 2)]
     return {"keyboard": rows, "resize_keyboard": True, "is_persistent": True}
 
 
 def _menu(cfg: dict) -> list[dict]:
     """setMyCommands payload — same table, Telegram's field names."""
-    return [{"command": o["cmd"], "description": (o["desc"] or "")[:250]}
-            for o in _remote_ops(cfg)]
+    return [
+        {"command": o["cmd"], "description": (o["desc"] or "")[:250]}
+        for o in _remote_ops(cfg)
+    ]
 
 
 def _help_text(cfg: dict) -> str:
-    lines = [f"{o['icon']} /{o['cmd']}" + (f" [{o['arg']}]" if o.get("arg") else "")
-             + f" — {o['desc']}"
-             for o in _remote_ops(cfg)]
+    lines = [
+        f"{o['icon']} /{o['cmd']}"
+        + (f" [{o['arg']}]" if o.get("arg") else "")
+        + f" — {o['desc']}"
+        for o in _remote_ops(cfg)
+    ]
     lines.append("")
-    lines.append("Anything else you write is passed straight to the assistant, "
-                 "in your own language.")
+    lines.append(
+        "Anything else you write is passed straight to the assistant, "
+        "in your own language."
+    )
     # Only mentioned when there is actually a way to hear it. A help screen that
     # offers something the machine cannot do is worse than one that is short.
     if _ops is not None:
@@ -791,8 +926,10 @@ def _help_text(cfg: dict) -> str:
         except Exception:
             hearing = False
         if hearing:
-            lines.append("Or hold the microphone button and just say it — when "
-                         "you do, the answer comes back out loud as well.")
+            lines.append(
+                "Or hold the microphone button and just say it — when "
+                "you do, the answer comes back out loud as well."
+            )
     return "\n".join(lines)
 
 
@@ -807,44 +944,87 @@ def _send_job(sess, token: str, job: dict, stop: threading.Event) -> None:
     for attempt in range(3):
         try:
             if kind == "photo":
-                r = _api(sess, token, "sendPhoto",
-                         data={"chat_id": job["chat"],
-                               "caption": (job.get("caption") or "")[:1024]},
-                         files={"photo": (job.get("name") or "photo.jpg",
-                                          job.get("data") or b"",
-                                          job.get("mime") or "image/jpeg")},
-                         timeout=60)
+                r = _api(
+                    sess,
+                    token,
+                    "sendPhoto",
+                    data={
+                        "chat_id": job["chat"],
+                        "caption": (job.get("caption") or "")[:1024],
+                    },
+                    files={
+                        "photo": (
+                            job.get("name") or "photo.jpg",
+                            job.get("data") or b"",
+                            job.get("mime") or "image/jpeg",
+                        )
+                    },
+                    timeout=60,
+                )
             elif kind == "document":
-                r = _api(sess, token, "sendDocument",
-                         data={"chat_id": job["chat"],
-                               "caption": (job.get("caption") or "")[:1024]},
-                         files={"document": (job.get("name") or "file.bin",
-                                             job.get("data") or b"",
-                                             job.get("mime") or "application/octet-stream")},
-                         timeout=180)
+                r = _api(
+                    sess,
+                    token,
+                    "sendDocument",
+                    data={
+                        "chat_id": job["chat"],
+                        "caption": (job.get("caption") or "")[:1024],
+                    },
+                    files={
+                        "document": (
+                            job.get("name") or "file.bin",
+                            job.get("data") or b"",
+                            job.get("mime") or "application/octet-stream",
+                        )
+                    },
+                    timeout=180,
+                )
             elif kind in ("voice", "audio"):
                 # sendVoice draws the round waveform bubble and needs OGG/Opus;
                 # sendAudio takes anything and draws a file row. Which one this
                 # is was decided where the sound was made, by whether ffmpeg was
                 # there to encode it.
                 field = "voice" if kind == "voice" else "audio"
-                r = _api(sess, token, "sendVoice" if kind == "voice" else "sendAudio",
-                         data={"chat_id": job["chat"],
-                               "duration": int(job.get("seconds") or 0)},
-                         files={field: (job.get("name") or f"{field}.ogg",
-                                        job.get("data") or b"",
-                                        job.get("mime") or "audio/ogg")},
-                         timeout=90)
+                r = _api(
+                    sess,
+                    token,
+                    "sendVoice" if kind == "voice" else "sendAudio",
+                    data={
+                        "chat_id": job["chat"],
+                        "duration": int(job.get("seconds") or 0),
+                    },
+                    files={
+                        field: (
+                            job.get("name") or f"{field}.ogg",
+                            job.get("data") or b"",
+                            job.get("mime") or "audio/ogg",
+                        )
+                    },
+                    timeout=90,
+                )
             elif kind == "menu":
-                r = _api(sess, token, "setMyCommands",
-                         json={"commands": job.get("commands") or [],
-                               "scope": {"type": "chat", "chat_id": job["chat"]}})
+                r = _api(
+                    sess,
+                    token,
+                    "setMyCommands",
+                    json={
+                        "commands": job.get("commands") or [],
+                        "scope": {"type": "chat", "chat_id": job["chat"]},
+                    },
+                )
             elif kind == "menu_clear":
-                r = _api(sess, token, "deleteMyCommands",
-                         json={"scope": {"type": "chat", "chat_id": job["chat"]}})
+                r = _api(
+                    sess,
+                    token,
+                    "deleteMyCommands",
+                    json={"scope": {"type": "chat", "chat_id": job["chat"]}},
+                )
             else:
-                payload = {"chat_id": job["chat"], "text": job.get("text") or "",
-                           "disable_web_page_preview": True}
+                payload = {
+                    "chat_id": job["chat"],
+                    "text": job.get("text") or "",
+                    "disable_web_page_preview": True,
+                }
                 # No parse_mode on purpose: JARVIS's answers are arbitrary text
                 # and Markdown parsing would reject or mangle them.
                 if job.get("markup"):
@@ -854,7 +1034,9 @@ def _send_job(sess, token: str, job: dict, stop: threading.Event) -> None:
             if r is not None and r.status_code == 429:
                 wait = 3.0
                 try:
-                    wait = float((r.json().get("parameters") or {}).get("retry_after", 3))
+                    wait = float(
+                        (r.json().get("parameters") or {}).get("retry_after", 3)
+                    )
                 except Exception:
                     pass
                 if stop.wait(min(max(wait, 1.0), 30.0)):
@@ -918,15 +1100,15 @@ def _name_prefix() -> str:
 
 def _open_turn(chat_id: int, spoken: bool = False) -> None:
     now = time.time()
-    _state["turn_chat"]  = chat_id
-    _state["turn_open"]  = True
-    _state["turn_end"]   = now + _REPLY_WINDOW
+    _state["turn_chat"] = chat_id
+    _state["turn_open"] = True
+    _state["turn_end"] = now + _REPLY_WINDOW
     _state["turn_quiet"] = now + _TURN_FIRST
     # A question asked out loud is answered out loud. That is the whole rule —
     # no setting to find, and it is right for the case this exists for, which is
     # somebody with their hands on a steering wheel.
     _state["turn_voice"] = bool(spoken)
-    _state["spoken"]     = 0
+    _state["spoken"] = 0
 
 
 def _turn_active() -> bool:
@@ -964,7 +1146,7 @@ def _maybe_relay(line: str) -> None:
             return
         prefix = _name_prefix()
         if line.startswith(prefix):
-            answer = line[len(prefix):].strip()
+            answer = line[len(prefix) :].strip()
             _enqueue(chat_id, answer)
             _maybe_speak(chat_id, answer)
         elif line.startswith("SYS:"):
@@ -1021,8 +1203,9 @@ def _install_relay(player) -> None:
     current = getattr(player, "write_log", None)
     if getattr(current, "_telegram_relay", False):
         with _lock:
-            _state["orig_log"] = getattr(current, "_telegram_orig", None) \
-                or _state.get("orig_log")
+            _state["orig_log"] = getattr(current, "_telegram_orig", None) or _state.get(
+                "orig_log"
+            )
             _state["wrapped"] = current
         return
 
@@ -1041,18 +1224,18 @@ def _install_relay(player) -> None:
             except Exception:
                 pass
 
-    wrapped._telegram_relay = True      # type: ignore[attr-defined]
-    wrapped._telegram_orig  = orig      # type: ignore[attr-defined]
+    wrapped._telegram_relay = True  # type: ignore[attr-defined]
+    wrapped._telegram_orig = orig  # type: ignore[attr-defined]
     _state["wrapped"] = wrapped
     player.write_log = wrapped
 
 
 def _remove_relay(player) -> None:
     with _lock:
-        orig    = _state.get("orig_log")
+        orig = _state.get("orig_log")
         wrapped = _state.get("wrapped")
         _state["orig_log"] = None
-        _state["wrapped"]  = None
+        _state["wrapped"] = None
     if not orig or not player:
         return
     # Only unwrap what is still ours. If something else wrapped write_log after
@@ -1061,7 +1244,7 @@ def _remove_relay(player) -> None:
     try:
         if getattr(player, "write_log", None) is not wrapped:
             return
-        del player.write_log          # unshadow the class method
+        del player.write_log  # unshadow the class method
     except Exception:
         try:
             player.write_log = orig
@@ -1070,6 +1253,7 @@ def _remove_relay(player) -> None:
 
 
 # ── inbound ──────────────────────────────────────────────────────────────────
+
 
 def _drop_backlog(sess, token: str):
     """Return an offset past everything already queued, so nothing sent while
@@ -1085,13 +1269,19 @@ def _drop_backlog(sess, token: str):
     start floor in _handle stands whether this call worked or not.
     """
     try:
-        _api(sess, token, "deleteWebhook", json={"drop_pending_updates": True},
-             timeout=15)
+        _api(
+            sess,
+            token,
+            "deleteWebhook",
+            json={"drop_pending_updates": True},
+            timeout=15,
+        )
     except Exception:
         pass
     try:
-        r = _api(sess, token, "getUpdates", params={"offset": -1, "timeout": 0},
-                 timeout=15)
+        r = _api(
+            sess, token, "getUpdates", params={"offset": -1, "timeout": 0}, timeout=15
+        )
         _note_skew(r)
         result = r.json().get("result") or []
     except Exception:
@@ -1112,7 +1302,7 @@ def _deliver(player, text: str) -> bool:
     # is a toggle and would otherwise put an awake JARVIS to sleep.
     try:
         get_state = getattr(player, "wake_get_state", None)
-        wake_now  = getattr(player, "on_wake_manual", None)
+        wake_now = getattr(player, "on_wake_manual", None)
         if callable(get_state) and callable(wake_now):
             st = get_state() or {}
             if st.get("enabled") and not st.get("awake"):
@@ -1128,20 +1318,24 @@ def _status_text() -> str:
     if not _state.get("running"):
         return "The Telegram remote is not running."
     mins = int((time.monotonic() - _state.get("started", 0)) // 60)
-    cfg  = _cfg()
-    ids  = _parse_ids(cfg.get("allowed_chat_ids", ""))
-    bot  = _state.get("bot") or "the bot"
-    bits = [f"Listening as {bot} for {mins} minute(s).",
-            f"{len(ids)} approved chat(s), {_state.get('seen', 0)} command(s) "
-            f"and {_state.get('shots', 0)} picture(s) this session."]
+    cfg = _cfg()
+    ids = _parse_ids(cfg.get("allowed_chat_ids", ""))
+    bot = _state.get("bot") or "the bot"
+    bits = [
+        f"Listening as {bot} for {mins} minute(s).",
+        f"{len(ids)} approved chat(s), {_state.get('seen', 0)} command(s) "
+        f"and {_state.get('shots', 0)} picture(s) this session.",
+    ]
     left = _state.get("pair_until", 0.0) - time.monotonic()
     if left > 0:
         bits.append(f"Pairing is open for another {int(left // 60)} minute(s).")
     if not cfg.get("allow_screenshot"):
         bits.append("Screen sharing is off.")
     if cfg.get("away_alerts"):
-        bits.append(f"Away alerts are on ({_state.get('alerts', 0)} sent"
-                    f"{'; nobody at the desk right now' if _desk_idle() else ''}).")
+        bits.append(
+            f"Away alerts are on ({_state.get('alerts', 0)} sent"
+            f"{'; nobody at the desk right now' if _desk_idle() else ''})."
+        )
     if _ops is not None and _state.get("heard"):
         bits.append(f"{_state['heard']} voice note(s) understood.")
     if _state.get("files"):
@@ -1151,8 +1345,10 @@ def _status_text() -> str:
         bits.append(f"A confirmation is waiting at the computer: {waiting}.")
     skew = _state.get("skew", 0.0)
     if abs(skew) > _FUTURE_SKEW:
-        bits.append(f"This computer's clock is {abs(skew):.0f}s "
-                    f"{'behind' if skew < 0 else 'ahead of'} Telegram's.")
+        bits.append(
+            f"This computer's clock is {abs(skew):.0f}s "
+            f"{'behind' if skew < 0 else 'ahead of'} Telegram's."
+        )
     return " ".join(bits)
 
 
@@ -1216,8 +1412,9 @@ def _run_op(player, op: dict, chats: list[int], arg: str) -> None:
 
 
 def _spawn(fn, *args) -> None:
-    threading.Thread(target=fn, args=args, daemon=True,
-                     name="telegram-remote-op").start()
+    threading.Thread(
+        target=fn, args=args, daemon=True, name="telegram-remote-op"
+    ).start()
 
 
 def _download(token: str, file_id: str) -> tuple[bytes, str]:
@@ -1263,10 +1460,14 @@ def _run_voice(player, chat_id: int, voice: dict, token: str, who: str) -> None:
         heard = _ops.transcribe(data, voice.get("mime_type") or "audio/ogg")
     except Exception as e:
         _state["turn_open"] = False
-        _enqueue(chat_id, f"I could not make out that voice note: "
-                          f"{_scrub(e, token)}")
-        _log(player, f"SYS: Telegram remote could not transcribe a voice note "
-                     f"— {_scrub(e, token)}")
+        _enqueue(
+            chat_id, f"I could not make out that voice note: " f"{_scrub(e, token)}"
+        )
+        _log(
+            player,
+            f"SYS: Telegram remote could not transcribe a voice note "
+            f"— {_scrub(e, token)}",
+        )
         return
 
     heard = (heard or "").strip()
@@ -1282,8 +1483,9 @@ def _run_voice(player, chat_id: int, voice: dict, token: str, who: str) -> None:
     _deliver_text(player, chat_id, who, heard, spoken=True)
 
 
-def _run_file_in(player, chat_id: int, item: dict, name: str, caption: str,
-                 token: str, who: str) -> None:
+def _run_file_in(
+    player, chat_id: int, item: dict, name: str, caption: str, token: str, who: str
+) -> None:
     """A file arrives from the phone, lands in the inbox folder, and waits.
 
     It is NOT handed to the assistant on its own. A file with no instruction is
@@ -1363,7 +1565,7 @@ def _repeat_ok(chat_id: int, cmd: str) -> bool:
     who, what, until = pending
     if who != chat_id or what != cmd or time.monotonic() > until:
         return False
-    _state["repeat"] = None        # consumed either way
+    _state["repeat"] = None  # consumed either way
     return True
 
 
@@ -1372,6 +1574,7 @@ def _arm_repeat(chat_id: int, cmd: str) -> None:
 
 
 # ── the desk watcher: two things a phone cannot see for itself ───────────────
+
 
 def _open_lease(chat_id: int) -> None:
     """Let one chat keep hearing SYSTEM lines while a confirmation is pending.
@@ -1386,7 +1589,7 @@ def _open_lease(chat_id: int) -> None:
     """
     if not chat_id:
         return
-    _state["lease_chat"]  = chat_id
+    _state["lease_chat"] = chat_id
     _state["lease_until"] = time.time() + _LEASE_MAX
 
 
@@ -1420,7 +1623,7 @@ def _watcher(player, stop: threading.Event) -> None:
             # will, whatever this file does. Polling the title sidesteps the
             # whole question, and works in every language besides.
             title = _ops.confirm_pending() if _ops else ""
-            was   = _state.get("confirm_at", "")
+            was = _state.get("confirm_at", "")
             if title and title != was:
                 # It went up. The assistant has already been told to say so in
                 # the user's own language, and that sentence relays with the
@@ -1436,10 +1639,14 @@ def _watcher(player, stop: threading.Event) -> None:
                 # the part a person waiting on a train needs.
                 chat = _state.get("lease_chat")
                 if chat and _lease_active():
-                    _enqueue(chat, f"The confirmation for “{was}” is no longer "
-                                   f"waiting at the computer.")
-                    _state["lease_until"] = min(_state.get("lease_until", 0),
-                                                time.time() + _LEASE_GRACE)
+                    _enqueue(
+                        chat,
+                        f"The confirmation for “{was}” is no longer "
+                        f"waiting at the computer.",
+                    )
+                    _state["lease_until"] = min(
+                        _state.get("lease_until", 0), time.time() + _LEASE_GRACE
+                    )
             _state["confirm_at"] = title
 
             # -- the machine in trouble while nobody is at the desk ----------
@@ -1458,19 +1665,26 @@ def _watcher(player, stop: threading.Event) -> None:
                         for cid in chats:
                             _enqueue(cid, f"⚠ {line}")
                         _state["alerts"] = _state.get("alerts", 0) + 1
-                        _log(player, f"SYS: Telegram remote pushed an away alert "
-                                     f"to {len(chats)} chat(s).")
+                        _log(
+                            player,
+                            f"SYS: Telegram remote pushed an away alert "
+                            f"to {len(chats)} chat(s).",
+                        )
         except Exception as e:
             print(f"[TelegramRemote] watcher error: {e}")
 
 
 def _handle(player, msg: dict, token: str) -> None:
     chat = msg.get("chat") or {}
-    frm  = msg.get("from") or {}
+    frm = msg.get("from") or {}
     chat_id = chat.get("id")
 
     # -- shape: private human chats only -------------------------------------
-    if chat.get("type") != "private" or frm.get("is_bot") or not isinstance(chat_id, int):
+    if (
+        chat.get("type") != "private"
+        or frm.get("is_bot")
+        or not isinstance(chat_id, int)
+    ):
         return
     # In a private chat the sender and the chat are the same account. Anything
     # else is a shape this bridge was not designed around, so it is refused
@@ -1481,14 +1695,18 @@ def _handle(player, msg: dict, token: str) -> None:
     # The last two are only considered when the helper is present to turn them
     # into words or into a saved file; without it they are not commands, they
     # are attachments, and they are ignored like anything else unrecognised.
-    text  = msg.get("text")
+    text = msg.get("text")
     voice = msg.get("voice")
-    doc   = msg.get("document")
+    doc = msg.get("document")
     photo = msg.get("photo")
-    text  = text.strip() if isinstance(text, str) else ""
+    text = text.strip() if isinstance(text, str) else ""
     spoken = (not text) and isinstance(voice, dict) and _ops is not None
-    filed  = (not text) and (not spoken) and _ops is not None and (
-        isinstance(doc, dict) or (isinstance(photo, list) and photo))
+    filed = (
+        (not text)
+        and (not spoken)
+        and _ops is not None
+        and (isinstance(doc, dict) or (isinstance(photo, list) and photo))
+    )
 
     if not text and not spoken and not filed:
         return
@@ -1512,20 +1730,26 @@ def _handle(player, msg: dict, token: str) -> None:
                 _state["stale_at"] = now
                 skew = _state.get("skew", 0.0)
                 if abs(skew) > _FUTURE_SKEW:
-                    _log(player, f"SYS: Telegram remote dropped a message — this "
-                                 f"computer's clock is {abs(skew):.0f}s "
-                                 f"{'behind' if skew < 0 else 'ahead of'} Telegram's. "
-                                 f"Fix the system clock.")
+                    _log(
+                        player,
+                        f"SYS: Telegram remote dropped a message — this "
+                        f"computer's clock is {abs(skew):.0f}s "
+                        f"{'behind' if skew < 0 else 'ahead of'} Telegram's. "
+                        f"Fix the system clock.",
+                    )
                 else:
-                    _log(player, f"SYS: Telegram remote dropped a message that was "
-                                 f"{abs(age):.0f}s old.")
+                    _log(
+                        player,
+                        f"SYS: Telegram remote dropped a message that was "
+                        f"{abs(age):.0f}s old.",
+                    )
             return
 
     # -- rate limit, ahead of the allowlist so pairing is covered too ---------
     if not _rate_ok(chat_id):
         return
 
-    cfg     = _cfg()
+    cfg = _cfg()
     allowed = _parse_ids(cfg.get("allowed_chat_ids", ""))
 
     # -- pairing: the ONLY thing an unapproved chat may do -------------------
@@ -1549,23 +1773,28 @@ def _handle(player, msg: dict, token: str) -> None:
         # An approved chat still gets told, because a PDF sent into silence is
         # indistinguishable from a broken bridge.
         if not str(cfg.get("inbox_folder") or "").strip():
-            _enqueue(chat_id, "Files from the phone are switched off. Name a "
-                              "folder for them at the computer: settings → "
-                              "TELEGRAM REMOTE.")
+            _enqueue(
+                chat_id,
+                "Files from the phone are switched off. Name a "
+                "folder for them at the computer: settings → "
+                "TELEGRAM REMOTE.",
+            )
             return
         if (item.get("file_size") or 0) > _FILE_BYTES:
-            _enqueue(chat_id, f"That file is over "
-                              f"{_FILE_BYTES // 1_000_000} MB.")
+            _enqueue(chat_id, f"That file is over " f"{_FILE_BYTES // 1_000_000} MB.")
             return
         name = item.get("file_name") or f"photo-{int(time.time())}.jpg"
-        cap  = str(msg.get("caption") or "").strip()[:_MAX_TEXT]
+        cap = str(msg.get("caption") or "").strip()[:_MAX_TEXT]
         _spawn(_run_file_in, player, chat_id, item, name, cap, token, who)
         return
 
     if spoken:
         if (voice.get("duration") or 0) > _VOICE_SECS:
-            _enqueue(chat_id, f"That is longer than {_VOICE_SECS} seconds. "
-                              f"Say it in a shorter one.")
+            _enqueue(
+                chat_id,
+                f"That is longer than {_VOICE_SECS} seconds. "
+                f"Say it in a shorter one.",
+            )
             return
         if (voice.get("file_size") or 0) > _VOICE_BYTES:
             _enqueue(chat_id, "That voice note is too big to fetch.")
@@ -1581,8 +1810,14 @@ def _handle(player, msg: dict, token: str) -> None:
         # because it is not a capability — it is the greeting, and it hands over
         # the keyboard that makes the rest reachable by thumb.
         if cmd == "start":
-            _put({"kind": "text", "chat": chat_id, "markup": _keyboard(cfg),
-                  "text": "Approved.\n\n" + _help_text(cfg)})
+            _put(
+                {
+                    "kind": "text",
+                    "chat": chat_id,
+                    "markup": _keyboard(cfg),
+                    "text": "Approved.\n\n" + _help_text(cfg),
+                }
+            )
             _register_menu(chat_id, cfg)
             return
 
@@ -1593,13 +1828,25 @@ def _handle(player, msg: dict, token: str) -> None:
             # DOES know but has switched off is a different answer, and the
             # difference matters: one is a typo, the other is a switch.
             hidden = next((o for o in _OPS if o.get("cmd") == cmd), None)
-            _enqueue(chat_id, _gate_notice(hidden) if hidden else
-                     f"There is no /{cmd}. Send /help for the list.")
+            _enqueue(
+                chat_id,
+                (
+                    _gate_notice(hidden)
+                    if hidden
+                    else f"There is no /{cmd}. Send /help for the list."
+                ),
+            )
             return
 
         if op["cmd"] == "help":
-            _put({"kind": "text", "chat": chat_id, "markup": _keyboard(cfg),
-                  "text": _help_text(cfg)})
+            _put(
+                {
+                    "kind": "text",
+                    "chat": chat_id,
+                    "markup": _keyboard(cfg),
+                    "text": _help_text(cfg),
+                }
+            )
             return
         if op["cmd"] == "id":
             _enqueue(chat_id, f"This chat's ID is {chat_id}.")
@@ -1608,7 +1855,9 @@ def _handle(player, msg: dict, token: str) -> None:
             _enqueue(chat_id, _status_text())
             return
         if op["cmd"] == "stop":
-            _enqueue(chat_id, "Closing the remote bridge. Start it again from the computer.")
+            _enqueue(
+                chat_id, "Closing the remote bridge. Start it again from the computer."
+            )
             _stop_now()
             return
         if op["cmd"] == "panic":
@@ -1623,9 +1872,12 @@ def _handle(player, msg: dict, token: str) -> None:
                 _enqueue(chat_id, str(e))
                 return
             _arm_repeat(chat_id, op["cmd"])
-            _enqueue(chat_id, f"{op['icon']} /{op['cmd']} → {subject}\n\n"
-                              f"Send /{op['cmd']} again within {_REPEAT_WINDOW}s "
-                              f"to confirm.")
+            _enqueue(
+                chat_id,
+                f"{op['icon']} /{op['cmd']} → {subject}\n\n"
+                f"Send /{op['cmd']} again within {_REPEAT_WINDOW}s "
+                f"to confirm.",
+            )
             return
 
         # Everything else is payload, produced off this thread.
@@ -1638,11 +1890,12 @@ def _handle(player, msg: dict, token: str) -> None:
     _deliver_text(player, chat_id, who, text)
 
 
-def _deliver_text(player, chat_id: int, who: str, text: str,
-                  spoken: bool = False) -> None:
+def _deliver_text(
+    player, chat_id: int, who: str, text: str, spoken: bool = False
+) -> None:
     """The last few inches, shared by something typed and something said."""
     if spoken:
-        _open_turn(chat_id, spoken=True)      # re-armed: transcription took time
+        _open_turn(chat_id, spoken=True)  # re-armed: transcription took time
     text = _attach_file(chat_id, text)
     if _deliver(player, text):
         _state["seen"] = _state.get("seen", 0) + 1
@@ -1655,24 +1908,33 @@ def _deliver_text(player, chat_id: int, who: str, text: str,
 def _try_pair(player, chat_id: int, text: str, cfg: dict, allowed: list[int]) -> None:
     """The whole of what an unapproved chat is allowed to reach."""
     armed = time.monotonic() < _state.get("pair_until", 0.0)
-    code  = str(cfg.get("pairing_code") or "").strip()
+    code = str(cfg.get("pairing_code") or "").strip()
 
     if armed and code and _code_matches(text, code):
         allowed.append(chat_id)
         try:
-            save_plugin_config(_NS, {
-                "allowed_chat_ids": ",".join(str(i) for i in allowed),
-                "pairing_code": "",           # consumed — one use only
-            })
+            save_plugin_config(
+                _NS,
+                {
+                    "allowed_chat_ids": ",".join(str(i) for i in allowed),
+                    "pairing_code": "",  # consumed — one use only
+                },
+            )
         except Exception as e:
             _log(player, f"SYS: Telegram remote could not save the pairing: {e}")
             return
-        _state["pair_until"] = 0.0            # one success closes the window
+        _state["pair_until"] = 0.0  # one success closes the window
         _state["pair_tries"] = 0
         cfg = _cfg()
-        _put({"kind": "text", "chat": chat_id, "markup": _keyboard(cfg),
-              "text": "Paired. This chat can now command the computer.\n\n"
-                      + _help_text(cfg)})
+        _put(
+            {
+                "kind": "text",
+                "chat": chat_id,
+                "markup": _keyboard(cfg),
+                "text": "Paired. This chat can now command the computer.\n\n"
+                + _help_text(cfg),
+            }
+        )
         _register_menu(chat_id, cfg)
         _log(player, f"SYS: Telegram remote paired with chat {chat_id}.")
         return
@@ -1684,8 +1946,11 @@ def _try_pair(player, chat_id: int, text: str, cfg: dict, allowed: list[int]) ->
         _state["pair_tries"] = _state.get("pair_tries", 0) + 1
         if _state["pair_tries"] >= _PAIR_TRIES:
             _state["pair_until"] = 0.0
-            _log(player, "SYS: Telegram remote closed pairing — too many wrong "
-                         "codes. Say \"pair my phone\" here to open it again.")
+            _log(
+                player,
+                "SYS: Telegram remote closed pairing — too many wrong "
+                'codes. Say "pair my phone" here to open it again.',
+            )
             return
 
     now = time.monotonic()
@@ -1722,14 +1987,19 @@ def _panic(player, chat_id: int | None = None) -> str:
         _log(player, f"SYS: Telegram remote could not clear the approved chats: {e}")
         return f"Sir, I could not clear the approved chats: {e}"
     _state["pair_until"] = 0.0
-    _log(player, "SYS: Telegram remote — PANIC: bridge closed, every approved chat erased.")
+    _log(
+        player,
+        "SYS: Telegram remote — PANIC: bridge closed, every approved chat erased.",
+    )
     _stop_now()
-    return ("The bridge is closed and every approved phone has been erased. "
-            "Nothing can reach this computer from outside until you pair one again.")
+    return (
+        "The bridge is closed and every approved phone has been erased. "
+        "Nothing can reach this computer from outside until you pair one again."
+    )
 
 
 def _worker(player, stop: threading.Event, token: str) -> None:
-    sess   = _session()
+    sess = _session()
     offset = _drop_backlog(sess, token)
     # The floor is set AFTER the backlog call, so it is measured on the clock we
     # have just corrected — and it is what actually holds if that call failed.
@@ -1747,23 +2017,32 @@ def _worker(player, stop: threading.Event, token: str) -> None:
         for cid in ids:
             _register_menu(cid, cfg)
     else:
-        _log(player, f"SYS: Telegram remote is listening — no chat approved yet. "
-                     f"Send your pairing code to {_state.get('bot') or 'the bot'} NOW; "
-                     f"anything sent before this moment was discarded, and pairing "
-                     f"closes in {_PAIR_WINDOW // 60} minutes.")
+        _log(
+            player,
+            f"SYS: Telegram remote is listening — no chat approved yet. "
+            f"Send your pairing code to {_state.get('bot') or 'the bot'} NOW; "
+            f"anything sent before this moment was discarded, and pairing "
+            f"closes in {_PAIR_WINDOW // 60} minutes.",
+        )
     try:
         while not stop.is_set():
             try:
                 params = {"timeout": _POLL_TIMEOUT, "allowed_updates": '["message"]'}
                 if offset is not None:
                     params["offset"] = offset
-                r = _api(sess, token, "getUpdates", params=params,
-                         timeout=_HTTP_TIMEOUT)
+                r = _api(
+                    sess, token, "getUpdates", params=params, timeout=_HTTP_TIMEOUT
+                )
                 if r.status_code == 401:
-                    _log(player, "SYS: Telegram rejected the bot token — remote stopped.")
+                    _log(
+                        player, "SYS: Telegram rejected the bot token — remote stopped."
+                    )
                     return
                 if r.status_code == 409:
-                    _log(player, "SYS: Another Telegram poller is using this bot — remote stopped.")
+                    _log(
+                        player,
+                        "SYS: Another Telegram poller is using this bot — remote stopped.",
+                    )
                     return
                 data = r.json()
                 if not data.get("ok"):
@@ -1794,12 +2073,15 @@ def _worker(player, stop: threading.Event, token: str) -> None:
                 fails += 1
                 print(f"[TelegramRemote] poll error: {_scrub(e, token)}")
                 if fails == 5:
-                    _log(player, "SYS: Telegram remote is having trouble reaching "
-                                 "Telegram — still retrying.")
+                    _log(
+                        player,
+                        "SYS: Telegram remote is having trouble reaching "
+                        "Telegram — still retrying.",
+                    )
                 stop.wait(min(60, 2 ** min(fails, 5)))
     finally:
         with _lock:
-            _state["running"]  = False
+            _state["running"] = False
             _state["stopping"] = False
         _remove_relay(player)
         _state["turn_open"] = False
@@ -1817,10 +2099,11 @@ def _worker(player, stop: threading.Event, token: str) -> None:
 
 # ── entry point ──────────────────────────────────────────────────────────────
 
+
 def _push(player, action: str, target: str) -> str:
     """Model-side screenshot / readout: produce it and send it to the phone."""
     cfg = _cfg()
-    op  = next((o for o in _MODEL_OPS if o["action"] == action), None)
+    op = next((o for o in _MODEL_OPS if o["action"] == action), None)
     if op is None:
         return f"I can't do '{action}' over the Telegram remote."
 
@@ -1835,13 +2118,17 @@ def _push(player, action: str, target: str) -> str:
         return notice + " Turn it on there and ask me again."
 
     if not _state.get("running"):
-        return ("The Telegram remote isn't running, so there's nowhere to send it. "
-                "Ask me to start the telegram remote first.")
+        return (
+            "The Telegram remote isn't running, so there's nowhere to send it. "
+            "Ask me to start the telegram remote first."
+        )
 
     chats = _targets(cfg)
     if not chats:
-        return ("No phone is approved yet, so there's nobody to send it to. "
-                "Pair one first.")
+        return (
+            "No phone is approved yet, so there's nobody to send it to. "
+            "Pair one first."
+        )
 
     _spawn(_run_op, player, op, chats, target or "")
     where = "your phone" if len(chats) == 1 else f"{len(chats)} approved chats"
@@ -1850,9 +2137,11 @@ def _push(player, action: str, target: str) -> str:
 
 def run(parameters: dict, player=None, session_memory=None) -> str:
     if not _HAS_CONFIG:
-        return ("This Mark is too old for the Telegram remote — it has no plugin "
-                "settings store, so there's nowhere to keep the bot token or the "
-                "approved chats. Update to Mark LII or newer and it will work as it is.")
+        return (
+            "This Mark is too old for the Telegram remote — it has no plugin "
+            "settings store, so there's nowhere to keep the bot token or the "
+            "approved chats. Update to Mark LII or newer and it will work as it is."
+        )
 
     action = (parameters.get("action") or "start").strip().lower()
     target = str(parameters.get("target") or "").strip()
@@ -1868,17 +2157,27 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
     # -------- PAIR --------
     if action in ("pair", "approve"):
         if not str(_cfg().get("pairing_code") or "").strip():
-            return ("There's no pairing code set, so there is nothing for a phone "
-                    "to send. Put one in settings → TELEGRAM REMOTE first.")
+            return (
+                "There's no pairing code set, so there is nothing for a phone "
+                "to send. Put one in settings → TELEGRAM REMOTE first."
+            )
         _state["pair_until"] = time.monotonic() + _PAIR_WINDOW
         _state["pair_tries"] = 0
-        _log(player, f"SYS: Telegram remote — pairing open for "
-                     f"{_PAIR_WINDOW // 60} minutes.")
-        tail = ("" if _state.get("running") else
-                " The bridge isn't listening yet, so start it before you send the code.")
-        return (f"Pairing is open for {_PAIR_WINDOW // 60} minutes. Send the "
-                f"pairing code to {_state.get('bot') or 'the bot'} from the phone "
-                f"you want to approve.{tail}")
+        _log(
+            player,
+            f"SYS: Telegram remote — pairing open for "
+            f"{_PAIR_WINDOW // 60} minutes.",
+        )
+        tail = (
+            ""
+            if _state.get("running")
+            else " The bridge isn't listening yet, so start it before you send the code."
+        )
+        return (
+            f"Pairing is open for {_PAIR_WINDOW // 60} minutes. Send the "
+            f"pairing code to {_state.get('bot') or 'the bot'} from the phone "
+            f"you want to approve.{tail}"
+        )
 
     # -------- PANIC --------
     if action in ("panic", "lockdown"):
@@ -1894,8 +2193,10 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
             return f"Sir, I could not clear the approved chats: {e}"
         _state["pair_until"] = 0.0
         _log(player, "SYS: Telegram remote — every approved chat revoked.")
-        return ("Every approved chat has been revoked. No phone can command this "
-                "computer until you pair one again with a new pairing code.")
+        return (
+            "Every approved chat has been revoked. No phone can command this "
+            "computer until you pair one again with a new pairing code."
+        )
 
     # -------- STOP --------
     if action in ("stop", "off", "disable", "close"):
@@ -1907,7 +2208,9 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
         if not running or ev is None:
             return "The Telegram remote is not running."
         ev.set()
-        return "Telegram remote closed. Nothing can reach the computer from outside now."
+        return (
+            "Telegram remote closed. Nothing can reach the computer from outside now."
+        )
 
     # An action nobody above claimed is NOT a start. The parameter defaults to
     # "start" when it is absent, which is right, but letting an unrecognised
@@ -1916,8 +2219,10 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
     # is generated from the table, so this is only ever reached by a value the
     # schema did not offer.
     if action and action not in ("start", "on", "enable", "open", "listen"):
-        return (f"I don't have a '{action}' action for the Telegram remote. "
-                f"I can " + ", ".join(o["action"] for o in _MODEL_OPS) + ".")
+        return (
+            f"I don't have a '{action}' action for the Telegram remote. "
+            f"I can " + ", ".join(o["action"] for o in _MODEL_OPS) + "."
+        )
 
     # -------- START --------
     # Claimed under the lock, not merely checked under it: two starts arriving
@@ -1925,8 +2230,10 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
     # poller with a 409, killing the pair.
     with _lock:
         if _state.get("stopping"):
-            return ("The Telegram remote is still closing the last connection — "
-                    "give it a moment and ask again.")
+            return (
+                "The Telegram remote is still closing the last connection — "
+                "give it a moment and ask again."
+            )
         if _state.get("running"):
             return "The Telegram remote is already listening."
         _state["running"] = True
@@ -1935,21 +2242,25 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
         with _lock:
             _state["running"] = False
 
-    cfg   = _cfg()
+    cfg = _cfg()
     token = _clean_token(cfg.get("bot_token"))
     if not token:
         _release()
-        return ("There's no bot token set. Open the settings, create a bot with "
-                "Telegram's @BotFather, paste the token into TELEGRAM REMOTE and "
-                "set a pairing code.")
+        return (
+            "There's no bot token set. Open the settings, create a bot with "
+            "Telegram's @BotFather, paste the token into TELEGRAM REMOTE and "
+            "set a pairing code."
+        )
 
-    ids  = _parse_ids(cfg.get("allowed_chat_ids", ""))
+    ids = _parse_ids(cfg.get("allowed_chat_ids", ""))
     code = str(cfg.get("pairing_code") or "").strip()
     if not ids and not code:
         _release()
-        return ("No approved chats and no pairing code, so nothing could ever be "
-                "accepted. Set a pairing code in the settings first, then message "
-                "that code to your bot once to approve your phone.")
+        return (
+            "No approved chats and no pairing code, so nothing could ever be "
+            "accepted. Set a pairing code in the settings first, then message "
+            "that code to your bot once to approve your phone."
+        )
 
     if player is None:
         _release()
@@ -1961,55 +2272,98 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
         me = r.json()
         if not me.get("ok"):
             _release()
-            return f"Telegram refused the token: {me.get('description', 'unknown error')}."
+            return (
+                f"Telegram refused the token: {me.get('description', 'unknown error')}."
+            )
         bot_name = "@" + (me.get("result", {}).get("username") or "bot")
     except Exception as e:
         _release()
         return f"Sir, I couldn't reach Telegram: {_scrub(e, token)}"
 
     stop = threading.Event()
-    _state.update({
-        "running": True, "stopping": False,
-        "stop": stop, "outbox": queue.Queue(maxsize=200),
-        "bot": bot_name, "started": time.monotonic(), "seen": 0, "shots": 0,
-        "player": player, "turn_chat": None, "turn_open": False,
-        "turn_end": 0.0, "turn_quiet": 0.0, "floor_ts": 0.0,
-        "repeat": None, "lease_chat": None, "lease_until": 0.0,
-        "confirm_at": "", "desk_seen": time.monotonic(), "alerts": 0,
-        "alert_last": "", "turn_voice": False, "spoken": 0, "heard": 0,
-        "last_file": None, "files": 0,
-        # Arm pairing only on a first run. Once a phone is approved the window
-        # stays shut until it is asked for, so a bridge left running for a month
-        # is not a month of open pairing.
-        "pair_until": (time.monotonic() + _PAIR_WINDOW) if (not ids and code) else 0.0,
-        "pair_tries": 0,
-    })
+    _state.update(
+        {
+            "running": True,
+            "stopping": False,
+            "stop": stop,
+            "outbox": queue.Queue(maxsize=200),
+            "bot": bot_name,
+            "started": time.monotonic(),
+            "seen": 0,
+            "shots": 0,
+            "player": player,
+            "turn_chat": None,
+            "turn_open": False,
+            "turn_end": 0.0,
+            "turn_quiet": 0.0,
+            "floor_ts": 0.0,
+            "repeat": None,
+            "lease_chat": None,
+            "lease_until": 0.0,
+            "confirm_at": "",
+            "desk_seen": time.monotonic(),
+            "alerts": 0,
+            "alert_last": "",
+            "turn_voice": False,
+            "spoken": 0,
+            "heard": 0,
+            "last_file": None,
+            "files": 0,
+            # Arm pairing only on a first run. Once a phone is approved the window
+            # stays shut until it is asked for, so a bridge left running for a month
+            # is not a month of open pairing.
+            "pair_until": (
+                (time.monotonic() + _PAIR_WINDOW) if (not ids and code) else 0.0
+            ),
+            "pair_tries": 0,
+        }
+    )
     _rate.clear()
 
     _install_relay(player)
 
-    sender = threading.Thread(target=_sender_loop, args=(token, stop),
-                              daemon=True, name="telegram-remote-send")
+    sender = threading.Thread(
+        target=_sender_loop,
+        args=(token, stop),
+        daemon=True,
+        name="telegram-remote-send",
+    )
     sender.start()
-    thread = threading.Thread(target=_worker, args=(player, stop, token),
-                              daemon=True, name="telegram-remote-poll")
+    thread = threading.Thread(
+        target=_worker,
+        args=(player, stop, token),
+        daemon=True,
+        name="telegram-remote-poll",
+    )
     thread.start()
-    watch = threading.Thread(target=_watcher, args=(player, stop),
-                             daemon=True, name="telegram-remote-watch")
+    watch = threading.Thread(
+        target=_watcher, args=(player, stop), daemon=True, name="telegram-remote-watch"
+    )
     watch.start()
     _state["sender"], _state["thread"], _state["watch"] = sender, thread, watch
 
-    extras = "" if _ops else (" (the extras file '_telegram_ops.py' is missing, "
-                              "so /screen and /sys are unavailable)")
+    extras = (
+        ""
+        if _ops
+        else (
+            " (the extras file '_telegram_ops.py' is missing, "
+            "so /screen and /sys are unavailable)"
+        )
+    )
     if ids:
-        return (f"Telegram remote is live on {bot_name}. Message it from any of your "
-                f"{len(ids)} approved chats and I'll act on it here.{extras}")
-    return (f"Telegram remote is live on {bot_name}, but no chat is approved yet. "
-            f"Send your pairing code to {bot_name} within {_PAIR_WINDOW // 60} "
-            f"minutes and that chat becomes the only one I'll obey.{extras}")
+        return (
+            f"Telegram remote is live on {bot_name}. Message it from any of your "
+            f"{len(ids)} approved chats and I'll act on it here.{extras}"
+        )
+    return (
+        f"Telegram remote is live on {bot_name}, but no chat is approved yet. "
+        f"Send your pairing code to {bot_name} within {_PAIR_WINDOW // 60} "
+        f"minutes and that chat becomes the only one I'll obey.{extras}"
+    )
 
 
 # ── starting without being asked, when the desk has asked once ───────────────
+
 
 def _player_candidates():
     """Objects that might be the running interface.
@@ -2029,6 +2383,7 @@ def _player_candidates():
     """
     try:
         from core import confirm
+
         for cb in (confirm._show_cb, confirm._log_cb, confirm._hide_cb):
             owner = getattr(cb, "__self__", None)
             if owner is not None:
@@ -2037,8 +2392,10 @@ def _player_candidates():
         pass
     try:
         from memory import memory_manager
-        owner = getattr(getattr(memory_manager, "_trim_notifier", None),
-                        "__self__", None)
+
+        owner = getattr(
+            getattr(memory_manager, "_trim_notifier", None), "__self__", None
+        )
         if owner is not None:
             yield owner
     except Exception:
@@ -2052,8 +2409,9 @@ def _usable_player(obj) -> bool:
     main.py put there, so it is not callable until the app has wired itself up.
     That makes this both a type check and a readiness check, in one expression.
     """
-    return (callable(getattr(obj, "write_log", None))
-            and callable(getattr(obj, "on_text_command", None)))
+    return callable(getattr(obj, "write_log", None)) and callable(
+        getattr(obj, "on_text_command", None)
+    )
 
 
 def _autostart() -> None:
@@ -2093,7 +2451,8 @@ def _autostart() -> None:
 if _HAS_CONFIG:
     try:
         if _cfg().get("start_on_launch"):
-            threading.Thread(target=_autostart, daemon=True,
-                             name="telegram-remote-autostart").start()
+            threading.Thread(
+                target=_autostart, daemon=True, name="telegram-remote-autostart"
+            ).start()
     except Exception:
         pass
