@@ -37,36 +37,108 @@ _OBJ = Path(__file__).resolve().parent / "face_model.obj"
 # Tuned so that brow→crown is ~0.36 of the head's height, which is the real
 # proportion; a taller cranium than that immediately reads as a long face even
 # though the face itself is untouched measured geometry.
-_SKULL_C = (0.0, 2.0, -1.0)      # centre of the cranial ellipsoid
-_SKULL_R = (8.4, 12.4, 8.2)      # its radii
+_SKULL_C = (0.0, 2.0, -1.0)  # centre of the cranial ellipsoid
+_SKULL_R = (8.4, 12.4, 8.2)  # its radii
 _SKULL_POLE = (0.0, 0.42, -1.0)  # direction of the occiput, where the sweep closes
 _SKULL_RINGS = 6
-_SKULL_BLEND = 1.7               # how fast the sweep leaves the face border
+_SKULL_BLEND = 1.7  # how fast the sweep leaves the face border
 _SKULL_BULGE = 1.04
 
 _NECK_RINGS, _NECK_SEGS = 9, 14
-_NECK_Z = -1.6                   # the neck tube's axis, in model units
-_WIRE_STRIDE = 3                 # keep every n-th edge; the surface carries the form
+_NECK_Z = -1.6  # the neck tube's axis, in model units
+_WIRE_STRIDE = 3  # keep every n-th edge; the surface carries the form
 
 # MediaPipe landmark rings. Verified against the geometry at build time — see
 # `_check_landmarks` — so a wrong index can never silently animate the cheek.
 LANDMARKS: dict[str, list[int]] = {
-    "eye_l":  [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159,
-               160, 161, 246],
-    "eye_r":  [263, 249, 390, 373, 374, 380, 381, 382, 362, 398, 384, 385, 386,
-               387, 388, 466],
+    "eye_l": [
+        33,
+        7,
+        163,
+        144,
+        145,
+        153,
+        154,
+        155,
+        133,
+        173,
+        157,
+        158,
+        159,
+        160,
+        161,
+        246,
+    ],
+    "eye_r": [
+        263,
+        249,
+        390,
+        373,
+        374,
+        380,
+        381,
+        382,
+        362,
+        398,
+        384,
+        385,
+        386,
+        387,
+        388,
+        466,
+    ],
     "brow_l": [70, 63, 105, 66, 107],
     "brow_r": [300, 293, 334, 296, 336],
-    "lips_out": [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 409, 270,
-                 269, 267, 0, 37, 39, 40, 185],
-    "lips_in": [78, 95, 88, 178, 87, 14, 317, 402, 318, 324, 308, 415, 310,
-                311, 312, 13, 82, 81, 80, 191],
+    "lips_out": [
+        61,
+        146,
+        91,
+        181,
+        84,
+        17,
+        314,
+        405,
+        321,
+        375,
+        291,
+        409,
+        270,
+        269,
+        267,
+        0,
+        37,
+        39,
+        40,
+        185,
+    ],
+    "lips_in": [
+        78,
+        95,
+        88,
+        178,
+        87,
+        14,
+        317,
+        402,
+        318,
+        324,
+        308,
+        415,
+        310,
+        311,
+        312,
+        13,
+        82,
+        81,
+        80,
+        191,
+    ],
 }
 
 # Jaw rig, in normalised units. The pivot sits between the ears, which is where
 # a real mandible hinges.
 JAW_PIVOT = (0.0, 0.06, -0.34)
-JAW_MAX = 0.115                  # radians of drop at full amplitude (~6.6°)
+JAW_MAX = 0.115  # radians of drop at full amplitude (~6.6°)
 #   Speech barely moves a real jaw, and a talking head is watched at HUD size
 #   where a small, precise mouth reads better than a large one. The lip rig
 #   (spread / round) now carries most of the articulation, so the jaw does not
@@ -112,8 +184,11 @@ def _slerp(a: np.ndarray, b: np.ndarray, t):
     om = np.arccos(dot)
     so = np.sin(om)
     safe = np.where(so < 1e-6, 1.0, so)
-    out = np.where(so < 1e-6, a * (1 - t) + b * t,
-                   (np.sin((1 - t) * om) / safe) * a + (np.sin(t * om) / safe) * b)
+    out = np.where(
+        so < 1e-6,
+        a * (1 - t) + b * t,
+        (np.sin((1 - t) * om) / safe) * a + (np.sin(t * om) / safe) * b,
+    )
     return out / np.maximum(np.linalg.norm(out, axis=-1, keepdims=True), 1e-9)
 
 
@@ -148,7 +223,7 @@ def _add_cranium(verts: np.ndarray, faces: np.ndarray):
 
     for t in ts:
         d = _slerp(pole, rim_d, 1.0 - t)
-        w = (1.0 - t) ** _SKULL_BLEND          # meets the rim exactly at t = 0
+        w = (1.0 - t) ** _SKULL_BLEND  # meets the rim exactly at t = 0
         # A skull is fuller than the border it springs from; peak it mid-sweep.
         r = ell_r(d) * (1.0 + (_SKULL_BULGE - 1.0) * np.sin(np.pi * t) ** 0.8)
         ring = C + d * (w * rim_r + (1.0 - w) * r)
@@ -187,8 +262,8 @@ def _add_neck(verts: np.ndarray, faces: np.ndarray):
     ys = np.linspace(-5.5, -13.0, _NECK_RINGS)
     d = (ys + 5.5) / -7.5
 
-    rx = 4.6 * (1.0 + 0.52 * d ** 1.9)
-    rz = 4.1 * (1.0 + 0.38 * d ** 1.9)
+    rx = 4.6 * (1.0 + 0.52 * d**1.9)
+    rz = 4.1 * (1.0 + 0.38 * d**1.9)
     nx = rx[:, None] * np.cos(ph)[None, :]
     nz = _NECK_Z + rz[:, None] * np.sin(ph)[None, :]
     ny = ys[:, None] * np.ones_like(ph)[None, :]
@@ -215,8 +290,9 @@ def _add_neck(verts: np.ndarray, faces: np.ndarray):
     return np.vstack([verts, nv]), np.vstack([faces, np.array(nf)]), fade
 
 
-def _vertex_normals(verts: np.ndarray, faces: np.ndarray,
-                    outward: np.ndarray) -> np.ndarray:
+def _vertex_normals(
+    verts: np.ndarray, faces: np.ndarray, outward: np.ndarray
+) -> np.ndarray:
     """Area-weighted vertex normals, flipped to agree with `outward`.
 
     `outward` must be a per-vertex direction that genuinely points out of the
@@ -227,7 +303,7 @@ def _vertex_normals(verts: np.ndarray, faces: np.ndarray,
     half-culled, half-lit triangles.
     """
     a, b, c = verts[faces[:, 0]], verts[faces[:, 1]], verts[faces[:, 2]]
-    fn = np.cross(b - a, c - a)          # length carries the area — the weighting
+    fn = np.cross(b - a, c - a)  # length carries the area — the weighting
 
     n = np.zeros_like(verts)
     for k in range(3):
@@ -291,17 +367,17 @@ def build_head() -> dict:
     chin_y = verts[:n_head, 1].min()
     jaw = np.clip((mouth_y - verts[:, 1]) / (mouth_y - chin_y), 0.0, 1.0) ** 0.8
     jaw *= np.clip(0.30 + 0.85 * (verts[:, 2] / 0.55), 0.0, 1.0)
-    jaw[n_head:] = 0.0                                  # the neck never moves
-    jaw[LANDMARKS["lips_in"][:10]] = 1.0                # lower inner lip leads
+    jaw[n_head:] = 0.0  # the neck never moves
+    jaw[LANDMARKS["lips_in"][:10]] = 1.0  # lower inner lip leads
     jaw[LANDMARKS["lips_out"][:10]] = 0.95
 
     # ── brow rig ────────────────────────────────────────────────────────────
     # Raising the brows displaces the actual surface rather than sliding a drawn
     # line over it, so the brow ridge relights as it lifts.
     brow_y = verts[LANDMARKS["brow_l"] + LANDMARKS["brow_r"], 1].mean()
-    brow = np.exp(-((verts[:, 1] - brow_y) / 0.115) ** 2)
-    brow *= np.clip(verts[:, 2] / 0.35, 0.0, 1.0)       # front of the face only
-    brow *= np.exp(-(verts[:, 0] / 0.42) ** 2)          # fades out past the temples
+    brow = np.exp(-(((verts[:, 1] - brow_y) / 0.115) ** 2))
+    brow *= np.clip(verts[:, 2] / 0.35, 0.0, 1.0)  # front of the face only
+    brow *= np.exp(-((verts[:, 0] / 0.42) ** 2))  # fades out past the temples
     brow[n_head:] = 0.0
 
     # ── lip rig ─────────────────────────────────────────────────────────────
@@ -310,8 +386,8 @@ def build_head() -> dict:
     # region as a whole, so the surrounding skin follows instead of tearing away
     # from the landmark rings.
     lip_c = verts[LANDMARKS["lips_out"]].mean(axis=0)
-    lips = np.exp(-((verts[:, 1] - lip_c[1]) / 0.155) ** 2)
-    lips *= np.exp(-(verts[:, 0] / 0.30) ** 2)
+    lips = np.exp(-(((verts[:, 1] - lip_c[1]) / 0.155) ** 2))
+    lips *= np.exp(-((verts[:, 0] / 0.30) ** 2))
     lips *= np.clip(verts[:, 2] / 0.40, 0.0, 1.0)
     lips[n_head:] = 0.0
 
@@ -320,7 +396,7 @@ def build_head() -> dict:
     # Neck and head interpenetrate, and a painter's-algorithm sort by triangle
     # depth interleaves them into a torn edge. Grouping fixes it: the neck is
     # always behind the head where they overlap, so draw every neck facet first.
-    face_group = (faces >= n_head).all(axis=1).astype(np.int32)   # 1 = neck
+    face_group = (faces >= n_head).all(axis=1).astype(np.int32)  # 1 = neck
 
     return {
         "face_group": np.ascontiguousarray(1 - face_group, dtype=np.float32),
@@ -336,7 +412,7 @@ def build_head() -> dict:
         "landmarks": {k: np.array(v, dtype=np.int32) for k, v in LANDMARKS.items()},
         "n_face": n_face,
         "n_head": n_head,
-        "span": (1.0, float(verts[:, 1].min())),        # crown, bottom of the neck
+        "span": (1.0, float(verts[:, 1].min())),  # crown, bottom of the neck
     }
 
 

@@ -4,6 +4,7 @@ MARK XL — Dependency auto-installer.
 Called automatically on first launch and after engine reconfiguration.
 Installs only the packages that are actually missing, then exits cleanly.
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -16,49 +17,50 @@ from typing import Callable
 # Each entry: (import_name, pip_package_name)
 
 _CORE: list[tuple[str, str]] = [
-    ("psutil",             "psutil"),
-    ("PIL",                "pillow"),
-    ("sounddevice",        "sounddevice"),
-    ("numpy",              "numpy"),
-    ("requests",           "requests"),
-    ("bs4",                "beautifulsoup4"),
-    ("ddgs",               "ddgs"),
-    ("pyautogui",          "pyautogui"),
-    ("pyperclip",          "pyperclip"),
-    ("pygetwindow",        "pygetwindow"),
-    ("mss",                "mss"),
-    ("cv2",                "opencv-python"),
-    ("soundfile",          "soundfile"),
-    ("miniaudio",          "miniaudio"),
-    ("send2trash",         "send2trash"),
-    ("pptx",               "python-pptx"),
+    ("psutil", "psutil"),
+    ("PIL", "pillow"),
+    ("sounddevice", "sounddevice"),
+    ("numpy", "numpy"),
+    ("requests", "requests"),
+    ("bs4", "beautifulsoup4"),
+    ("ddgs", "ddgs"),
+    ("pyautogui", "pyautogui"),
+    ("pyperclip", "pyperclip"),
+    ("pygetwindow", "pygetwindow"),
+    ("mss", "mss"),
+    ("cv2", "opencv-python"),
+    ("soundfile", "soundfile"),
+    ("miniaudio", "miniaudio"),
+    ("send2trash", "send2trash"),
+    ("pptx", "python-pptx"),
     ("youtube_transcript_api", "youtube-transcript-api"),
 ]
 
 # Windows-only (pywinauto, pycaw, win10toast, comtypes)
 _WINDOWS: list[tuple[str, str]] = [
-    ("comtypes",   "comtypes"),
-    ("pycaw",      "pycaw"),
+    ("comtypes", "comtypes"),
+    ("pycaw", "pycaw"),
     ("win10toast", "win10toast"),
-    ("pywinauto",  "pywinauto"),
+    ("pywinauto", "pywinauto"),
 ]
 
 # STT engine packages
 _STT: dict[str, list[tuple[str, str]]] = {
     "whisper": [("faster_whisper", "faster-whisper")],
-    "vosk":    [("vosk",           "vosk")],
+    "vosk": [("vosk", "vosk")],
 }
 
 # TTS engine packages
 _TTS: dict[str, list[tuple[str, str]]] = {
-    "edgetts":    [("edge_tts", "edge-tts")],
+    "edgetts": [("edge_tts", "edge-tts")],
     # kokoro>=0.9 dropped AlbertModel/AutoModel from transformers — version pin is critical
-    "kokoro":     [("kokoro",   "kokoro>=0.9"), ("soundfile", "soundfile")],
-    "elevenlabs": [],   # uses only requests, already in core
+    "kokoro": [("kokoro", "kokoro>=0.9"), ("soundfile", "soundfile")],
+    "elevenlabs": [],  # uses only requests, already in core
 }
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────
+
 
 def _available(module: str) -> bool:
     """Return True if the module can be imported (no actual import)."""
@@ -70,8 +72,13 @@ def _pip(package: str, log: Callable | None = None) -> bool:
         log(f"SYS: pip install {package} …")
     result = subprocess.run(
         [
-            sys.executable, "-m", "pip", "install", package,
-            "--quiet", "--disable-pip-version-check",
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            package,
+            "--quiet",
+            "--disable-pip-version-check",
         ],
         capture_output=True,
     )
@@ -83,6 +90,7 @@ def _pip(package: str, log: Callable | None = None) -> bool:
 
 
 # ── Public API ────────────────────────────────────────────────────────────
+
 
 def install_for_config(config: dict, log: Callable | None = None) -> None:
     """

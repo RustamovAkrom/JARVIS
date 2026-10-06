@@ -6,6 +6,7 @@ Provides the two capture entry points main.py uses — `_capture_screen()` and
 config access). main.py grabs a frame here on demand, then injects it into the
 main Gemini Live session; there is no separate vision session here.
 """
+
 from __future__ import annotations
 
 import io
@@ -17,6 +18,7 @@ import numpy as np
 
 try:
     import cv2
+
     _CV2 = True
 except ImportError:
     _CV2 = False
@@ -24,12 +26,14 @@ except ImportError:
 try:
     import mss
     import mss.tools
+
     _MSS = True
 except ImportError:
     _MSS = False
 
 try:
     import PIL.Image
+
     _PIL = True
 except ImportError:
     _PIL = False
@@ -41,7 +45,7 @@ def _base_dir() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
-_BASE        = _base_dir()
+_BASE = _base_dir()
 _CONFIG_PATH = _BASE / "config" / "api_keys.json"
 
 
@@ -67,7 +71,7 @@ def _get_os() -> str:
 
 _IMG_MAX_W = 1280
 _IMG_MAX_H = 720
-_JPEG_Q    = 82
+_JPEG_Q = 82
 
 
 def _compress(img_bytes: bytes, source_format: str = "PNG") -> tuple[bytes, str]:
@@ -91,10 +95,10 @@ def _capture_screen() -> tuple[bytes, str]:
         raise RuntimeError("mss is not installed. Run: pip install mss")
 
     with mss.mss() as sct:
-        monitors = sct.monitors          # [0] = all combined, [1..n] = real screens
-        target   = monitors[1] if len(monitors) > 1 else monitors[0]
-        shot     = sct.grab(target)
-        png      = mss.tools.to_png(shot.rgb, shot.size)
+        monitors = sct.monitors  # [0] = all combined, [1..n] = real screens
+        target = monitors[1] if len(monitors) > 1 else monitors[0]
+        shot = sct.grab(target)
+        png = mss.tools.to_png(shot.rgb, shot.size)
 
     return _compress(png, "PNG")
 
@@ -153,11 +157,13 @@ def _get_camera_index() -> int:
 
 def _capture_camera() -> tuple[bytes, str]:
     if not _CV2:
-        raise RuntimeError("OpenCV (cv2) is not installed. Run: pip install opencv-python")
+        raise RuntimeError(
+            "OpenCV (cv2) is not installed. Run: pip install opencv-python"
+        )
 
-    index   = _get_camera_index()
+    index = _get_camera_index()
     backend = _cv2_backend()
-    cap     = cv2.VideoCapture(index, backend)
+    cap = cv2.VideoCapture(index, backend)
 
     if not cap.isOpened():
         raise RuntimeError(f"Camera index {index} could not be opened.")

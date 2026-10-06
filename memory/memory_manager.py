@@ -12,9 +12,9 @@ def get_base_dir() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
-BASE_DIR         = get_base_dir()
-MEMORY_PATH      = BASE_DIR / "memory" / "long_term.json"
-_lock            = Lock()
+BASE_DIR = get_base_dir()
+MEMORY_PATH = BASE_DIR / "memory" / "long_term.json"
+_lock = Lock()
 MAX_VALUE_LENGTH = 380
 
 # ── Why there are two very different numbers here ────────────────────────────
@@ -37,22 +37,24 @@ MAX_VALUE_LENGTH = 380
 #
 # Everything above the core stays on disk and is fetched on demand by the
 # recall_memory tool — see search_memory() and format_memory_for_prompt().
-MEMORY_MAX_CHARS  = 200_000
+MEMORY_MAX_CHARS = 200_000
 PROMPT_CORE_CHARS = 900
 PROMPT_INDEX_CHARS = 420
 # Most entries any one category may contribute to the core block, so a person
 # with forty stored preferences still gets their sister into the prompt.
 PROMPT_MAX_PER_CATEGORY = 6
 
+
 def _empty_memory() -> dict:
     return {
-        "identity":      {},
-        "preferences":   {},
-        "projects":      {},
+        "identity": {},
+        "preferences": {},
+        "projects": {},
         "relationships": {},
-        "wishes":        {},
-        "notes":         {},
+        "wishes": {},
+        "notes": {},
     }
+
 
 def load_memory() -> dict:
     if not MEMORY_PATH.exists():
@@ -70,6 +72,7 @@ def load_memory() -> dict:
         except Exception as e:
             print(f"[Memory] ⚠️ Load error: {e}")
             return _empty_memory()
+
 
 def _all_entries(memory: dict) -> list[tuple]:
     entries = []
@@ -115,6 +118,7 @@ def _trim_to_limit(memory: dict) -> dict:
             pass
     return memory
 
+
 def save_memory(memory: dict) -> None:
     if not isinstance(memory, dict):
         return
@@ -147,8 +151,10 @@ def _recursive_update(target: dict, updates: dict) -> bool:
             if _recursive_update(target[key], value):
                 changed = True
         else:
-            new_val  = _truncate_value(str(value["value"] if isinstance(value, dict) else value))
-            entry    = {"value": new_val, "updated": datetime.now().strftime("%Y-%m-%d")}
+            new_val = _truncate_value(
+                str(value["value"] if isinstance(value, dict) else value)
+            )
+            entry = {"value": new_val, "updated": datetime.now().strftime("%Y-%m-%d")}
             existing = target.get(key, {})
             if not isinstance(existing, dict) or existing.get("value") != new_val:
                 target[key] = entry
@@ -165,6 +171,7 @@ def update_memory(memory_update: dict) -> dict:
         print(f"[Memory] 💾 Saved: {list(memory_update.keys())}")
     return memory
 
+
 def _entry_value(entry) -> str:
     """Accept both the {'value': ..., 'updated': ...} shape and a bare string,
     because early versions of the store wrote plain strings."""
@@ -180,15 +187,23 @@ def _pretty(key: str) -> str:
 # Identity is always in the prompt; these categories compete for the remaining
 # budget by recency.
 _CATEGORY_LABELS = {
-    "preferences":   "Preferences",
-    "projects":      "Active projects / goals",
+    "preferences": "Preferences",
+    "projects": "Active projects / goals",
     "relationships": "People in their life",
-    "wishes":        "Wishes / plans",
-    "notes":         "Notes",
+    "wishes": "Wishes / plans",
+    "notes": "Notes",
 }
 
-_IDENTITY_FIELDS = ["name", "age", "birthday", "city", "job",
-                    "language", "school", "nationality"]
+_IDENTITY_FIELDS = [
+    "name",
+    "age",
+    "birthday",
+    "city",
+    "job",
+    "language",
+    "school",
+    "nationality",
+]
 
 
 def format_memory_for_prompt(memory: dict | None) -> str:
@@ -230,7 +245,8 @@ def format_memory_for_prompt(memory: dict | None) -> str:
             # was one of the reasons a Turkish question came back in English.
             core_lines.append(
                 f"Has spoken to you in: {val} (an observation about the past — "
-                f"always answer in the language of their CURRENT message)")
+                f"always answer in the language of their CURRENT message)"
+            )
         else:
             core_lines.append(f"{field.title()}: {val}")
     for key, entry in identity.items():
@@ -241,17 +257,19 @@ def format_memory_for_prompt(memory: dict | None) -> str:
             core_lines.append(f"{_pretty(key).title()}: {val}")
 
     # 2. Everything else, most recently updated first
-    rest: list[tuple[str, str, str, str]] = []   # (updated, cat, key, value)
+    rest: list[tuple[str, str, str, str]] = []  # (updated, cat, key, value)
     for cat in _CATEGORY_LABELS:
         for key, entry in (memory.get(cat, {}) or {}).items():
             val = _entry_value(entry)
             if not val:
                 continue
-            updated = (entry.get("updated", "") if isinstance(entry, dict) else "") or "0000-00-00"
+            updated = (
+                entry.get("updated", "") if isinstance(entry, dict) else ""
+            ) or "0000-00-00"
             rest.append((updated, cat, key, val))
     rest.sort(key=lambda t: t[0], reverse=True)
 
-    used    = sum(len(l) + 1 for l in core_lines)
+    used = sum(len(l) + 1 for l in core_lines)
     shown: dict[str, list[str]] = {}
     overflow: dict[str, list[str]] = {}
 
@@ -263,8 +281,10 @@ def format_memory_for_prompt(memory: dict | None) -> str:
     per_cat_used: dict[str, int] = {}
     for _updated, cat, key, val in rest:
         line = f"  - {_pretty(key).title()}: {val}"
-        if (per_cat_used.get(cat, 0) < PROMPT_MAX_PER_CATEGORY
-                and used + len(line) + 1 <= PROMPT_CORE_CHARS):
+        if (
+            per_cat_used.get(cat, 0) < PROMPT_MAX_PER_CATEGORY
+            and used + len(line) + 1 <= PROMPT_CORE_CHARS
+        ):
             shown.setdefault(cat, []).append(line)
             per_cat_used[cat] = per_cat_used.get(cat, 0) + 1
             used += len(line) + 1
@@ -278,7 +298,7 @@ def format_memory_for_prompt(memory: dict | None) -> str:
     # about — would fall off the end.
     indexed: list[str] = []
     if overflow:
-        cats  = [c for c in _CATEGORY_LABELS if overflow.get(c)]
+        cats = [c for c in _CATEGORY_LABELS if overflow.get(c)]
         cursor = {c: 0 for c in cats}
         while cats:
             for cat in list(cats):
@@ -317,14 +337,20 @@ def format_memory_for_prompt(memory: dict | None) -> str:
                 "[ALSO REMEMBERED — values not shown here. Call recall_memory "
                 "with a keyword to read any of these before saying you do not know]"
             )
-            out.append(", ".join(names)
-                       + (f" (+{len(indexed) - len(names)} more)"
-                          if len(indexed) > len(names) else ""))
+            out.append(
+                ", ".join(names)
+                + (
+                    f" (+{len(indexed) - len(names)} more)"
+                    if len(indexed) > len(names)
+                    else ""
+                )
+            )
 
     return "\n".join(out) + "\n"
 
 
 # ── Recall ────────────────────────────────────────────────────────────────────
+
 
 def _score(query_words: list[str], cat: str, key: str, value: str) -> int:
     """Cheap lexical relevance. No embeddings, no network, no model call - this
@@ -332,7 +358,7 @@ def _score(query_words: list[str], cat: str, key: str, value: str) -> int:
     cost one model round trip, never two."""
     hay_key = _pretty(key).lower()
     hay_val = value.lower()
-    score   = 0
+    score = 0
     for w in query_words:
         if not w:
             continue
@@ -353,12 +379,12 @@ def search_memory(query: str, limit: int = 8) -> str:
     An empty query is treated as "show me everything you know", capped - the
     model asks that when the user says "what do you remember about me?"."""
     memory = load_memory()
-    words  = [w for w in re.split(r"[^\w]+", (query or "").lower()) if len(w) > 1]
+    words = [w for w in re.split(r"[^\w]+", (query or "").lower()) if len(w) > 1]
 
     rows: list[tuple[int, str, str, str]] = []
     for cat, items in memory.items():
         if not isinstance(items, dict):
-            continue                     # skip 'sessions', which is a list
+            continue  # skip 'sessions', which is a list
         for key, entry in items.items():
             val = _entry_value(entry)
             if not val:
@@ -368,15 +394,24 @@ def search_memory(query: str, limit: int = 8) -> str:
                 rows.append((s, cat, key, val))
 
     if not rows:
-        return (f"Nothing stored about '{query}'." if query
-                else "I have not stored anything about this person yet.")
+        return (
+            f"Nothing stored about '{query}'."
+            if query
+            else "I have not stored anything about this person yet."
+        )
 
     rows.sort(key=lambda r: (-r[0], r[2]))
-    lines = [f"{cat}/{_pretty(key)}: {val}" for _s, cat, key, val in rows[:max(1, limit)]]
-    head  = (f"Stored facts matching '{query}':" if query
-             else "Everything currently stored:")
-    more  = (f"\n(+{len(rows) - len(lines)} more — search with a narrower keyword)"
-             if len(rows) > len(lines) else "")
+    lines = [
+        f"{cat}/{_pretty(key)}: {val}" for _s, cat, key, val in rows[: max(1, limit)]
+    ]
+    head = (
+        f"Stored facts matching '{query}':" if query else "Everything currently stored:"
+    )
+    more = (
+        f"\n(+{len(rows) - len(lines)} more — search with a narrower keyword)"
+        if len(rows) > len(lines)
+        else ""
+    )
     return head + "\n" + "\n".join(lines) + more
 
 
@@ -392,14 +427,19 @@ def all_entries_for_ui() -> list[dict]:
             val = _entry_value(entry)
             if not val:
                 continue
-            rows.append({
-                "category": cat,
-                "key":      key,
-                "value":    val,
-                "updated":  (entry.get("updated", "") if isinstance(entry, dict) else ""),
-            })
+            rows.append(
+                {
+                    "category": cat,
+                    "key": key,
+                    "value": val,
+                    "updated": (
+                        entry.get("updated", "") if isinstance(entry, dict) else ""
+                    ),
+                }
+            )
     rows.sort(key=lambda r: (r["updated"] or "0000-00-00"), reverse=True)
     return rows
+
 
 def remember(key: str, value: str, category: str = "notes") -> str:
     valid = {"identity", "preferences", "projects", "relationships", "wishes", "notes"}
@@ -411,7 +451,7 @@ def remember(key: str, value: str, category: str = "notes") -> str:
 
 def forget(key: str, category: str = "notes") -> str:
     memory = load_memory()
-    cat    = memory.get(category, {})
+    cat = memory.get(category, {})
     if key in cat:
         del cat[key]
         memory[category] = cat
@@ -425,7 +465,7 @@ forget_memory = forget
 
 # ── Session memory ─────────────────────────────────────────────────────────────
 
-_SESSION_MAX = 3   # safety cap — in practice 0-1 entries after pop
+_SESSION_MAX = 3  # safety cap — in practice 0-1 entries after pop
 
 
 def save_session_summary(summary: str, language: str = "") -> None:
@@ -433,12 +473,12 @@ def save_session_summary(summary: str, language: str = "") -> None:
     summary = (summary or "").strip()
     if not summary:
         return
-    memory   = load_memory()
+    memory = load_memory()
     sessions = memory.get("sessions", [])
     if not isinstance(sessions, list):
         sessions = []
     entry: dict = {
-        "date":    datetime.now().strftime("%Y-%m-%d"),
+        "date": datetime.now().strftime("%Y-%m-%d"),
         "summary": summary[:280],
     }
     if language:
@@ -463,11 +503,11 @@ def pop_last_session() -> dict | None:
         if not MEMORY_PATH.exists():
             return None
         try:
-            memory   = json.loads(MEMORY_PATH.read_text(encoding="utf-8"))
+            memory = json.loads(MEMORY_PATH.read_text(encoding="utf-8"))
             sessions = memory.get("sessions", [])
             if not isinstance(sessions, list) or not sessions:
                 return None
-            entry = sessions.pop()          # remove the last entry
+            entry = sessions.pop()  # remove the last entry
             memory["sessions"] = sessions
             MEMORY_PATH.write_text(
                 json.dumps(memory, indent=2, ensure_ascii=False),

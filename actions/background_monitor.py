@@ -3,23 +3,40 @@ BackgroundMonitor — user-configured topic watching.
 Checks DDG news once per day per topic; alerts JARVIS when a new headline appears.
 No crypto, no finance, no uninvited tracking.
 """
+
 import hashlib
 import json
 import re
 from datetime import datetime
 from pathlib import Path
 
-
 # ── Blocked categories (never monitor regardless of what user says) ────────────
 
 _BLOCKED = {
     # Brand / asset names — spelled the same in every language
-    "bitcoin", "ethereum", "dogecoin", "solana", "binance",
-    "nft", "blockchain", "defi", "altcoin", "memecoin", "coin", "token",
+    "bitcoin",
+    "ethereum",
+    "dogecoin",
+    "solana",
+    "binance",
+    "nft",
+    "blockchain",
+    "defi",
+    "altcoin",
+    "memecoin",
+    "coin",
+    "token",
     # spellings of the "crypto" root across different languages
-    "crypto", "kripto", "cripto", "krypto", "крипто", "仮想通貨", "暗号資産",
+    "crypto",
+    "kripto",
+    "cripto",
+    "krypto",
+    "крипто",
+    "仮想通貨",
+    "暗号資産",
     "cryptocurrency",
 }
+
 
 def _is_blocked(topic: str) -> bool:
     t = topic.lower()
@@ -28,8 +45,10 @@ def _is_blocked(topic: str) -> bool:
 
 # ── Slug / hash helpers ────────────────────────────────────────────────────────
 
+
 def _slug(topic: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", topic.lower().strip())[:40].strip("_")
+
 
 def _title_hash(title: str) -> str:
     return hashlib.md5(title.encode("utf-8", errors="ignore")).hexdigest()[:12]
@@ -37,13 +56,17 @@ def _title_hash(title: str) -> str:
 
 # ── Memory I/O ─────────────────────────────────────────────────────────────────
 
+
 def _load() -> dict:
     from memory.memory_manager import load_memory
+
     data = load_memory().get("monitors", {})
     return data if isinstance(data, dict) else {}
 
+
 def _save(monitors: dict) -> None:
     from memory.memory_manager import load_memory, MEMORY_PATH, _lock
+
     memory = load_memory()
     memory["monitors"] = monitors
     with _lock:
@@ -56,6 +79,7 @@ def _save(monitors: dict) -> None:
 
 # ── Public API ─────────────────────────────────────────────────────────────────
 
+
 def add_monitor(topic: str) -> str:
     topic = topic.strip()
     if not topic:
@@ -67,10 +91,10 @@ def add_monitor(topic: str) -> str:
     if slug in monitors:
         return f"Already monitoring: {monitors[slug]['topic']}"
     monitors[slug] = {
-        "topic":      topic,
-        "added":      datetime.now().strftime("%Y-%m-%d"),
+        "topic": topic,
+        "added": datetime.now().strftime("%Y-%m-%d"),
         "last_check": "",
-        "last_hash":  "",
+        "last_hash": "",
     }
     _save(monitors)
     print(f"[Monitor] ➕ Added: {topic}")
@@ -110,13 +134,13 @@ def check_all() -> list[str]:
     if not monitors:
         return []
 
-    today   = datetime.now().strftime("%Y-%m-%d")
-    alerts  = []
+    today = datetime.now().strftime("%Y-%m-%d")
+    alerts = []
     changed = False
 
     for slug, data in monitors.items():
         if data.get("last_check") == today:
-            continue                     # already checked today
+            continue  # already checked today
 
         topic = data.get("topic", slug)
         try:
@@ -126,7 +150,7 @@ def check_all() -> list[str]:
                 changed = True
                 continue
 
-            top   = results[0]
+            top = results[0]
             title = top.get("title", "").strip()
             if not title:
                 continue
@@ -136,13 +160,13 @@ def check_all() -> list[str]:
             changed = True
 
             if h == data.get("last_hash"):
-                continue                 # same headline as last check — no alert
+                continue  # same headline as last check — no alert
 
             monitors[slug]["last_hash"] = h
 
             snippet = top.get("snippet", "")[:150]
-            source  = top.get("source", "")
-            parts   = [f"[MONITOR_ALERT] {topic}", f"Headline: {title}"]
+            source = top.get("source", "")
+            parts = [f"[MONITOR_ALERT] {topic}", f"Headline: {title}"]
             if snippet:
                 parts.append(snippet)
             if source:

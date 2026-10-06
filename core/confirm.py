@@ -48,11 +48,11 @@ TIMEOUT_SECONDS = 90.0
 
 @dataclass
 class _Pending:
-    key:     str
-    title:   str
-    detail:  str
-    run:     Callable[[], str]
-    at:      float
+    key: str
+    title: str
+    detail: str
+    run: Callable[[], str]
+    at: float
 
 
 _pending: Optional[_Pending] = None
@@ -62,7 +62,7 @@ _lock = threading.Lock()
 # and () -> None for hide. Both are marshalled onto the Qt thread by the UI.
 _show_cb: Optional[Callable[[str, str], None]] = None
 _hide_cb: Optional[Callable[[], None]] = None
-_log_cb:  Optional[Callable[[str], None]] = None
+_log_cb: Optional[Callable[[str], None]] = None
 
 
 def bind(show, hide, log=None) -> None:
@@ -90,12 +90,15 @@ def request(key: str, title: str, detail: str, run: Callable[[], str]) -> str:
     if _show_cb is None:
         # No interface bound (headless, or a very early call). Refuse rather
         # than silently performing something irreversible.
-        return (f"I cannot confirm '{title}' right now because the interface is "
-                f"not available, so I have not done it.")
+        return (
+            f"I cannot confirm '{title}' right now because the interface is "
+            f"not available, so I have not done it."
+        )
 
     with _lock:
-        _pending = _Pending(key=key, title=title, detail=detail,
-                            run=run, at=time.monotonic())
+        _pending = _Pending(
+            key=key, title=title, detail=detail, run=run, at=time.monotonic()
+        )
 
     try:
         _show_cb(title, detail)
@@ -147,8 +150,7 @@ def resolve(accepted: bool) -> None:
         except Exception as e:
             _log(f"ERR: {p.title} failed — {e}")
 
-    threading.Thread(target=_worker, daemon=True,
-                     name=f"confirm-{p.key}").start()
+    threading.Thread(target=_worker, daemon=True, name=f"confirm-{p.key}").start()
 
 
 def pending_title() -> str:

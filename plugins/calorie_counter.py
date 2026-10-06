@@ -45,15 +45,16 @@ PLUGIN = {
     },
 }
 
-_MODEL             = "gemini-2.5-flash"
-_LIVE_SCAN_SECONDS = 1.8     # live preview before the photo is taken
-_FPS               = 25
-_ANIM_MAX_SECONDS  = 25      # animator safety stop
-_SCAN_COLOR        = (255, 190, 40)    # JARVIS cyan-blue (BGR)
-_SCAN_CORE         = (255, 235, 130)   # bright core line (BGR)
+_MODEL = "gemini-2.5-flash"
+_LIVE_SCAN_SECONDS = 1.8  # live preview before the photo is taken
+_FPS = 25
+_ANIM_MAX_SECONDS = 25  # animator safety stop
+_SCAN_COLOR = (255, 190, 40)  # JARVIS cyan-blue (BGR)
+_SCAN_CORE = (255, 235, 130)  # bright core line (BGR)
 
 
 # ── config helpers (same pattern as actions/web_search.py) ──────────────────
+
 
 def _config() -> dict:
     try:
@@ -66,6 +67,7 @@ def _config() -> dict:
 
 def _open_camera():
     import platform
+
     try:
         backend = cv2.CAP_DSHOW if platform.system() == "Windows" else cv2.CAP_ANY
     except AttributeError:
@@ -82,13 +84,14 @@ def _open_camera():
 
 # ── scan-bar rendering ───────────────────────────────────────────────────────
 
+
 def _draw_scan_bar(frame: np.ndarray, phase: float) -> np.ndarray:
     """Return a copy of the BGR frame with an animated scan bar sweeping
     bottom → top → bottom (triangle wave on `phase`)."""
     h, w = frame.shape[:2]
     pos = phase % 2.0
     pos = pos if pos <= 1.0 else 2.0 - pos
-    y    = int((1.0 - pos) * (h - 1))
+    y = int((1.0 - pos) * (h - 1))
     band = max(6, h // 14)
 
     out = frame.copy()
@@ -99,7 +102,9 @@ def _draw_scan_bar(frame: np.ndarray, phase: float) -> np.ndarray:
         alpha = falloff[:, None, None] * 0.55
         glow = np.empty_like(region)
         glow[:] = _SCAN_COLOR
-        out[y0:y1] = np.clip(region * (1 - alpha) + glow * alpha, 0, 255).astype(np.uint8)
+        out[y0:y1] = np.clip(region * (1 - alpha) + glow * alpha, 0, 255).astype(
+            np.uint8
+        )
     cv2.line(out, (0, y), (w, y), _SCAN_CORE, 2)
     return out
 
@@ -112,6 +117,7 @@ def _emit_frame(frame_sig, frame: np.ndarray) -> None:
 
 # ── Gemini ───────────────────────────────────────────────────────────────────
 
+
 def _analyze(photo: np.ndarray, query: str, api_key: str) -> dict:
     from google import genai
     from google.genai import types as gtypes
@@ -119,7 +125,9 @@ def _analyze(photo: np.ndarray, query: str, api_key: str) -> dict:
     # match screen_processor's upload size: max 1280 wide
     h, w = photo.shape[:2]
     if w > 1280:
-        photo = cv2.resize(photo, (1280, int(h * 1280 / w)), interpolation=cv2.INTER_AREA)
+        photo = cv2.resize(
+            photo, (1280, int(h * 1280 / w)), interpolation=cv2.INTER_AREA
+        )
     ok, jpg = cv2.imencode(".jpg", photo, [cv2.IMWRITE_JPEG_QUALITY, 85])
     if not ok:
         raise RuntimeError("could not encode photo")
@@ -153,11 +161,12 @@ def _analyze(photo: np.ndarray, query: str, api_key: str) -> dict:
 
     # tolerate accidental fences / prose around the JSON
     if "{" in text and "}" in text:
-        text = text[text.find("{"): text.rfind("}") + 1]
+        text = text[text.find("{") : text.rfind("}") + 1]
     return json.loads(text)
 
 
 # ── entry point ──────────────────────────────────────────────────────────────
+
 
 def run(parameters: dict, player=None, session_memory=None) -> str:
     query = (parameters.get("query") or "").strip() or "How many calories is this food?"
@@ -174,14 +183,16 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
                 pass
 
     # HUD camera signals (graceful if unavailable)
-    win        = getattr(player, "_win", None) if player else None
-    frame_sig  = getattr(win, "_cam_frame_sig", None)
+    win = getattr(player, "_win", None) if player else None
+    frame_sig = getattr(win, "_cam_frame_sig", None)
     stream_sig = getattr(win, "_cam_stream_sig", None)
 
     cap = _open_camera()
     if cap is None:
-        return ("I couldn't access the camera — it may be in use by another "
-                "feature or application.")
+        return (
+            "I couldn't access the camera — it may be in use by another "
+            "feature or application."
+        )
 
     photo = None
     stop_anim = threading.Event()
@@ -189,7 +200,7 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
     view_open = False
     try:
         if stream_sig:
-            stream_sig.emit(True)   # HUD logo → live camera view
+            stream_sig.emit(True)  # HUD logo → live camera view
             view_open = True
         _log("JARVIS: Nutrition scan started.")
 
@@ -201,13 +212,15 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
             if ok and frm is not None:
                 last = frm
                 if frame_sig:
-                    _emit_frame(frame_sig, _draw_scan_bar(frm, (time.time() - t0) * 1.2))
+                    _emit_frame(
+                        frame_sig, _draw_scan_bar(frm, (time.time() - t0) * 1.2)
+                    )
             time.sleep(1.0 / _FPS)
         ok, frm = cap.read()
         photo = frm if ok and frm is not None else last
     finally:
         try:
-            cap.release()   # release BEFORE anything else — avoid device conflicts
+            cap.release()  # release BEFORE anything else — avoid device conflicts
         except Exception:
             pass
 
@@ -218,13 +231,17 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
 
     # Phase 2 — freeze frame, keep the scan bar sweeping while Gemini analyzes
     if frame_sig:
+
         def _animate():
             a0 = time.time()
-            while (not stop_anim.wait(1.0 / _FPS)
-                   and time.time() - a0 < _ANIM_MAX_SECONDS):
+            while (
+                not stop_anim.wait(1.0 / _FPS) and time.time() - a0 < _ANIM_MAX_SECONDS
+            ):
                 _emit_frame(frame_sig, _draw_scan_bar(photo, (time.time() - a0) * 1.2))
-        animator = threading.Thread(target=_animate, daemon=True,
-                                    name="calorie-scan-anim")
+
+        animator = threading.Thread(
+            target=_animate, daemon=True, name="calorie-scan-anim"
+        )
         animator.start()
 
     try:
@@ -247,7 +264,9 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
                 player.show_content("🍽 NUTRITION SCAN", panel)
             except Exception:
                 pass
-        _log(f"JARVIS: Nutrition scan complete — {data.get('food')}"
-             f" ≈ {data.get('calories_kcal')} kcal.")
+        _log(
+            f"JARVIS: Nutrition scan complete — {data.get('food')}"
+            f" ≈ {data.get('calories_kcal')} kcal."
+        )
 
     return spoken or "The scan finished, but I couldn't read the result."

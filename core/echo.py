@@ -58,8 +58,8 @@ import numpy as np
 # people saying the same word — we want the *timbre* that echo preserves.
 _BAND_EDGES = (200, 400, 700, 1100, 1700, 2600, 3800, 5200, 7000)
 
-_HISTORY_S = 1.5      # how far back an echo could plausibly have been played
-_MIN_LEVEL = 0.06     # below this the mic is room noise; nothing to decide
+_HISTORY_S = 1.5  # how far back an echo could plausibly have been played
+_MIN_LEVEL = 0.06  # below this the mic is room noise; nothing to decide
 
 # The threshold is not a tuned constant. It is placed just above essentially ALL
 # the echo this particular room has been seen to produce. Residuals measured on
@@ -75,22 +75,22 @@ _MIN_LEVEL = 0.06     # below this the mic is room noise; nothing to decide
 # quiet setup even a voice whose formants sit close to ours stands clear of the
 # echo, and in a bad one nothing reliably does. The right response to the last
 # row is to say so — not to interrupt at random.
-_MIN_USER = 0.15      # never call anything below this a voice
-_HEAD_Q = 97          # percentile of observed echo the threshold must clear
-_HEAD_MULT = 1.15     # ...with this much headroom above it
+_MIN_USER = 0.15  # never call anything below this a voice
+_HEAD_Q = 97  # percentile of observed echo the threshold must clear
+_HEAD_MULT = 1.15  # ...with this much headroom above it
 
 # Above this echo floor, content separates the two poorly. Loudness cannot
 # rescue it — in exactly those rooms the echo already saturates the level meter,
 # so a level test can never be passed. Time can: echo wobbles around its median
 # while a person talking holds above it, so such rooms hold the evidence longer.
 _UNRELIABLE_FLOOR = 0.22
-_BLOCKS_NORMAL = 5    # ~320 ms of sustained evidence
-_BLOCKS_NOISY = 12    # ~770 ms when the room is this hard
+_BLOCKS_NORMAL = 5  # ~320 ms of sustained evidence
+_BLOCKS_NOISY = 12  # ~770 ms when the room is this hard
 
-_FLOOR_WINDOW = 60    # blocks kept to characterise the room's echo
-_FLOOR_Q = 35         # percentile taken as "typical echo here"
-_WARMUP = 16          # blocks (~1 s) of listening before judging anyone
-_RELEARN_RUN = 28     # a 'voice' lasting this long means the room changed
+_FLOOR_WINDOW = 60  # blocks kept to characterise the room's echo
+_FLOOR_Q = 35  # percentile taken as "typical echo here"
+_WARMUP = 16  # blocks (~1 s) of listening before judging anyone
+_RELEARN_RUN = 28  # a 'voice' lasting this long means the room changed
 
 
 def band_energies(pcm, sr: int) -> np.ndarray:
@@ -103,7 +103,7 @@ def band_energies(pcm, sr: int) -> np.ndarray:
     if x.size < 64:
         return np.zeros(len(_BAND_EDGES) - 1, dtype=np.float32)
     x = x - x.mean()
-    n = 1 << (int(x.size) - 1).bit_length()          # next power of two
+    n = 1 << (int(x.size) - 1).bit_length()  # next power of two
     mag = np.abs(np.fft.rfft(x * np.hanning(x.size), n=n))
     freqs = np.fft.rfftfreq(n, 1.0 / sr)
     out = np.empty(len(_BAND_EDGES) - 1, dtype=np.float32)
@@ -122,15 +122,15 @@ class EchoGuard:
     """
 
     def __init__(self) -> None:
-        self._hist: list[tuple[float, np.ndarray, float]] = []   # (t, bands, level)
-        self._gain = 0.6          # mic level per unit of output level; learned
-        self._seen = 0            # how many echo blocks the estimate has seen
+        self._hist: list[tuple[float, np.ndarray, float]] = []  # (t, bands, level)
+        self._gain = 0.6  # mic level per unit of output level; learned
+        self._seen = 0  # how many echo blocks the estimate has seen
         self._last_sim = 0.0
         self._last_expected = 0.0
-        self._residuals: list[float] = []   # recent ECHO residuals only
-        self._floor = 0.10        # typical echo residual here; learned
-        self._run = 0             # consecutive blocks called speech
-        self._head = 0.13         # near-worst echo residual here; learned
+        self._residuals: list[float] = []  # recent ECHO residuals only
+        self._floor = 0.10  # typical echo residual here; learned
+        self._run = 0  # consecutive blocks called speech
+        self._head = 0.13  # near-worst echo residual here; learned
 
     # ── diagnostics, for the log and for tests ──────────────────────────────
 
@@ -180,7 +180,9 @@ class EchoGuard:
 
     # ── the two entry points ────────────────────────────────────────────────
 
-    def note_output(self, pcm, sr: int, level: float, when: float | None = None) -> None:
+    def note_output(
+        self, pcm, sr: int, level: float, when: float | None = None
+    ) -> None:
         """Record a slice of what is being played, for later comparison."""
         try:
             t = time.monotonic() if when is None else when
@@ -189,10 +191,11 @@ class EchoGuard:
             if len(self._hist) > 8:
                 self._hist = [h for h in self._hist if h[0] >= cutoff]
         except Exception:
-            pass          # never let bookkeeping disturb playback
+            pass  # never let bookkeeping disturb playback
 
-    def is_user_speech(self, pcm, sr: int, level: float,
-                       when: float | None = None) -> bool:
+    def is_user_speech(
+        self, pcm, sr: int, level: float, when: float | None = None
+    ) -> bool:
         """True if this microphone block is a different voice, not our echo."""
         try:
             if level < _MIN_LEVEL:
@@ -285,4 +288,4 @@ class EchoGuard:
                 self._seen = min(self._seen + 1, 999)
             return False
         except Exception:
-            return False      # any doubt: do not interrupt
+            return False  # any doubt: do not interrupt

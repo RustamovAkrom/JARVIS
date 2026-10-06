@@ -9,6 +9,7 @@ Adds a lightweight market agent that can answer:
 
 This purposely avoids API keys and uses public endpoints only.
 """
+
 from __future__ import annotations
 
 import math
@@ -37,15 +38,48 @@ PLUGIN = {
             "action": {
                 "type": "STRING",
                 "description": "quote | news | analyze | chart | scan | watchlist | compare | macro | sentiment | overview | portfolio",
-                "enum": ["quote", "news", "analyze", "chart", "scan", "watchlist", "compare", "macro", "sentiment", "overview", "portfolio"],
+                "enum": [
+                    "quote",
+                    "news",
+                    "analyze",
+                    "chart",
+                    "scan",
+                    "watchlist",
+                    "compare",
+                    "macro",
+                    "sentiment",
+                    "overview",
+                    "portfolio",
+                ],
             },
-            "symbol": {"type": "STRING", "description": "Ticker symbol like AAPL, MSFT, NVDA."},
-            "symbol_b": {"type": "STRING", "description": "Second ticker for compare mode."},
-            "symbols": {"type": "STRING", "description": "Comma- or space-separated list for scan/watchlist."},
-            "range": {"type": "STRING", "description": "Chart range like 1mo, 3mo, 6mo, 1y."},
-            "interval": {"type": "STRING", "description": "Chart interval like 1d, 1wk, 1mo."},
-            "limit": {"type": "INTEGER", "description": "Number of headlines, symbols, or portfolio lines to include."},
-            "portfolio": {"type": "OBJECT", "description": "Portfolio positions as an object or list of {symbol, shares, avg_price}."},
+            "symbol": {
+                "type": "STRING",
+                "description": "Ticker symbol like AAPL, MSFT, NVDA.",
+            },
+            "symbol_b": {
+                "type": "STRING",
+                "description": "Second ticker for compare mode.",
+            },
+            "symbols": {
+                "type": "STRING",
+                "description": "Comma- or space-separated list for scan/watchlist.",
+            },
+            "range": {
+                "type": "STRING",
+                "description": "Chart range like 1mo, 3mo, 6mo, 1y.",
+            },
+            "interval": {
+                "type": "STRING",
+                "description": "Chart interval like 1d, 1wk, 1mo.",
+            },
+            "limit": {
+                "type": "INTEGER",
+                "description": "Number of headlines, symbols, or portfolio lines to include.",
+            },
+            "portfolio": {
+                "type": "OBJECT",
+                "description": "Portfolio positions as an object or list of {symbol, shares, avg_price}.",
+            },
         },
         "required": [],
     },
@@ -53,7 +87,9 @@ PLUGIN = {
 
 
 def _http_get(url: str, timeout: float = 15.0) -> requests.Response:
-    response = requests.get(url, headers={"User-Agent": "Mozilla/5.0 (JarvisTradingAgent)"}, timeout=timeout)
+    response = requests.get(
+        url, headers={"User-Agent": "Mozilla/5.0 (JarvisTradingAgent)"}, timeout=timeout
+    )
     response.raise_for_status()
     return response
 
@@ -68,7 +104,7 @@ def _fmt_money(value):
         return "N/A"
     try:
         n = float(value)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return "N/A"
     return f"${n:,.2f}"
 
@@ -78,7 +114,7 @@ def _fmt_pct(value):
         return "N/A"
     try:
         n = float(value)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return "N/A"
     sign = "+" if n >= 0 else ""
     return f"{sign}{n:.2f}%"
@@ -91,7 +127,9 @@ def _quote_summary(symbol: str) -> dict:
 
     # Yahoo's v6 /quote endpoint is not reliable in some environments; the chart
     # endpoint returns the same current-market metadata we need and is stable.
-    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}?range=1mo&interval=1d"
+    url = (
+        f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}?range=1mo&interval=1d"
+    )
     data = _http_get(url).json()
     result = (data.get("chart") or {}).get("result") or []
     if not result:
@@ -100,7 +138,11 @@ def _quote_summary(symbol: str) -> dict:
     meta = result[0].get("meta") or {}
     price = meta.get("regularMarketPrice")
     prev_close = meta.get("chartPreviousClose")
-    change = meta.get("regularMarketPrice") - meta.get("chartPreviousClose") if price is not None and prev_close is not None else None
+    change = (
+        meta.get("regularMarketPrice") - meta.get("chartPreviousClose")
+        if price is not None and prev_close is not None
+        else None
+    )
     change_pct = meta.get("regularMarketChangePercent")
     volume = meta.get("regularMarketVolume")
     market = meta.get("fullExchangeName") or meta.get("exchangeName") or "Market"
@@ -115,7 +157,9 @@ def _quote_summary(symbol: str) -> dict:
     }
 
 
-def _chart_history(symbol: str, range_name: str = "1mo", interval: str = "1d") -> list[dict]:
+def _chart_history(
+    symbol: str, range_name: str = "1mo", interval: str = "1d"
+) -> list[dict]:
     sym = _clean_symbol(symbol)
     url = f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}?range={range_name}&interval={interval}"
     data = _http_get(url).json()
@@ -126,16 +170,18 @@ def _chart_history(symbol: str, range_name: str = "1mo", interval: str = "1d") -
     chart = result[0]
     timestamps = chart.get("timestamp") or []
     quote = (chart.get("indicators") or {}).get("quote") or [{}]
-    closes = (quote[0].get("close") or [])
+    closes = quote[0].get("close") or []
 
     series = []
     for ts, close in zip(timestamps, closes):
         if close is None:
             continue
-        series.append({
-            "timestamp": int(ts),
-            "close": float(close),
-        })
+        series.append(
+            {
+                "timestamp": int(ts),
+                "close": float(close),
+            }
+        )
     return series
 
 
@@ -185,7 +231,7 @@ def _macd(values: list[float], fast: int = 12, slow: int = 26, signal_period: in
     for i in range(1, len(values) + 1):
         if i < slow:
             continue
-        slice_vals = values[max(0, i - slow):i]
+        slice_vals = values[max(0, i - slow) : i]
         if len(slice_vals) >= slow:
             history.append(_ema(slice_vals, fast) - _ema(slice_vals, slow))
     if not history:
@@ -197,7 +243,9 @@ def _macd(values: list[float], fast: int = 12, slow: int = 26, signal_period: in
 
 def _news_headlines(symbol: str, limit: int = 5) -> list[dict]:
     sym = _clean_symbol(symbol)
-    url = f"https://feeds.finance.yahoo.com/rss/2.0/headline?s={sym}&region=US&lang=en-US"
+    url = (
+        f"https://feeds.finance.yahoo.com/rss/2.0/headline?s={sym}&region=US&lang=en-US"
+    )
     xml_text = _http_get(url, timeout=12.0).text
     try:
         root = ET.fromstring(xml_text)
@@ -214,7 +262,9 @@ def _news_headlines(symbol: str, limit: int = 5) -> list[dict]:
     return items
 
 
-def _technical_summary(symbol: str, range_name: str = "1mo", interval: str = "1d") -> dict:
+def _technical_summary(
+    symbol: str, range_name: str = "1mo", interval: str = "1d"
+) -> dict:
     history = _chart_history(symbol, range_name=range_name, interval=interval)
     closes = [entry["close"] for entry in history]
     if len(closes) < 20:
@@ -291,21 +341,52 @@ def _scan_symbols(symbols: Iterable[str], limit: int = 5) -> list[dict]:
         try:
             data = _quote_summary(sym)
             tech = _technical_summary(sym)
-            rows.append({
-                "symbol": sym,
-                "price": data.get("price"),
-                "change_pct": data.get("change_pct"),
-                "bias": tech.get("bias"),
-                "summary": tech.get("summary"),
-            })
+            rows.append(
+                {
+                    "symbol": sym,
+                    "price": data.get("price"),
+                    "change_pct": data.get("change_pct"),
+                    "bias": tech.get("bias"),
+                    "summary": tech.get("summary"),
+                }
+            )
         except Exception:
             continue
     return rows
 
 
 def _sentiment_score_headlines(headlines: list[dict]) -> tuple[int, str]:
-    positive = {"beat", "raise", "rally", "surge", "strong", "growth", "demand", "upgrade", "outperform", "bullish", "record", "profit", "gain"}
-    negative = {"miss", "downgrade", "sell", "drop", "weak", "decline", "loss", "risk", "warn", "slump", "recession", "bearish", "cut", "lag"}
+    positive = {
+        "beat",
+        "raise",
+        "rally",
+        "surge",
+        "strong",
+        "growth",
+        "demand",
+        "upgrade",
+        "outperform",
+        "bullish",
+        "record",
+        "profit",
+        "gain",
+    }
+    negative = {
+        "miss",
+        "downgrade",
+        "sell",
+        "drop",
+        "weak",
+        "decline",
+        "loss",
+        "risk",
+        "warn",
+        "slump",
+        "recession",
+        "bearish",
+        "cut",
+        "lag",
+    }
     total = 0
     for item in headlines:
         text = (item.get("title") or "").lower()
@@ -364,7 +445,9 @@ def _compare_symbols(symbol_a: str, symbol_b: str) -> str:
     ]
     if a.get("price") and b.get("price"):
         delta = float(a["price"]) - float(b["price"])
-        base.append(f"Relative spread: {symbol_a} is {_fmt_money(abs(delta))} {'above' if delta > 0 else 'below'} {symbol_b}.")
+        base.append(
+            f"Relative spread: {symbol_a} is {_fmt_money(abs(delta))} {'above' if delta > 0 else 'below'} {symbol_b}."
+        )
     return "\n".join(base)
 
 
@@ -391,15 +474,21 @@ def _portfolio_summary(portfolio: object) -> str:
         try:
             q = _quote_summary(sym)
             shares = float(item.get("shares") or item.get("qty") or 0)
-            avg = float(item.get("avg_price") or item.get("average") or item.get("avg") or 0)
+            avg = float(
+                item.get("avg_price") or item.get("average") or item.get("avg") or 0
+            )
             price = float(q.get("price") or 0)
             value = shares * price
             total_value += value
             total_pl += (price - avg) * shares if avg else 0.0
-            lines.append(f"- {sym}: {shares} shares @ {_fmt_money(avg) or 'N/A'} | value {_fmt_money(value)} | mark {_fmt_pct(q.get('change_pct'))}")
+            lines.append(
+                f"- {sym}: {shares} shares @ {_fmt_money(avg) or 'N/A'} | value {_fmt_money(value)} | mark {_fmt_pct(q.get('change_pct'))}"
+            )
         except Exception:
             continue
-    lines.append(f"Total value: {_fmt_money(total_value)} | P/L: {_fmt_money(total_pl)}")
+    lines.append(
+        f"Total value: {_fmt_money(total_value)} | P/L: {_fmt_money(total_pl)}"
+    )
     return "\n".join(lines)
 
 
@@ -415,7 +504,9 @@ def _show_live_market(player, payload: dict) -> bool:
 def run(parameters: dict, player=None, session_memory=None) -> str:
     params = parameters or {}
     action = (params.get("action") or "quote").strip().lower()
-    symbol = _clean_symbol(params.get("symbol") or params.get("ticker") or params.get("asset") or "")
+    symbol = _clean_symbol(
+        params.get("symbol") or params.get("ticker") or params.get("asset") or ""
+    )
     range_name = (params.get("range") or "1mo").strip()
     interval = (params.get("interval") or "1d").strip()
     limit = int(params.get("limit") or 5)
@@ -451,7 +542,9 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
             else:
                 lines.append("No recent headline feed was returned for this symbol.")
             if player is not None and _show_live_market(player, payload):
-                return "A live trading panel is now open on the HUD.\n" + "\n".join(lines)
+                return "A live trading panel is now open on the HUD.\n" + "\n".join(
+                    lines
+                )
             return "\n".join(lines)
 
         if action in {"news", "headline", "headlines"}:
@@ -471,8 +564,10 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
             }
             if player is not None and _show_live_market(player, payload):
                 return "A live trading panel is now open on the HUD.\n" + "\n".join(
-                    [f"Latest headlines for {symbol}:"] + [
-                        f"{i}. {item['title']} ({item.get('date') or 'recent'})" for i, item in enumerate(headlines, 1)
+                    [f"Latest headlines for {symbol}:"]
+                    + [
+                        f"{i}. {item['title']} ({item.get('date') or 'recent'})"
+                        for i, item in enumerate(headlines, 1)
                     ]
                 )
             lines = [f"Latest headlines for {symbol}:"]
@@ -544,7 +639,9 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
 
         if action in {"compare", "vs", "comparison"}:
             sym_a = _clean_symbol(params.get("symbol") or params.get("symbol_a") or "")
-            sym_b = _clean_symbol(params.get("symbol_b") or params.get("compare_to") or "")
+            sym_b = _clean_symbol(
+                params.get("symbol_b") or params.get("compare_to") or ""
+            )
             if not sym_a or not sym_b:
                 return "Provide two symbols, for example: {'action':'compare','symbol':'AAPL','symbol_b':'MSFT'}"
             try:
@@ -556,10 +653,14 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
                     "change_pct": a.get("change_pct"),
                     "bias": "Comparison",
                     "summary": f"{sym_a} vs {sym_b} — {_fmt_money(a.get('price'))} vs {_fmt_money(b.get('price'))}",
-                    "headlines": _news_headlines(sym_a, limit=2) + _news_headlines(sym_b, limit=2),
+                    "headlines": _news_headlines(sym_a, limit=2)
+                    + _news_headlines(sym_b, limit=2),
                 }
                 if player is not None and _show_live_market(player, payload):
-                    return "A live trading panel is now open on the HUD.\n" + _compare_symbols(sym_a, sym_b)
+                    return (
+                        "A live trading panel is now open on the HUD.\n"
+                        + _compare_symbols(sym_a, sym_b)
+                    )
             except Exception:
                 pass
             return _compare_symbols(sym_a, sym_b)
@@ -576,7 +677,11 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
         if action in {"scan", "watchlist"}:
             raw_symbols = params.get("symbols") or params.get("watchlist") or symbol
             if isinstance(raw_symbols, str):
-                items = [part.strip() for part in re.split(r"[\s,]+", raw_symbols) if part.strip()]
+                items = [
+                    part.strip()
+                    for part in re.split(r"[\s,]+", raw_symbols)
+                    if part.strip()
+                ]
             else:
                 items = [str(part).strip() for part in raw_symbols if str(part).strip()]
             if not items:
@@ -592,9 +697,7 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
                 )
             return "\n".join(lines)
 
-        return (
-            "Trading agent action not recognized. Use one of: quote, news, analyze, chart, scan, watchlist, compare, macro, sentiment, overview, portfolio."
-        )
+        return "Trading agent action not recognized. Use one of: quote, news, analyze, chart, scan, watchlist, compare, macro, sentiment, overview, portfolio."
     except Exception as exc:
         return (
             f"I could not fetch trading data for {symbol or 'that symbol'} right now. "

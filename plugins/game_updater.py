@@ -71,6 +71,7 @@ WHAT IT WILL NOT DO
     It says which drive, how much is needed and how much is free, and stops.
     Filling a system drive is not a thing to be brisk about.
 """
+
 from __future__ import annotations
 
 import concurrent.futures
@@ -93,7 +94,8 @@ from config import is_windows, is_mac, is_linux
 
 _CNW: dict = (
     {"creationflags": subprocess.CREATE_NO_WINDOW}
-    if _platform_mod.system() == "Windows" else {}
+    if _platform_mod.system() == "Windows"
+    else {}
 )
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -112,23 +114,50 @@ PLUGIN_SETTINGS = {
     "namespace": _NS,
     "title": "🎮  GAME UPDATER (Steam / Epic)",
     "fields": [
-        {"key": "install_drive", "label": "Install games to drive", "type": "text",
-         "placeholder": "F   —   empty: whichever Steam library has room"},
-        {"key": "steam_account", "label": "Steam account to sign in as", "type": "text",
-         "placeholder": "empty: the account Steam remembers"},
-        {"key": "schedule_hour", "label": "Daily update — hour (0-23)", "type": "text",
-         "default": "3", "placeholder": "3"},
-        {"key": "schedule_minute", "label": "Daily update — minute (0-59)", "type": "text",
-         "default": "0", "placeholder": "0"},
-        {"key": "claim_free",
-         "label": "Add free games to the library when asked to install them",
-         "type": "toggle", "default": True},
-        {"key": "accept_eula",
-         "label": "Accept game licence agreements automatically",
-         "type": "toggle", "default": True},
-        {"key": "shutdown_when_done",
-         "label": "Shut the PC down when a download finishes", "type": "toggle",
-         "default": False},
+        {
+            "key": "install_drive",
+            "label": "Install games to drive",
+            "type": "text",
+            "placeholder": "F   —   empty: whichever Steam library has room",
+        },
+        {
+            "key": "steam_account",
+            "label": "Steam account to sign in as",
+            "type": "text",
+            "placeholder": "empty: the account Steam remembers",
+        },
+        {
+            "key": "schedule_hour",
+            "label": "Daily update — hour (0-23)",
+            "type": "text",
+            "default": "3",
+            "placeholder": "3",
+        },
+        {
+            "key": "schedule_minute",
+            "label": "Daily update — minute (0-59)",
+            "type": "text",
+            "default": "0",
+            "placeholder": "0",
+        },
+        {
+            "key": "claim_free",
+            "label": "Add free games to the library when asked to install them",
+            "type": "toggle",
+            "default": True,
+        },
+        {
+            "key": "accept_eula",
+            "label": "Accept game licence agreements automatically",
+            "type": "toggle",
+            "default": True,
+        },
+        {
+            "key": "shutdown_when_done",
+            "label": "Shut the PC down when a download finishes",
+            "type": "toggle",
+            "default": False,
+        },
     ],
 }
 
@@ -138,6 +167,7 @@ def _setting(key: str, default=""):
     its own config still has to run."""
     try:
         from memory.config_manager import get_plugin_setting
+
         val = get_plugin_setting(_NS, key, default)
     except Exception:
         return default
@@ -257,10 +287,15 @@ def _find_steam_path() -> Path | None:
 def _find_steam_windows() -> Path | None:
     try:
         import winreg
+
         for hive, key_path, value in [
-            (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Valve\Steam", "InstallPath"),
+            (
+                winreg.HKEY_LOCAL_MACHINE,
+                r"SOFTWARE\WOW6432Node\Valve\Steam",
+                "InstallPath",
+            ),
             (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Valve\Steam", "InstallPath"),
-            (winreg.HKEY_CURRENT_USER,  r"SOFTWARE\Valve\Steam", "SteamPath"),
+            (winreg.HKEY_CURRENT_USER, r"SOFTWARE\Valve\Steam", "SteamPath"),
         ]:
             try:
                 key = winreg.OpenKey(hive, key_path)
@@ -276,7 +311,10 @@ def _find_steam_windows() -> Path | None:
     for p in [
         Path(os.environ.get("ProgramFiles(x86)", "")) / "Steam",
         Path(os.environ.get("ProgramFiles", "")) / "Steam",
-        Path("C:/Steam"), Path("D:/Steam"), Path("E:/Steam"), Path("F:/Steam"),
+        Path("C:/Steam"),
+        Path("D:/Steam"),
+        Path("E:/Steam"),
+        Path("F:/Steam"),
     ]:
         try:
             if (p / "steam.exe").exists():
@@ -301,7 +339,8 @@ def _find_steam_linux() -> Path | None:
         Path.home() / ".steam" / "steam",
         Path.home() / ".steam" / "root",
         Path.home() / ".local" / "share" / "Steam",
-        Path("/usr/share/steam"), Path("/opt/steam"),
+        Path("/usr/share/steam"),
+        Path("/opt/steam"),
     ]:
         if p.exists():
             return p
@@ -348,7 +387,7 @@ def _libraries(steam_path: Path) -> list[dict]:
             if isinstance(entry, dict):
                 raw = entry.get("path")
             elif key.isdigit():
-                raw = entry            # very old clients: "1" "D:\\SteamLibrary"
+                raw = entry  # very old clients: "1" "D:\\SteamLibrary"
             else:
                 continue
             if raw:
@@ -367,13 +406,15 @@ def _libraries(steam_path: Path) -> list[dict]:
                 continue
             seen.add(resolved)
             usage = shutil.disk_usage(str(root))
-            out.append({
-                "path": root,
-                "steamapps": steamapps,
-                "drive": str(root)[:1].upper() if is_windows() else "",
-                "free": int(usage.free),
-                "total": int(usage.total),
-            })
+            out.append(
+                {
+                    "path": root,
+                    "steamapps": steamapps,
+                    "drive": str(root)[:1].upper() if is_windows() else "",
+                    "free": int(usage.free),
+                    "total": int(usage.total),
+                }
+            )
         except Exception:
             continue
     out.sort(key=lambda lib: lib["free"], reverse=True)
@@ -388,7 +429,7 @@ def _pick_library(libs: list[dict], need_bytes: int = 0) -> tuple[dict | None, s
     if not libs:
         return None, "no Steam library folder was found"
 
-    margin = 2 * 1024 ** 3        # Steam unpacks while it downloads; do not fill the disk
+    margin = 2 * 1024**3  # Steam unpacks while it downloads; do not fill the disk
     fits = [lib for lib in libs if not need_bytes or lib["free"] >= need_bytes + margin]
 
     wanted = str(_setting("install_drive", "")).strip(" :/\\").upper()[:1]
@@ -397,22 +438,27 @@ def _pick_library(libs: list[dict], need_bytes: int = 0) -> tuple[dict | None, s
         if chosen is None:
             _log(f"⚠️ settings ask for drive {wanted}:, which holds no Steam library")
         elif need_bytes and chosen["free"] < need_bytes + margin:
-            _log(f"⚠️ drive {wanted}: is the configured one but cannot hold this download")
+            _log(
+                f"⚠️ drive {wanted}: is the configured one but cannot hold this download"
+            )
         else:
             return chosen, f"drive {wanted}: is the one you configured"
 
     if fits:
         best = fits[0]
         if len(fits) == 1 and len(libs) > 1:
-            why = (f"{_drive_label(best)} is the only library with room for "
-                   f"{_fmt_bytes(need_bytes)}")
+            why = (
+                f"{_drive_label(best)} is the only library with room for "
+                f"{_fmt_bytes(need_bytes)}"
+            )
         else:
             why = f"{_drive_label(best)} has the most room, {_fmt_bytes(best['free'])}"
         return best, why
 
-    return None, ("no Steam library has room for it — "
-                  + ", ".join(f"{_drive_label(l)} has {_fmt_bytes(l['free'])}"
-                              for l in libs))
+    return None, (
+        "no Steam library has room for it — "
+        + ", ".join(f"{_drive_label(l)} has {_fmt_bytes(l['free'])}" for l in libs)
+    )
 
 
 def _drive_label(lib: dict) -> str:
@@ -429,8 +475,17 @@ def _fmt_bytes(n: int | float) -> str:
 
 
 _SIZE_RE = re.compile(r"(\d[\d.,]*)\s*(B|KB|MB|GB|TB|KiB|MiB|GiB|TiB)\b", re.I)
-_UNIT = {"b": 1, "kb": 1024, "mb": 1024 ** 2, "gb": 1024 ** 3, "tb": 1024 ** 4,
-         "kib": 1024, "mib": 1024 ** 2, "gib": 1024 ** 3, "tib": 1024 ** 4}
+_UNIT = {
+    "b": 1,
+    "kb": 1024,
+    "mb": 1024**2,
+    "gb": 1024**3,
+    "tb": 1024**4,
+    "kib": 1024,
+    "mib": 1024**2,
+    "gib": 1024**3,
+    "tib": 1024**4,
+}
 
 
 def _parse_size(text: str) -> int:
@@ -455,11 +510,11 @@ def _parse_size(text: str) -> int:
         number = raw
     else:
         last = seps[-1]
-        tail = raw[last + 1:]
-        if len(tail) == 3:                       # grouping, or the ambiguous case
+        tail = raw[last + 1 :]
+        if len(tail) == 3:  # grouping, or the ambiguous case
             number = raw.replace(".", "").replace(",", "")
         else:
-            number = (raw[:last].replace(".", "").replace(",", "") + "." + tail)
+            number = raw[:last].replace(".", "").replace(",", "") + "." + tail
     try:
         return int(float(number) * _UNIT[m.group(2).lower()])
     except Exception:
@@ -484,7 +539,7 @@ SF_FILES_MISSING = 32
 SF_RUNNING = 64
 SF_PAUSED = 512
 SF_UNINSTALLING = 2048
-SF_BUSY = (256 | 1024 | 131072 | 262144 | 524288 | 1048576 | 2097152 | 4194304)
+SF_BUSY = 256 | 1024 | 131072 | 262144 | 524288 | 1048576 | 2097152 | 4194304
 
 
 def _games(steam_path: Path) -> list[dict]:
@@ -498,16 +553,18 @@ def _games(steam_path: Path) -> list[dict]:
                     continue
                 done = int(app.get("BytesDownloaded") or 0)
                 total = int(app.get("BytesToDownload") or 0)
-                out.append({
-                    "id": str(app_id),
-                    "name": str(name).strip(),
-                    "state": int(app.get("StateFlags") or 0),
-                    "size": int(app.get("SizeOnDisk") or 0),
-                    "done": done,
-                    "total": total,
-                    "lib": lib,
-                    "acf": acf,
-                })
+                out.append(
+                    {
+                        "id": str(app_id),
+                        "name": str(name).strip(),
+                        "state": int(app.get("StateFlags") or 0),
+                        "size": int(app.get("SizeOnDisk") or 0),
+                        "done": done,
+                        "total": total,
+                        "lib": lib,
+                        "acf": acf,
+                    }
+                )
             except Exception:
                 continue
     return out
@@ -526,9 +583,12 @@ def _needs_update(game: dict) -> bool:
 
 
 def _is_ready(game: dict) -> bool:
-    return (bool(game["state"] & SF_INSTALLED)
-            and not game["state"] & (SF_UPDATE_REQUIRED | SF_FILES_MISSING | SF_UNINSTALLING)
-            and not _is_busy(game))
+    return (
+        bool(game["state"] & SF_INSTALLED)
+        and not game["state"]
+        & (SF_UPDATE_REQUIRED | SF_FILES_MISSING | SF_UNINSTALLING)
+        and not _is_busy(game)
+    )
 
 
 def _progress(game: dict) -> str:
@@ -589,13 +649,15 @@ def _accounts(steam_path: Path) -> list[dict]:
     for _steam_id, entry in (data.items() if isinstance(data, dict) else []):
         if not isinstance(entry, dict):
             continue
-        out.append({
-            "login": str(entry.get("AccountName") or ""),
-            "persona": str(entry.get("PersonaName") or ""),
-            "autologin": str(entry.get("AutoLogin") or "0") == "1",
-            "remembered": str(entry.get("RememberPassword") or "0") == "1",
-            "timestamp": int(entry.get("Timestamp") or 0),
-        })
+        out.append(
+            {
+                "login": str(entry.get("AccountName") or ""),
+                "persona": str(entry.get("PersonaName") or ""),
+                "autologin": str(entry.get("AutoLogin") or "0") == "1",
+                "remembered": str(entry.get("RememberPassword") or "0") == "1",
+                "timestamp": int(entry.get("Timestamp") or 0),
+            }
+        )
     out.sort(key=lambda a: a["timestamp"], reverse=True)
     return out
 
@@ -615,8 +677,10 @@ def _preferred_account(steam_path: Path) -> dict | None:
                 return a
         _log(f"⚠️ configured account '{wanted}' is not remembered by Steam")
 
-    return next((a for a in accounts if a["autologin"]),
-                next((a for a in accounts if a["remembered"]), accounts[0]))
+    return next(
+        (a for a in accounts if a["autologin"]),
+        next((a for a in accounts if a["remembered"]), accounts[0]),
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -644,6 +708,7 @@ CT_CUSTOM, CT_GROUP, CT_WINDOW = 50025, 50026, 50032
 def _uia_loop(jobs: "queue.Queue") -> None:
     try:
         import comtypes
+
         comtypes.CoInitialize()
     except Exception:
         pass
@@ -656,7 +721,7 @@ def _uia_loop(jobs: "queue.Queue") -> None:
             continue
         try:
             fut.set_result(fn())
-        except BaseException as exc:      # noqa: BLE001 — carried to the caller
+        except BaseException as exc:  # noqa: BLE001 — carried to the caller
             fut.set_exception(exc)
 
 
@@ -665,8 +730,9 @@ def _submit(fn) -> concurrent.futures.Future:
     with _uia_lock:
         if _uia_thread is None or not _uia_thread.is_alive():
             _uia_queue = queue.Queue()
-            _uia_thread = threading.Thread(target=_uia_loop, args=(_uia_queue,),
-                                           daemon=True, name="steam-uia")
+            _uia_thread = threading.Thread(
+                target=_uia_loop, args=(_uia_queue,), daemon=True, name="steam-uia"
+            )
             _uia_thread.start()
         fut: concurrent.futures.Future = concurrent.futures.Future()
         _uia_queue.put((fn, fut))
@@ -697,8 +763,12 @@ def _steam_pids() -> set[int]:
         try:
             out = subprocess.run(
                 ["tasklist", "/FI", f"IMAGENAME eq {image}", "/FO", "CSV", "/NH"],
-                capture_output=True, text=True, encoding="utf-8",
-                errors="replace", **_CNW).stdout
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                **_CNW,
+            ).stdout
             for line in out.splitlines():
                 if line.startswith('"'):
                     try:
@@ -724,8 +794,10 @@ def _active_user() -> int:
         return 0
     try:
         import winreg
-        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
-                             r"Software\Valve\Steam\ActiveProcess")
+
+        key = winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER, r"Software\Valve\Steam\ActiveProcess"
+        )
         try:
             value, _ = winreg.QueryValueEx(key, "ActiveUser")
         finally:
@@ -738,16 +810,24 @@ def _active_user() -> int:
 def _client_running() -> bool:
     if is_windows():
         try:
-            out = subprocess.run(["tasklist", "/FI", "IMAGENAME eq steam.exe"],
-                                 capture_output=True, text=True, encoding="utf-8",
-                                 errors="replace", **_CNW).stdout
+            out = subprocess.run(
+                ["tasklist", "/FI", "IMAGENAME eq steam.exe"],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                **_CNW,
+            ).stdout
             return "steam.exe" in out.lower()
         except Exception:
             return False
     proc = "steam_osx" if is_mac() else "steam"
     try:
-        return bool(subprocess.run(["pgrep", "-x", proc], capture_output=True,
-                                   text=True, errors="replace").stdout.strip())
+        return bool(
+            subprocess.run(
+                ["pgrep", "-x", proc], capture_output=True, text=True, errors="replace"
+            ).stdout.strip()
+        )
     except Exception:
         return False
 
@@ -788,8 +868,15 @@ def _steam_windows() -> list[dict]:
             # whether a window is worth reading is decided by its tree.
             if w < 60 or h < 20:
                 return True
-            found.append({"hwnd": int(hwnd), "title": title.value,
-                          "cls": cls.value, "w": w, "h": h})
+            found.append(
+                {
+                    "hwnd": int(hwnd),
+                    "title": title.value,
+                    "cls": cls.value,
+                    "w": w,
+                    "h": h,
+                }
+            )
         except Exception:
             pass
         return True
@@ -822,11 +909,13 @@ def _scan_window(hwnd: int) -> list[dict]:
 
     Empty is a legitimate answer here and NOT an error: Chromium has not built
     its tree yet. `_scan` is what turns that into a retry."""
+
     def work():
         if not _user32.IsWindow(hwnd):
             return []
         from pywinauto.uia_defines import IUIA
         from pywinauto.uia_element_info import UIAElementInfo
+
         iuia = IUIA().iuia
         root = UIAElementInfo(hwnd).element
         # Asked about a dead handle, UIA quietly answers with the DESKTOP, and
@@ -840,25 +929,38 @@ def _scan_window(hwnd: int) -> list[dict]:
             req = iuia.CreateCacheRequest()
             for pid in (_P_RECT, _P_NAME, _P_CTYPE, _P_OFFSCREEN):
                 req.AddProperty(pid)
-            found = root.FindAllBuildCache(_TREE_SUBTREE, iuia.CreateTrueCondition(), req)
+            found = root.FindAllBuildCache(
+                _TREE_SUBTREE, iuia.CreateTrueCondition(), req
+            )
         except Exception:
-            found, cached = root.FindAll(_TREE_SUBTREE, iuia.CreateTrueCondition()), False
+            found, cached = (
+                root.FindAll(_TREE_SUBTREE, iuia.CreateTrueCondition()),
+                False,
+            )
 
         out = []
         for i in range(found.Length):
             try:
                 el = found.GetElement(i)
-                if (el.CachedIsOffscreen if cached else el.CurrentIsOffscreen):
+                if el.CachedIsOffscreen if cached else el.CurrentIsOffscreen:
                     continue
-                rect = el.CachedBoundingRectangle if cached else el.CurrentBoundingRectangle
+                rect = (
+                    el.CachedBoundingRectangle
+                    if cached
+                    else el.CurrentBoundingRectangle
+                )
                 if rect.right <= rect.left or rect.bottom <= rect.top:
                     continue
-                out.append({
-                    "el": el,
-                    "type": int(el.CachedControlType if cached else el.CurrentControlType),
-                    "name": (el.CachedName if cached else el.CurrentName) or "",
-                    "rect": (rect.left, rect.top, rect.right, rect.bottom),
-                })
+                out.append(
+                    {
+                        "el": el,
+                        "type": int(
+                            el.CachedControlType if cached else el.CurrentControlType
+                        ),
+                        "name": (el.CachedName if cached else el.CurrentName) or "",
+                        "rect": (rect.left, rect.top, rect.right, rect.bottom),
+                    }
+                )
             except Exception:
                 continue
         return out
@@ -875,7 +977,7 @@ def _scan(hwnd: int, tries: int = 4, gap: float = 0.35) -> list[dict]:
     and concluding it cannot be read."""
     for attempt in range(max(1, tries)):
         items = _scan_window(hwnd)
-        if len(items) > 4:                 # a bare window/pane shell is not a tree
+        if len(items) > 4:  # a bare window/pane shell is not a tree
             return items
         if attempt < tries - 1:
             time.sleep(gap)
@@ -887,8 +989,10 @@ def _invoke(item: dict) -> bool:
 
     Measured at 13-15 ms. A real click would need the window raised, which
     steals the foreground from whatever the user is doing while they talk."""
+
     def work():
         from comtypes.gen.UIAutomationClient import IUIAutomationInvokePattern
+
         pattern = item["el"].GetCurrentPattern(_PAT_INVOKE)
         if not pattern:
             return False
@@ -923,8 +1027,11 @@ def _login_candidates(items: list[dict], accounts: list[dict]) -> list[dict]:
         return []
     known = {a["persona"].lower() for a in accounts if a["persona"]}
     known |= {a["login"].lower() for a in accounts if a["login"]}
-    return [i for i in _named(items, CT_HYPERLINK, CT_LISTITEM, CT_BUTTON)
-            if i["name"].strip().lower() in known]
+    return [
+        i
+        for i in _named(items, CT_HYPERLINK, CT_LISTITEM, CT_BUTTON)
+        if i["name"].strip().lower() in known
+    ]
 
 
 def _account_for(item: dict, items: list[dict], accounts: list[dict]) -> dict | None:
@@ -936,9 +1043,11 @@ def _account_for(item: dict, items: list[dict], accounts: list[dict]) -> dict | 
     label = item["name"].strip().lower()
     left, top, right, bottom = item["rect"]
     nearby = " ".join(
-        i["name"] for i in items
+        i["name"]
+        for i in items
         if i["type"] == CT_TEXT
-        and i["rect"][0] >= left - 80 and i["rect"][2] <= right + 80
+        and i["rect"][0] >= left - 80
+        and i["rect"][2] <= right + 80
         and top - 40 <= i["rect"][1] <= bottom + 90
     ).lower()
     for account in accounts:
@@ -959,11 +1068,13 @@ def _install_rows(items: list[dict]) -> list[dict]:
         m = _DRIVE_RE.search(item["name"])
         if not m:
             continue
-        rows.append({
-            **item,
-            "drive": m.group(1).upper(),
-            "free_text": _parse_size(item["name"]),
-        })
+        rows.append(
+            {
+                **item,
+                "drive": m.group(1).upper(),
+                "free_text": _parse_size(item["name"]),
+            }
+        )
     return rows
 
 
@@ -1004,8 +1115,9 @@ def _error_dialog(items: list[dict], app_id: str) -> dict | None:
     if not app_id:
         return None
     named = [item for item in items if item["name"].strip()]
-    message = next((item["name"].strip() for item in named
-                    if str(app_id) in item["name"]), "")
+    message = next(
+        (item["name"].strip() for item in named if str(app_id) in item["name"]), ""
+    )
     if not message:
         return None
     return {"message": message, "buttons": _named(items, CT_BUTTON)}
@@ -1055,16 +1167,21 @@ def _pending_modal(items: list[dict]) -> dict | None:
         i["name"].strip()
         and (i["rect"][2] - i["rect"][0]) * (i["rect"][3] - i["rect"][1])
         >= 0.85 * window_area
-        for i in items if i["type"] in (CT_GROUP, CT_CUSTOM)
+        for i in items
+        if i["type"] in (CT_GROUP, CT_CUSTOM)
     )
     if not covering:
         return None
 
-    buttons = [item["name"].strip() for item in _named(items, CT_BUTTON)
-               if len(item["name"].strip()) <= 60]
-    texts = sorted((item for item in items
-                    if item["type"] == CT_TEXT and item["name"].strip()),
-                   key=lambda item: item["rect"][1])
+    buttons = [
+        item["name"].strip()
+        for item in _named(items, CT_BUTTON)
+        if len(item["name"].strip()) <= 60
+    ]
+    texts = sorted(
+        (item for item in items if item["type"] == CT_TEXT and item["name"].strip()),
+        key=lambda item: item["rect"][1],
+    )
     if not buttons or not texts:
         return None
     return {"message": texts[0]["name"].strip(), "buttons": buttons}
@@ -1109,7 +1226,7 @@ _ROLE_PROMPT = (
     '  "confirm"   : the button that STARTS the installation, else null\n'
     '  "cancel"    : the button that CLOSES the dialog without doing it, else null\n'
     '  "agreement" : the button that ACCEPTS a licence, a EULA or terms of use '
-    '— the one that lets the install carry on — else null\n\n'
+    "— the one that lets the install carry on — else null\n\n"
     "Each value must be one button name copied EXACTLY from the list above, on "
     "its own, with no translation and no numbering — or null. A button naming a "
     "disk or a drive letter is a place to install to, so it is null for every "
@@ -1126,6 +1243,7 @@ _ROLE_PROMPT = (
 
 def _role_key(labels: tuple[str, ...]) -> str:
     import hashlib
+
     return hashlib.sha1("\n".join(labels).encode("utf-8")).hexdigest()[:16]
 
 
@@ -1150,8 +1268,10 @@ def _role_cache_save(store: dict) -> None:
 def _ask_model_roles(labels: tuple[str, ...]) -> dict:
     try:
         from core import gemini
-        raw = gemini.as_json(_ROLE_PROMPT.format(listing="\n".join(labels)),
-                             tier=gemini.FAST)
+
+        raw = gemini.as_json(
+            _ROLE_PROMPT.format(listing="\n".join(labels)), tier=gemini.FAST
+        )
     except Exception as e:
         _log(f"⚠️ could not ask the model which button installs: {e}")
         return {}
@@ -1175,15 +1295,19 @@ def _roles_for(buttons: list[dict]) -> tuple[list[dict], dict]:
     the drive entries and the scroll region holding an agreement's text, and
     neither is an action. The answer for a given set of labels is asked of the
     model once and kept on disk, so a language costs one request ever."""
-    row_candidates = [b for b in buttons
-                      if not _DRIVE_RE.search(b["name"])
-                      and len(b["name"].strip()) <= 60]
+    row_candidates = [
+        b
+        for b in buttons
+        if not _DRIVE_RE.search(b["name"]) and len(b["name"].strip()) <= 60
+    ]
     if not row_candidates:
         return [], {}
 
     bottom = max(b["rect"][3] for b in row_candidates)
-    row = sorted((b for b in row_candidates if b["rect"][3] >= bottom - 40),
-                 key=lambda b: b["rect"][0])
+    row = sorted(
+        (b for b in row_candidates if b["rect"][3] >= bottom - 40),
+        key=lambda b: b["rect"][0],
+    )
     labels = tuple(b["name"].strip() for b in row)
 
     key = _role_key(labels)
@@ -1242,20 +1366,28 @@ def _agreement_button(items: list[dict]) -> dict | None:
 
     There is no positional fallback and there must never be one: which button
     signs a legal document is not a thing to be approximately right about."""
-    buttons = [b for b in _named(items, CT_BUTTON)
-               if len(b["name"].strip()) <= 60 and not _DRIVE_RE.search(b["name"])]
-    texts = sorted((i for i in items if i["type"] == CT_TEXT and i["name"].strip()),
-                   key=lambda i: i["rect"][1])
+    buttons = [
+        b
+        for b in _named(items, CT_BUTTON)
+        if len(b["name"].strip()) <= 60 and not _DRIVE_RE.search(b["name"])
+    ]
+    texts = sorted(
+        (i for i in items if i["type"] == CT_TEXT and i["name"].strip()),
+        key=lambda i: i["rect"][1],
+    )
     if len(buttons) < 2 or not texts:
         return None
 
     try:
         from core import gemini
+
         answer = gemini.as_json(
             _ACCEPT_PROMPT.format(
                 message=texts[0]["name"].strip()[:400],
-                listing="\n".join(b["name"].strip() for b in buttons)),
-            tier=gemini.FAST)
+                listing="\n".join(b["name"].strip() for b in buttons),
+            ),
+            tier=gemini.FAST,
+        )
     except Exception as exc:
         _log(f"⚠️ could not ask which button agrees: {exc}")
         return None
@@ -1270,8 +1402,10 @@ def _agreement_button(items: list[dict]) -> dict | None:
     wanted = answer.get("agree")
     if not isinstance(wanted, str):
         return None
-    return next((b for b in buttons
-                 if b["name"].strip().lower() == wanted.strip().lower()), None)
+    return next(
+        (b for b in buttons if b["name"].strip().lower() == wanted.strip().lower()),
+        None,
+    )
 
 
 def _confirm_button(dialog: dict) -> tuple[dict | None, dict | None]:
@@ -1299,21 +1433,26 @@ def _confirm_button(dialog: dict) -> tuple[dict | None, dict | None]:
     confirm, cancel, agreement = pick("confirm"), pick("cancel"), pick("agreement")
 
     if agreement is not None and not _setting_bool("accept_eula", True):
-        _log(f"🚫 this dialog wants an agreement accepted ({agreement['name']!r}) "
-             f"and automatic acceptance is switched off — leaving it for you")
+        _log(
+            f"🚫 this dialog wants an agreement accepted ({agreement['name']!r}) "
+            f"and automatic acceptance is switched off — leaving it for you"
+        )
         return None, cancel
 
     if confirm is None:
-        _log(f"🚫 cannot tell which button installs, out of "
-             f"{[b['name'] for b in row]} — leaving the dialog for you")
+        _log(
+            f"🚫 cannot tell which button installs, out of "
+            f"{[b['name'] for b in row]} — leaving the dialog for you"
+        )
     return confirm, cancel
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Getting Steam to a usable state
 # ─────────────────────────────────────────────────────────────────────────────
-def _steam_ready(steam_path: Path, timeout: float = 45.0,
-                 speak=None) -> tuple[bool, str]:
+def _steam_ready(
+    steam_path: Path, timeout: float = 45.0, speak=None
+) -> tuple[bool, str]:
     """(ready, message). Ready means signed in and showing the library — not
     merely that a process exists."""
     if not is_windows():
@@ -1372,16 +1511,23 @@ def _steam_ready(steam_path: Path, timeout: float = 45.0,
                 continue
 
             if not announced and speak:
-                speak("Tell the user Steam is asking which account to use and "
-                      "that you are picking theirs; one short sentence.")
+                speak(
+                    "Tell the user Steam is asking which account to use and "
+                    "that you are picking theirs; one short sentence."
+                )
                 announced = True
 
             target = None
             if wanted:
                 target = next(
-                    (p for p in profiles
-                     if (_account_for(p, items, accounts) or {}).get("login")
-                     == wanted["login"]), None)
+                    (
+                        p
+                        for p in profiles
+                        if (_account_for(p, items, accounts) or {}).get("login")
+                        == wanted["login"]
+                    ),
+                    None,
+                )
             if target is None:
                 target = profiles[0]
                 _log("ℹ️ no remembered account matched — taking the first profile")
@@ -1395,15 +1541,19 @@ def _steam_ready(steam_path: Path, timeout: float = 45.0,
             pressed.add(login)
             _log(f"👤 sign-in screen — choosing {login}")
             if not _invoke(target):
-                return False, ("Steam is asking who is playing and would not let "
-                               "me choose. Pick an account and ask me again.")
+                return False, (
+                    "Steam is asking who is playing and would not let "
+                    "me choose. Pick an account and ask me again."
+                )
         time.sleep(0.4)
 
     if _active_user():
         return True, ""
     if pressed:
-        return False, ("I chose your account on Steam's sign-in screen but it "
-                       "has not finished signing in. It may want your password.")
+        return False, (
+            "I chose your account on Steam's sign-in screen but it "
+            "has not finished signing in. It may want your password."
+        )
     return False, "Steam did not finish starting."
 
 
@@ -1411,46 +1561,46 @@ def _steam_ready(steam_path: Path, timeout: float = 45.0,
 # Installing
 # ─────────────────────────────────────────────────────────────────────────────
 _KNOWN_APPIDS: dict[str, tuple[str, str]] = {
-    "pubg":                ("578080",  "PUBG: Battlegrounds"),
-    "pubg battlegrounds":  ("578080",  "PUBG: Battlegrounds"),
-    "pubg: battlegrounds": ("578080",  "PUBG: Battlegrounds"),
-    "battlegrounds":       ("578080",  "PUBG: Battlegrounds"),
-    "gta5":                ("271590",  "Grand Theft Auto V"),
-    "gta v":               ("271590",  "Grand Theft Auto V"),
-    "grand theft auto v":  ("271590",  "Grand Theft Auto V"),
-    "cs2":                 ("730",     "Counter-Strike 2"),
-    "csgo":                ("730",     "Counter-Strike 2"),
-    "counter-strike 2":    ("730",     "Counter-Strike 2"),
-    "counter strike 2":    ("730",     "Counter-Strike 2"),
-    "dota2":               ("570",     "Dota 2"),
-    "dota 2":              ("570",     "Dota 2"),
-    "rust":                ("252490",  "Rust"),
-    "valheim":             ("892970",  "Valheim"),
-    "cyberpunk":           ("1091500", "Cyberpunk 2077"),
-    "cyberpunk 2077":      ("1091500", "Cyberpunk 2077"),
-    "elden ring":          ("1245620", "ELDEN RING"),
-    "minecraft":           ("1672970", "Minecraft Launcher"),
-    "apex legends":        ("1172470", "Apex Legends"),
-    "apex":                ("1172470", "Apex Legends"),
-    "fortnite":            ("1517990", "Fortnite"),
-    "goose goose duck":    ("1568590", "Goose Goose Duck"),
-    "among us":            ("945360",  "Among Us"),
-    "fall guys":           ("1097150", "Fall Guys"),
-    "rocket league":       ("252950",  "Rocket League"),
-    "warframe":            ("230410",  "Warframe"),
-    "destiny 2":           ("1085660", "Destiny 2"),
-    "team fortress 2":     ("440",     "Team Fortress 2"),
-    "tf2":                 ("440",     "Team Fortress 2"),
-    "left 4 dead 2":       ("550",     "Left 4 Dead 2"),
-    "l4d2":                ("550",     "Left 4 Dead 2"),
-    "paladins":            ("444090",  "Paladins"),
-    "smite":               ("386360",  "SMITE"),
-    "war thunder":         ("236390",  "War Thunder"),
-    "world of warships":   ("552990",  "World of Warships"),
-    "path of exile":       ("238960",  "Path of Exile"),
-    "poe":                 ("238960",  "Path of Exile"),
-    "lost ark":            ("1599340", "Lost Ark"),
-    "new world":           ("1063730", "New World: Aeternum"),
+    "pubg": ("578080", "PUBG: Battlegrounds"),
+    "pubg battlegrounds": ("578080", "PUBG: Battlegrounds"),
+    "pubg: battlegrounds": ("578080", "PUBG: Battlegrounds"),
+    "battlegrounds": ("578080", "PUBG: Battlegrounds"),
+    "gta5": ("271590", "Grand Theft Auto V"),
+    "gta v": ("271590", "Grand Theft Auto V"),
+    "grand theft auto v": ("271590", "Grand Theft Auto V"),
+    "cs2": ("730", "Counter-Strike 2"),
+    "csgo": ("730", "Counter-Strike 2"),
+    "counter-strike 2": ("730", "Counter-Strike 2"),
+    "counter strike 2": ("730", "Counter-Strike 2"),
+    "dota2": ("570", "Dota 2"),
+    "dota 2": ("570", "Dota 2"),
+    "rust": ("252490", "Rust"),
+    "valheim": ("892970", "Valheim"),
+    "cyberpunk": ("1091500", "Cyberpunk 2077"),
+    "cyberpunk 2077": ("1091500", "Cyberpunk 2077"),
+    "elden ring": ("1245620", "ELDEN RING"),
+    "minecraft": ("1672970", "Minecraft Launcher"),
+    "apex legends": ("1172470", "Apex Legends"),
+    "apex": ("1172470", "Apex Legends"),
+    "fortnite": ("1517990", "Fortnite"),
+    "goose goose duck": ("1568590", "Goose Goose Duck"),
+    "among us": ("945360", "Among Us"),
+    "fall guys": ("1097150", "Fall Guys"),
+    "rocket league": ("252950", "Rocket League"),
+    "warframe": ("230410", "Warframe"),
+    "destiny 2": ("1085660", "Destiny 2"),
+    "team fortress 2": ("440", "Team Fortress 2"),
+    "tf2": ("440", "Team Fortress 2"),
+    "left 4 dead 2": ("550", "Left 4 Dead 2"),
+    "l4d2": ("550", "Left 4 Dead 2"),
+    "paladins": ("444090", "Paladins"),
+    "smite": ("386360", "SMITE"),
+    "war thunder": ("236390", "War Thunder"),
+    "world of warships": ("552990", "World of Warships"),
+    "path of exile": ("238960", "Path of Exile"),
+    "poe": ("238960", "Path of Exile"),
+    "lost ark": ("1599340", "Lost Ark"),
+    "new world": ("1063730", "New World: Aeternum"),
 }
 
 
@@ -1476,8 +1626,11 @@ def _store_details(app_id: str) -> dict:
     try:
         import urllib.parse
         import urllib.request
-        url = ("https://store.steampowered.com/api/appdetails"
-               f"?appids={urllib.parse.quote(key)}")
+
+        url = (
+            "https://store.steampowered.com/api/appdetails"
+            f"?appids={urllib.parse.quote(key)}"
+        )
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(req, timeout=12) as resp:
             payload = json.loads(resp.read().decode()).get(key, {})
@@ -1488,7 +1641,9 @@ def _store_details(app_id: str) -> dict:
             "name": str(data.get("name") or ""),
             "type": str(data.get("type") or ""),
             "is_free": bool(data.get("is_free")),
-            "price": str((data.get("price_overview") or {}).get("final_formatted") or ""),
+            "price": str(
+                (data.get("price_overview") or {}).get("final_formatted") or ""
+            ),
         }
     except Exception as exc:
         _log(f"⚠️ the store would not describe {app_id}: {exc}")
@@ -1527,7 +1682,9 @@ def _acquire_free(steam_path: Path, app_id: str) -> None:
     time.sleep(5.0)
 
 
-def _search_appid(steam_path: Path | None, game_name: str) -> tuple[str | None, str | None]:
+def _search_appid(
+    steam_path: Path | None, game_name: str
+) -> tuple[str | None, str | None]:
     name = (game_name or "").lower().strip()
     if not name:
         return None, None
@@ -1546,8 +1703,11 @@ def _search_appid(steam_path: Path | None, game_name: str) -> tuple[str | None, 
     try:
         import urllib.request
         import urllib.parse
-        url = ("https://store.steampowered.com/api/storesearch/"
-               f"?term={urllib.parse.quote(game_name)}&l=english&cc=US")
+
+        url = (
+            "https://store.steampowered.com/api/storesearch/"
+            f"?term={urllib.parse.quote(game_name)}&l=english&cc=US"
+        )
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(req, timeout=6) as resp:
             items = json.loads(resp.read().decode()).get("items", [])
@@ -1560,8 +1720,9 @@ def _search_appid(steam_path: Path | None, game_name: str) -> tuple[str | None, 
     return None, None
 
 
-def _await_dialog(steam_path: Path, app_id: str,
-                  timeout: float = 15.0) -> tuple[str, int, dict]:
+def _await_dialog(
+    steam_path: Path, app_id: str, timeout: float = 15.0
+) -> tuple[str, int, dict]:
     """('install' | 'error' | 'signin' | '', hwnd, dialog) once Steam answers.
 
     Every outcome is a modal INSIDE the main window, so this reads the trees of
@@ -1608,12 +1769,20 @@ def _dismiss(hwnd: int, dialog: dict) -> None:
         _invoke(buttons[0])
 
 
-def _choose_library_in_dialog(hwnd: int, dialog: dict, target_drive: str) -> tuple[bool, str]:
+def _choose_library_in_dialog(
+    hwnd: int, dialog: dict, target_drive: str
+) -> tuple[bool, str]:
     """Select `target_drive` in the install dialog and confirm that it took."""
-    already = [r for r in dialog["rows"]
-               if r["drive"] == target_drive and r["type"] != CT_BUTTON]
-    clickable = [r for r in dialog["rows"]
-                 if r["drive"] == target_drive and r["type"] == CT_BUTTON]
+    already = [
+        r
+        for r in dialog["rows"]
+        if r["drive"] == target_drive and r["type"] != CT_BUTTON
+    ]
+    clickable = [
+        r
+        for r in dialog["rows"]
+        if r["drive"] == target_drive and r["type"] == CT_BUTTON
+    ]
 
     if not clickable:
         if already:
@@ -1628,10 +1797,15 @@ def _choose_library_in_dialog(hwnd: int, dialog: dict, target_drive: str) -> tup
         top = min(r["rect"][1] for r in rows)
         bottom = max(r["rect"][3] for r in rows)
         openers = sorted(
-            (b for b in dialog["items"]
-             if b["type"] == CT_BUTTON and not b["name"].strip()
-             and top - 60 <= (b["rect"][1] + b["rect"][3]) / 2 <= bottom + 60),
-            key=lambda b: abs((b["rect"][1] + b["rect"][3]) / 2 - (top + bottom) / 2))
+            (
+                b
+                for b in dialog["items"]
+                if b["type"] == CT_BUTTON
+                and not b["name"].strip()
+                and top - 60 <= (b["rect"][1] + b["rect"][3]) / 2 <= bottom + 60
+            ),
+            key=lambda b: abs((b["rect"][1] + b["rect"][3]) / 2 - (top + bottom) / 2),
+        )
         if openers:
             _invoke(openers[0])
             time.sleep(0.4)
@@ -1639,8 +1813,11 @@ def _choose_library_in_dialog(hwnd: int, dialog: dict, target_drive: str) -> tup
             refreshed = _install_dialog(items)
             if refreshed:
                 dialog.update(refreshed)
-                clickable = [r for r in dialog["rows"]
-                             if r["drive"] == target_drive and r["type"] == CT_BUTTON]
+                clickable = [
+                    r
+                    for r in dialog["rows"]
+                    if r["drive"] == target_drive and r["type"] == CT_BUTTON
+                ]
     if not clickable:
         offered = ", ".join(sorted({r["drive"] + ":" for r in dialog["rows"]}))
         return False, f"Steam only offered {offered or 'no drives'}"
@@ -1658,8 +1835,12 @@ def _choose_library_in_dialog(hwnd: int, dialog: dict, target_drive: str) -> tup
     return True, "selected"
 
 
-def _install_steam_game(steam_path: Path, game_name: str | None = None,
-                        app_id: str | None = None, speak=None) -> str:
+def _install_steam_game(
+    steam_path: Path,
+    game_name: str | None = None,
+    app_id: str | None = None,
+    speak=None,
+) -> str:
     ready, note = _steam_ready(steam_path, speak=speak)
     if not ready:
         return note or "Steam could not be started."
@@ -1679,8 +1860,10 @@ def _install_steam_game(steam_path: Path, game_name: str | None = None,
     if not app_id and game_name:
         app_id, canonical = _search_appid(None, game_name)
         if not app_id:
-            return (f"I could not find '{game_name}' on Steam. "
-                    f"Give me the AppID and I will install it directly.")
+            return (
+                f"I could not find '{game_name}' on Steam. "
+                f"Give me the AppID and I will install it directly."
+            )
         game_name = canonical or game_name
     label = game_name or f"AppID {app_id}"
 
@@ -1692,10 +1875,12 @@ def _install_steam_game(steam_path: Path, game_name: str | None = None,
 
     if not is_windows():
         _steam_url(_steam_exe(steam_path), f"steam://install/{app_id}")
-        return (f"Steam is opening the install dialog for {label}. "
-                f"Choose a drive there and confirm.")
+        return (
+            f"Steam is opening the install dialog for {label}. "
+            f"Choose a drive there and confirm."
+        )
 
-    claimed = False          # a free licence is claimed at most once
+    claimed = False  # a free licence is claimed at most once
     signed_in_again = False
     claimed_note = ""
     while True:
@@ -1715,8 +1900,10 @@ def _install_steam_game(steam_path: Path, game_name: str | None = None,
                 return note or "Steam signed out and would not sign back in."
             continue
         if kind == "signin":
-            return ("Steam keeps returning to its sign-in screen, so I could "
-                    "not start the install. It may want your password.")
+            return (
+                "Steam keeps returning to its sign-in screen, so I could "
+                "not start the install. It may want your password."
+            )
 
         if kind == "error":
             _dismiss(hwnd, dialog)
@@ -1724,12 +1911,12 @@ def _install_steam_game(steam_path: Path, game_name: str | None = None,
 
             # Not owned, but free to own. Claiming it is the whole of what the
             # store page's button would have done, without going near the page.
-            if (_claimable(store) and not claimed
-                    and _setting_bool("claim_free", True)):
+            if _claimable(store) and not claimed and _setting_bool("claim_free", True):
                 claimed = True
                 _acquire_free(steam_path, str(app_id))
-                claimed_note = (f" {label} was not in your library, so I added "
-                                f"it — it is free.")
+                claimed_note = (
+                    f" {label} was not in your library, so I added " f"it — it is free."
+                )
                 continue
 
             # Steam's own words, passed straight through: it knows why it
@@ -1737,41 +1924,55 @@ def _install_steam_game(steam_path: Path, game_name: str | None = None,
             # useful half of the answer — and buying it is not on offer here.
             price = store.get("price")
             if price and not store.get("is_free"):
-                aside = (f" It is not in your library and it is not free: the "
-                         f"store lists it at {price}. I do not buy games, so "
-                         f"that part is yours.")
+                aside = (
+                    f" It is not in your library and it is not free: the "
+                    f"store lists it at {price}. I do not buy games, so "
+                    f"that part is yours."
+                )
             elif store.get("is_free"):
                 kind_word = store.get("type") or "title"
-                aside = (f" It is free, but it is a {kind_word} rather than a "
-                         f"full game, and Steam only hands those out from its "
-                         f"own store page — open it there and it will install.")
+                aside = (
+                    f" It is free, but it is a {kind_word} rather than a "
+                    f"full game, and Steam only hands those out from its "
+                    f"own store page — open it there and it will install."
+                )
             elif not _in_library(steam_path, str(app_id)):
-                aside = (f" It is also not in this account's library, so it "
-                         f"would have to be added from the Steam store first.")
+                aside = (
+                    f" It is also not in this account's library, so it "
+                    f"would have to be added from the Steam store first."
+                )
             else:
                 aside = ""
-            return (f"Steam refused to install {label} — it said: "
-                    f"\"{dialog['message']}\".{aside} Nothing was started. Do "
-                    f"not try this title again; ask the user which game they "
-                    f"want, or offer one that is already installed.")
+            return (
+                f"Steam refused to install {label} — it said: "
+                f"\"{dialog['message']}\".{aside} Nothing was started. Do "
+                f"not try this title again; ask the user which game they "
+                f"want, or offer one that is already installed."
+            )
 
         if kind != "install":
-            return (f"Steam did not show the install dialog for {label}, and did "
-                    f"not report an error either. It may already be installing.")
+            return (
+                f"Steam did not show the install dialog for {label}, and did "
+                f"not report an error either. It may already be installing."
+            )
         break
 
     need = dialog["size"]
     library, why = _pick_library(libs, need)
     if library is None:
         _cancel_dialog(hwnd, dialog)
-        return (f"{label} needs {_fmt_bytes(need)} and there is nowhere to put it: {why}. "
-                f"I have not started anything.")
+        return (
+            f"{label} needs {_fmt_bytes(need)} and there is nowhere to put it: {why}. "
+            f"I have not started anything."
+        )
 
     ok, how = _choose_library_in_dialog(hwnd, dialog, library["drive"])
     if not ok:
         _cancel_dialog(hwnd, dialog)
-        return (f"I could not point the install at {_drive_label(library)} — {how}. "
-                f"Nothing has been started.")
+        return (
+            f"I could not point the install at {_drive_label(library)} — {how}. "
+            f"Nothing has been started."
+        )
 
     confirm, _cancel = _confirm_button(_install_dialog(_scan(hwnd, tries=2)) or dialog)
     if confirm is None or not _invoke(confirm):
@@ -1779,10 +1980,12 @@ def _install_steam_game(steam_path: Path, game_name: str | None = None,
         # game and choosing the drive is done and on screen, so the user is one
         # press from finished. The activity log says which of the two reasons
         # it was.
-        return (f"{label} is set up to install to {_drive_label(library)} and the "
-                f"dialog is waiting on screen, but I will not press the last "
-                f"button — either I could not tell which one starts it, or it is "
-                f"asking for terms to be accepted, and that one is yours to press.")
+        return (
+            f"{label} is set up to install to {_drive_label(library)} and the "
+            f"dialog is waiting on screen, but I will not press the last "
+            f"button — either I could not tell which one starts it, or it is "
+            f"asking for terms to be accepted, and that one is yours to press."
+        )
 
     size_note = f" ({_fmt_bytes(need)})" if need else ""
     auto_accept = _setting_bool("accept_eula", True)
@@ -1794,12 +1997,13 @@ def _install_steam_game(steam_path: Path, game_name: str | None = None,
     # is pressed must not turn into a program that keeps pressing it.
     for attempt in range(3):
         started, blocking, modal_hwnd = _wait_for_download(
-            steam_path, str(app_id), timeout=15.0 if attempt == 0 else 10.0)
+            steam_path, str(app_id), timeout=15.0 if attempt == 0 else 10.0
+        )
         if started or not blocking or not auto_accept:
             break
         agreement = _agreement_button(_scan(modal_hwnd, tries=2))
         if agreement is None:
-            break                       # something else is waiting — say so
+            break  # something else is waiting — say so
         _log(f"📜 accepting a licence agreement for {label}: {agreement['name']!r}")
         if not _invoke(agreement):
             break
@@ -1810,29 +2014,36 @@ def _install_steam_game(steam_path: Path, game_name: str | None = None,
     # licence for them is a reasonable convenience and an unreasonable secret:
     # the one thing that must not happen is the user finding out later that
     # their assistant agreed to something without mentioning it.
-    accepted_note = (f" I accepted the licence agreement for you to start it."
-                     if accepted else "")
+    accepted_note = (
+        f" I accepted the licence agreement for you to start it." if accepted else ""
+    )
 
     if started:
         # Where it landed comes from the manifest, not from what was clicked.
         # Saying "downloading to F:" because F: was pressed is how a tool ends
         # up confidently reporting something that did not happen.
-        return (f"{label} is downloading to {_drive_label(started['lib'])}"
-                f"{size_note} — {why}.{claimed_note}{accepted_note}")
+        return (
+            f"{label} is downloading to {_drive_label(started['lib'])}"
+            f"{size_note} — {why}.{claimed_note}{accepted_note}"
+        )
 
     if blocking:
         # Steam's own sentence, and the names of the buttons under it. Reached
         # when the dialog is not an agreement, or is one this could not identify
         # — and an unidentified dialog is left alone rather than guessed at.
-        return (f"{label} is set to install to {_drive_label(library)}"
-                f"{size_note} and I pressed Install, but Steam is now asking "
-                f"something I cannot answer for you: \"{blocking['message']}\" "
-                f"— the buttons are {', '.join(blocking['buttons'])}. It is "
-                f"waiting on screen.{claimed_note}{accepted_note}")
+        return (
+            f"{label} is set to install to {_drive_label(library)}"
+            f"{size_note} and I pressed Install, but Steam is now asking "
+            f"something I cannot answer for you: \"{blocking['message']}\" "
+            f"— the buttons are {', '.join(blocking['buttons'])}. It is "
+            f"waiting on screen.{claimed_note}{accepted_note}"
+        )
 
-    return (f"I confirmed the install of {label} on {_drive_label(library)}{size_note}, "
-            f"but Steam has not reported a download yet. Worth a look."
-            f"{claimed_note}{accepted_note}")
+    return (
+        f"I confirmed the install of {label} on {_drive_label(library)}{size_note}, "
+        f"but Steam has not reported a download yet. Worth a look."
+        f"{claimed_note}{accepted_note}"
+    )
 
 
 def _cancel_dialog(hwnd: int, dialog: dict) -> None:
@@ -1849,9 +2060,9 @@ def _cancel_dialog(hwnd: int, dialog: dict) -> None:
                 _invoke(late)
 
 
-def _wait_for_download(steam_path: Path, app_id: str, watch: bool = True,
-                       timeout: float = 15.0
-                       ) -> tuple[dict | None, dict | None, int]:
+def _wait_for_download(
+    steam_path: Path, app_id: str, watch: bool = True, timeout: float = 15.0
+) -> tuple[dict | None, dict | None, int]:
     """(manifest, blocking modal, that modal's window) — whichever comes first.
 
     This is the difference between reporting what was pressed and reporting
@@ -1891,25 +2102,31 @@ def _describe_state(game: dict, steam_path: Path) -> str:
     name = game["name"]
     if _is_busy(game):
         progress = _progress(game)
-        return f"{name} is already downloading — {progress}." if progress else \
-               f"{name} is already downloading."
+        return (
+            f"{name} is already downloading — {progress}."
+            if progress
+            else f"{name} is already downloading."
+        )
     if _is_paused(game):
         return f"{name}'s download is paused. Say resume and I will start it again."
     if _needs_update(game):
         _steam_url(_steam_exe(steam_path), f"steam://update/{game['id']}")
         pending = _fmt_bytes(game["total"] - game["done"]) if game["total"] else ""
-        return (f"{name} had an update waiting{f' ({pending})' if pending else ''} "
-                f"— I have started it.")
+        return (
+            f"{name} had an update waiting{f' ({pending})' if pending else ''} "
+            f"— I have started it."
+        )
     if game["state"] & SF_FILES_MISSING:
-        return f"{name} is installed but files are missing; it needs verifying in Steam."
+        return (
+            f"{name} is installed but files are missing; it needs verifying in Steam."
+        )
     return f"{name} is installed and up to date on {_drive_label(game['lib'])}."
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Updating
 # ─────────────────────────────────────────────────────────────────────────────
-def _update_steam(steam_path: Path, game_name: str | None = None,
-                  speak=None) -> str:
+def _update_steam(steam_path: Path, game_name: str | None = None, speak=None) -> str:
     ready, note = _steam_ready(steam_path, speak=speak)
     if not ready:
         return note or "Steam could not be started."
@@ -1933,7 +2150,9 @@ def _update_steam(steam_path: Path, game_name: str | None = None,
     for game in targets:
         if _is_busy(game):
             busy.append(game)
-        elif _needs_update(game) or _is_paused(game) or game["state"] & SF_FILES_MISSING:
+        elif (
+            _needs_update(game) or _is_paused(game) or game["state"] & SF_FILES_MISSING
+        ):
             try:
                 _steam_url(exe, f"steam://update/{game['id']}")
                 started.append(game)
@@ -1951,13 +2170,14 @@ def _update_steam(steam_path: Path, game_name: str | None = None,
         size = f", {_fmt_bytes(pending)} to fetch" if pending else ""
         parts.append(f"Updating {names}{more}{size}.")
     if busy:
-        detail = "; ".join(
-            f"{g['name']} {_progress(g)}".strip() for g in busy[:3])
+        detail = "; ".join(f"{g['name']} {_progress(g)}".strip() for g in busy[:3])
         parts.append(f"Already running: {detail}.")
     if ready_already:
-        parts.append(f"{ready_already[0]['name']} is already up to date."
-                     if game_name else
-                     f"{len(ready_already)} games are already up to date.")
+        parts.append(
+            f"{ready_already[0]['name']} is already up to date."
+            if game_name
+            else f"{len(ready_already)} games are already up to date."
+        )
     if failed:
         parts.append("Failed: " + "; ".join(failed))
     return " ".join(parts) or "Everything is already up to date."
@@ -1973,17 +2193,25 @@ def _download_status(steam_path: Path) -> str:
     for game in active[:3]:
         progress = _progress(game)
         left = max(0, game["total"] - game["done"])
-        lines.append(f"{game['name']} {progress}"
-                     + (f", {_fmt_bytes(left)} left" if left else ""))
+        lines.append(
+            f"{game['name']} {progress}"
+            + (f", {_fmt_bytes(left)} left" if left else "")
+        )
     if paused:
         lines.append("Paused: " + ", ".join(g["name"] for g in paused[:3]))
     if pending:
         total = sum(max(0, g["total"] - g["done"]) for g in pending)
         names = ", ".join(g["name"] for g in pending[:4])
         more = f" and {len(pending) - 4} more" if len(pending) > 4 else ""
-        lines.append(f"Waiting: {names}{more}"
-                     + (f" — {_fmt_bytes(total)} in total" if total else ""))
-    return ". ".join(lines) + "." if lines else "Nothing is downloading and nothing is waiting."
+        lines.append(
+            f"Waiting: {names}{more}"
+            + (f" — {_fmt_bytes(total)} in total" if total else "")
+        )
+    return (
+        ". ".join(lines) + "."
+        if lines
+        else "Nothing is downloading and nothing is waiting."
+    )
 
 
 def _list_games(steam_path: Path | None) -> str:
@@ -1993,7 +2221,9 @@ def _list_games(steam_path: Path | None) -> str:
         if games:
             by_lib: dict[str, int] = {}
             for g in games:
-                by_lib[_drive_label(g["lib"])] = by_lib.get(_drive_label(g["lib"]), 0) + 1
+                by_lib[_drive_label(g["lib"])] = (
+                    by_lib.get(_drive_label(g["lib"]), 0) + 1
+                )
             where = ", ".join(f"{n} on {d}" for d, n in by_lib.items())
             names = ", ".join(g["name"] for g in games[:8])
             more = f" and {len(games) - 8} more" if len(games) > 8 else ""
@@ -2017,17 +2247,20 @@ def _system_shutdown() -> None:
         subprocess.run(["systemctl", "poweroff"])
 
 
-def _watch_and_shutdown(steam_path: Path, speak=None,
-                        check_interval: int = 30, timeout_hours: int = 12) -> None:
+def _watch_and_shutdown(
+    steam_path: Path, speak=None, check_interval: int = 30, timeout_hours: int = 12
+) -> None:
     deadline = time.time() + timeout_hours * 3600
     for _ in range(24):
         time.sleep(5)
         active = [g for g in _games(steam_path) if _is_busy(g)]
         if active:
             if speak:
-                speak(f"Tell the user the download of "
-                      f"{', '.join(g['name'] for g in active)} has begun and that "
-                      f"you will shut the machine down when it finishes.")
+                speak(
+                    f"Tell the user the download of "
+                    f"{', '.join(g['name'] for g in active)} has begun and that "
+                    f"you will shut the machine down when it finishes."
+                )
             break
     else:
         return
@@ -2036,15 +2269,19 @@ def _watch_and_shutdown(steam_path: Path, speak=None,
         time.sleep(check_interval)
         if not any(_is_busy(g) for g in _games(steam_path)):
             if speak:
-                speak("Tell the user the download is finished and that you are "
-                      "shutting the computer down now.")
+                speak(
+                    "Tell the user the download is finished and that you are "
+                    "shutting the computer down now."
+                )
             time.sleep(5)
             _system_shutdown()
             return
 
     if speak:
-        speak("Tell the user the download is taking too long and that you have "
-              "cancelled the automatic shutdown.")
+        speak(
+            "Tell the user the download is taking too long and that you have "
+            "cancelled the automatic shutdown."
+        )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -2061,10 +2298,14 @@ def _find_epic_exe() -> Path | None:
 def _find_epic_exe_windows() -> Path | None:
     try:
         import winreg
+
         for hive, key_path in [
-            (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\EpicGames\EpicGamesLauncher"),
+            (
+                winreg.HKEY_LOCAL_MACHINE,
+                r"SOFTWARE\WOW6432Node\EpicGames\EpicGamesLauncher",
+            ),
             (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\EpicGames\EpicGamesLauncher"),
-            (winreg.HKEY_CURRENT_USER,  r"SOFTWARE\EpicGames\EpicGamesLauncher"),
+            (winreg.HKEY_CURRENT_USER, r"SOFTWARE\EpicGames\EpicGamesLauncher"),
         ]:
             try:
                 key = winreg.OpenKey(hive, key_path)
@@ -2078,12 +2319,26 @@ def _find_epic_exe_windows() -> Path | None:
     except ImportError:
         pass
     for candidate in [
-        Path(os.environ.get("ProgramFiles(x86)", "")) / "Epic Games" / "Launcher"
-        / "Portal" / "Binaries" / "Win64" / "EpicGamesLauncher.exe",
-        Path(os.environ.get("ProgramFiles", "")) / "Epic Games" / "Launcher"
-        / "Portal" / "Binaries" / "Win64" / "EpicGamesLauncher.exe",
-        Path(os.environ.get("LOCALAPPDATA", "")) / "EpicGamesLauncher"
-        / "Portal" / "Binaries" / "Win64" / "EpicGamesLauncher.exe",
+        Path(os.environ.get("ProgramFiles(x86)", ""))
+        / "Epic Games"
+        / "Launcher"
+        / "Portal"
+        / "Binaries"
+        / "Win64"
+        / "EpicGamesLauncher.exe",
+        Path(os.environ.get("ProgramFiles", ""))
+        / "Epic Games"
+        / "Launcher"
+        / "Portal"
+        / "Binaries"
+        / "Win64"
+        / "EpicGamesLauncher.exe",
+        Path(os.environ.get("LOCALAPPDATA", ""))
+        / "EpicGamesLauncher"
+        / "Portal"
+        / "Binaries"
+        / "Win64"
+        / "EpicGamesLauncher.exe",
     ]:
         if candidate.exists():
             return candidate
@@ -2104,12 +2359,24 @@ def _find_epic_exe_linux() -> Path | None:
 
 def _epic_manifests_path() -> Path | None:
     if is_windows():
-        p = (Path(os.environ.get("PROGRAMDATA", "C:/ProgramData"))
-             / "Epic" / "EpicGamesLauncher" / "Data" / "Manifests")
+        p = (
+            Path(os.environ.get("PROGRAMDATA", "C:/ProgramData"))
+            / "Epic"
+            / "EpicGamesLauncher"
+            / "Data"
+            / "Manifests"
+        )
         return p if p.exists() else None
     if is_mac():
-        p = (Path.home() / "Library" / "Application Support"
-             / "Epic" / "EpicGamesLauncher" / "Data" / "Manifests")
+        p = (
+            Path.home()
+            / "Library"
+            / "Application Support"
+            / "Epic"
+            / "EpicGamesLauncher"
+            / "Data"
+            / "Manifests"
+        )
         return p if p.exists() else None
     return None
 
@@ -2137,13 +2404,17 @@ def _update_epic(epic_exe: Path | None, game_name: str | None = None) -> str:
         matched = [g for g in games if game_name.lower() in g["name"].lower()]
         if not matched:
             return f"'{game_name}' is not in your Epic library."
-        url = (f"com.epicgames.launcher://apps/{matched[0]['id']}"
-               f"?action=launch&silent=true")
+        url = (
+            f"com.epicgames.launcher://apps/{matched[0]['id']}"
+            f"?action=launch&silent=true"
+        )
         try:
             if is_mac():
                 subprocess.Popen(["open", url])
             elif is_linux():
-                subprocess.Popen([str(epic_exe), url] if epic_exe else ["xdg-open", url])
+                subprocess.Popen(
+                    [str(epic_exe), url] if epic_exe else ["xdg-open", url]
+                )
             else:
                 subprocess.Popen([str(epic_exe), url], **_CNW)
             return f"Epic is checking {matched[0]['name']}."
@@ -2155,13 +2426,18 @@ def _update_epic(epic_exe: Path | None, game_name: str | None = None) -> str:
             subprocess.Popen(["open", "-a", "Epic Games Launcher"])
         elif is_linux():
             if not epic_exe:
-                return ("Epic has no Linux client. Heroic Launcher does the same job "
-                        "if you want one.")
+                return (
+                    "Epic has no Linux client. Heroic Launcher does the same job "
+                    "if you want one."
+                )
             subprocess.Popen([str(epic_exe)])
         else:
             subprocess.Popen([str(epic_exe)], **_CNW)
-        return (f"Epic Games Launcher is open; it will check {len(games)} games."
-                if games else "Epic Games Launcher is open.")
+        return (
+            f"Epic Games Launcher is open; it will check {len(games)} games."
+            if games
+            else "Epic Games Launcher is open."
+        )
     except Exception as e:
         return f"Epic launch failed: {e}"
 
@@ -2180,15 +2456,33 @@ def _schedule_daily_update(hour: int = 3, minute: int = 0) -> str:
 def _schedule_windows(hour: int, minute: int) -> str:
     task_name = "JARVIS_GameUpdater"
     script_path = Path(__file__).resolve()
-    subprocess.run(["schtasks", "/Delete", "/TN", task_name, "/F"],
-                   capture_output=True, **_CNW)
+    subprocess.run(
+        ["schtasks", "/Delete", "/TN", task_name, "/F"], capture_output=True, **_CNW
+    )
     result = None
     for extra in (["/RL", "HIGHEST", "/RU", "SYSTEM"], []):
-        cmd = ["schtasks", "/Create", "/TN", task_name,
-               "/TR", f'"{sys.executable}" "{script_path}" --scheduled',
-               "/SC", "DAILY", "/ST", f"{hour:02d}:{minute:02d}", "/F", *extra]
-        result = subprocess.run(cmd, capture_output=True, text=True,
-                                encoding="utf-8", errors="replace", **_CNW)
+        cmd = [
+            "schtasks",
+            "/Create",
+            "/TN",
+            task_name,
+            "/TR",
+            f'"{sys.executable}" "{script_path}" --scheduled',
+            "/SC",
+            "DAILY",
+            "/ST",
+            f"{hour:02d}:{minute:02d}",
+            "/F",
+            *extra,
+        ]
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            **_CNW,
+        )
         if result.returncode == 0:
             return f"Daily game update scheduled for {hour:02d}:{minute:02d}."
     return f"Scheduling failed: {(result.stderr if result else '').strip()}"
@@ -2220,9 +2514,13 @@ def _schedule_mac(hour: int, minute: int) -> str:
     try:
         plist_path.write_text(plist, encoding="utf-8")
         subprocess.run(["launchctl", "unload", str(plist_path)], capture_output=True)
-        result = subprocess.run(["launchctl", "load", str(plist_path)],
-                                capture_output=True, text=True,
-                                encoding="utf-8", errors="replace")
+        result = subprocess.run(
+            ["launchctl", "load", str(plist_path)],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
         if result.returncode == 0:
             return f"Daily game update scheduled for {hour:02d}:{minute:02d}."
         return f"Scheduling failed: {result.stderr.strip()}"
@@ -2233,16 +2531,31 @@ def _schedule_mac(hour: int, minute: int) -> str:
 def _schedule_linux(hour: int, minute: int) -> str:
     script_path = Path(__file__).resolve()
     marker = "# JARVIS_GameUpdater"
-    entry = f"{minute} {hour} * * * {sys.executable} {script_path} --scheduled  {marker}"
+    entry = (
+        f"{minute} {hour} * * * {sys.executable} {script_path} --scheduled  {marker}"
+    )
     try:
-        existing = subprocess.run(["crontab", "-l"], capture_output=True, text=True,
-                                  encoding="utf-8", errors="replace")
-        lines = [l for l in existing.stdout.splitlines()
-                 if marker not in l and str(script_path) not in l]
+        existing = subprocess.run(
+            ["crontab", "-l"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+        lines = [
+            l
+            for l in existing.stdout.splitlines()
+            if marker not in l and str(script_path) not in l
+        ]
         lines.append(entry)
-        proc = subprocess.run(["crontab", "-"], input="\n".join(lines) + "\n",
-                              text=True, encoding="utf-8", errors="replace",
-                              capture_output=True)
+        proc = subprocess.run(
+            ["crontab", "-"],
+            input="\n".join(lines) + "\n",
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+        )
         if proc.returncode == 0:
             return f"Daily game update scheduled for {hour:02d}:{minute:02d}."
         return f"Scheduling failed: {proc.stderr.strip()}"
@@ -2252,25 +2565,48 @@ def _schedule_linux(hour: int, minute: int) -> str:
 
 def _cancel_scheduled_update() -> str:
     if is_windows():
-        result = subprocess.run(["schtasks", "/Delete", "/TN", "JARVIS_GameUpdater", "/F"],
-                                capture_output=True, text=True, encoding="utf-8",
-                                errors="replace", **_CNW)
-        return ("The scheduled update is cancelled."
-                if result.returncode == 0 else "There was no scheduled update.")
+        result = subprocess.run(
+            ["schtasks", "/Delete", "/TN", "JARVIS_GameUpdater", "/F"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            **_CNW,
+        )
+        return (
+            "The scheduled update is cancelled."
+            if result.returncode == 0
+            else "There was no scheduled update."
+        )
     if is_mac():
-        plist_path = (Path.home() / "Library" / "LaunchAgents"
-                      / "com.jarvis.gameupdater.plist")
+        plist_path = (
+            Path.home() / "Library" / "LaunchAgents" / "com.jarvis.gameupdater.plist"
+        )
         if plist_path.exists():
-            subprocess.run(["launchctl", "unload", str(plist_path)], capture_output=True)
+            subprocess.run(
+                ["launchctl", "unload", str(plist_path)], capture_output=True
+            )
             plist_path.unlink()
             return "The scheduled update is cancelled."
         return "There was no scheduled update."
     try:
-        existing = subprocess.run(["crontab", "-l"], capture_output=True, text=True,
-                                  encoding="utf-8", errors="replace")
-        lines = [l for l in existing.stdout.splitlines() if "JARVIS_GameUpdater" not in l]
-        subprocess.run(["crontab", "-"], input="\n".join(lines) + "\n",
-                       text=True, encoding="utf-8", errors="replace")
+        existing = subprocess.run(
+            ["crontab", "-l"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+        lines = [
+            l for l in existing.stdout.splitlines() if "JARVIS_GameUpdater" not in l
+        ]
+        subprocess.run(
+            ["crontab", "-"],
+            input="\n".join(lines) + "\n",
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
         return "The scheduled update is cancelled."
     except Exception as e:
         return f"Cancel failed: {e}"
@@ -2289,11 +2625,21 @@ def _next_run_windows() -> str:
     called that in every locale."""
     try:
         result = subprocess.run(
-            ["powershell", "-NoProfile", "-NonInteractive", "-Command",
-             "(Get-ScheduledTaskInfo -TaskName 'JARVIS_GameUpdater')"
-             ".NextRunTime.ToString('yyyy-MM-dd HH:mm')"],
-            capture_output=True, text=True, encoding="utf-8",
-            errors="replace", timeout=20, **_CNW)
+            [
+                "powershell",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                "(Get-ScheduledTaskInfo -TaskName 'JARVIS_GameUpdater')"
+                ".NextRunTime.ToString('yyyy-MM-dd HH:mm')",
+            ],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=20,
+            **_CNW,
+        )
         value = result.stdout.strip()
         return value if result.returncode == 0 and value else ""
     except Exception:
@@ -2304,20 +2650,37 @@ def _schedule_status() -> str:
     if is_windows():
         result = subprocess.run(
             ["schtasks", "/Query", "/TN", "JARVIS_GameUpdater", "/FO", "LIST"],
-            capture_output=True, text=True, encoding="utf-8", errors="replace", **_CNW)
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            **_CNW,
+        )
         if result.returncode != 0:
             return "No game update is scheduled."
         when = _next_run_windows()
-        return (f"A game update is scheduled; the next one runs at {when}."
-                if when else "A game update is scheduled.")
+        return (
+            f"A game update is scheduled; the next one runs at {when}."
+            if when
+            else "A game update is scheduled."
+        )
     if is_mac():
-        plist_path = (Path.home() / "Library" / "LaunchAgents"
-                      / "com.jarvis.gameupdater.plist")
-        return ("A game update is scheduled."
-                if plist_path.exists() else "No game update is scheduled.")
+        plist_path = (
+            Path.home() / "Library" / "LaunchAgents" / "com.jarvis.gameupdater.plist"
+        )
+        return (
+            "A game update is scheduled."
+            if plist_path.exists()
+            else "No game update is scheduled."
+        )
     try:
-        result = subprocess.run(["crontab", "-l"], capture_output=True, text=True,
-                                encoding="utf-8", errors="replace")
+        result = subprocess.run(
+            ["crontab", "-l"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
         for line in result.stdout.splitlines():
             if "JARVIS_GameUpdater" in line:
                 return f"A game update is scheduled: {line.split('#')[0].strip()}"
@@ -2338,8 +2701,11 @@ def game_updater(parameters: dict, player=None, speak=None) -> str:
     hour = int(p.get("hour", _setting_int("schedule_hour", 3)))
     minute = int(p.get("minute", _setting_int("schedule_minute", 0)))
     raw_shutdown = p.get("shutdown_when_done")
-    shutdown = (_setting_bool("shutdown_when_done", False) if raw_shutdown is None
-                else str(raw_shutdown).lower() in ("true", "1", "yes"))
+    shutdown = (
+        _setting_bool("shutdown_when_done", False)
+        if raw_shutdown is None
+        else str(raw_shutdown).lower() in ("true", "1", "yes")
+    )
 
     if action == "schedule":
         return _schedule_daily_update(hour=hour, minute=minute)
@@ -2363,13 +2729,18 @@ def game_updater(parameters: dict, player=None, speak=None) -> str:
                     f"Epic has {len(games)} games: "
                     + ", ".join(g["name"] for g in games[:8])
                     + (f" and {len(games) - 8} more." if len(games) > 8 else ".")
-                    if games else "Epic: no games found.")
+                    if games
+                    else "Epic: no games found."
+                )
         return " ".join(results) or "I found neither Steam nor Epic."
 
     if action == "download_status":
         if platform_name in ("steam", "both"):
-            results.append(_download_status(steam_path) if steam_path
-                           else "Steam is not installed.")
+            results.append(
+                _download_status(steam_path)
+                if steam_path
+                else "Steam is not installed."
+            )
         if platform_name in ("epic", "both"):
             results.append("Epic does not publish its download progress to me.")
         return " ".join(results)
@@ -2386,28 +2757,39 @@ def game_updater(parameters: dict, player=None, speak=None) -> str:
                     # "update X" for one that is missing is an install. The
                     # user's word for it does not decide that; what is on the
                     # disk does.
-                    installed = _find_games(_games(steam_path), game_name) if game_name else []
+                    installed = (
+                        _find_games(_games(steam_path), game_name) if game_name else []
+                    )
                     results.append(
                         _update_steam(steam_path, game_name=game_name, speak=speak)
-                        if installed else
-                        _install_steam_game(steam_path, game_name=game_name,
-                                            app_id=app_id, speak=speak))
+                        if installed
+                        else _install_steam_game(
+                            steam_path, game_name=game_name, app_id=app_id, speak=speak
+                        )
+                    )
                 else:
                     results.append(_update_steam(steam_path, speak=speak))
 
                 if shutdown:
-                    threading.Thread(target=_watch_and_shutdown,
-                                     kwargs={"steam_path": steam_path, "speak": speak},
-                                     daemon=True).start()
+                    threading.Thread(
+                        target=_watch_and_shutdown,
+                        kwargs={"steam_path": steam_path, "speak": speak},
+                        daemon=True,
+                    ).start()
                     results.append("I will shut the machine down when it finishes.")
 
         if platform_name in ("epic", "both") and action == "update":
             if is_linux():
-                results.append("Epic has no Linux client; Heroic Launcher does the same job.")
+                results.append(
+                    "Epic has no Linux client; Heroic Launcher does the same job."
+                )
             else:
                 epic_exe = _find_epic_exe()
-                results.append(_update_epic(epic_exe, game_name=game_name)
-                               if epic_exe else "Epic is not installed.")
+                results.append(
+                    _update_epic(epic_exe, game_name=game_name)
+                    if epic_exe
+                    else "Epic is not installed."
+                )
 
         output = " ".join(results) or "There was nothing to do."
         if player:
@@ -2417,17 +2799,22 @@ def game_updater(parameters: dict, player=None, speak=None) -> str:
                 pass
         return output
 
-    return (f"I do not know the action '{action}'. I can update, install, list, "
-            f"report download_status, or schedule.")
+    return (
+        f"I do not know the action '{action}'. I can update, install, list, "
+        f"report download_status, or schedule."
+    )
 
 
 if __name__ == "__main__":
     if "--scheduled" in sys.argv:
         print(f"[GameUpdater] 🕐 scheduled run at {datetime.now().strftime('%H:%M')}")
-        print(f"[GameUpdater] ✅ {game_updater({'action': 'update', 'platform': 'both'})}")
+        print(
+            f"[GameUpdater] ✅ {game_updater({'action': 'update', 'platform': 'both'})}"
+        )
 
 
 # ── Plugin entry point (auto-discovered by core/plugin_loader.py) ────────────
+
 
 def _speaker(player):
     """The `speak` channel, plugin-side.
@@ -2480,9 +2867,11 @@ PLUGIN = {
         "properties": {
             "action": {
                 "type": "STRING",
-                "description": ("update | install | list | download_status | "
-                                "schedule | cancel_schedule | schedule_status "
-                                "(default: update)"),
+                "description": (
+                    "update | install | list | download_status | "
+                    "schedule | cancel_schedule | schedule_status "
+                    "(default: update)"
+                ),
             },
             "platform": {
                 "type": "STRING",

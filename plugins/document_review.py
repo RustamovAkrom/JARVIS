@@ -37,6 +37,7 @@ JARVIS still says the short version out loud.
 FOR EVERYONE: no keys, no setup, no network calls, nothing beyond the standard
 library. Same on Windows, macOS and Linux, in any language and any alphabet.
 """
+
 from __future__ import annotations
 
 # Severity is an ordinal, not a category — the only thing this plugin claims to
@@ -81,55 +82,55 @@ PLUGIN = {
             "title": {
                 "type": "STRING",
                 "description": "What this document is, in the user's language - "
-                               "'Rental agreement', 'Health insurance policy'.",
+                "'Rental agreement', 'Health insurance policy'.",
             },
             "summary": {
                 "type": "STRING",
                 "description": "One or two sentences, in the user's language: what the "
-                               "document is for and what accepting it commits them to. "
-                               "The thing they would want to know if they read nothing "
-                               "else.",
+                "document is for and what accepting it commits them to. "
+                "The thing they would want to know if they read nothing "
+                "else.",
             },
             "findings": {
                 "type": "ARRAY",
                 "description": "The points worth knowing, most important first. Leave "
-                               "out anything routine - a long list of the ordinary "
-                               "buries the one clause that matters.",
+                "out anything routine - a long list of the ordinary "
+                "buries the one clause that matters.",
                 "items": {
                     "type": "OBJECT",
                     "properties": {
                         "heading": {
                             "type": "STRING",
                             "description": "A few words naming the point, in the user's "
-                                           "language - 'Automatic renewal', 'Deposit is "
-                                           "non-refundable'.",
+                            "language - 'Automatic renewal', 'Deposit is "
+                            "non-refundable'.",
                         },
                         "detail": {
                             "type": "STRING",
                             "description": "What it means for them in plain language, in "
-                                           "their own words, not the document's. Include "
-                                           "the numbers, dates and deadlines that matter.",
+                            "their own words, not the document's. Include "
+                            "the numbers, dates and deadlines that matter.",
                         },
                         "severity": {
                             "type": "STRING",
                             "enum": ["serious", "caution", "note"],
                             "description": "'serious' if it could change whether they "
-                                           "sign or cost them real money, 'caution' if "
-                                           "they should be aware of it, 'note' for useful "
-                                           "context. Use 'serious' sparingly - if "
-                                           "everything is serious, nothing is.",
+                            "sign or cost them real money, 'caution' if "
+                            "they should be aware of it, 'note' for useful "
+                            "context. Use 'serious' sparingly - if "
+                            "everything is serious, nothing is.",
                         },
                         "quote": {
                             "type": "STRING",
                             "description": "The document's own wording for this point, so "
-                                           "they can find the clause. Keep it short and "
-                                           "copy it exactly, in the document's language.",
+                            "they can find the clause. Keep it short and "
+                            "copy it exactly, in the document's language.",
                         },
                         "suggestion": {
                             "type": "STRING",
                             "description": "Optional - what they could actually do about "
-                                           "it: a question to ask, a term to negotiate, a "
-                                           "deadline to diarise.",
+                            "it: a question to ask, a term to negotiate, a "
+                            "deadline to diarise.",
                         },
                     },
                     "required": ["heading", "detail", "severity"],
@@ -139,9 +140,9 @@ PLUGIN = {
                 "type": "ARRAY",
                 "items": {"type": "STRING"},
                 "description": "Anything the document leaves unanswered or you could not "
-                               "determine from the part you saw - a missing figure, an "
-                               "unreadable page, a term it refers to but does not "
-                               "define. Say so rather than filling the gap.",
+                "determine from the part you saw - a missing figure, an "
+                "unreadable page, a term it refers to but does not "
+                "define. Say so rather than filling the gap.",
             },
         },
         "required": ["title", "findings"],
@@ -159,7 +160,7 @@ def clean_findings(raw) -> list:
     drop what cannot be rendered, and sort by severity so the thing that could
     cost someone money is not below a note about office hours."""
     out = []
-    for f in (raw or []):
+    for f in raw or []:
         if not isinstance(f, dict):
             continue
         heading = _clip(f.get("heading"), 120)
@@ -169,14 +170,18 @@ def clean_findings(raw) -> list:
         sev = str(f.get("severity") or "").strip().lower()
         if sev not in _RANK:
             sev = "note"
-        out.append({
-            "heading": heading or detail[:60],
-            "detail": detail,
-            "severity": sev,
-            "quote": _clip(f.get("quote"), _MAX_QUOTE),
-            "suggestion": _clip(f.get("suggestion"), 300),
-        })
-    out.sort(key=lambda f: _RANK[f["severity"]])       # stable: keeps model order within a level
+        out.append(
+            {
+                "heading": heading or detail[:60],
+                "detail": detail,
+                "severity": sev,
+                "quote": _clip(f.get("quote"), _MAX_QUOTE),
+                "suggestion": _clip(f.get("suggestion"), 300),
+            }
+        )
+    out.sort(
+        key=lambda f: _RANK[f["severity"]]
+    )  # stable: keeps model order within a level
     return out[:_MAX_FINDINGS]
 
 
@@ -192,19 +197,33 @@ def _spoken(title: str, findings: list, unclear: list) -> str:
     counts = tally(findings)
     n = len(findings)
     if not n:
-        return ("Nothing in " + (title or "that document") + " stood out as worth "
-                "flagging. It's on screen if you want to look through it.")
+        return (
+            "Nothing in " + (title or "that document") + " stood out as worth "
+            "flagging. It's on screen if you want to look through it."
+        )
     bits = [str(counts[lvl]) + " " + lvl for lvl in _LEVELS if counts[lvl]]
-    line = (str(n) + " point" + ("s" if n != 1 else "") + " from "
-            + (title or "the document") + " on screen"
-            + (" — " + ", ".join(bits) if bits else "") + ".")
+    line = (
+        str(n)
+        + " point"
+        + ("s" if n != 1 else "")
+        + " from "
+        + (title or "the document")
+        + " on screen"
+        + (" — " + ", ".join(bits) if bits else "")
+        + "."
+    )
     if counts["serious"]:
         line += " Tell them the serious ones first, briefly, in their own language."
     else:
         line += " Give them the gist in a sentence; the detail is there to read."
     if unclear:
-        line += (" " + str(len(unclear)) + " thing"
-                 + ("s" if len(unclear) != 1 else "") + " the document doesn't settle.")
+        line += (
+            " "
+            + str(len(unclear))
+            + " thing"
+            + ("s" if len(unclear) != 1 else "")
+            + " the document doesn't settle."
+        )
     return line
 
 
@@ -213,12 +232,17 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
         title = _clip(parameters.get("title"), 120)
         summary = _clip(parameters.get("summary"), _MAX_TEXT)
         findings = clean_findings(parameters.get("findings"))
-        unclear = [_clip(u, 300) for u in (parameters.get("unclear") or [])
-                   if str(u or "").strip()][:10]
+        unclear = [
+            _clip(u, 300)
+            for u in (parameters.get("unclear") or [])
+            if str(u or "").strip()
+        ][:10]
 
         if not findings and not summary:
-            return ("I need the document read first — look at the file or the screen, "
-                    "then call document_review with what you found.")
+            return (
+                "I need the document read first — look at the file or the screen, "
+                "then call document_review with what you found."
+            )
 
         shown = False
         if player:

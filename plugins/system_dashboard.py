@@ -61,7 +61,6 @@ from PyQt6.QtGui import (
 )
 from PyQt6.QtWidgets import QApplication, QMenu, QMessageBox, QWidget
 
-
 PLUGIN = {
     "name": "system_dashboard",
     "description": (
@@ -81,15 +80,20 @@ PLUGIN = {
             "operation": {
                 "type": "STRING",
                 "enum": [
-                    "details", "copy", "analyze", "terminate",
-                    "suspend", "resume", "open_location"
+                    "details",
+                    "copy",
+                    "analyze",
+                    "terminate",
+                    "suspend",
+                    "resume",
+                    "open_location",
                 ],
                 "description": "Process operation when action='process'.",
             },
             "pid": {
                 "type": "INTEGER",
                 "description": "Process ID for action='process'.",
-            }
+            },
         },
     },
     "behavior": "NON_BLOCKING",
@@ -101,26 +105,27 @@ PLUGIN = {
 # Theme
 # ─────────────────────────────────────────────────────────────────────────────
 
-BG        = (3, 8, 13)
-SURFACE   = (7, 15, 24)
+BG = (3, 8, 13)
+SURFACE = (7, 15, 24)
 SURFACE_2 = (9, 20, 31)
-GRID      = (14, 36, 46)
-TEXT      = (228, 242, 248)
-TEXT_DIM  = (148, 170, 182)
-MUTED     = (106, 136, 150)
-GOOD      = (0, 234, 146)
-WARN      = (255, 188, 64)
-BAD       = (255, 72, 92)
-WHITE     = (241, 250, 253)
+GRID = (14, 36, 46)
+TEXT = (228, 242, 248)
+TEXT_DIM = (148, 170, 182)
+MUTED = (106, 136, 150)
+GOOD = (0, 234, 146)
+WARN = (255, 188, 64)
+BAD = (255, 72, 92)
+WHITE = (241, 250, 253)
 
 
 class DT:
     """Design tokens — single source of truth for rhythm and type."""
-    PAD_X   = 14.0
-    PAD_Y   = 10.0
-    RADIUS  = 11.0
-    ROW_H   = 26.0
-    BTN     = 28.0
+
+    PAD_X = 14.0
+    PAD_Y = 10.0
+    RADIUS = 11.0
+    ROW_H = 26.0
+    BTN = 28.0
     T_VALUE = 17.0
 
 
@@ -158,6 +163,7 @@ def _live_accent() -> tuple[int, int, int]:
     """
     try:
         import ui
+
         value = getattr(getattr(ui, "C", None), "PRI", None)
         if value:
             return _rgb(value)
@@ -167,6 +173,7 @@ def _live_accent() -> tuple[int, int, int]:
     # Secondary path for compatibility with ui.py variants.
     try:
         from ui import current_palette
+
         palette = current_palette()
         if isinstance(palette, dict):
             value = palette.get("PRI") or palette.get("primary")
@@ -192,7 +199,9 @@ def _mix(a, b, amount: float) -> tuple[int, int, int]:
     return tuple(int(a[i] + (b[i] - a[i]) * amount) for i in range(3))
 
 
-def _level_color(value: Optional[float], accent: tuple[int, int, int]) -> tuple[int, int, int]:
+def _level_color(
+    value: Optional[float], accent: tuple[int, int, int]
+) -> tuple[int, int, int]:
     if value is None:
         return MUTED
     if value >= 90:
@@ -217,6 +226,7 @@ def _ease_out(t: float) -> float:
 # ─────────────────────────────────────────────────────────────────────────────
 # Telemetry sampler
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class _Sampler:
     """
@@ -352,9 +362,9 @@ class _Sampler:
 
         vm = psutil.virtual_memory()
         ram = _num(vm.percent)
-        ram_used = vm.used / (1024 ** 3)
-        ram_total = vm.total / (1024 ** 3)
-        ram_available = vm.available / (1024 ** 3)
+        ram_used = vm.used / (1024**3)
+        ram_total = vm.total / (1024**3)
+        ram_available = vm.available / (1024**3)
 
         try:
             swap = _num(psutil.swap_memory().percent)
@@ -366,8 +376,12 @@ class _Sampler:
         down = 0.0
         up = 0.0
         if net_now is not None and self._last_net is not None:
-            down = max(0.0, (net_now.bytes_recv - self._last_net.bytes_recv) / dt / (1024 ** 2))
-            up = max(0.0, (net_now.bytes_sent - self._last_net.bytes_sent) / dt / (1024 ** 2))
+            down = max(
+                0.0, (net_now.bytes_recv - self._last_net.bytes_recv) / dt / (1024**2)
+            )
+            up = max(
+                0.0, (net_now.bytes_sent - self._last_net.bytes_sent) / dt / (1024**2)
+            )
         if net_now is not None:
             self._last_net = net_now
 
@@ -376,8 +390,13 @@ class _Sampler:
         try:
             dio = psutil.disk_io_counters()
             if dio is not None and self._last_disk is not None:
-                disk_read = max(0.0, (dio.read_bytes - self._last_disk.read_bytes) / dt / (1024 ** 2))
-                disk_write = max(0.0, (dio.write_bytes - self._last_disk.write_bytes) / dt / (1024 ** 2))
+                disk_read = max(
+                    0.0, (dio.read_bytes - self._last_disk.read_bytes) / dt / (1024**2)
+                )
+                disk_write = max(
+                    0.0,
+                    (dio.write_bytes - self._last_disk.write_bytes) / dt / (1024**2),
+                )
             if dio is not None:
                 self._last_disk = dio
         except Exception:
@@ -389,8 +408,8 @@ class _Sampler:
             root = Path.home().anchor or "/"
             du = psutil.disk_usage(root)
             disk_pct = _num(du.percent)
-            disk_free = du.free / (1024 ** 3)
-            disk_total = du.total / (1024 ** 3)
+            disk_free = du.free / (1024**3)
+            disk_total = du.total / (1024**3)
         except Exception:
             disk_pct = 0.0
             disk_free = 0.0
@@ -538,6 +557,7 @@ class _Sampler:
             try:
                 if self._wmi is None:
                     import wmi  # type: ignore
+
                     self._wmi = wmi.WMI(namespace="root/wmi")
 
                 rows = self._wmi.MSAcpi_ThermalZoneTemperature()
@@ -554,12 +574,14 @@ class _Sampler:
             counters = psutil.net_io_counters(pernic=True)
             rows = []
             for name, value in counters.items():
-                rows.append({
-                    "name": str(name),
-                    "recv": int(value.bytes_recv),
-                    "sent": int(value.bytes_sent),
-                    "total": int(value.bytes_recv + value.bytes_sent),
-                })
+                rows.append(
+                    {
+                        "name": str(name),
+                        "recv": int(value.bytes_recv),
+                        "sent": int(value.bytes_sent),
+                        "total": int(value.bytes_recv + value.bytes_sent),
+                    }
+                )
             rows.sort(key=lambda item: item["total"], reverse=True)
             return rows[:8]
         except Exception:
@@ -609,12 +631,14 @@ class _Sampler:
                 if not name:
                     continue
 
-                rows.append({
-                    "pid": int(pid),
-                    "name": str(name),
-                    "cpu": cpu,
-                    "mb": rss / (1024 ** 2),
-                })
+                rows.append(
+                    {
+                        "pid": int(pid),
+                        "name": str(name),
+                        "cpu": cpu,
+                        "mb": rss / (1024**2),
+                    }
+                )
             except Exception:
                 self._process_cache.pop(pid, None)
 
@@ -632,7 +656,8 @@ class _Sampler:
         )
 
         rows = [
-            row for row in rows
+            row
+            for row in rows
             if row["name"].strip().casefold() not in {"system idle process", "idle"}
         ]
 
@@ -643,12 +668,17 @@ class _Sampler:
 # Dashboard widget
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class _Dashboard(QWidget):
     METRICS = ("cpu", "ram", "gpu", "temp", "disk")
     DETAIL_TITLES = {
-        "process": "PROCESS DETAILS", "network": "NETWORK",
-        "ram": "MEMORY", "gpu": "GPU", "temp": "TEMPERATURE",
-        "disk": "DISK", "system": "SYSTEM",
+        "process": "PROCESS DETAILS",
+        "network": "NETWORK",
+        "ram": "MEMORY",
+        "gpu": "GPU",
+        "temp": "TEMPERATURE",
+        "disk": "DISK",
+        "system": "SYSTEM",
     }
 
     def __init__(self, host: QWidget, parent=None) -> None:
@@ -667,8 +697,8 @@ class _Dashboard(QWidget):
         self._focus = ""
         self._selected_metric = "cpu"
         self._selected_process: Optional[int] = None
-        self._detail = ""          # "", "cpu", "process", "network", ...
-        self._detail_t = 0.0       # overlay animation 0..1
+        self._detail = ""  # "", "cpu", "process", "network", ...
+        self._detail_t = 0.0  # overlay animation 0..1
         self._closing = False
         self._mouse = QPointF(-1, -1)
         self._last_input = 0.0
@@ -815,30 +845,45 @@ class _Dashboard(QWidget):
             core = QRectF(content.center().x() - side / 2, content.top(), side, side)
             L["core"] = core
             if strip_h:
-                L["micro"] = QRectF(core.left(), core.bottom() + g * 0.6,
-                                    core.width(), strip_h)
+                L["micro"] = QRectF(
+                    core.left(), core.bottom() + g * 0.6, core.width(), strip_h
+                )
             return L
 
         left_w = content.width() * (0.38 if mode == "medium" else 0.34)
         left = QRectF(content.left(), content.top(), left_w, content.height())
-        right = QRectF(content.left() + left_w + g, content.top(),
-                       content.width() - left_w - g, content.height())
+        right = QRectF(
+            content.left() + left_w + g,
+            content.top(),
+            content.width() - left_w - g,
+            content.height(),
+        )
 
         core_h = left.height() * 0.57
         L["core"] = QRectF(left.left(), left.top(), left.width(), core_h)
-        L["system"] = QRectF(left.left(), left.top() + core_h + g,
-                             left.width(), left.height() - core_h - g)
+        L["system"] = QRectF(
+            left.left(),
+            left.top() + core_h + g,
+            left.width(),
+            left.height() - core_h - g,
+        )
 
         if mode == "medium":
             kpi_h = max(84.0, min(104.0, right.height() * 0.22))
             kw = (right.width() - 2 * g) / 3
             for i, k in enumerate(("cpu", "ram", "disk")):
-                L[f"kpi:{k}"] = QRectF(right.left() + i * (kw + g), right.top(), kw, kpi_h)
+                L[f"kpi:{k}"] = QRectF(
+                    right.left() + i * (kw + g), right.top(), kw, kpi_h
+                )
             row2_y = right.top() + kpi_h + g
             net_h = max(96.0, min(120.0, right.height() * 0.24))
             L["network"] = QRectF(right.left(), row2_y, right.width(), net_h)
-            L["processes"] = QRectF(right.left(), row2_y + net_h + g, right.width(),
-                                    right.bottom() - row2_y - net_h - g)
+            L["processes"] = QRectF(
+                right.left(),
+                row2_y + net_h + g,
+                right.width(),
+                right.bottom() - row2_y - net_h - g,
+            )
             return L
 
         kpi_h = max(92.0, min(116.0, right.height() * 0.20))
@@ -853,15 +898,22 @@ class _Dashboard(QWidget):
         row3_y = row2_y + net_h + g
         hist_h = max(112.0, min(148.0, right.height() * 0.24))
         L["history"] = QRectF(right.left(), row3_y, right.width(), hist_h)
-        L["processes"] = QRectF(right.left(), row3_y + hist_h + g, right.width(),
-                                right.bottom() - row3_y - hist_h - g)
+        L["processes"] = QRectF(
+            right.left(),
+            row3_y + hist_h + g,
+            right.width(),
+            right.bottom() - row3_y - hist_h - g,
+        )
         return L
 
     # ── text primitives ──────────────────────────────────────────────────────
 
     def _font(self, size: float, bold: bool = False) -> QFont:
-        return QFont("Segoe UI", max(7, int(round(size))),
-                     QFont.Weight.Bold if bold else QFont.Weight.Normal)
+        return QFont(
+            "Segoe UI",
+            max(7, int(round(size))),
+            QFont.Weight.Bold if bold else QFont.Weight.Normal,
+        )
 
     def _fit(self, text: Any, font: QFont, width: float) -> str:
         text = str(text)
@@ -875,8 +927,16 @@ class _Dashboard(QWidget):
             cur = cur[:-1]
         return (cur.rstrip() + "…") if cur else "…"
 
-    def _text(self, p, text, rect, size, color, bold=False,
-              align=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter) -> None:
+    def _text(
+        self,
+        p,
+        text,
+        rect,
+        size,
+        color,
+        bold=False,
+        align=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+    ) -> None:
         if rect.width() <= 3 or rect.height() <= 3:
             return
         f = self._font(size, bold)
@@ -884,34 +944,41 @@ class _Dashboard(QWidget):
         p.setPen(QPen(_q(color), 1))
         p.drawText(rect, align, self._fit(text, f, rect.width()))
 
-    def _label(self, p, text, rect, color, size: float = 8.5, spacing: float = 0.8) -> None:
+    def _label(
+        self, p, text, rect, color, size: float = 8.5, spacing: float = 0.8
+    ) -> None:
         f = self._font(size, True)
         if spacing:
             f.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, spacing)
         p.setFont(f)
         p.setPen(QPen(_q(color), 1))
-        p.drawText(rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-                   self._fit(str(text).upper(), f, rect.width()))
+        p.drawText(
+            rect,
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+            self._fit(str(text).upper(), f, rect.width()),
+        )
 
     def _panel(self, p, rect, active=False, pressed=False, focus=False) -> None:
         if rect.width() < 8 or rect.height() < 8:
             return
-        fill = _mix(SURFACE_2, self.acc,
-                    0.06 if pressed else (0.10 if active else 0.025))
-        border = _mix(MUTED, self.acc,
-                      0.60 if pressed else (0.75 if active else 0.40))
-        p.setPen(QPen(_q(border, 245 if pressed or active else 200),
-                      1.35 if active else 1.0))
+        fill = _mix(
+            SURFACE_2, self.acc, 0.06 if pressed else (0.10 if active else 0.025)
+        )
+        border = _mix(MUTED, self.acc, 0.60 if pressed else (0.75 if active else 0.40))
+        p.setPen(
+            QPen(_q(border, 245 if pressed or active else 200), 1.35 if active else 1.0)
+        )
         p.setBrush(QBrush(_q(fill, 250)))
         p.drawRoundedRect(rect, DT.RADIUS, DT.RADIUS)
         p.setPen(QPen(_q(self.acc, 190 if active else 85), 2))
-        p.drawLine(QPointF(rect.left() + 12, rect.top() + 1),
-                   QPointF(min(rect.left() + 60, rect.right() - 12), rect.top() + 1))
+        p.drawLine(
+            QPointF(rect.left() + 12, rect.top() + 1),
+            QPointF(min(rect.left() + 60, rect.right() - 12), rect.top() + 1),
+        )
         if focus:
             p.setBrush(Qt.BrushStyle.NoBrush)
             p.setPen(QPen(_q(WHITE, 170), 1.3, Qt.PenStyle.DashLine))
-            p.drawRoundedRect(rect.adjusted(-3, -3, 3, 3),
-                              DT.RADIUS + 2, DT.RADIUS + 2)
+            p.drawRoundedRect(rect.adjusted(-3, -3, 3, 3), DT.RADIUS + 2, DT.RADIUS + 2)
 
     def _spark(self, p, rect, values, color) -> None:
         if len(values) < 2 or rect.width() < 8 or rect.height() < 4:
@@ -959,7 +1026,9 @@ class _Dashboard(QWidget):
         return f"{d}d {h}h" if d else f"{h}h {m}m"
 
     def _suffix(self, metric: str) -> str:
-        return "°C" if metric == "temp" else (" MB/s" if metric in ("down", "up") else "%")
+        return (
+            "°C" if metric == "temp" else (" MB/s" if metric in ("down", "up") else "%")
+        )
 
     # ── header ───────────────────────────────────────────────────────────────
 
@@ -969,8 +1038,11 @@ class _Dashboard(QWidget):
         f.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 1.1)
         p.setFont(f)
         p.setPen(QPen(_q(TEXT), 1))
-        p.drawText(QRectF(rect.left(), rect.top() + 2, 260, rect.height() - 4),
-                   Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, title)
+        p.drawText(
+            QRectF(rect.left(), rect.top() + 2, 260, rect.height() - 4),
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+            title,
+        )
         tw = QFontMetrics(f).horizontalAdvance(title)
 
         pulse = 0.5 + 0.5 * math.sin(self._phase * 2.2)
@@ -979,13 +1051,18 @@ class _Dashboard(QWidget):
         p.drawEllipse(QPointF(rect.left() + tw + 14, rect.center().y()), 3.0, 3.0)
 
         if rect.width() > 430:
-            self._label(p, self._mode(),
-                        QRectF(rect.left() + tw + 24, rect.top(), 100, rect.height()),
-                        MUTED, 7.5)
+            self._label(
+                p,
+                self._mode(),
+                QRectF(rect.left() + tw + 24, rect.top(), 100, rect.height()),
+                MUTED,
+                7.5,
+            )
 
         # close button
-        btn = QRectF(rect.right() - DT.BTN, rect.center().y() - DT.BTN / 2,
-                     DT.BTN, DT.BTN)
+        btn = QRectF(
+            rect.right() - DT.BTN, rect.center().y() - DT.BTN / 2, DT.BTN, DT.BTN
+        )
         self._hit["header:close"] = btn
         hov = self._hover == "header:close"
         p.setPen(QPen(_q(BAD if hov else MUTED, 220), 1))
@@ -1017,12 +1094,24 @@ class _Dashboard(QWidget):
             p.drawRoundedRect(bar, 3, 3)
             p.setBrush(_q(col, 235))
             p.drawRoundedRect(
-                QRectF(bar.left(), bar.top(),
-                       bar.width() * max(0.05, min(1.0, b / 100.0)), bar.height()), 3, 3)
-            self._text(p, f"{b:.0f}%",
-                       QRectF(pill.right() - 32, pill.top(), 28, pill.height()),
-                       8, TEXT, True,
-                       Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                QRectF(
+                    bar.left(),
+                    bar.top(),
+                    bar.width() * max(0.05, min(1.0, b / 100.0)),
+                    bar.height(),
+                ),
+                3,
+                3,
+            )
+            self._text(
+                p,
+                f"{b:.0f}%",
+                QRectF(pill.right() - 32, pill.top(), 28, pill.height()),
+                8,
+                TEXT,
+                True,
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+            )
 
     # ── AI core visualizer ───────────────────────────────────────────────────
 
@@ -1053,11 +1142,13 @@ class _Dashboard(QWidget):
         glow.setColorAt(1.0, _q(BG, 0))
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(QBrush(glow))
-        p.drawEllipse(QRectF(cx - radius * 1.25, cy - radius * 1.25,
-                             radius * 2.5, radius * 2.5))
+        p.drawEllipse(
+            QRectF(cx - radius * 1.25, cy - radius * 1.25, radius * 2.5, radius * 2.5)
+        )
 
-        body = QRadialGradient(QPointF(cx - radius * 0.22, cy - radius * 0.27),
-                               radius * 1.02)
+        body = QRadialGradient(
+            QPointF(cx - radius * 0.22, cy - radius * 0.27), radius * 1.02
+        )
         body.setColorAt(0.0, _q(_mix(BG, self.acc, 0.25), 250))
         body.setColorAt(0.52, _q(_mix(BG, self.acc, 0.08), 252))
         body.setColorAt(1.0, _q(BG, 255))
@@ -1070,8 +1161,14 @@ class _Dashboard(QWidget):
             yy = cy + k * radius
             half = math.sqrt(max(0.0, 1.0 - k * k)) * radius
             p.setPen(QPen(_q(self.acc, 42), 0.7))
-            p.drawEllipse(QRectF(cx - half, yy - radius * (0.045 + 0.035 * (1.0 - abs(k))),
-                                 half * 2, radius * (0.09 + 0.07 * (1.0 - abs(k)))))
+            p.drawEllipse(
+                QRectF(
+                    cx - half,
+                    yy - radius * (0.045 + 0.035 * (1.0 - abs(k))),
+                    half * 2,
+                    radius * (0.09 + 0.07 * (1.0 - abs(k))),
+                )
+            )
         for k in (-0.72, -0.48, -0.24, 0.0, 0.24, 0.48, 0.72):
             wq = radius * (0.20 + 0.80 * (1.0 - abs(k)))
             p.setPen(QPen(_q(self.acc, 40 if k else 64), 0.7))
@@ -1102,7 +1199,9 @@ class _Dashboard(QWidget):
             p.setBrush(_q(self.acc, int(80 + depth * 125 + pulse * 50)))
             p.drawEllipse(QRectF(x - size, y - size, size * 2, size * 2))
 
-        ring = QRectF(cx - radius * 1.10, cy - radius * 1.10, radius * 2.20, radius * 2.20)
+        ring = QRectF(
+            cx - radius * 1.10, cy - radius * 1.10, radius * 2.20, radius * 2.20
+        )
         p.setPen(QPen(_q(_mix(BG, self.acc, 0.38), 235), 3))
         p.drawArc(ring, 90 * 16, -360 * 16)
         load_angle = max(0.0, min(100.0, cpu)) * 3.6
@@ -1111,8 +1210,9 @@ class _Dashboard(QWidget):
         p.drawArc(ring, sweep * 16, int(-load_angle * 16))
 
         core_r = radius * 0.22
-        sensor = QRadialGradient(QPointF(cx - core_r * 0.25, cy - core_r * 0.35),
-                                 core_r * 1.35)
+        sensor = QRadialGradient(
+            QPointF(cx - core_r * 0.25, cy - core_r * 0.35), core_r * 1.35
+        )
         sensor.setColorAt(0.0, _q(_mix(BG, self.acc, 0.42), 245))
         sensor.setColorAt(0.55, _q(_mix(BG, self.acc, 0.12), 245))
         sensor.setColorAt(1.0, _q(BG, 252))
@@ -1120,12 +1220,24 @@ class _Dashboard(QWidget):
         p.setBrush(QBrush(sensor))
         p.drawEllipse(QRectF(cx - core_r, cy - core_r, core_r * 2, core_r * 2))
 
-        self._text(p, f"{cpu:.0f}%",
-                   QRectF(cx - core_r - 16, cy - 14, core_r * 2 + 32, 28),
-                   max(14, int(radius * 0.155)), TEXT, True, Qt.AlignmentFlag.AlignCenter)
-        self._text(p, "SYSTEM LOAD",
-                   QRectF(cx - core_r - 16, cy + 13, core_r * 2 + 32, 16),
-                   7, self.acc, True, Qt.AlignmentFlag.AlignCenter)
+        self._text(
+            p,
+            f"{cpu:.0f}%",
+            QRectF(cx - core_r - 16, cy - 14, core_r * 2 + 32, 28),
+            max(14, int(radius * 0.155)),
+            TEXT,
+            True,
+            Qt.AlignmentFlag.AlignCenter,
+        )
+        self._text(
+            p,
+            "SYSTEM LOAD",
+            QRectF(cx - core_r - 16, cy + 13, core_r * 2 + 32, 16),
+            7,
+            self.acc,
+            True,
+            Qt.AlignmentFlag.AlignCenter,
+        )
 
         if self._focus == "core":
             p.setBrush(Qt.BrushStyle.NoBrush)
@@ -1141,8 +1253,11 @@ class _Dashboard(QWidget):
         cells = [
             ("RAM", f"{_num(data.get('ram')):.0f}%", _num(data.get("ram"))),
             ("NET ↓", self._rate(data.get("down")), None),
-            ("TEMP", "N/A" if temp is None else f"{_num(temp):.0f}°C",
-             None if temp is None else _num(temp) * 1.15),
+            (
+                "TEMP",
+                "N/A" if temp is None else f"{_num(temp):.0f}°C",
+                None if temp is None else _num(temp) * 1.15,
+            ),
         ]
         cw = rect.width() / 3.0
         for i, (lab, val, pct) in enumerate(cells):
@@ -1151,89 +1266,205 @@ class _Dashboard(QWidget):
             self._hit[key] = r
             hov = self._hover == key or self._press == key
             self._panel(p, r, hov, self._press == key, self._focus == key)
-            self._label(p, lab, QRectF(r.left() + 9, r.top() + 3, r.width() - 18, 12),
-                        MUTED, 7.0)
-            self._text(p, val,
-                       QRectF(r.left() + 9, r.top() + 14, r.width() - 18, r.height() - 16),
-                       10.5, TEXT if pct is None else _level_color(pct, self.acc), True)
+            self._label(
+                p,
+                lab,
+                QRectF(r.left() + 9, r.top() + 3, r.width() - 18, 12),
+                MUTED,
+                7.0,
+            )
+            self._text(
+                p,
+                val,
+                QRectF(r.left() + 9, r.top() + 14, r.width() - 18, r.height() - 16),
+                10.5,
+                TEXT if pct is None else _level_color(pct, self.acc),
+                True,
+            )
 
     # ── KPI card ─────────────────────────────────────────────────────────────
 
     def _card(self, p, rect, key, label, value, pct, history, sub="") -> None:
         hkey = f"kpi:{key}"
-        active = self._hover == hkey or self._press == hkey or self._selected_metric == key
+        active = (
+            self._hover == hkey or self._press == hkey or self._selected_metric == key
+        )
         pressed = self._press == hkey
         self._panel(p, rect, active and not pressed, pressed, self._focus == hkey)
-        self._label(p, label,
-                    QRectF(rect.left() + DT.PAD_X, rect.top() + DT.PAD_Y - 3,
-                           rect.width() * 0.62, 14),
-                    self.acc if active else TEXT_DIM, 8.0)
+        self._label(
+            p,
+            label,
+            QRectF(
+                rect.left() + DT.PAD_X,
+                rect.top() + DT.PAD_Y - 3,
+                rect.width() * 0.62,
+                14,
+            ),
+            self.acc if active else TEXT_DIM,
+            8.0,
+        )
         if sub:
-            self._text(p, sub,
-                       QRectF(rect.right() - DT.PAD_X - rect.width() * 0.42,
-                              rect.top() + DT.PAD_Y - 3, rect.width() * 0.42, 14),
-                       7, MUTED, False,
-                       Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        self._text(p, value,
-                   QRectF(rect.left() + DT.PAD_X, rect.top() + DT.PAD_Y + 11,
-                          rect.width() - 2 * DT.PAD_X, 26),
-                   min(DT.T_VALUE, rect.height() * 0.26),
-                   _level_color(pct, self.acc), True)
-        self._spark(p, QRectF(rect.left() + DT.PAD_X, rect.bottom() - 21,
-                              rect.width() - 2 * DT.PAD_X, 15),
-                    history, self.acc)
+            self._text(
+                p,
+                sub,
+                QRectF(
+                    rect.right() - DT.PAD_X - rect.width() * 0.42,
+                    rect.top() + DT.PAD_Y - 3,
+                    rect.width() * 0.42,
+                    14,
+                ),
+                7,
+                MUTED,
+                False,
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+            )
+        self._text(
+            p,
+            value,
+            QRectF(
+                rect.left() + DT.PAD_X,
+                rect.top() + DT.PAD_Y + 11,
+                rect.width() - 2 * DT.PAD_X,
+                26,
+            ),
+            min(DT.T_VALUE, rect.height() * 0.26),
+            _level_color(pct, self.acc),
+            True,
+        )
+        self._spark(
+            p,
+            QRectF(
+                rect.left() + DT.PAD_X,
+                rect.bottom() - 21,
+                rect.width() - 2 * DT.PAD_X,
+                15,
+            ),
+            history,
+            self.acc,
+        )
 
     # ── network / disk cards ────────────────────────────────────────────────
 
     def _network_card(self, p, rect, data, hist) -> None:
         active = self._hover == "network" or self._press == "network"
         self._panel(p, rect, active, self._press == "network", self._focus == "network")
-        self._label(p, "NETWORK",
-                    QRectF(rect.left() + DT.PAD_X, rect.top() + DT.PAD_Y - 3,
-                           rect.width() * 0.6, 14),
-                    self.acc if active else TEXT_DIM, 8.0)
-        self._text(p, f"↓  {self._rate(data.get('down'))}",
-                   QRectF(rect.left() + DT.PAD_X, rect.top() + 26, 130, 18), 10.5, GOOD, True)
-        self._text(p, f"↑  {self._rate(data.get('up'))}",
-                   QRectF(rect.left() + DT.PAD_X, rect.top() + 46, 130, 18), 10.5, self.acc, True)
-        self._text(p, f"{len(data.get('interfaces') or [])} INTERFACES",
-                   QRectF(rect.left() + DT.PAD_X, rect.bottom() - 18, 130, 13), 6.5, MUTED)
-        chart = QRectF(rect.left() + 128, rect.top() + 10,
-                       rect.width() - 140, rect.height() - 20)
+        self._label(
+            p,
+            "NETWORK",
+            QRectF(
+                rect.left() + DT.PAD_X,
+                rect.top() + DT.PAD_Y - 3,
+                rect.width() * 0.6,
+                14,
+            ),
+            self.acc if active else TEXT_DIM,
+            8.0,
+        )
+        self._text(
+            p,
+            f"↓  {self._rate(data.get('down'))}",
+            QRectF(rect.left() + DT.PAD_X, rect.top() + 26, 130, 18),
+            10.5,
+            GOOD,
+            True,
+        )
+        self._text(
+            p,
+            f"↑  {self._rate(data.get('up'))}",
+            QRectF(rect.left() + DT.PAD_X, rect.top() + 46, 130, 18),
+            10.5,
+            self.acc,
+            True,
+        )
+        self._text(
+            p,
+            f"{len(data.get('interfaces') or [])} INTERFACES",
+            QRectF(rect.left() + DT.PAD_X, rect.bottom() - 18, 130, 13),
+            6.5,
+            MUTED,
+        )
+        chart = QRectF(
+            rect.left() + 128, rect.top() + 10, rect.width() - 140, rect.height() - 20
+        )
         if chart.width() > 50:
             self._spark(p, chart, hist.get("down", []), GOOD)
-            self._spark(p, chart.adjusted(0, chart.height() * 0.45, 0, -chart.height() * 0.05),
-                        hist.get("up", []), self.acc)
+            self._spark(
+                p,
+                chart.adjusted(0, chart.height() * 0.45, 0, -chart.height() * 0.05),
+                hist.get("up", []),
+                self.acc,
+            )
 
     def _disk_card(self, p, rect, data) -> None:
         active = self._hover == "diskcard" or self._press == "diskcard"
-        self._panel(p, rect, active, self._press == "diskcard", self._focus == "diskcard")
+        self._panel(
+            p, rect, active, self._press == "diskcard", self._focus == "diskcard"
+        )
         pct = _num(data.get("disk"))
-        self._label(p, "DISK",
-                    QRectF(rect.left() + DT.PAD_X, rect.top() + DT.PAD_Y - 3,
-                           rect.width() * 0.5, 14),
-                    self.acc if active else TEXT_DIM, 8.0)
-        self._text(p, f"{_num(data.get('disk_free')):.0f} GB FREE",
-                   QRectF(rect.right() - DT.PAD_X - 120, rect.top() + DT.PAD_Y - 3, 120, 14),
-                   7, MUTED, False,
-                   Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        self._text(p, f"{pct:.0f}%",
-                   QRectF(rect.left() + DT.PAD_X, rect.top() + DT.PAD_Y + 11,
-                          rect.width() - 2 * DT.PAD_X, 26), DT.T_VALUE,
-                   _level_color(pct, self.acc), True)
-        self._text(p, f"R {self._rate(data.get('disk_read'))}    "
-                      f"W {self._rate(data.get('disk_write'))}",
-                   QRectF(rect.left() + DT.PAD_X, rect.bottom() - 32,
-                          rect.width() - 2 * DT.PAD_X, 13), 7, MUTED)
-        bar = QRectF(rect.left() + DT.PAD_X, rect.bottom() - 16,
-                     rect.width() - 2 * DT.PAD_X, 5)
+        self._label(
+            p,
+            "DISK",
+            QRectF(
+                rect.left() + DT.PAD_X,
+                rect.top() + DT.PAD_Y - 3,
+                rect.width() * 0.5,
+                14,
+            ),
+            self.acc if active else TEXT_DIM,
+            8.0,
+        )
+        self._text(
+            p,
+            f"{_num(data.get('disk_free')):.0f} GB FREE",
+            QRectF(rect.right() - DT.PAD_X - 120, rect.top() + DT.PAD_Y - 3, 120, 14),
+            7,
+            MUTED,
+            False,
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+        )
+        self._text(
+            p,
+            f"{pct:.0f}%",
+            QRectF(
+                rect.left() + DT.PAD_X,
+                rect.top() + DT.PAD_Y + 11,
+                rect.width() - 2 * DT.PAD_X,
+                26,
+            ),
+            DT.T_VALUE,
+            _level_color(pct, self.acc),
+            True,
+        )
+        self._text(
+            p,
+            f"R {self._rate(data.get('disk_read'))}    "
+            f"W {self._rate(data.get('disk_write'))}",
+            QRectF(
+                rect.left() + DT.PAD_X,
+                rect.bottom() - 32,
+                rect.width() - 2 * DT.PAD_X,
+                13,
+            ),
+            7,
+            MUTED,
+        )
+        bar = QRectF(
+            rect.left() + DT.PAD_X, rect.bottom() - 16, rect.width() - 2 * DT.PAD_X, 5
+        )
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(_q(_mix(BG, self.acc, 0.14)))
         p.drawRoundedRect(bar, 2, 2)
         p.setBrush(_q(_level_color(pct, self.acc), 230))
-        p.drawRoundedRect(QRectF(bar.left(), bar.top(),
-                                 bar.width() * max(0.0, min(1.0, pct / 100.0)),
-                                 bar.height()), 2, 2)
+        p.drawRoundedRect(
+            QRectF(
+                bar.left(),
+                bar.top(),
+                bar.width() * max(0.0, min(1.0, pct / 100.0)),
+                bar.height(),
+            ),
+            2,
+            2,
+        )
 
     # ── processes ────────────────────────────────────────────────────────────
 
@@ -1249,22 +1480,43 @@ class _Dashboard(QWidget):
     def _process_card(self, p, rect, data) -> None:
         active = self._hover == "processes"
         self._panel(p, rect, active, False, self._focus == "processes")
-        self._label(p, "TOP PROCESSES",
-                    QRectF(rect.left() + DT.PAD_X, rect.top() + DT.PAD_Y - 3,
-                           rect.width() * 0.5, 14),
-                    self.acc if active else TEXT_DIM, 8.0)
-        self._text(p, f"{data.get('nproc', 0)} RUNNING",
-                   QRectF(rect.right() - DT.PAD_X - 120, rect.top() + DT.PAD_Y - 3, 120, 14),
-                   7, MUTED, False,
-                   Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self._label(
+            p,
+            "TOP PROCESSES",
+            QRectF(
+                rect.left() + DT.PAD_X,
+                rect.top() + DT.PAD_Y - 3,
+                rect.width() * 0.5,
+                14,
+            ),
+            self.acc if active else TEXT_DIM,
+            8.0,
+        )
+        self._text(
+            p,
+            f"{data.get('nproc', 0)} RUNNING",
+            QRectF(rect.right() - DT.PAD_X - 120, rect.top() + DT.PAD_Y - 3, 120, 14),
+            7,
+            MUTED,
+            False,
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+        )
 
         name, pid, cpu, mem = self._proc_cols(
-            QRectF(rect.left() + 4, rect.top() + 24, rect.width() - 8, 14))
+            QRectF(rect.left() + 4, rect.top() + 24, rect.width() - 8, 14)
+        )
         self._label(p, "NAME", name, MUTED, 6.5)
         self._label(p, "PID", pid, MUTED, 6.5)
         self._text(p, "CPU", cpu, 6.5, MUTED, True, Qt.AlignmentFlag.AlignCenter)
-        self._text(p, "MEM", mem, 6.5, MUTED, True,
-                   Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self._text(
+            p,
+            "MEM",
+            mem,
+            6.5,
+            MUTED,
+            True,
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+        )
 
         self._proc_hits.clear()
         rows = list(data.get("top") or [])
@@ -1289,26 +1541,61 @@ class _Dashboard(QWidget):
             p.drawRoundedRect(rr, 6, 6)
             if sel or self._focus == hkey:
                 p.setBrush(Qt.BrushStyle.NoBrush)
-                p.setPen(QPen(_q(self.acc if sel else WHITE, 170), 1,
-                              Qt.PenStyle.DashLine if not sel else Qt.PenStyle.SolidLine))
+                p.setPen(
+                    QPen(
+                        _q(self.acc if sel else WHITE, 170),
+                        1,
+                        Qt.PenStyle.DashLine if not sel else Qt.PenStyle.SolidLine,
+                    )
+                )
                 p.drawRoundedRect(rr, 6, 6)
 
             name_r, pid_r, cpu_r, mem_r = self._proc_cols(rr)
-            self._text(p, row.get("name") or "unknown", name_r, 8,
-                       self.acc if sel else TEXT, sel or hov)
+            self._text(
+                p,
+                row.get("name") or "unknown",
+                name_r,
+                8,
+                self.acc if sel else TEXT,
+                sel or hov,
+            )
             self._text(p, str(pid_v), pid_r, 7, MUTED)
             cpu_val = row.get("cpu")
-            self._text(p, "—" if cpu_val is None else f"{_num(cpu_val):.1f}%",
-                       cpu_r, 8, self.acc, True, Qt.AlignmentFlag.AlignCenter)
-            self._text(p, f"{_num(row.get('mb')):.0f} MB", mem_r, 7.5, TEXT_DIM, False,
-                       Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            self._text(
+                p,
+                "—" if cpu_val is None else f"{_num(cpu_val):.1f}%",
+                cpu_r,
+                8,
+                self.acc,
+                True,
+                Qt.AlignmentFlag.AlignCenter,
+            )
+            self._text(
+                p,
+                f"{_num(row.get('mb')):.0f} MB",
+                mem_r,
+                7.5,
+                TEXT_DIM,
+                False,
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+            )
             y += DT.ROW_H
 
         if not rows:
-            self._text(p, "Waiting for process telemetry…",
-                       QRectF(rect.left() + DT.PAD_X, rect.top() + 44,
-                              rect.width() - 2 * DT.PAD_X, 20),
-                       8, MUTED, False, Qt.AlignmentFlag.AlignCenter)
+            self._text(
+                p,
+                "Waiting for process telemetry…",
+                QRectF(
+                    rect.left() + DT.PAD_X,
+                    rect.top() + 44,
+                    rect.width() - 2 * DT.PAD_X,
+                    20,
+                ),
+                8,
+                MUTED,
+                False,
+                Qt.AlignmentFlag.AlignCenter,
+            )
 
     # ── system card + generic rows ───────────────────────────────────────────
 
@@ -1322,11 +1609,21 @@ class _Dashboard(QWidget):
             p.setPen(Qt.PenStyle.NoPen)
             p.setBrush(_q(WHITE, 5))
             p.drawRoundedRect(QRectF(rect.left(), y + 1, rect.width(), rh - 3), 4, 4)
-            self._label(p, str(k), QRectF(rect.left() + 8, y, rect.width() * 0.34, rh),
-                        MUTED, 7.0)
-            self._text(p, str(v),
-                       QRectF(rect.left() + rect.width() * 0.36, y,
-                              rect.width() * 0.62, rh), 8.5, TEXT, True)
+            self._label(
+                p,
+                str(k),
+                QRectF(rect.left() + 8, y, rect.width() * 0.34, rh),
+                MUTED,
+                7.0,
+            )
+            self._text(
+                p,
+                str(v),
+                QRectF(rect.left() + rect.width() * 0.36, y, rect.width() * 0.62, rh),
+                8.5,
+                TEXT,
+                True,
+            )
             y += rh
 
     def _system_rows(self, data) -> list:
@@ -1334,35 +1631,63 @@ class _Dashboard(QWidget):
             ("HOST", platform.node() or "LOCAL"),
             ("OS", f"{platform.system()} {platform.release()}"),
             ("UPTIME", self._uptime(data.get("uptime"))),
-            ("CPU", "N/A" if data.get("cpu_freq") is None
-                    else f"{_num(data.get('cpu_freq')):.2f} GHz"),
+            (
+                "CPU",
+                (
+                    "N/A"
+                    if data.get("cpu_freq") is None
+                    else f"{_num(data.get('cpu_freq')):.2f} GHz"
+                ),
+            ),
         ]
         if data.get("gpu") is not None:
-            rows.append(("GPU", f"{data.get('gpu_name', 'N/A')} · {_num(data.get('gpu')):.0f}%"))
+            rows.append(
+                ("GPU", f"{data.get('gpu_name', 'N/A')} · {_num(data.get('gpu')):.0f}%")
+            )
         if data.get("temp") is not None:
             rows.append(("TEMP", f"{_num(data.get('temp')):.0f}°C"))
         if data.get("battery") is not None:
-            rows.append(("BATTERY", f"{_num(data.get('battery')):.0f}%"
-                                    + (" · AC" if data.get("plugged") else "")))
+            rows.append(
+                (
+                    "BATTERY",
+                    f"{_num(data.get('battery')):.0f}%"
+                    + (" · AC" if data.get("plugged") else ""),
+                )
+            )
         return rows
 
     def _system_card(self, p, rect, data) -> None:
         active = self._hover == "system" or self._press == "system"
         self._panel(p, rect, active, self._press == "system", self._focus == "system")
-        self._label(p, "SYSTEM",
-                    QRectF(rect.left() + DT.PAD_X, rect.top() + DT.PAD_Y - 3,
-                           rect.width() * 0.5, 14),
-                    self.acc if active else TEXT_DIM, 8.0)
-        self._rows_block(p, rect.adjusted(DT.PAD_X, 26, -DT.PAD_X, -DT.PAD_Y),
-                         self._system_rows(data))
+        self._label(
+            p,
+            "SYSTEM",
+            QRectF(
+                rect.left() + DT.PAD_X,
+                rect.top() + DT.PAD_Y - 3,
+                rect.width() * 0.5,
+                14,
+            ),
+            self.acc if active else TEXT_DIM,
+            8.0,
+        )
+        self._rows_block(
+            p,
+            rect.adjusted(DT.PAD_X, 26, -DT.PAD_X, -DT.PAD_Y),
+            self._system_rows(data),
+        )
 
     # ── history panel + chart with axes and scrubbing ───────────────────────
 
     def _history_panel(self, p, rect, hist) -> None:
         self._panel(p, rect)
-        self._label(p, f"{self._selected_metric} · last 90s",
-                    QRectF(rect.left() + DT.PAD_X, rect.top() + 7, rect.width() * 0.5, 16),
-                    self.acc, 8.5)
+        self._label(
+            p,
+            f"{self._selected_metric} · last 90s",
+            QRectF(rect.left() + DT.PAD_X, rect.top() + 7, rect.width() * 0.5, 16),
+            self.acc,
+            8.5,
+        )
         x = rect.right() - DT.PAD_X
         for name in reversed(("cpu", "ram", "gpu", "temp", "down", "up", "disk")):
             r = QRectF(x - 38, rect.top() + 6, 38, 16)
@@ -1377,19 +1702,39 @@ class _Dashboard(QWidget):
                 p.setBrush(Qt.BrushStyle.NoBrush)
                 p.setPen(QPen(_q(WHITE, 170), 1.2, Qt.PenStyle.DashLine))
                 p.drawRoundedRect(r.adjusted(-2, -2, 2, 2), 10, 10)
-            self._text(p, name.upper(), r, 6.5, self.acc if on else MUTED, on,
-                       Qt.AlignmentFlag.AlignCenter)
+            self._text(
+                p,
+                name.upper(),
+                r,
+                6.5,
+                self.acc if on else MUTED,
+                on,
+                Qt.AlignmentFlag.AlignCenter,
+            )
 
         values = list(hist.get(self._selected_metric, []))
-        self._history_chart(p, rect.adjusted(DT.PAD_X, 28, -DT.PAD_X, -DT.PAD_Y - 14),
-                            values, self._suffix(self._selected_metric))
+        self._history_chart(
+            p,
+            rect.adjusted(DT.PAD_X, 28, -DT.PAD_X, -DT.PAD_Y - 14),
+            values,
+            self._suffix(self._selected_metric),
+        )
         if values:
             avg = sum(values) / len(values)
-            self._text(p, f"MIN {min(values):.1f}   AVG {avg:.1f}   MAX {max(values):.1f}",
-                       QRectF(rect.left() + DT.PAD_X, rect.bottom() - 16,
-                              rect.width() - 2 * DT.PAD_X, 12),
-                       7, MUTED, False,
-                       Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            self._text(
+                p,
+                f"MIN {min(values):.1f}   AVG {avg:.1f}   MAX {max(values):.1f}",
+                QRectF(
+                    rect.left() + DT.PAD_X,
+                    rect.bottom() - 16,
+                    rect.width() - 2 * DT.PAD_X,
+                    12,
+                ),
+                7,
+                MUTED,
+                False,
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+            )
 
     def _history_chart(self, p, rect, values, suffix="%") -> None:
         if rect.width() < 40 or rect.height() < 30:
@@ -1399,8 +1744,15 @@ class _Dashboard(QWidget):
         p.drawRoundedRect(rect, 8, 8)
 
         if len(values) < 2:
-            self._text(p, "Collecting telemetry…", rect, 8, MUTED, False,
-                       Qt.AlignmentFlag.AlignCenter)
+            self._text(
+                p,
+                "Collecting telemetry…",
+                rect,
+                8,
+                MUTED,
+                False,
+                Qt.AlignmentFlag.AlignCenter,
+            )
             self._hit["history_chart"] = rect
             return
 
@@ -1422,15 +1774,20 @@ class _Dashboard(QWidget):
             p.setPen(QPen(_q(GRID, 150 if i else 210), 1))
             p.drawLine(QPointF(plot.left(), yy), QPointF(plot.right(), yy))
             p.setPen(QPen(_q(MUTED, 210), 1))
-            p.drawText(QRectF(plot.right() + 4, yy - 7, 34, 14),
-                       Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-                       lab(maximum * frac))
+            p.drawText(
+                QRectF(plot.right() + 4, yy - 7, 34, 14),
+                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                lab(maximum * frac),
+            )
 
         n = len(values)
         path = QPainterPath()
         for i, v in enumerate(values):
             x = plot.left() + plot.width() * i / (n - 1)
-            y = plot.bottom() - plot.height() * max(0.0, min(float(v), maximum)) / maximum
+            y = (
+                plot.bottom()
+                - plot.height() * max(0.0, min(float(v), maximum)) / maximum
+            )
             path.moveTo(x, y) if i == 0 else path.lineTo(x, y)
         fill = QPainterPath(path)
         fill.lineTo(plot.right(), plot.bottom())
@@ -1446,7 +1803,10 @@ class _Dashboard(QWidget):
         p.setPen(QPen(_q(self.acc, 235), 1.6))
         p.drawPath(path)
 
-        last_y = plot.bottom() - plot.height() * max(0.0, min(float(values[-1]), maximum)) / maximum
+        last_y = (
+            plot.bottom()
+            - plot.height() * max(0.0, min(float(values[-1]), maximum)) / maximum
+        )
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(_q(TEXT, 240))
         p.drawEllipse(QPointF(plot.right(), last_y), 2.4, 2.4)
@@ -1455,7 +1815,10 @@ class _Dashboard(QWidget):
             frac = (self._mouse.x() - plot.left()) / max(1.0, plot.width())
             idx = max(0, min(n - 1, int(round(frac * (n - 1)))))
             sx = plot.left() + plot.width() * idx / (n - 1)
-            sy = plot.bottom() - plot.height() * max(0.0, min(float(values[idx]), maximum)) / maximum
+            sy = (
+                plot.bottom()
+                - plot.height() * max(0.0, min(float(values[idx]), maximum)) / maximum
+            )
             p.setPen(QPen(_q(TEXT_DIM, 110), 1, Qt.PenStyle.DashLine))
             p.drawLine(QPointF(sx, plot.top()), QPointF(sx, plot.bottom()))
             p.setBrush(_q(self.acc, 240))
@@ -1465,8 +1828,15 @@ class _Dashboard(QWidget):
             p.setPen(QPen(_q(self.acc, 220), 1))
             p.setBrush(_q(BG, 235))
             p.drawRoundedRect(pill, 8, 8)
-            self._text(p, f"{values[idx]:.1f}{suffix}", pill, 7.5, TEXT, True,
-                       Qt.AlignmentFlag.AlignCenter)
+            self._text(
+                p,
+                f"{values[idx]:.1f}{suffix}",
+                pill,
+                7.5,
+                TEXT,
+                True,
+                Qt.AlignmentFlag.AlignCenter,
+            )
 
     # ── detail overlay (unified, animated) ──────────────────────────────────
 
@@ -1485,15 +1855,19 @@ class _Dashboard(QWidget):
 
     def _metric_subtitle(self, d: str, data: dict) -> str:
         if d == "ram":
-            return (f"{_num(data.get('ram_used')):.1f} / {_num(data.get('ram_total')):.1f} GB"
-                    f"  ·  SWAP {_num(data.get('swap')):.1f}%")
+            return (
+                f"{_num(data.get('ram_used')):.1f} / {_num(data.get('ram_total')):.1f} GB"
+                f"  ·  SWAP {_num(data.get('swap')):.1f}%"
+            )
         if d == "gpu":
             return f"{data.get('gpu_name', 'N/A')}  ·  VRAM {_num(data.get('gpu_mem')):.0f}%"
         if d == "temp":
             return f"SOURCE  {data.get('temp_source', 'N/A')}"
         if d == "disk":
-            return (f"{_num(data.get('disk_free')):.1f} GB FREE OF "
-                    f"{_num(data.get('disk_total')):.1f} GB")
+            return (
+                f"{_num(data.get('disk_free')):.1f} GB FREE OF "
+                f"{_num(data.get('disk_total')):.1f} GB"
+            )
         if d in ("down", "up"):
             return f"NOW  ↓ {self._rate(data.get('down'))}   ↑ {self._rate(data.get('up'))}"
         return f"CURRENT  {_num(data.get(d, 0)):.1f}%"
@@ -1504,8 +1878,12 @@ class _Dashboard(QWidget):
         t = _ease_out(self._detail_t)
         if t <= 0.01:
             return
-        r = QRectF(content.left(), content.top() + (1.0 - t) * 16.0,
-                   content.width(), content.height())
+        r = QRectF(
+            content.left(),
+            content.top() + (1.0 - t) * 16.0,
+            content.width(),
+            content.height(),
+        )
         p.setOpacity(0.2 + 0.8 * t)
         self._panel(p, r, True)
 
@@ -1513,12 +1891,22 @@ class _Dashboard(QWidget):
             title = self.DETAIL_TITLES[self._detail]
         else:
             title = f"{self.DETAIL_TITLES.get(self._detail, self._detail.upper())} · HISTORY"
-        self._label(p, title, QRectF(r.left() + DT.PAD_X, r.top() + 9, r.width() - 110, 18),
-                    self.acc, 9.5, 1.0)
+        self._label(
+            p,
+            title,
+            QRectF(r.left() + DT.PAD_X, r.top() + 9, r.width() - 110, 18),
+            self.acc,
+            9.5,
+            1.0,
+        )
         if self._detail not in ("process", "network", "system"):
-            self._text(p, self._metric_subtitle(self._detail, data),
-                       QRectF(r.left() + DT.PAD_X, r.top() + 27, r.width() - 110, 14),
-                       7.5, MUTED)
+            self._text(
+                p,
+                self._metric_subtitle(self._detail, data),
+                QRectF(r.left() + DT.PAD_X, r.top() + 27, r.width() - 110, 14),
+                7.5,
+                MUTED,
+            )
 
         back = QRectF(r.right() - DT.PAD_X - 76, r.top() + 9, 76, 24)
         self._hit["detail:back"] = back
@@ -1526,8 +1914,15 @@ class _Dashboard(QWidget):
         p.setPen(QPen(_q(self.acc if hov else MUTED, 215), 1))
         p.setBrush(_q(self.acc, 40 if hov else 14))
         p.drawRoundedRect(back, 7, 7)
-        self._text(p, "ESC · BACK", back, 7, self.acc if hov else TEXT_DIM, bool(hov),
-                   Qt.AlignmentFlag.AlignCenter)
+        self._text(
+            p,
+            "ESC · BACK",
+            back,
+            7,
+            self.acc if hov else TEXT_DIM,
+            bool(hov),
+            Qt.AlignmentFlag.AlignCenter,
+        )
 
         body = r.adjusted(DT.PAD_X, 44, -DT.PAD_X, -DT.PAD_Y)
         d = self._detail
@@ -1544,20 +1939,34 @@ class _Dashboard(QWidget):
             self._history_chart(p, body, values, self._suffix(d))
             if values:
                 avg = sum(values) / len(values)
-                self._text(p, f"MIN {min(values):.1f}   AVG {avg:.1f}   "
-                              f"MAX {max(values):.1f}   NOW {values[-1]:.1f}",
-                           QRectF(body.left(), body.bottom() + 4, body.width(), 14),
-                           8, TEXT_DIM, False,
-                           Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                self._text(
+                    p,
+                    f"MIN {min(values):.1f}   AVG {avg:.1f}   "
+                    f"MAX {max(values):.1f}   NOW {values[-1]:.1f}",
+                    QRectF(body.left(), body.bottom() + 4, body.width(), 14),
+                    8,
+                    TEXT_DIM,
+                    False,
+                    Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+                )
         p.setOpacity(1.0)
 
     def _body_process(self, p, rect, data) -> None:
         pid = self._selected_process
-        row = next((it for it in (data.get("top") or [])
-                    if int(it.get("pid") or 0) == pid), None)
+        row = next(
+            (it for it in (data.get("top") or []) if int(it.get("pid") or 0) == pid),
+            None,
+        )
         if row is None:
-            self._text(p, "Process ended or telemetry is unavailable.",
-                       rect, 9, MUTED, False, Qt.AlignmentFlag.AlignCenter)
+            self._text(
+                p,
+                "Process ended or telemetry is unavailable.",
+                rect,
+                9,
+                MUTED,
+                False,
+                Qt.AlignmentFlag.AlignCenter,
+            )
             return
         try:
             proc = psutil.Process(pid)
@@ -1567,9 +1976,10 @@ class _Dashboard(QWidget):
                 threads = proc.num_threads()
                 user = proc.username()
                 exe = proc.exe() or "N/A"
-                created = time.strftime("%Y-%m-%d %H:%M:%S",
-                                        time.localtime(proc.create_time()))
-                mem = proc.memory_info().rss / (1024 ** 2)
+                created = time.strftime(
+                    "%Y-%m-%d %H:%M:%S", time.localtime(proc.create_time())
+                )
+                mem = proc.memory_info().rss / (1024**2)
                 cpu = proc.cpu_percent(interval=None)
         except Exception:
             name = row.get("name", "unknown")
@@ -1580,43 +1990,82 @@ class _Dashboard(QWidget):
             created = "N/A"
             mem = _num(row.get("mb"))
             cpu = row.get("cpu")
-        self._rows_block(p, rect, [
-            ("NAME", name), ("PID", pid),
-            ("CPU", "N/A" if cpu is None else f"{_num(cpu):.1f}%"),
-            ("MEMORY", f"{_num(mem):.1f} MB"), ("THREADS", threads),
-            ("STATUS", status), ("USER", user), ("STARTED", created),
-            ("EXECUTABLE", exe),
-        ])
+        self._rows_block(
+            p,
+            rect,
+            [
+                ("NAME", name),
+                ("PID", pid),
+                ("CPU", "N/A" if cpu is None else f"{_num(cpu):.1f}%"),
+                ("MEMORY", f"{_num(mem):.1f} MB"),
+                ("THREADS", threads),
+                ("STATUS", status),
+                ("USER", user),
+                ("STARTED", created),
+                ("EXECUTABLE", exe),
+            ],
+        )
 
     def _body_network(self, p, rect, data) -> None:
-        self._text(p, f"↓ {self._rate(data.get('down'))}",
-                   QRectF(rect.left(), rect.top(), rect.width() * 0.5, 26),
-                   11, GOOD, True)
-        self._text(p, f"↑ {self._rate(data.get('up'))}",
-                   QRectF(rect.left() + rect.width() * 0.5, rect.top(),
-                          rect.width() * 0.5, 26),
-                   11, self.acc, True,
-                   Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        rows = [(item.get("name", "?"),
-                 f"↓ {self._bytes(item.get('recv'))}   ↑ {self._bytes(item.get('sent'))}")
-                for item in (data.get("interfaces") or [])[:10]]
+        self._text(
+            p,
+            f"↓ {self._rate(data.get('down'))}",
+            QRectF(rect.left(), rect.top(), rect.width() * 0.5, 26),
+            11,
+            GOOD,
+            True,
+        )
+        self._text(
+            p,
+            f"↑ {self._rate(data.get('up'))}",
+            QRectF(
+                rect.left() + rect.width() * 0.5, rect.top(), rect.width() * 0.5, 26
+            ),
+            11,
+            self.acc,
+            True,
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+        )
+        rows = [
+            (
+                item.get("name", "?"),
+                f"↓ {self._bytes(item.get('recv'))}   ↑ {self._bytes(item.get('sent'))}",
+            )
+            for item in (data.get("interfaces") or [])[:10]
+        ]
         if rows:
             self._rows_block(p, rect.adjusted(0, 32, 0, 0), rows)
         else:
-            self._text(p, "No interface telemetry yet.",
-                       rect.adjusted(0, 32, 0, 0), 8, MUTED, False,
-                       Qt.AlignmentFlag.AlignCenter)
+            self._text(
+                p,
+                "No interface telemetry yet.",
+                rect.adjusted(0, 32, 0, 0),
+                8,
+                MUTED,
+                False,
+                Qt.AlignmentFlag.AlignCenter,
+            )
 
     def _body_temp(self, p, rect, data) -> None:
         value = data.get("temp")
-        self._label(p, "CURRENT", QRectF(rect.left(), rect.top(), rect.width(), 14),
-                    MUTED, 7.5)
-        self._text(p, "N/A" if value is None else f"{_num(value):.1f}°C",
-                   QRectF(rect.left(), rect.top() + 16, rect.width(), rect.height() - 52),
-                   max(24.0, rect.height() * 0.28),
-                   MUTED if value is None else _level_color(_num(value) * 1.15, self.acc), True)
-        self._text(p, "Comfortable range ≈ 40–85°C",
-                   QRectF(rect.left(), rect.bottom() - 22, rect.width(), 16), 7.5, MUTED)
+        self._label(
+            p, "CURRENT", QRectF(rect.left(), rect.top(), rect.width(), 14), MUTED, 7.5
+        )
+        self._text(
+            p,
+            "N/A" if value is None else f"{_num(value):.1f}°C",
+            QRectF(rect.left(), rect.top() + 16, rect.width(), rect.height() - 52),
+            max(24.0, rect.height() * 0.28),
+            MUTED if value is None else _level_color(_num(value) * 1.15, self.acc),
+            True,
+        )
+        self._text(
+            p,
+            "Comfortable range ≈ 40–85°C",
+            QRectF(rect.left(), rect.bottom() - 22, rect.width(), 16),
+            7.5,
+            MUTED,
+        )
 
     # ── process operations ───────────────────────────────────────────────────
 
@@ -1631,7 +2080,7 @@ class _Dashboard(QWidget):
                 exe = proc.exe() or "N/A"
                 status = proc.status()
                 cpu = proc.cpu_percent(interval=None)
-                mem = proc.memory_info().rss / (1024 ** 2)
+                mem = proc.memory_info().rss / (1024**2)
                 threads = proc.num_threads()
                 user = proc.username()
                 created = time.strftime(
@@ -1765,6 +2214,7 @@ class _Dashboard(QWidget):
                         os.startfile(os.path.dirname(exe))
                     else:
                         import subprocess
+
                         subprocess.Popen(["xdg-open", os.path.dirname(exe)])
         except Exception as exc:
             try:
@@ -1845,8 +2295,9 @@ class _Dashboard(QWidget):
     # ── interaction ──────────────────────────────────────────────────────────
 
     def _is_interactive(self, key: str) -> bool:
-        return key.startswith(("kpi:", "proc:", "micro:", "chip:", "detail:")) or key in (
-            "core", "network", "diskcard", "system", "header:close")
+        return key.startswith(
+            ("kpi:", "proc:", "micro:", "chip:", "detail:")
+        ) or key in ("core", "network", "diskcard", "system", "header:close")
 
     def _hit_at(self, pos: QPointF) -> str:
         for key in ("detail:back", "header:close"):
@@ -1874,8 +2325,11 @@ class _Dashboard(QWidget):
         if key == "history_chart":
             self.setCursor(Qt.CursorShape.CrossCursor)
         else:
-            self.setCursor(Qt.CursorShape.PointingHandCursor
-                           if self._is_interactive(key) else Qt.CursorShape.ArrowCursor)
+            self.setCursor(
+                Qt.CursorShape.PointingHandCursor
+                if self._is_interactive(key)
+                else Qt.CursorShape.ArrowCursor
+            )
 
     def _activate(self, key: str) -> None:
         if key.startswith("kpi:"):
@@ -1887,7 +2341,9 @@ class _Dashboard(QWidget):
         elif key.startswith("chip:"):
             self._selected_metric = key[5:]
         elif key.startswith("micro:"):
-            self._open_detail({"0": "ram", "1": "network", "2": "temp"}.get(key[6:], "cpu"))
+            self._open_detail(
+                {"0": "ram", "1": "network", "2": "temp"}.get(key[6:], "cpu")
+            )
         elif key.startswith("proc:"):
             try:
                 self._selected_process = int(key[5:])
@@ -2007,7 +2463,9 @@ class _Dashboard(QWidget):
         mode = self._mode()
         data, hist = self.sampler.snapshot()
         L = self._layout(mode, data)
-        self._hit = {k: v for k, v in L.items() if isinstance(v, QRectF) and k != "content"}
+        self._hit = {
+            k: v for k, v in L.items() if isinstance(v, QRectF) and k != "content"
+        }
         self._proc_hits.clear()
 
         self._draw_header(p, L["header"], data)
@@ -2019,39 +2477,82 @@ class _Dashboard(QWidget):
         elif mode == "medium":
             self._draw_core(p, L["core"], cpu, False)
             self._system_card(p, L["system"], data)
-            self._card(p, L["kpi:cpu"], "cpu", "CPU", f"{cpu:.0f}%", cpu,
-                       hist.get("cpu", []),
-                       "" if data.get("cpu_freq") is None
-                       else f"{_num(data.get('cpu_freq')):.1f} GHz")
-            self._card(p, L["kpi:ram"], "ram", "MEMORY",
-                       f"{_num(data.get('ram')):.0f}%", _num(data.get("ram")),
-                       hist.get("ram", []),
-                       f"{_num(data.get('ram_used')):.0f}/{_num(data.get('ram_total')):.0f} GB")
-            self._card(p, L["kpi:disk"], "disk", "DISK",
-                       f"{_num(data.get('disk')):.0f}%", _num(data.get("disk")),
-                       hist.get("disk", []),
-                       f"{_num(data.get('disk_free')):.0f} GB FREE")
+            self._card(
+                p,
+                L["kpi:cpu"],
+                "cpu",
+                "CPU",
+                f"{cpu:.0f}%",
+                cpu,
+                hist.get("cpu", []),
+                (
+                    ""
+                    if data.get("cpu_freq") is None
+                    else f"{_num(data.get('cpu_freq')):.1f} GHz"
+                ),
+            )
+            self._card(
+                p,
+                L["kpi:ram"],
+                "ram",
+                "MEMORY",
+                f"{_num(data.get('ram')):.0f}%",
+                _num(data.get("ram")),
+                hist.get("ram", []),
+                f"{_num(data.get('ram_used')):.0f}/{_num(data.get('ram_total')):.0f} GB",
+            )
+            self._card(
+                p,
+                L["kpi:disk"],
+                "disk",
+                "DISK",
+                f"{_num(data.get('disk')):.0f}%",
+                _num(data.get("disk")),
+                hist.get("disk", []),
+                f"{_num(data.get('disk_free')):.0f} GB FREE",
+            )
             self._network_card(p, L["network"], data, hist)
             self._process_card(p, L["processes"], data)
         else:
             self._draw_core(p, L["core"], cpu, False)
             self._system_card(p, L["system"], data)
             gpu, temp = data.get("gpu"), data.get("temp")
-            self._card(p, L["kpi:cpu"], "cpu", "CPU", f"{cpu:.0f}%", cpu,
-                       hist.get("cpu", []))
-            self._card(p, L["kpi:ram"], "ram", "MEMORY",
-                       f"{_num(data.get('ram')):.0f}%", _num(data.get("ram")),
-                       hist.get("ram", []),
-                       f"{_num(data.get('ram_used')):.1f}/{_num(data.get('ram_total')):.1f} GB")
-            self._card(p, L["kpi:gpu"], "gpu", "GPU",
-                       "N/A" if gpu is None else f"{_num(gpu):.0f}%",
-                       None if gpu is None else _num(gpu), hist.get("gpu", []),
-                       "N/A" if data.get("gpu_mem") is None
-                       else f"VRAM {_num(data.get('gpu_mem')):.0f}%")
-            self._card(p, L["kpi:temp"], "temp", "TEMP",
-                       "N/A" if temp is None else f"{_num(temp):.0f}°C",
-                       None if temp is None else _num(temp) * 1.15,
-                       hist.get("temp", []))
+            self._card(
+                p, L["kpi:cpu"], "cpu", "CPU", f"{cpu:.0f}%", cpu, hist.get("cpu", [])
+            )
+            self._card(
+                p,
+                L["kpi:ram"],
+                "ram",
+                "MEMORY",
+                f"{_num(data.get('ram')):.0f}%",
+                _num(data.get("ram")),
+                hist.get("ram", []),
+                f"{_num(data.get('ram_used')):.1f}/{_num(data.get('ram_total')):.1f} GB",
+            )
+            self._card(
+                p,
+                L["kpi:gpu"],
+                "gpu",
+                "GPU",
+                "N/A" if gpu is None else f"{_num(gpu):.0f}%",
+                None if gpu is None else _num(gpu),
+                hist.get("gpu", []),
+                (
+                    "N/A"
+                    if data.get("gpu_mem") is None
+                    else f"VRAM {_num(data.get('gpu_mem')):.0f}%"
+                ),
+            )
+            self._card(
+                p,
+                L["kpi:temp"],
+                "temp",
+                "TEMP",
+                "N/A" if temp is None else f"{_num(temp):.0f}°C",
+                None if temp is None else _num(temp) * 1.15,
+                hist.get("temp", []),
+            )
             self._network_card(p, L["network"], data, hist)
             self._disk_card(p, L["diskcard"], data)
             self._history_panel(p, L["history"], hist)
@@ -2275,13 +2776,21 @@ def _process_from_pid(pid: int) -> Optional[dict]:
             status = proc.status()
             threads = proc.num_threads()
             user = proc.username()
-            memory = proc.memory_info().rss / (1024 ** 2)
+            memory = proc.memory_info().rss / (1024**2)
             cpu = proc.cpu_percent(interval=None)
-            created = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(proc.create_time()))
+            created = time.strftime(
+                "%Y-%m-%d %H:%M:%S", time.localtime(proc.create_time())
+            )
         return {
-            "pid": int(pid), "name": name, "exe": exe, "status": status,
-            "threads": threads, "user": user, "memory": memory,
-            "cpu": cpu, "created": created,
+            "pid": int(pid),
+            "name": name,
+            "exe": exe,
+            "status": status,
+            "threads": threads,
+            "user": user,
+            "memory": memory,
+            "cpu": cpu,
+            "created": created,
         }
     except Exception:
         return None
@@ -2318,8 +2827,12 @@ def _process_tool_action(action: str, operation: str, pid: int, player=None) -> 
             f"RAM {info['memory']:.1f} MB | Status {info['status']} | "
             f"Executable {info['exe']}"
         )
-        threading.Thread(target=callback, args=(prompt,), daemon=True,
-                         name="jarvis-process-analysis-tool").start()
+        threading.Thread(
+            target=callback,
+            args=(prompt,),
+            daemon=True,
+            name="jarvis-process-analysis-tool",
+        ).start()
         return {"ok": True, "operation": "analyze", "pid": pid}
 
     if operation == "open_location":
@@ -2333,15 +2846,18 @@ def _process_tool_action(action: str, operation: str, pid: int, player=None) -> 
                 os.startfile(folder)
             elif platform.system() == "Darwin":
                 import subprocess
+
                 subprocess.Popen(["open", folder])
             else:
                 import subprocess
+
                 subprocess.Popen(["xdg-open", folder])
 
         ok = _queue_gui(open_location)
         return {"ok": ok, "operation": operation, "pid": pid}
 
     if operation in {"terminate", "suspend", "resume"}:
+
         def ask_and_run() -> None:
             try:
                 proc = psutil.Process(pid)
@@ -2389,7 +2905,9 @@ def run(parameters, player=None, session_memory=None) -> dict:
             pid = int(params.get("pid"))
         except Exception:
             return {"ok": False, "error": "A valid process PID is required."}
-        return _process_tool_action(operation=operation, action=action, pid=pid, player=player)
+        return _process_tool_action(
+            operation=operation, action=action, pid=pid, player=player
+        )
 
     # Open/close/toggle/status are intentionally asynchronous for non-status
     # calls. This removes the timeout failure mode completely.

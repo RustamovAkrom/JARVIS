@@ -23,6 +23,7 @@ Discovery runs once at startup; import errors, validation errors, and name
 collisions are logged and the offending file is skipped — they NEVER raise out
 of discover_actions() and never abort the scan of the remaining files.
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -63,13 +64,13 @@ class ActionRecord:
     file: str = ""
     valid: bool = False
     error: str = ""
-    behavior: Optional[str] = None     # None = the API's default (blocking)
-    scheduling: Optional[str] = None   # None = the API's default (WHEN_IDLE)
+    behavior: Optional[str] = None  # None = the API's default (blocking)
+    scheduling: Optional[str] = None  # None = the API's default (WHEN_IDLE)
 
 
 class ActionRegistry:
     def __init__(self, actions: dict[str, ActionRecord], logger: Callable[[str], None]):
-        self._actions = actions          # name -> ActionRecord, VALID entries only
+        self._actions = actions  # name -> ActionRecord, VALID entries only
         self._all_records: list[ActionRecord] = []
         self._logger = logger
 
@@ -77,8 +78,11 @@ class ActionRegistry:
     def get_tool_declarations(self) -> list[dict]:
         out = []
         for rec in self._actions.values():
-            decl = {"name": rec.name, "description": rec.description,
-                    "parameters": rec.parameters}
+            decl = {
+                "name": rec.name,
+                "description": rec.description,
+                "parameters": rec.parameters,
+            }
             if rec.behavior:
                 decl["behavior"] = rec.behavior
             out.append(decl)
@@ -113,7 +117,9 @@ def _call_handler(fn: Callable, parameters: dict, ctx: dict) -> str:
     (or all of them if it has **kwargs), so each action's existing signature
     works unchanged."""
     sig = inspect.signature(fn)
-    has_var_kw = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
+    has_var_kw = any(
+        p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
+    )
     kwargs = {}
     for key in _CTX_KEYS:
         if has_var_kw or key in sig.parameters:
@@ -125,37 +131,58 @@ def _validate(module, filename: str) -> ActionRecord:
     """Returns an ActionRecord; .valid=False + .error set on any problem. Never raises."""
     tool = getattr(module, "TOOL", None)
     if not isinstance(tool, dict):
-        return ActionRecord(name=Path(filename).stem, file=filename,
-                            error="No module-level TOOL dict (not a discoverable action).")
+        return ActionRecord(
+            name=Path(filename).stem,
+            file=filename,
+            error="No module-level TOOL dict (not a discoverable action).",
+        )
 
     name = tool.get("name")
     if not isinstance(name, str) or not _NAME_RE.match(name):
-        return ActionRecord(name=str(name or Path(filename).stem), file=filename,
-                            error="TOOL['name'] missing or not a valid identifier.")
+        return ActionRecord(
+            name=str(name or Path(filename).stem),
+            file=filename,
+            error="TOOL['name'] missing or not a valid identifier.",
+        )
 
     description = tool.get("description")
     if not isinstance(description, str) or not description.strip():
-        return ActionRecord(name=name, file=filename,
-                            error="TOOL['description'] missing or empty.")
+        return ActionRecord(
+            name=name, file=filename, error="TOOL['description'] missing or empty."
+        )
 
     parameters = tool.get("parameters", _DEFAULT_PARAMS)
     if not isinstance(parameters, dict) or parameters.get("type") != "OBJECT":
-        return ActionRecord(name=name, file=filename,
-                            error="TOOL['parameters'] must be a dict with \"type\": \"OBJECT\".")
+        return ActionRecord(
+            name=name,
+            file=filename,
+            error='TOOL[\'parameters\'] must be a dict with "type": "OBJECT".',
+        )
 
     handler = tool.get("handler")
     if not callable(handler):
-        return ActionRecord(name=name, file=filename,
-                            error="TOOL['handler'] missing or not callable.")
+        return ActionRecord(
+            name=name, file=filename, error="TOOL['handler'] missing or not callable."
+        )
 
-    return ActionRecord(name=name, description=description.strip(), parameters=parameters,
-                        handler=handler, file=filename, valid=True, error="",
-                        behavior=_opt_upper(tool.get("behavior"), _BEHAVIORS),
-                        scheduling=_opt_upper(tool.get("scheduling"), _SCHEDULING))
+    return ActionRecord(
+        name=name,
+        description=description.strip(),
+        parameters=parameters,
+        handler=handler,
+        file=filename,
+        valid=True,
+        error="",
+        behavior=_opt_upper(tool.get("behavior"), _BEHAVIORS),
+        scheduling=_opt_upper(tool.get("scheduling"), _SCHEDULING),
+    )
 
 
-def discover_actions(actions_dir: Path, reserved_names: set[str] | None = None,
-                     logger: Callable[[str], None] = print) -> ActionRegistry:
+def discover_actions(
+    actions_dir: Path,
+    reserved_names: set[str] | None = None,
+    logger: Callable[[str], None] = print,
+) -> ActionRegistry:
     """
     Scans actions_dir for *.py files (skips files starting with '_'). A file is
     only treated as an action if it exposes a module-level TOOL dict; files
@@ -168,7 +195,9 @@ def discover_actions(actions_dir: Path, reserved_names: set[str] | None = None,
     valid: dict[str, ActionRecord] = {}
     all_records: list[ActionRecord] = []
 
-    files = sorted(actions_dir.glob("*.py"), key=lambda p: p.name)  # deterministic order
+    files = sorted(
+        actions_dir.glob("*.py"), key=lambda p: p.name
+    )  # deterministic order
     for path in files:
         if path.name.startswith("_"):
             continue
@@ -190,21 +219,28 @@ def discover_actions(actions_dir: Path, reserved_names: set[str] | None = None,
                     raise
 
             if getattr(module, "TOOL", None) is None:
-                continue   # not an action file — a helper/capture-only module
+                continue  # not an action file — a helper/capture-only module
 
             rec = _validate(module, path.name)
 
             if rec.valid and rec.name in reserved:
-                rec = ActionRecord(name=rec.name, file=path.name,
-                                   error=f"Name '{rec.name}' collides with a reserved core tool — rejected.")
+                rec = ActionRecord(
+                    name=rec.name,
+                    file=path.name,
+                    error=f"Name '{rec.name}' collides with a reserved core tool — rejected.",
+                )
             elif rec.valid and rec.name in valid:
                 other = valid[rec.name].file
-                rec = ActionRecord(name=rec.name, file=path.name,
-                                   error=f"Name '{rec.name}' already used by action '{other}' — rejected.")
+                rec = ActionRecord(
+                    name=rec.name,
+                    file=path.name,
+                    error=f"Name '{rec.name}' already used by action '{other}' — rejected.",
+                )
 
         except Exception as e:
-            rec = ActionRecord(name=path.stem, file=path.name,
-                               error=f"Failed to load: {e}")
+            rec = ActionRecord(
+                name=path.stem, file=path.name, error=f"Failed to load: {e}"
+            )
             traceback.print_exc()
 
         all_records.append(rec)

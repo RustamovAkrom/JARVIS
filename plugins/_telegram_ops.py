@@ -47,6 +47,7 @@ EVERYTHING HEAVY IS IMPORTED INSIDE A FUNCTION
     to a boot where nobody opens the remote, so this module's own imports are all
     deferred to the moment a picture is actually asked for.
 """
+
 from __future__ import annotations
 
 # The picture is meant to be READ on a phone — a window title, an error dialog,
@@ -67,76 +68,85 @@ _DOC_LIMIT = 45_000_000
 EXTRA_OPS = (
     {
         "action": "screenshot",
-        "cmd":    "screen",
-        "icon":   "\U0001F4F8",
-        "desc":   ("capture this computer's screen right now and send the picture "
-                   "to the phone"),
-        "where":  "both",
+        "cmd": "screen",
+        "icon": "\U0001f4f8",
+        "desc": (
+            "capture this computer's screen right now and send the picture "
+            "to the phone"
+        ),
+        "where": "both",
         "button": True,
-        "gate":   "allow_screenshot",
-        "arg":    "a monitor number, or 'all' for every monitor at once",
+        "gate": "allow_screenshot",
+        "arg": "a monitor number, or 'all' for every monitor at once",
     },
     {
         "action": "system_status",
-        "cmd":    "sys",
-        "icon":   "\U0001F4CA",
-        "desc":   ("send this computer's CPU, memory, GPU, temperature and uptime "
-                   "to the phone"),
-        "where":  "both",
+        "cmd": "sys",
+        "icon": "\U0001f4ca",
+        "desc": (
+            "send this computer's CPU, memory, GPU, temperature and uptime "
+            "to the phone"
+        ),
+        "where": "both",
         "button": True,
-        "gate":   None,
-        "arg":    None,
+        "gate": None,
+        "arg": None,
     },
     {
         "action": "camera",
-        "cmd":    "cam",
-        "icon":   "\U0001F4F7",
-        "desc":   ("take one picture with this computer's webcam and send it to "
-                   "the phone"),
-        "where":  "both",
+        "cmd": "cam",
+        "icon": "\U0001f4f7",
+        "desc": (
+            "take one picture with this computer's webcam and send it to " "the phone"
+        ),
+        "where": "both",
         "button": False,
-        "gate":   "allow_camera",
-        "arg":    None,
+        "gate": "allow_camera",
+        "arg": None,
     },
     {
         "action": "get_file",
-        "cmd":    "get",
-        "icon":   "\U0001F4CE",
-        "desc":   ("send a file out of the shared folder, or list what is in it"),
-        "where":  "remote",
+        "cmd": "get",
+        "icon": "\U0001f4ce",
+        "desc": ("send a file out of the shared folder, or list what is in it"),
+        "where": "remote",
         "button": False,
         # Not a switch but a folder name: the gate opens by naming ONE place,
         # which is also the only place this can ever read from.
-        "gate":   "share_folder",
-        "arg":    "a file name, or nothing to list the folder",
+        "gate": "share_folder",
+        "arg": "a file name, or nothing to list the folder",
     },
     {
         "action": "pending",
-        "cmd":    "pending",
-        "icon":   "⚠",
-        "desc":   ("say whether a confirmation is waiting to be pressed on the "
-                   "computer's screen"),
-        "where":  "remote",
+        "cmd": "pending",
+        "icon": "⚠",
+        "desc": (
+            "say whether a confirmation is waiting to be pressed on the "
+            "computer's screen"
+        ),
+        "where": "remote",
         "button": True,
-        "gate":   None,
-        "arg":    None,
+        "gate": None,
+        "arg": None,
     },
     {
         "action": "undo",
-        "cmd":    "undo",
-        "icon":   "↩",
-        "desc":   ("take back the last thing the assistant did to a file or a "
-                   "setting"),
-        "where":  "remote",
+        "cmd": "undo",
+        "icon": "↩",
+        "desc": (
+            "take back the last thing the assistant did to a file or a " "setting"
+        ),
+        "where": "remote",
         "button": False,
-        "gate":   None,
-        "arg":    None,
+        "gate": None,
+        "arg": None,
         "confirm": True,
     },
 )
 
 
 # -- screen -------------------------------------------------------------------
+
 
 def _grab(arg: str) -> tuple[bytes, int, int, int, int]:
     """Return (png, width, height, monitor_index, monitor_count).
@@ -171,10 +181,10 @@ def _grab(arg: str) -> tuple[bytes, int, int, int, int]:
                     )
             else:
                 idx = 1 if len(mons) > 1 else 0
-            shot   = sct.grab(mons[idx])
-            width  = shot.width
+            shot = sct.grab(mons[idx])
+            width = shot.width
             height = shot.height
-            png    = mss.tools.to_png(shot.rgb, shot.size)
+            png = mss.tools.to_png(shot.rgb, shot.size)
     except RuntimeError:
         raise
     except Exception as e:
@@ -221,13 +231,18 @@ def _screenshot(arg: str = "", _cfg: dict | None = None) -> dict:
     if idx == 0 and count > 1:
         which = "⛶ all"
     elif count > 1:
-        which = f"\U0001F5B5 {idx}/{count}"
+        which = f"\U0001f5b5 {idx}/{count}"
     else:
-        which = "\U0001F5B5"
+        which = "\U0001f5b5"
     caption = f"{which}  ·  {w}×{h}  ·  {_time.strftime('%H:%M:%S')}"
 
-    return {"kind": "photo", "data": data, "mime": mime,
-            "name": f"screen.{ext}", "caption": caption}
+    return {
+        "kind": "photo",
+        "data": data,
+        "mime": mime,
+        "name": f"screen.{ext}",
+        "caption": caption,
+    }
 
 
 def _camera(_arg: str = "", _cfg: dict | None = None) -> dict:
@@ -241,12 +256,18 @@ def _camera(_arg: str = "", _cfg: dict | None = None) -> dict:
     import time as _time
 
     from actions.screen_processor import _capture_camera
+
     try:
         data, mime = _capture_camera()
     except Exception as e:
         raise RuntimeError(f"The camera could not be used ({e}).") from None
-    return {"kind": "photo", "data": data, "mime": mime, "name": "camera.jpg",
-            "caption": f"\U0001F4F7  ·  {_time.strftime('%H:%M:%S')}"}
+    return {
+        "kind": "photo",
+        "data": data,
+        "mime": mime,
+        "name": "camera.jpg",
+        "caption": f"\U0001f4f7  ·  {_time.strftime('%H:%M:%S')}",
+    }
 
 
 # -- files, in and out --------------------------------------------------------
@@ -256,6 +277,7 @@ def _camera(_arg: str = "", _cfg: dict | None = None) -> dict:
 # single directory that is the only place this can write to, and a single
 # directory that is the only place it can read from. Nothing from Telegram can
 # set either of them.
+
 
 def _safe_name(raw: str) -> str:
     """A name Telegram supplied is not a name this machine has to accept.
@@ -272,6 +294,7 @@ def _safe_name(raw: str) -> str:
 
 def _folder(cfg: dict | None, key: str):
     from pathlib import Path
+
     raw = str((cfg or {}).get(key) or "").strip()
     if not raw:
         raise RuntimeError("No folder is set for that at the computer.")
@@ -308,8 +331,10 @@ def _get_file(arg: str = "", cfg: dict | None = None) -> dict:
             return {"kind": "text", "text": "The shared folder is empty."}
         listing = "\n".join(f"• {n}" for n in names[:60])
         more = f"\n… and {len(names) - 60} more" if len(names) > 60 else ""
-        return {"kind": "text",
-                "text": f"{folder.name}:\n{listing}{more}\n\nSend /get <name>."}
+        return {
+            "kind": "text",
+            "text": f"{folder.name}:\n{listing}{more}\n\nSend /get <name>.",
+        }
 
     target = (folder / wanted).resolve()
     # Belt and braces behind _safe_name: whatever the name turned out to be, the
@@ -319,14 +344,21 @@ def _get_file(arg: str = "", cfg: dict | None = None) -> dict:
         raise RuntimeError(f"There is no '{wanted}' in the shared folder.")
     size = target.stat().st_size
     if size > _DOC_LIMIT:
-        raise RuntimeError(f"'{target.name}' is {size / 1e6:.0f} MB — Telegram "
-                           f"will not carry more than {_DOC_LIMIT // 1_000_000} MB.")
-    return {"kind": "document", "data": target.read_bytes(), "name": target.name,
-            "mime": "application/octet-stream",
-            "caption": f"{target.name}  ·  {size / 1000:.0f} KB"}
+        raise RuntimeError(
+            f"'{target.name}' is {size / 1e6:.0f} MB — Telegram "
+            f"will not carry more than {_DOC_LIMIT // 1_000_000} MB."
+        )
+    return {
+        "kind": "document",
+        "data": target.read_bytes(),
+        "name": target.name,
+        "mime": "application/octet-stream",
+        "caption": f"{target.name}  ·  {size / 1000:.0f} KB",
+    }
 
 
 # -- hardware -----------------------------------------------------------------
+
 
 def _system_card(_arg: str = "", _cfg: dict | None = None) -> dict:
     """The bundled system_monitor already knows how to read this machine - GPU
@@ -343,31 +375,33 @@ def _system_card(_arg: str = "", _cfg: dict | None = None) -> dict:
     except Exception as e:
         raise RuntimeError(f"The hardware readout failed ({e}).") from None
 
-    rows = [f"\U0001F5A5  CPU   {float(s.get('cpu_percent') or 0):.0f}%"]
+    rows = [f"\U0001f5a5  CPU   {float(s.get('cpu_percent') or 0):.0f}%"]
 
     ram = s.get("ram_percent")
     if ram is not None:
         used, total = s.get("ram_used_gb"), s.get("ram_total_gb")
         detail = f"  ({used}/{total} GB)" if used is not None and total else ""
-        rows.append(f"\U0001F9E0  RAM   {float(ram):.0f}%{detail}")
+        rows.append(f"\U0001f9e0  RAM   {float(ram):.0f}%{detail}")
 
     # A value the platform could not report is left out rather than shown as 0.
     # A machine with no discrete GPU reporting "GPU 0%" is a lie that looks like
     # a reading.
     gpu = s.get("gpu_percent")
     if gpu is not None:
-        rows.append(f"\U0001F3AE  GPU   {float(gpu):.0f}%")
+        rows.append(f"\U0001f3ae  GPU   {float(gpu):.0f}%")
 
     temp = s.get("cpu_temp_c")
     if temp is not None:
-        rows.append(f"\U0001F321  TEMP  {float(temp):.0f}°C")
+        rows.append(f"\U0001f321  TEMP  {float(temp):.0f}°C")
 
-    rows.append(f"⏱  UP    {s.get('uptime', '?')}  ·  "
-                f"{s.get('process_count', '?')} proc")
+    rows.append(
+        f"⏱  UP    {s.get('uptime', '?')}  ·  " f"{s.get('process_count', '?')} proc"
+    )
     return {"kind": "text", "text": "\n".join(rows)}
 
 
 # -- the confirmation gate, seen from a phone ---------------------------------
+
 
 def confirm_pending() -> str:
     """The title of whatever is waiting on the HUD, or ''.
@@ -380,6 +414,7 @@ def confirm_pending() -> str:
     """
     try:
         from core.confirm import pending_title
+
         return pending_title() or ""
     except Exception:
         return ""
@@ -388,29 +423,40 @@ def confirm_pending() -> str:
 def _pending(_arg: str = "", _cfg: dict | None = None) -> dict:
     title = confirm_pending()
     if not title:
-        return {"kind": "text",
-                "text": "Nothing is waiting for a hand at the computer."}
-    return {"kind": "text",
-            "text": (f"⚠ Waiting for someone at the computer to press "
-                     f"CONFIRM:\n\n{title}\n\nI cannot press it from here, and "
-                     f"that is deliberate — an irreversible action needs a "
-                     f"hand in the room.")}
+        return {
+            "kind": "text",
+            "text": "Nothing is waiting for a hand at the computer.",
+        }
+    return {
+        "kind": "text",
+        "text": (
+            f"⚠ Waiting for someone at the computer to press "
+            f"CONFIRM:\n\n{title}\n\nI cannot press it from here, and "
+            f"that is deliberate — an irreversible action needs a "
+            f"hand in the room."
+        ),
+    }
 
 
 # -- undo ---------------------------------------------------------------------
 
+
 def _undo(_arg: str = "", _cfg: dict | None = None) -> dict:
     from core.undo import undo_last
+
     return {"kind": "text", "text": undo_last()}
 
 
 def _undo_preview() -> str:
     from core.undo import peek
+
     what = peek()
     if not what:
-        raise RuntimeError("There is nothing to undo. I only track what I "
-                           "changed myself — files I moved or wrote, and "
-                           "settings I adjusted.")
+        raise RuntimeError(
+            "There is nothing to undo. I only track what I "
+            "changed myself — files I moved or wrote, and "
+            "settings I adjusted."
+        )
     return what
 
 
@@ -444,6 +490,7 @@ def away_alert() -> str | None:
     global _monitor
     try:
         from actions.system_monitor import SystemMonitor
+
         if _monitor is None:
             _monitor = SystemMonitor()
         line = _monitor.check()
@@ -466,10 +513,12 @@ def away_alert() -> str | None:
 # at the microphone, so the same route is used here and nothing extra needs
 # downloading.
 
+
 def _slot(slot: str) -> str:
     """The provider id filling one pipeline slot, or '' when not in that mode."""
     try:
         from memory.config_manager import get_pipeline, get_provider_mode
+
         if get_provider_mode() == "pipeline":
             return str(get_pipeline().get(slot) or "").strip()
     except Exception:
@@ -488,6 +537,7 @@ def _build(pid: str):
     """
     from memory.config_manager import get_provider_config
     from providers import registry
+
     cfg = get_provider_config(pid)
     try:
         return registry.build(pid, cfg)
@@ -506,6 +556,7 @@ def stt_ready() -> tuple[bool, str]:
         return True, pid
     try:
         from core import gemini
+
         return bool(gemini.api_key()), "Gemini"
     except Exception:
         return False, ""
@@ -533,11 +584,12 @@ def _decode_pcm(data: bytes, rate: int = 16_000) -> bytes:
             raise RuntimeError("That file has no audio in it.")
         stream = container.streams.audio[0]
         resampler = av.audio.resampler.AudioResampler(
-            format="s16", layout="mono", rate=rate)
+            format="s16", layout="mono", rate=rate
+        )
         for frame in container.decode(stream):
             for out in resampler.resample(frame):
                 chunks.append(out.to_ndarray().tobytes())
-        for out in resampler.resample(None):        # flush the tail
+        for out in resampler.resample(None):  # flush the tail
             chunks.append(out.to_ndarray().tobytes())
     return b"".join(chunks)
 
@@ -565,17 +617,22 @@ def _transcribe_gemini(data: bytes, mime: str) -> str:
     from google.genai import types as gtypes
 
     from core import gemini
+
     # Through core/gemini.py rather than a client of its own: the ladder, the
     # timeout and the cooldowns are exactly what a plugin should not be
     # reinventing, and this call is no different from the nineteen others in
     # the app that go the same way.
     return gemini.text(
-        [gtypes.Part.from_bytes(data=data, mime_type=mime or "audio/ogg"),
-         "Transcribe this voice message word for word, in the language it is "
-         "spoken in. Reply with the transcription alone — no quotation marks, "
-         "no translation, no commentary, no apology. If there is nothing "
-         "intelligible in it, reply with nothing at all."],
-        timeout_ms=45_000, default="").strip()
+        [
+            gtypes.Part.from_bytes(data=data, mime_type=mime or "audio/ogg"),
+            "Transcribe this voice message word for word, in the language it is "
+            "spoken in. Reply with the transcription alone — no quotation marks, "
+            "no translation, no commentary, no apology. If there is nothing "
+            "intelligible in it, reply with nothing at all.",
+        ],
+        timeout_ms=45_000,
+        default="",
+    ).strip()
 
 
 def transcribe(data: bytes, mime: str = "audio/ogg") -> str:
@@ -627,38 +684,65 @@ def synthesize(text: str) -> dict:
 
     pcm = asyncio.run(_collect())
     if not pcm:
-        raise RuntimeError("The voice produced no sound. Check the voice in "
-                           "ENGINE & PROVIDERS — some system voices return "
-                           "silence for a language they do not have.")
+        raise RuntimeError(
+            "The voice produced no sound. Check the voice in "
+            "ENGINE & PROVIDERS — some system voices return "
+            "silence for a language they do not have."
+        )
     seconds = max(1, int(pa.duration_s(pcm, pa.SPEAKER_RATE)))
     wav = pa.to_wav(pcm, pa.SPEAKER_RATE)
 
     if shutil.which("ffmpeg"):
         try:
             done = subprocess.run(
-                ["ffmpeg", "-hide_banner", "-loglevel", "error",
-                 "-i", "pipe:0", "-c:a", "libopus", "-b:a", "24k",
-                 "-f", "ogg", "pipe:1"],
-                input=wav, capture_output=True, timeout=60)
+                [
+                    "ffmpeg",
+                    "-hide_banner",
+                    "-loglevel",
+                    "error",
+                    "-i",
+                    "pipe:0",
+                    "-c:a",
+                    "libopus",
+                    "-b:a",
+                    "24k",
+                    "-f",
+                    "ogg",
+                    "pipe:1",
+                ],
+                input=wav,
+                capture_output=True,
+                timeout=60,
+            )
             if done.returncode == 0 and done.stdout:
-                return {"kind": "voice", "data": done.stdout, "name": "reply.ogg",
-                        "mime": "audio/ogg", "seconds": seconds}
+                return {
+                    "kind": "voice",
+                    "data": done.stdout,
+                    "name": "reply.ogg",
+                    "mime": "audio/ogg",
+                    "seconds": seconds,
+                }
         except Exception:
-            pass          # a build without libopus is not a reason to say nothing
+            pass  # a build without libopus is not a reason to say nothing
 
-    return {"kind": "audio", "data": wav, "name": "reply.wav",
-            "mime": "audio/wav", "seconds": seconds}
+    return {
+        "kind": "audio",
+        "data": wav,
+        "name": "reply.wav",
+        "mime": "audio/wav",
+        "seconds": seconds,
+    }
 
 
 # -- the one entry point telegram_remote.py uses ------------------------------
 
 _RUNNERS = {
-    "screenshot":    _screenshot,
+    "screenshot": _screenshot,
     "system_status": _system_card,
-    "camera":        _camera,
-    "get_file":      _get_file,
-    "pending":       _pending,
-    "undo":          _undo,
+    "camera": _camera,
+    "get_file": _get_file,
+    "pending": _pending,
+    "undo": _undo,
 }
 
 

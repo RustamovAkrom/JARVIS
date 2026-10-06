@@ -15,6 +15,7 @@ Design goals:
 openwakeword ships small ONNX models (a few MB each) and runs comfortably on a
 CPU. The pretrained wake phrase used here is "Hey Jarvis".
 """
+
 from __future__ import annotations
 
 import queue
@@ -36,6 +37,7 @@ def is_installed() -> bool:
     """True if the openwakeword package is importable (no model check)."""
     try:
         import importlib.util
+
         return importlib.util.find_spec("openwakeword") is not None
     except Exception:
         return False
@@ -53,22 +55,29 @@ def is_ready() -> bool:
         return False
     try:
         import openwakeword
-        models_dir = Path(openwakeword.__file__).resolve().parent / "resources" / "models"
+
+        models_dir = (
+            Path(openwakeword.__file__).resolve().parent / "resources" / "models"
+        )
         if not models_dir.is_dir():
             return False
-        has_wake = (any(models_dir.glob(f"{WAKE_MODEL}*.onnx"))
-                    or any(models_dir.glob(f"{WAKE_MODEL}*.tflite")))
-        has_mel = (any(models_dir.glob("melspectrogram*.onnx"))
-                   or any(models_dir.glob("melspectrogram*.tflite")))
-        has_emb = (any(models_dir.glob("embedding_model*.onnx"))
-                   or any(models_dir.glob("embedding_model*.tflite")))
+        has_wake = any(models_dir.glob(f"{WAKE_MODEL}*.onnx")) or any(
+            models_dir.glob(f"{WAKE_MODEL}*.tflite")
+        )
+        has_mel = any(models_dir.glob("melspectrogram*.onnx")) or any(
+            models_dir.glob("melspectrogram*.tflite")
+        )
+        has_emb = any(models_dir.glob("embedding_model*.onnx")) or any(
+            models_dir.glob("embedding_model*.tflite")
+        )
         return bool(has_wake and has_mel and has_emb)
     except Exception:
         return False
 
 
-def install_and_download(logger: Callable[[str], None] = print,
-                         notify: Callable[[str], None] | None = None) -> tuple[bool, str]:
+def install_and_download(
+    logger: Callable[[str], None] = print, notify: Callable[[str], None] | None = None
+) -> tuple[bool, str]:
     """
     One-click setup for the UI button: pip-install openwakeword if missing, then
     download the wake model. Returns (ok, message). Never raises — every failure
@@ -81,7 +90,8 @@ def install_and_download(logger: Callable[[str], None] = print,
             _tell("Wake word: installing openwakeword (one-time)…")
             r = subprocess.run(
                 [sys.executable, "-m", "pip", "install", "openwakeword"],
-                capture_output=True, text=True,
+                capture_output=True,
+                text=True,
             )
             if r.returncode != 0:
                 tail = (r.stderr or r.stdout or "").strip().splitlines()[-1:] or [""]
@@ -91,10 +101,11 @@ def install_and_download(logger: Callable[[str], None] = print,
         _tell("Wake word: downloading models…")
         try:
             import openwakeword.utils as _u
+
             try:
                 _u.download_models([WAKE_MODEL])
             except TypeError:
-                _u.download_models()   # older signature downloads the default set
+                _u.download_models()  # older signature downloads the default set
         except Exception as e:
             return False, f"model download failed: {e}"
 
@@ -113,16 +124,19 @@ class WakeWordDetector:
     the callback must marshal to whatever loop/UI it needs).
     """
 
-    def __init__(self, on_detect: Callable[[], None],
-                 threshold: float = DEFAULT_THRESHOLD,
-                 logger: Callable[[str], None] = print,
-                 notify: Callable[[str], None] | None = None):
+    def __init__(
+        self,
+        on_detect: Callable[[], None],
+        threshold: float = DEFAULT_THRESHOLD,
+        logger: Callable[[str], None] = print,
+        notify: Callable[[str], None] | None = None,
+    ):
         self._on_detect = on_detect
         self._threshold = threshold
-        self._logger    = logger
+        self._logger = logger
         # See PluginRegistry: `logger` is the console and gets everything,
         # `notify` is the activity log and gets only what the user must act on.
-        self._notify    = notify or (lambda _msg: None)
+        self._notify = notify or (lambda _msg: None)
         self._queue: queue.Queue = queue.Queue(maxsize=50)
         self._thread: threading.Thread | None = None
         self._running = False
@@ -136,7 +150,10 @@ class WakeWordDetector:
             return True
         try:
             from openwakeword.model import Model
-            self._model = Model(wakeword_models=[WAKE_MODEL], inference_framework="onnx")
+
+            self._model = Model(
+                wakeword_models=[WAKE_MODEL], inference_framework="onnx"
+            )
         except Exception as e:
             self._logger(f"Wake word: could not load model — {e}")
             self._notify("Wake word unavailable — use the WAKE NOW button.")
@@ -144,7 +161,9 @@ class WakeWordDetector:
             return False
         self._running = True
         self._ready = True
-        self._thread = threading.Thread(target=self._loop, daemon=True, name="WakeWordThread")
+        self._thread = threading.Thread(
+            target=self._loop, daemon=True, name="WakeWordThread"
+        )
         self._thread.start()
         self._logger("Wake word: listening for 'Hey Jarvis'.")
         return True
@@ -170,7 +189,11 @@ class WakeWordDetector:
             return
         try:
             # frame_int16 is a numpy int16 array (possibly 2-D mono) — flatten to 1-D
-            data = frame_int16[:, 0].copy() if getattr(frame_int16, "ndim", 1) > 1 else frame_int16.copy()
+            data = (
+                frame_int16[:, 0].copy()
+                if getattr(frame_int16, "ndim", 1) > 1
+                else frame_int16.copy()
+            )
             self._queue.put_nowait(data)
         except queue.Full:
             pass
@@ -179,6 +202,7 @@ class WakeWordDetector:
 
     def _loop(self) -> None:
         import numpy as np
+
         while self._running:
             try:
                 frame = self._queue.get()
