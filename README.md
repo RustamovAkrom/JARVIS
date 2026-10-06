@@ -1,19 +1,21 @@
-# ⚙️ JARVIS (v2)
-### The Real-Time Personal AI Assistant for Your Computer
+![banner](/assets/images/banner.png)
+# JARVIS (v2)
+[RUSSIAN DOCS](/README_ru.md)
+### The Real-Time Personal AI Assistant for Your Computer — By Akrom Rustamov
 
-A real-time voice AI assistant that can hear, see, speak, remember, and control your computer. JARVIS (v2) is built around the Gemini Live API, a modular action system, a dynamic plugin architecture, persistent memory, computer vision, real-time audio, and a PyQt6 HUD.
+A real-time voice AI assistant that can hear, see, speak, remember, and control your computer. JARVIS (v2) is built around the Gemini Live API, a modular action system, a dynamic plugin architecture, persistent local memory, computer vision, real-time audio, and a PyQt6 HUD.
 
 ---
 
 ## ✨ Overview
 
-JARVIS (v2) is a personal AI system designed to operate as a practical extension of your computer rather than a simple chatbot.
+JARVIS (v2) is designed as a practical extension of your computer rather than a simple chatbot.
 
-It combines real-time voice interaction with visual awareness, computer control, persistent memory, background tasks, plugins, live system telemetry, and an interactive HUD.
+It combines real-time voice interaction with visual awareness, computer control, persistent memory, background tasks, plugins, live system telemetry, interactive content, remote control, and a custom PyQt6 HUD.
 
-The architecture is modular: built-in computer actions are automatically discovered from `actions/`, while additional capabilities can be added as standalone plugins in `plugins/`.
+The central runtime stays separate from individual capabilities. Built-in computer actions are automatically discovered from `actions/`, while specialized capabilities can be added as standalone plugins in `plugins/`.
 
-JARVIS can work with voice, keyboard input, screen context, webcam input, and remote commands while keeping the main interaction inside one assistant session.
+JARVIS can work with voice, keyboard input, screen context, webcam input, files, browser interaction, and remote commands while keeping the main interaction inside one assistant session.
 
 It's not just a chatbot — it's a personal computer intelligence system.
 
@@ -64,7 +66,7 @@ It's not just a chatbot — it's a personal computer intelligence system.
 | 📨 Messaging | Messaging integrations can send commands and messages through supported services |
 | 🖱️ Desktop Control | Keyboard, mouse, window, taskbar, and desktop-level operations |
 | 📱 Telegram Remote | JARVIS can be controlled remotely through a secured Telegram integration |
-| 📋 Clipboard Intelligence | Clipboard content can be processed for operations such as explanation, translation, summarization, and correction |
+| 📋 Clipboard Intelligence | Clipboard content can be processed for explanation, translation, summarization, and correction |
 | 🪪 Assistant Customization | Assistant name, user name, voice, and UI color can be configured |
 | 📧 Email Monitoring | Gmail monitoring plugin for checking relevant email changes through OAuth |
 | 📝 Document Review | Documents can be analyzed and presented with findings grouped by severity |
@@ -75,7 +77,7 @@ It's not just a chatbot — it's a personal computer intelligence system.
 | 💬 Chat Takeover | Screen-based conversation assistance for supported visible chat interfaces |
 | 🍎 Food Analysis | Camera-based food recognition and nutrition estimation |
 | 💹 Trading Intelligence | Public market quotes, news, analysis, charts, comparisons, watchlists, and macro information |
-| 🔎 OSINT Research | Planned/extendable public-source investigation workflows for entities, domains, companies, usernames, and other research targets |
+| 🔎 OSINT Research | Extendable public-source investigation workflows for entities, domains, companies, usernames, and other research targets |
 
 ---
 
@@ -103,17 +105,7 @@ Every action exposes a module-level `TOOL` dictionary.
 
 Example:
 
-```python
-TOOL = {
-    "name": "example_action",
-    "description": "Example computer action",
-    "parameters": {
-        "type": "OBJECT",
-        "properties": {}
-    },
-    "handler": handler,
-}
-```
+ - [plugins/_template.py](/plugins/_template.py)
 
 The action loader automatically discovers valid action files at startup.
 
@@ -127,7 +119,7 @@ Additional capabilities live inside:
 plugins/
 ```
 
-A plugin exposes:
+A plugin exposes a `PLUGIN` definition and a runtime entry point:
 
 ```python
 PLUGIN = {
@@ -148,28 +140,8 @@ Plugins are discovered automatically and can optionally provide their own settin
 This keeps specialized functionality outside the core runtime.
 
 ---
-
-## 🧩 Current Plugin Ecosystem
-
-JARVIS (v2) includes a growing collection of specialized plugins:
-
-| Plugin | Purpose |
-|---|---|
-| `map_assistant` | Interactive maps, routing, layers, markers, measurements, drawing, and globe mode |
-| `email_monitor` | Gmail monitoring through OAuth |
-| `calorie_counter` | Camera-based food and nutrition analysis |
-| `chat_takeover` | Screen-aware conversation assistance |
-| `document_review` | Document explanation and structured findings |
-| `excel_writer` | Natural-language Excel workbook generation |
-| `game_updater` | Steam/Epic update and installation control |
-| `pomodoro` | Focus sessions, breaks, and statistics |
-| `quiz` | Interactive HUD quizzes |
-| `telegram_remote` | Remote JARVIS control through Telegram |
-| `trading_agent` | Public market intelligence and analysis |
-| `water_reminder` | Hydration reminders and intake tracking |
-
-Additional plugins can be added without changing the central architecture.
-
+## Plugins
+ - [all optional plugins](/docs/plugins.md)
 ---
 
 ## 👁️ Visual Intelligence
@@ -274,31 +246,6 @@ This mechanism is intended for operations such as shutdown, restart, Wi-Fi chang
 
 ---
 
-## 🗺️ Interactive Map
-
-JARVIS includes a MapLibre-based interactive map plugin.
-
-The map can provide:
-
-- street maps
-- satellite imagery
-- hybrid layers
-- terrain
-- globe projection
-- route drawing
-- distance measurement
-- markers
-- geocoding
-- routing
-- map interaction events
-- dynamic JARVIS accent colors
-
-The map is integrated into the existing JARVIS HUD instead of creating a separate application window.
-
-Its interface follows the current JARVIS theme.
-
----
-
 ## 📱 Remote Control
 
 JARVIS can be extended with remote control through Telegram.
@@ -317,48 +264,6 @@ The remote architecture uses:
 Remote text commands are routed into the same assistant command path used by the desktop interface.
 
 Voice messages can use the existing recognition pipeline.
-
----
-
-## 🔎 OSINT Research
-
-JARVIS can be extended with an OSINT research agent focused on public information.
-
-The intended architecture is:
-
-```text
-plugins/
-├── osint_agent.py
-├── _osint_core.py
-├── _osint_sources.py
-├── _osint_graph.py
-└── _osint_report.py
-```
-
-The research workflow can include:
-
-1. Entity extraction
-2. Investigation planning
-3. Public-source search
-4. Evidence collection
-5. Correlation
-6. Contradiction detection
-7. Source tracking
-8. Relationship mapping
-9. Structured reporting
-
-Potential research targets include:
-
-- people in public/professional contexts
-- companies
-- domains
-- usernames
-- public email addresses
-- IP infrastructure
-- organizations
-- public documents
-
-The system is intended for lawful public-source research and authorized security investigations. It does not target private accounts, passwords, leaked credentials, precise private locations, or other private sensitive information.
 
 ---
 
@@ -525,7 +430,7 @@ Plugin-specific configuration is handled through the shared configuration manage
 
 ---
 
-## 🚀 Quick Start
+## ⚡ Quick Start
 
 ```bash
 git clone https://github.com/RustamovAkrom/JARVIS.git
@@ -557,25 +462,6 @@ Start JARVIS:
 ```bash
 python main.py
 ```
----
-
-## 🔄 Development Workflow
-
-JARVIS uses a simple two-branch workflow:
-
-```text
-dev
-  ↓
-development / testing / fixes
-  ↓
-main
-  ↓
-stable release
-```
-
-`dev` is used for active development and resolving changes.
-
-`main` is kept clean and represents the stable version intended for deployment or release.
 
 ---
 
@@ -647,16 +533,4 @@ The goal is a modular JARVIS-style system that can grow through independent acti
 
 ---
 
-## 📜 License
-
-Define the license for your JARVIS repository here.
-
-For example:
-
-```text
-Copyright © 2026 Akrom Rustamov.
-
-All rights reserved.
-```
-
-Replace this section with the actual license you choose before publishing the repository.
+## [📜 License](/LICENSE)
