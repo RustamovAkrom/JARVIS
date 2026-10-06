@@ -46,13 +46,14 @@ Unicode normalisation rather than through any per-language table, and anything
 the comparison is unsure about is handed to JARVIS to judge rather than being
 marked wrong.
 """
+
 from __future__ import annotations
 
 import unicodedata
 
 _MAX_QUESTIONS = 20
-_MAX_TEXT = 600        # a question the panel can still show without scrolling away
-_MAX_OPTION = 200      # a button, not a paragraph
+_MAX_TEXT = 600  # a question the panel can still show without scrolling away
+_MAX_OPTION = 200  # a button, not a paragraph
 _TYPES = ("multiple_choice", "true_false", "fill_blank", "open")
 
 PLUGIN = {
@@ -85,13 +86,13 @@ PLUGIN = {
                 "type": "STRING",
                 "enum": ["start", "stop"],
                 "description": "'start' puts a new quiz on screen (needs `questions`); "
-                               "'stop' clears one they want to abandon.",
+                "'stop' clears one they want to abandon.",
             },
             "topic": {
                 "type": "STRING",
                 "description": "Short name of what is being tested, in the user's own "
-                               "language - 'French subjunctive', 'Ottoman reforms'. Used "
-                               "as the on-screen title and to track progress over time.",
+                "language - 'French subjunctive', 'Ottoman reforms'. Used "
+                "as the on-screen title and to track progress over time.",
             },
             "questions": {
                 "type": "ARRAY",
@@ -101,34 +102,42 @@ PLUGIN = {
                     "properties": {
                         "type": {
                             "type": "STRING",
-                            "enum": ["multiple_choice", "true_false", "fill_blank", "open"],
+                            "enum": [
+                                "multiple_choice",
+                                "true_false",
+                                "fill_blank",
+                                "open",
+                            ],
                             "description": "'multiple_choice' (give 3-5 options), "
-                                           "'true_false', 'fill_blank' (write the sentence "
-                                           "with ___ where the gap is), or 'open' (a short "
-                                           "written answer you will mark yourself when the "
-                                           "results come back).",
+                            "'true_false', 'fill_blank' (write the sentence "
+                            "with ___ where the gap is), or 'open' (a short "
+                            "written answer you will mark yourself when the "
+                            "results come back).",
                         },
-                        "question": {"type": "STRING", "description": "The question itself."},
+                        "question": {
+                            "type": "STRING",
+                            "description": "The question itself.",
+                        },
                         "options": {
                             "type": "ARRAY",
                             "items": {"type": "STRING"},
                             "description": "The choices. For multiple_choice, 3-5 of them. For "
-                                           "true_false, give exactly 2 - the words for true and "
-                                           "false IN THE USER'S OWN LANGUAGE, so the buttons "
-                                           "read the same way the question does.",
+                            "true_false, give exactly 2 - the words for true and "
+                            "false IN THE USER'S OWN LANGUAGE, so the buttons "
+                            "read the same way the question does.",
                         },
                         "answer": {
                             "type": "STRING",
                             "description": "The correct answer, written exactly as it appears in "
-                                           "`options` when there are options. For fill_blank, the "
-                                           "missing word. For open, a model answer to mark "
-                                           "against.",
+                            "`options` when there are options. For fill_blank, the "
+                            "missing word. For open, a model answer to mark "
+                            "against.",
                         },
                         "note": {
                             "type": "STRING",
                             "description": "Optional one-line explanation shown once they have "
-                                           "answered. Worth adding - it is where the learning "
-                                           "actually happens.",
+                            "answered. Worth adding - it is where the learning "
+                            "actually happens.",
                         },
                     },
                     "required": ["type", "question", "answer"],
@@ -145,6 +154,7 @@ PLUGIN = {
 # "CAFE" and "cafe" agree without a rule per language, so the same code path
 # serves Turkish, Greek and Vietnamese alike. Whatever this cannot decide is
 # handed to JARVIS to mark instead of being called wrong.
+
 
 def _norm(s) -> str:
     s = unicodedata.normalize("NFD", str(s or "").strip().casefold())
@@ -188,7 +198,7 @@ def grade(question: dict, given: str):
         a, b = _truthy(given), _truthy(correct)
         if a is not None and b is not None:
             return a == b
-        return False        # two shown labels that did not match: a real miss
+        return False  # two shown labels that did not match: a real miss
     if qtype == "multiple_choice":
         # The UI sends back the option's own text, so a mismatch is a real miss.
         return False
@@ -201,6 +211,7 @@ def grade(question: dict, given: str):
 # ── validation ───────────────────────────────────────────────────────────────
 # The questions come from a language model, so treat them as untrusted input:
 # drop anything unusable rather than putting a broken question on screen.
+
 
 def _resolve_answer(answer: str, opts: list) -> str:
     """Point the answer key at one of the buttons.
@@ -220,16 +231,16 @@ def _resolve_answer(answer: str, opts: list) -> str:
             # the panel shows them the right answer, and it should read exactly
             # as the button they did not press.
             return o
-    token = _norm(answer)                     # "a)" and "A." both reduce to "a"
+    token = _norm(answer)  # "a)" and "A." both reduce to "a"
     if len(token) == 1 and "a" <= token <= "z":
         i = ord(token) - ord("a")
         if i < len(opts):
             return opts[i]
     if token.isdigit():
-        i = int(token) - 1                    # people and models both count from 1
+        i = int(token) - 1  # people and models both count from 1
         if 0 <= i < len(opts):
             return opts[i]
-    return answer                             # unusable — grade() defers to JARVIS
+    return answer  # unusable — grade() defers to JARVIS
 
 
 def clean_questions(raw) -> list:
@@ -247,13 +258,13 @@ def clean_questions(raw) -> list:
         # Deduplicate: two identical buttons are two ways to give one answer,
         # and one of them will look wrong whichever the person presses.
         opts, seen = [], set()
-        for o in (q.get("options") or []):
+        for o in q.get("options") or []:
             o = str(o).strip()[:_MAX_OPTION]
             if o and _norm(o) not in seen:
                 seen.add(_norm(o))
                 opts.append(o)
         if qtype == "multiple_choice" and len(opts) < 2:
-            qtype = "open"            # a choice of one is not a question
+            qtype = "open"  # a choice of one is not a question
         if qtype == "true_false" and len(opts) != 2:
             # Only fall back to English when the model did not label the two
             # buttons itself. Hard-coding a pair per language is the thing this
@@ -261,17 +272,20 @@ def clean_questions(raw) -> list:
             # reading True and False is exactly what that would look like.
             opts = ["True", "False"]
         shown = opts if qtype in ("multiple_choice", "true_false") else []
-        out.append({
-            "type": qtype,
-            "question": text,
-            "options": shown,
-            "answer": _resolve_answer(answer, shown),
-            "note": str(q.get("note") or "").strip()[:_MAX_TEXT],
-        })
+        out.append(
+            {
+                "type": qtype,
+                "question": text,
+                "options": shown,
+                "answer": _resolve_answer(answer, shown),
+                "note": str(q.get("note") or "").strip()[:_MAX_TEXT],
+            }
+        )
     return out
 
 
 # ── entry point ──────────────────────────────────────────────────────────────
+
 
 def run(parameters: dict, player=None, session_memory=None) -> str:
     try:
@@ -288,8 +302,10 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
 
         questions = clean_questions(parameters.get("questions"))
         if not questions:
-            return ("I need the questions themselves before I can put a quiz on "
-                    "screen - write them and call quiz again with them.")
+            return (
+                "I need the questions themselves before I can put a quiz on "
+                "screen - write them and call quiz again with them."
+            )
 
         shown = False
         if player:
@@ -312,14 +328,22 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
                     player.show_content(topic.upper() or "QUIZ", "\n".join(lines))
                 except Exception:
                     pass
-            return (str(len(questions)) + " questions ready"
-                    + ((" on " + topic) if topic else "")
-                    + " - I'll read them out; answer whenever you're ready.")
+            return (
+                str(len(questions))
+                + " questions ready"
+                + ((" on " + topic) if topic else "")
+                + " - I'll read them out; answer whenever you're ready."
+            )
 
         n = len(questions)
-        return (str(n) + " question" + ("s" if n != 1 else "") + " on the board"
-                + ((" - " + topic + ".") if topic else ".")
-                + " Tell them to take their time, and that you'll go through the"
-                  " results together when they finish.")
+        return (
+            str(n)
+            + " question"
+            + ("s" if n != 1 else "")
+            + " on the board"
+            + ((" - " + topic + ".") if topic else ".")
+            + " Tell them to take their time, and that you'll go through the"
+            " results together when they finish."
+        )
     except Exception as e:
         return "Sir, the quiz plugin failed: " + str(e)

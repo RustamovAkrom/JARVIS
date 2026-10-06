@@ -66,19 +66,18 @@ PLUGIN = {
                 "type": "STRING",
                 "enum": ["start", "stop", "status"],
                 "description": "start = begin the takeover, stop = hand the "
-                               "conversation back to the user, status = report "
-                               "whether it is running.",
+                "conversation back to the user, status = report "
+                "whether it is running.",
             },
             "query": {
                 "type": "STRING",
                 "description": "The user's exact request, verbatim, in their "
-                               "own language (may contain extra instructions "
-                               "for how to reply).",
+                "own language (may contain extra instructions "
+                "for how to reply).",
             },
             "duration_minutes": {
                 "type": "NUMBER",
-                "description": "Optional safety time limit in minutes "
-                               "(default 10).",
+                "description": "Optional safety time limit in minutes " "(default 10).",
             },
         },
         "required": ["action"],
@@ -87,23 +86,23 @@ PLUGIN = {
 
 # fallback if main.py isn't loaded (tests) — inside the app the model name is
 # read live from main.LIVE_MODEL, so upgrading main.py upgrades this plugin too
-_LIVE_MODEL       = "models/gemini-2.5-flash-native-audio-preview-12-2025"
-_REST_MODEL       = "gemini-2.5-flash"   # fallback engine only
-_POLL_SECONDS     = 10       # how often the screen is checked
-_DEFAULT_MINUTES  = 10       # auto-stop safety limit
-_PIXEL_DELTA      = 15       # per-pixel difference that counts as "changed"
-_CHANGED_RATIO    = 0.002    # >0.2% of pixels changed = screen changed
-                             # (a new chat bubble ≈ 1-2%; clock digits ≈ 0.03%)
-_MAX_MISSES       = 4        # consecutive "no chat visible" checks before giving up
-_MAX_ERRORS       = 5        # consecutive engine errors → Live falls back to REST,
-                             # REST gives up
-_MAX_REPLY_CHARS  = 500      # longer output = model chatter, never paste it
-_MAX_BURST        = 3        # a reply may be split into at most this many messages
-_BURST_GAP        = 2.0      # seconds between messages of one burst
-_START_DEBOUNCE   = 20       # duplicate start calls within this window stay silent
-_IMG_MAX_W        = 1280
-_JPEG_Q           = 82
-_PANEL_EXCHANGES  = 10       # last N exchanges shown in the HUD panel
+_LIVE_MODEL = "models/gemini-2.5-flash-native-audio-preview-12-2025"
+_REST_MODEL = "gemini-2.5-flash"  # fallback engine only
+_POLL_SECONDS = 10  # how often the screen is checked
+_DEFAULT_MINUTES = 10  # auto-stop safety limit
+_PIXEL_DELTA = 15  # per-pixel difference that counts as "changed"
+_CHANGED_RATIO = 0.002  # >0.2% of pixels changed = screen changed
+# (a new chat bubble ≈ 1-2%; clock digits ≈ 0.03%)
+_MAX_MISSES = 4  # consecutive "no chat visible" checks before giving up
+_MAX_ERRORS = 5  # consecutive engine errors → Live falls back to REST,
+# REST gives up
+_MAX_REPLY_CHARS = 500  # longer output = model chatter, never paste it
+_MAX_BURST = 3  # a reply may be split into at most this many messages
+_BURST_GAP = 2.0  # seconds between messages of one burst
+_START_DEBOUNCE = 20  # duplicate start calls within this window stay silent
+_IMG_MAX_W = 1280
+_JPEG_Q = 82
+_PANEL_EXCHANGES = 10  # last N exchanges shown in the HUD panel
 
 # exactly one of these three outputs per turn — everything else gets pasted
 _LIVE_SYSTEM = (
@@ -155,6 +154,7 @@ _LIVE_SYSTEM = (
 
 # ── config helpers (same pattern as actions/screen_processor.py) ─────────────
 
+
 def _config() -> dict:
     try:
         return json.loads(
@@ -167,11 +167,11 @@ def _config() -> dict:
 # ── module state (persists across run() calls — loader imports us once) ──────
 
 _state = {
-    "thread":    None,    # the takeover loop thread
-    "stop":      None,    # threading.Event to end it
-    "exchanges": [],      # list of (their_message_or_empty, our_reply)
-    "engine":    "",      # "live" / "rest" — which engine is/was in use
-    "ended":     "",      # why the last run ended (for status reports)
+    "thread": None,  # the takeover loop thread
+    "stop": None,  # threading.Event to end it
+    "exchanges": [],  # list of (their_message_or_empty, our_reply)
+    "engine": "",  # "live" / "rest" — which engine is/was in use
+    "ended": "",  # why the last run ended (for status reports)
 }
 _state_lock = threading.Lock()
 
@@ -182,6 +182,7 @@ def _running() -> bool:
 
 
 # ── screen capture ───────────────────────────────────────────────────────────
+
 
 def _grab_screen():
     """Return (raw_rgb_np, jpeg_bytes) of the primary monitor."""
@@ -204,6 +205,7 @@ def _grab_screen():
 
 def _screen_changed(prev, cur) -> bool:
     import numpy as np
+
     if prev is None or prev.shape != cur.shape:
         return True
     delta = np.abs(prev.astype(np.int16) - cur.astype(np.int16))
@@ -217,30 +219,34 @@ def _screen_changed(prev, cur) -> bool:
 # Both expose: check(jpg, last_reply) -> "NOSCREEN" | "STANDBY" | reply text
 # and close(). check() may raise — the loop counts errors and falls back.
 
+
 class _LiveEngine:
     """Persistent Gemini Live session. Audio out is discarded; the output
     transcript is the text channel (verified verbatim, incl. Turkish)."""
 
     def __init__(self, api_key: str, system_prompt: str):
         self._api_key = api_key
-        self._system  = system_prompt
-        self._client  = None
-        self._cm      = None
+        self._system = system_prompt
+        self._client = None
+        self._cm = None
         self._session = None
-        self._loop    = asyncio.new_event_loop()
-        self._thread  = threading.Thread(target=self._loop.run_forever,
-                                         daemon=True, name="chat-takeover-live")
+        self._loop = asyncio.new_event_loop()
+        self._thread = threading.Thread(
+            target=self._loop.run_forever, daemon=True, name="chat-takeover-live"
+        )
         self._thread.start()
 
     def check(self, jpg: bytes, recent: list) -> str:
         fut = asyncio.run_coroutine_threadsafe(
-            self._check_async(jpg, recent), self._loop)
+            self._check_async(jpg, recent), self._loop
+        )
         return fut.result(timeout=90)
 
     def close(self) -> None:
         try:
-            asyncio.run_coroutine_threadsafe(
-                self._close_session(), self._loop).result(timeout=5)
+            asyncio.run_coroutine_threadsafe(self._close_session(), self._loop).result(
+                timeout=5
+            )
         except Exception:
             pass
         try:
@@ -255,24 +261,30 @@ class _LiveEngine:
         from google.genai import types as gtypes
 
         if self._client is None:
-            self._client = genai.Client(api_key=self._api_key,
-                                        http_options={"api_version": "v1beta"})
+            self._client = genai.Client(
+                api_key=self._api_key, http_options={"api_version": "v1beta"}
+            )
         kwargs = dict(
             response_modalities=["AUDIO"],
             output_audio_transcription={},
             system_instruction=self._system,
         )
         try:  # keeps long sessions alive past the 15-min audio-session cap
-            kwargs["context_window_compression"] = \
+            kwargs["context_window_compression"] = (
                 gtypes.ContextWindowCompressionConfig(
-                    sliding_window=gtypes.SlidingWindow())
+                    sliding_window=gtypes.SlidingWindow()
+                )
+            )
         except AttributeError:
             pass
-        model = (_config().get("chat_takeover_live_model")
-                 or getattr(sys.modules.get("main"), "LIVE_MODEL", None)
-                 or _LIVE_MODEL)
+        model = (
+            _config().get("chat_takeover_live_model")
+            or getattr(sys.modules.get("main"), "LIVE_MODEL", None)
+            or _LIVE_MODEL
+        )
         self._cm = self._client.aio.live.connect(
-            model=model, config=gtypes.LiveConnectConfig(**kwargs))
+            model=model, config=gtypes.LiveConnectConfig(**kwargs)
+        )
         self._session = await asyncio.wait_for(self._cm.__aenter__(), 25)
 
     async def _close_session(self):
@@ -296,19 +308,28 @@ class _LiveEngine:
         note = _history_note(recent)
         await asyncio.wait_for(
             self._session.send_client_content(
-                turns={"parts": [
-                    {"inline_data": {
-                        "mime_type": "image/jpeg",
-                        "data": base64.b64encode(jpg).decode("ascii")}},
-                    {"text": "Screenshot check — respond now with exactly "
-                             "one of your three outputs (NOSCREEN / STANDBY "
-                             "/ the reply), even if nothing changed since "
-                             "the last screenshot. Reply language = the "
-                             "conversation's own language, NOT English by "
-                             "default." + note},
-                ]},
-                turn_complete=True),
-            timeout=20)
+                turns={
+                    "parts": [
+                        {
+                            "inline_data": {
+                                "mime_type": "image/jpeg",
+                                "data": base64.b64encode(jpg).decode("ascii"),
+                            }
+                        },
+                        {
+                            "text": "Screenshot check — respond now with exactly "
+                            "one of your three outputs (NOSCREEN / STANDBY "
+                            "/ the reply), even if nothing changed since "
+                            "the last screenshot. Reply language = the "
+                            "conversation's own language, NOT English by "
+                            "default." + note
+                        },
+                    ]
+                },
+                turn_complete=True,
+            ),
+            timeout=20,
+        )
 
         transcript: list[str] = []
 
@@ -347,8 +368,11 @@ class _RestEngine:
             "screen showing a messaging app.\n"
             "The user's OWN messages are aligned RIGHT (outgoing); the OTHER "
             "person's messages are aligned LEFT (incoming).\n"
-            + (f'Extra instruction from the user: "{self._instruction}"\n'
-               if self._instruction else "")
+            + (
+                f'Extra instruction from the user: "{self._instruction}"\n'
+                if self._instruction
+                else ""
+            )
             + (_history_note(recent).strip() + "\n" if recent else "")
             + "Return ONLY minified JSON — no markdown fences — with keys:\n"
             ' "chat_visible": true/false — true ONLY for a real messaging '
@@ -372,12 +396,11 @@ class _RestEngine:
         client = genai.Client(api_key=self._api_key)
         resp = client.models.generate_content(
             model=_REST_MODEL,
-            contents=[gtypes.Part.from_bytes(data=jpg, mime_type="image/jpeg"),
-                      prompt],
+            contents=[gtypes.Part.from_bytes(data=jpg, mime_type="image/jpeg"), prompt],
         )
         text = (resp.text or "").strip()
         if "{" in text and "}" in text:
-            text = text[text.find("{"): text.rfind("}") + 1]
+            text = text[text.find("{") : text.rfind("}") + 1]
         data = json.loads(text)
         if not data.get("chat_visible"):
             return "NOSCREEN"
@@ -392,6 +415,7 @@ class _RestEngine:
 
 # ── input-box calibration & sending ──────────────────────────────────────────
 
+
 def _split_messages(verdict: str) -> list[str]:
     """Split a burst reply on the NEXTMSG separator word (max _MAX_BURST)."""
     parts = [p.strip() for p in re.split(r"\s*NEXTMSG\s*", verdict) if p.strip()]
@@ -405,10 +429,12 @@ def _history_note(recent: list) -> str:
     if not recent:
         return ""
     listed = "; ".join(f'"{r}"' for r in recent)
-    return (f" (Memory aid — replies you already sent, oldest first: "
-            f"{listed}. Never answer an incoming message you already "
-            f"answered, even if these replies are not visible on the "
-            f"screenshot: in that case output STANDBY.)")
+    return (
+        f" (Memory aid — replies you already sent, oldest first: "
+        f"{listed}. Never answer an incoming message you already "
+        f"answered, even if these replies are not visible on the "
+        f"screenshot: in that case output STANDBY.)"
+    )
 
 
 def _casualize(msg: str) -> str:
@@ -427,6 +453,7 @@ def _active_window_id():
     elsewhere). Returns None when it can't be determined — guard disabled."""
     try:
         import pygetwindow as gw
+
         w = gw.getActiveWindow()
         if w is None:
             return None
@@ -448,7 +475,7 @@ def _send_reply(reply: str, os_name: str) -> None:
     except Exception:
         pass
 
-    pyperclip.copy(reply)          # paste instead of typing — non-ASCII safe
+    pyperclip.copy(reply)  # paste instead of typing — non-ASCII safe
     pyautogui.hotkey("command" if os_name == "mac" else "ctrl", "v")
     time.sleep(0.35)
     pyautogui.press("enter")
@@ -463,8 +490,10 @@ def _send_reply(reply: str, os_name: str) -> None:
 
 # ── the takeover loop (daemon thread) ────────────────────────────────────────
 
-def _takeover_loop(user_instruction: str, duration_s: float, player,
-                   stop_evt: threading.Event) -> None:
+
+def _takeover_loop(
+    user_instruction: str, duration_s: float, player, stop_evt: threading.Event
+) -> None:
     import pyautogui  # noqa: F401  (failsafe stays enabled — corner = abort)
 
     def _log(msg: str) -> None:
@@ -490,8 +519,8 @@ def _takeover_loop(user_instruction: str, duration_s: float, player,
 
     api_key = _config().get("gemini_api_key", "")
     os_name = _config().get("os_system", "windows").lower()
-    ended   = "finished"
-    engine  = None
+    ended = "finished"
+    engine = None
 
     try:
         # the focus guard learns its window at the FIRST paste (that's when
@@ -501,8 +530,10 @@ def _takeover_loop(user_instruction: str, duration_s: float, player,
 
         system = _LIVE_SYSTEM
         if user_instruction:
-            system += (f'\nExtra instruction from the user for how to reply: '
-                       f'"{user_instruction}"')
+            system += (
+                f"\nExtra instruction from the user for how to reply: "
+                f'"{user_instruction}"'
+            )
         if _config().get("chat_takeover_engine", "live") == "rest":
             engine = _RestEngine(api_key, user_instruction)
             _state["engine"] = "rest"
@@ -510,18 +541,20 @@ def _takeover_loop(user_instruction: str, duration_s: float, player,
             engine = _LiveEngine(api_key, system)
             _state["engine"] = "live"
 
-        _log(f"JARVIS: Chat takeover armed ({_state['engine']} engine) — "
-             f"pasting into the focused input box (no clicking); the focus "
-             f"guard locks onto the chat window at the first reply. Watching "
-             f"the screen every {_POLL_SECONDS}s.")
+        _log(
+            f"JARVIS: Chat takeover armed ({_state['engine']} engine) — "
+            f"pasting into the focused input box (no clicking); the focus "
+            f"guard locks onto the chat window at the first reply. Watching "
+            f"the screen every {_POLL_SECONDS}s."
+        )
 
-        recent_replies = []    # last 3 sent bursts — the dedup memory
-        last_burst     = ""
-        seen_chat      = False # NOSCREEN only counts after a chat was seen
-        prev_raw       = None
-        misses         = 0
-        errors         = 0
-        deadline       = time.time() + duration_s
+        recent_replies = []  # last 3 sent bursts — the dedup memory
+        last_burst = ""
+        seen_chat = False  # NOSCREEN only counts after a chat was seen
+        prev_raw = None
+        misses = 0
+        errors = 0
+        deadline = time.time() + duration_s
 
         while not stop_evt.is_set() and time.time() < deadline:
             try:
@@ -534,15 +567,16 @@ def _takeover_loop(user_instruction: str, duration_s: float, player,
                     continue
                 prev_raw = raw
 
-                verdict = engine.check(jpg,
-                                       recent_replies).strip().strip('"\'')
-                errors  = 0
-                upper   = verdict.upper().rstrip(".!")
+                verdict = engine.check(jpg, recent_replies).strip().strip("\"'")
+                errors = 0
+                upper = verdict.upper().rstrip(".!")
 
                 if not verdict or upper.startswith("STANDBY"):
                     if not seen_chat and verdict:
-                        _log("JARVIS: Chat in sight — monitoring the "
-                             "conversation now.")
+                        _log(
+                            "JARVIS: Chat in sight — monitoring the "
+                            "conversation now."
+                        )
                     seen_chat = True
                     misses = 0
 
@@ -551,23 +585,28 @@ def _takeover_loop(user_instruction: str, duration_s: float, player,
                         # the user may still be opening the conversation —
                         # wait patiently, never give up before seeing a chat
                         if misses == 0:
-                            _log("JARVIS: No chat visible yet — waiting for "
-                                 "you to open the conversation.")
+                            _log(
+                                "JARVIS: No chat visible yet — waiting for "
+                                "you to open the conversation."
+                            )
                         misses = 1
                     else:
                         misses += 1
                         if misses >= _MAX_MISSES:
-                            ended = ("the chat window disappeared from the "
-                                     "screen")
-                            _log("JARVIS: Chat takeover ended — I can no "
-                                 "longer see the conversation on screen.")
+                            ended = "the chat window disappeared from the " "screen"
+                            _log(
+                                "JARVIS: Chat takeover ended — I can no "
+                                "longer see the conversation on screen."
+                            )
                             break
 
                 elif len(verdict) > _MAX_REPLY_CHARS:
                     # a real chat reply is never this long — model chatter,
                     # never paste it
-                    _log("JARVIS: Skipped an over-long engine output "
-                         f"({len(verdict)} chars).")
+                    _log(
+                        "JARVIS: Skipped an over-long engine output "
+                        f"({len(verdict)} chars)."
+                    )
 
                 elif verdict == last_burst:
                     # identical regenerated reply (e.g. right after a
@@ -580,7 +619,7 @@ def _takeover_loop(user_instruction: str, duration_s: float, player,
                     sent = []
                     for i, part in enumerate(_split_messages(verdict)):
                         if i and stop_evt.wait(_BURST_GAP):
-                            break   # stopped mid-burst
+                            break  # stopped mid-burst
                         cur_win = _active_window_id()
                         if focus_id is None:
                             # first paste — the user is on the chat right
@@ -588,12 +627,16 @@ def _takeover_loop(user_instruction: str, duration_s: float, player,
                             # we will ever paste into
                             focus_id = cur_win
                             if focus_id is not None:
-                                _log("JARVIS: Focus guard locked onto the "
-                                     "chat window.")
+                                _log(
+                                    "JARVIS: Focus guard locked onto the "
+                                    "chat window."
+                                )
                         elif cur_win not in (None, focus_id):
-                            _log("JARVIS: Reply held — focus is not on the "
-                                 "chat window. Click the message box to let "
-                                 "me continue.")
+                            _log(
+                                "JARVIS: Reply held — focus is not on the "
+                                "chat window. Click the message box to let "
+                                "me continue."
+                            )
                             break
                         part = _casualize(part)
                         _send_reply(part, os_name)
@@ -602,11 +645,13 @@ def _takeover_loop(user_instruction: str, duration_s: float, player,
                     if sent:
                         last_burst = verdict
                         recent_replies.append(" / ".join(sent))
-                        del recent_replies[:-3]   # remember the last 3 bursts
-                        prev_raw = None   # our messages change the screen
-                        _log(f"JARVIS: Auto-replied ({len(sent)} message"
-                             f"{'s' if len(sent) > 1 else ''}) — "
-                             f"“{' | '.join(sent)[:120]}”")
+                        del recent_replies[:-3]  # remember the last 3 bursts
+                        prev_raw = None  # our messages change the screen
+                        _log(
+                            f"JARVIS: Auto-replied ({len(sent)} message"
+                            f"{'s' if len(sent) > 1 else ''}) — "
+                            f"“{' | '.join(sent)[:120]}”"
+                        )
                         _panel()
 
             except pyautogui.FailSafeException:
@@ -626,8 +671,10 @@ def _takeover_loop(user_instruction: str, duration_s: float, player,
                         engine = _RestEngine(api_key, user_instruction)
                         _state["engine"] = "rest"
                         errors = 0
-                        _log("JARVIS: Live engine unavailable — switched to "
-                             "the REST fallback engine.")
+                        _log(
+                            "JARVIS: Live engine unavailable — switched to "
+                            "the REST fallback engine."
+                        )
                     else:
                         ended = f"too many consecutive errors (last: {e})"
                         break
@@ -645,37 +692,44 @@ def _takeover_loop(user_instruction: str, duration_s: float, player,
             except Exception:
                 pass
         _state["ended"] = ended
-        _log(f"JARVIS: Chat takeover over ({ended}) — "
-             f"{len(_state['exchanges'])} replies sent this run.")
+        _log(
+            f"JARVIS: Chat takeover over ({ended}) — "
+            f"{len(_state['exchanges'])} replies sent this run."
+        )
 
 
 # ── entry point ──────────────────────────────────────────────────────────────
 
+
 def run(parameters: dict, player=None, session_memory=None) -> str:
     action = (parameters.get("action") or "start").strip().lower()
-    query  = (parameters.get("query") or "").strip()
+    query = (parameters.get("query") or "").strip()
 
     try:
         if action == "stop":
             with _state_lock:
                 if not _running():
-                    return ("There is no chat takeover running right now, "
-                            "sir.")
+                    return "There is no chat takeover running right now, " "sir."
                 _state["stop"].set()
             _state["thread"].join(timeout=5)
             n = len(_state["exchanges"])
-            return (f"The conversation is yours again, sir. I sent {n} "
-                    f"repl{'y' if n == 1 else 'ies'} while I had it.")
+            return (
+                f"The conversation is yours again, sir. I sent {n} "
+                f"repl{'y' if n == 1 else 'ies'} while I had it."
+            )
 
         if action == "status":
             if _running():
                 n = len(_state["exchanges"])
-                return (f"The chat takeover is active on the "
-                        f"{_state['engine'] or 'live'} engine — {n} "
-                        f"repl{'y' if n == 1 else 'ies'} sent so far.")
+                return (
+                    f"The chat takeover is active on the "
+                    f"{_state['engine'] or 'live'} engine — {n} "
+                    f"repl{'y' if n == 1 else 'ies'} sent so far."
+                )
             last = _state["ended"]
-            return ("No takeover is running at the moment."
-                    + (f" The last one ended: {last}." if last else ""))
+            return "No takeover is running at the moment." + (
+                f" The last one ended: {last}." if last else ""
+            )
 
         # ── action == "start" ────────────────────────────────────────────
         with _state_lock:
@@ -683,36 +737,41 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
                 # the main model sometimes issues a duplicate start call for
                 # the same spoken request — keep JARVIS from announcing twice
                 if time.time() - _state.get("started_at", 0) < _START_DEBOUNCE:
-                    return ("(Duplicate start call ignored — the takeover is "
-                            "already active and was already announced. Do "
-                            "NOT announce it again; stay silent.)")
-                return ("I'm already handling that conversation, sir — say "
-                        "the word if you want it back.")
+                    return (
+                        "(Duplicate start call ignored — the takeover is "
+                        "already active and was already announced. Do "
+                        "NOT announce it again; stay silent.)"
+                    )
+                return (
+                    "I'm already handling that conversation, sir — say "
+                    "the word if you want it back."
+                )
 
             if not _config().get("gemini_api_key"):
                 return "I can't take over the chat — no API key is configured."
             try:
-                import mss        # noqa: F401
+                import mss  # noqa: F401
                 import pyautogui  # noqa: F401
                 import pyperclip  # noqa: F401
-                import PIL        # noqa: F401
+                import PIL  # noqa: F401
             except ImportError as e:
-                return (f"A required package is missing for the chat "
-                        f"takeover: {e}. Please install it with pip.")
+                return (
+                    f"A required package is missing for the chat "
+                    f"takeover: {e}. Please install it with pip."
+                )
 
             try:
-                minutes = float(parameters.get("duration_minutes")
-                                or _DEFAULT_MINUTES)
-            except (TypeError, ValueError):
+                minutes = float(parameters.get("duration_minutes") or _DEFAULT_MINUTES)
+            except TypeError, ValueError:
                 minutes = _DEFAULT_MINUTES
             minutes = max(1.0, min(minutes, 120.0))
 
-            _state["exchanges"]  = []
-            _state["ended"]      = ""
-            _state["engine"]     = ""
+            _state["exchanges"] = []
+            _state["ended"] = ""
+            _state["engine"] = ""
             _state["started_at"] = time.time()
-            _state["stop"]       = threading.Event()
-            _state["thread"]    = threading.Thread(
+            _state["stop"] = threading.Event()
+            _state["thread"] = threading.Thread(
                 target=_takeover_loop,
                 args=(query, minutes * 60, player, _state["stop"]),
                 daemon=True,
@@ -720,11 +779,13 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
             )
             _state["thread"].start()
 
-        return ("Taking over the conversation, sir. Just leave the cursor "
-                "in the message input box — I never click anything, I type "
-                "into the box you focused. I'll watch the chat and answer "
-                f"any new message in your style for up to {minutes:.0f} "
-                "minutes. Say the word when you want it back.")
+        return (
+            "Taking over the conversation, sir. Just leave the cursor "
+            "in the message input box — I never click anything, I type "
+            "into the box you focused. I'll watch the chat and answer "
+            f"any new message in your style for up to {minutes:.0f} "
+            "minutes. Say the word when you want it back."
+        )
 
     except Exception as e:
         return f"Sir, the chat takeover failed: {e}"

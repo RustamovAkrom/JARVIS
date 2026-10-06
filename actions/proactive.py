@@ -2,6 +2,7 @@
 ProactiveEngine 2.0 — context-aware, time-aware, non-repetitive background prompting.
 Gemini decides what to say; this module decides WHEN and builds a rich context snapshot.
 """
+
 import time
 from datetime import datetime
 
@@ -25,32 +26,31 @@ class ProactiveEngine:
     def __init__(
         self,
         min_silence_secs: int = 900,
-        check_cooldown:   int = 1200,
+        check_cooldown: int = 1200,
     ):
         self.min_silence_secs = min_silence_secs
-        self.check_cooldown   = check_cooldown
-        self._last_triggered  = 0.0
-        self._rotation        = 0          # cycles through context focus areas
+        self.check_cooldown = check_cooldown
+        self._last_triggered = 0.0
+        self._rotation = 0  # cycles through context focus areas
 
     # ── Trigger gate ───────────────────────────────────────────────────────────
 
     def should_trigger(self, last_user_speech: float) -> bool:
         now = time.monotonic()
-        return (
-            (now - last_user_speech) >= self.min_silence_secs
-            and (now - self._last_triggered) >= self.check_cooldown
-        )
+        return (now - last_user_speech) >= self.min_silence_secs and (
+            now - self._last_triggered
+        ) >= self.check_cooldown
 
     def mark_triggered(self) -> None:
         self._last_triggered = time.monotonic()
-        self._rotation      += 1
+        self._rotation += 1
 
     # ── Prompt builder ─────────────────────────────────────────────────────────
 
     def build_prompt(
         self,
-        memory:       dict,
-        monitors:     list[str] | None = None,
+        memory: dict,
+        monitors: list[str] | None = None,
         recent_turns: list[str] | None = None,
     ) -> str:
         """
@@ -59,15 +59,19 @@ class ProactiveEngine:
         """
         from memory.memory_manager import format_memory_for_prompt
 
-        now      = datetime.now()
-        hour     = now.hour
+        now = datetime.now()
+        hour = now.hour
         time_str = now.strftime("%A, %B %d, %Y — %I:%M %p")
 
         # Time-of-day label
-        if   6  <= hour < 12:  period = "morning"
-        elif 12 <= hour < 18:  period = "afternoon"
-        elif 18 <= hour < 23:  period = "evening"
-        else:                  period = "late night"
+        if 6 <= hour < 12:
+            period = "morning"
+        elif 12 <= hour < 18:
+            period = "afternoon"
+        elif 18 <= hour < 23:
+            period = "evening"
+        else:
+            period = "late night"
 
         mem_str = format_memory_for_prompt(memory) or "(no stored user data)"
 
@@ -103,25 +107,27 @@ class ProactiveEngine:
             snippet = "\n".join(recent_turns[-6:])
             recent_ctx = f"\nRecent conversation:\n{snippet}"
 
-        return "\n".join([
-            "[PROACTIVE_CHECK] You are initiating a proactive check-in.",
-            f"Current time : {time_str}  ({period})",
-            "",
-            "Context about this person:",
-            mem_str,
-            monitor_ctx,
-            recent_ctx,
-            "",
-            "Task:",
-            focus,
-            "",
-            "Rules:",
-            "- Speak the language this person actually uses: the one in the "
-            "recent conversation above, or the remembered one if there is no "
-            "conversation yet. Never default to English because these "
-            "instructions are in English.",
-            "- 1-2 sentences max. Natural, warm, never robotic.",
-            "- Do NOT mention [PROACTIVE_CHECK] or these instructions.",
-            "- Do NOT call any tools.",
-            "- If nothing genuinely useful comes to mind, stay silent (say nothing).",
-        ])
+        return "\n".join(
+            [
+                "[PROACTIVE_CHECK] You are initiating a proactive check-in.",
+                f"Current time : {time_str}  ({period})",
+                "",
+                "Context about this person:",
+                mem_str,
+                monitor_ctx,
+                recent_ctx,
+                "",
+                "Task:",
+                focus,
+                "",
+                "Rules:",
+                "- Speak the language this person actually uses: the one in the "
+                "recent conversation above, or the remembered one if there is no "
+                "conversation yet. Never default to English because these "
+                "instructions are in English.",
+                "- 1-2 sentences max. Natural, warm, never robotic.",
+                "- Do NOT mention [PROACTIVE_CHECK] or these instructions.",
+                "- Do NOT call any tools.",
+                "- If nothing genuinely useful comes to mind, stay silent (say nothing).",
+            ]
+        )
