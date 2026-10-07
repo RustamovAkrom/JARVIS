@@ -104,8 +104,17 @@ actions/
 Every action exposes a module-level `TOOL` dictionary.
 
 Example:
-
- - [plugins/_template.py](/plugins/_template.py)
+```py
+TOOL = {
+    "name": "example_action",
+    "description": "Example computer action",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {}
+    },
+    "handler": handler,
+}
+```
 
 The action loader automatically discovers valid action files at startup.
 
@@ -121,19 +130,7 @@ plugins/
 
 A plugin exposes a `PLUGIN` definition and a runtime entry point:
 
-```python
-PLUGIN = {
-    "name": "example_plugin",
-    "description": "Example JARVIS plugin",
-    "parameters": {
-        "type": "OBJECT",
-        "properties": {}
-    },
-}
-
-def run(parameters, player=None, session_memory=None):
-    return "Done."
-```
+ - [plugins/_template.py](/plugins/_template.py)
 
 Plugins are discovered automatically and can optionally provide their own settings schema.
 

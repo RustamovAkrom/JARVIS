@@ -154,6 +154,7 @@ _RAIL_W = 36
 # Mini (orb-only, picture-in-picture style) window.
 _MINI_W, _MINI_H = 240, 290
 _MINI_MIN_W, _MINI_MIN_H = 120, 140
+_MINI_DEFAULT_OPACITY = 0.80
 
 # One-click prompts: (short label, palette title, message). A message starting
 # with "clip:" is a template that needs the clipboard text.
@@ -1603,11 +1604,12 @@ class HudCanvas(QWidget):
         txt, col = self._status()
 
         if compact:
-            # Rounded dark card — also gives the whole window something to grab.
+            # A deliberately light glass card: mini mode is an unobtrusive
+            # development/status indicator, not a second full HUD.
             card = QPainterPath()
             card.addRoundedRect(QRectF(0.5, 0.5, W - 1, H - 1), 18, 18)
-            p.fillPath(card, QColor(2, 10, 18, 228))
-            p.setPen(QPen(qcol(C.PRI, 70), 1))
+            p.fillPath(card, QColor(2, 10, 18, 158))
+            p.setPen(QPen(qcol(C.PRI, 46), 1))
             p.setBrush(Qt.BrushStyle.NoBrush)
             p.drawPath(card)
             bx, by, bw, bh = 8.0, 8.0, W - 16.0, H - 16.0
@@ -4628,6 +4630,204 @@ class ShortcutsOverlay(_HudOverlay):
         self.deleteLater()
 
 
+class TopDock(QWidget):
+    """Hover-expandable always-on-top presence bar for development work.
+
+    It is deliberately a view, not a second JARVIS runtime: MainWindow owns
+    state, audio callbacks and tasks, while this widget only exposes them.
+    """
+
+    _COLLAPSED_H = 42
+    _EXPANDED_H = 244
+
+    def __init__(self, owner, parent=None):
+        super().__init__(parent)
+        self.owner = owner
+        self._expanded = False
+        self._state = "LISTENING"
+        self.setWindowFlags(
+            Qt.WindowType.Tool
+            | Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.WindowStaysOnTopHint
+        )
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        self.setMouseTracking(True)
+        self._collapse_timer = QTimer(self)
+        self._collapse_timer.setSingleShot(True)
+        self._collapse_timer.timeout.connect(lambda: self._set_expanded(False))
+
+        self._root = QFrame(self)
+        self._root.setObjectName("TopDockRoot")
+        self._root.setStyleSheet(f"""
+            QFrame#TopDockRoot {{
+                background: rgba(2, 12, 20, 226);
+                border: 1px solid rgba(0, 212, 255, 115);
+                border-radius: 0 0 13px 13px;
+            }}
+        """)
+        lay = QVBoxLayout(self._root)
+        lay.setContentsMargins(14, 6, 14, 10)
+        lay.setSpacing(8)
+
+        bar = QHBoxLayout()
+        bar.setSpacing(9)
+        self._orb = QLabel("◉")
+        self._orb.setFont(QFont(_DISPLAY, 17, QFont.Weight.Bold))
+        self._orb.setStyleSheet(f"color: {C.PRI}; background: transparent;")
+        bar.addWidget(self._orb)
+        self._name = QLabel(owner._assistant_name.upper())
+        self._name.setFont(QFont(_DISPLAY, 9, QFont.Weight.Bold))
+        self._name.setStyleSheet(f"color: {C.TEXT}; background: transparent;")
+        bar.addWidget(self._name)
+        self._status = QLabel()
+        self._status.setFont(QFont(_MONO, 8, QFont.Weight.Bold))
+        bar.addWidget(self._status)
+        bar.addStretch(1)
+        self._tasks = QLabel()
+        self._tasks.setFont(QFont(_MONO, 8, QFont.Weight.Bold))
+        self._tasks.setStyleSheet(f"color: {C.TEXT_MED}; background: transparent;")
+        bar.addWidget(self._tasks)
+        self._clock = QLabel()
+        self._clock.setFont(QFont(_MONO, 9, QFont.Weight.Bold))
+        self._clock.setStyleSheet(f"color: {C.PRI}; background: transparent;")
+        bar.addWidget(self._clock)
+        lay.addLayout(bar)
+
+        self._drop = QWidget()
+        drop = QVBoxLayout(self._drop)
+        drop.setContentsMargins(0, 0, 0, 0)
+        drop.setSpacing(7)
+        title = QLabel("TASKS")
+        title.setFont(QFont(_DISPLAY, 8, QFont.Weight.Bold))
+        title.setStyleSheet(f"color: {C.PRI}; background: transparent;")
+        drop.addWidget(title)
+        self._task_box = QWidget()
+        self._task_lay = QVBoxLayout(self._task_box)
+        self._task_lay.setContentsMargins(0, 0, 0, 0)
+        self._task_lay.setSpacing(3)
+        drop.addWidget(self._task_box)
+        controls = QHBoxLayout()
+        controls.setSpacing(6)
+        self._input = QLineEdit()
+        self._input.setPlaceholderText("Quick task…")
+        self._input.setFixedHeight(27)
+        self._input.setFont(QFont(_FONT, 9))
+        self._input.setStyleSheet(f"""
+            QLineEdit {{ background: rgba(0, 0, 0, 58); color: {C.TEXT};
+                border: 1px solid {C.BORDER}; border-radius: 7px; padding: 3px 7px; }}
+            QLineEdit:focus {{ border-color: {C.PRI}; }}
+        """)
+        self._input.returnPressed.connect(self._add_task)
+        controls.addWidget(self._input, 1)
+        for text, callback in (("MIC", owner._toggle_mute), ("STOP", owner._do_interrupt), ("FULL", owner.set_dock)):
+            b = QPushButton(text)
+            b.setFixedSize(52, 27)
+            b.setFont(QFont(_MONO, 8, QFont.Weight.Bold))
+            b.setCursor(Qt.CursorShape.PointingHandCursor)
+            b.setStyleSheet(f"""
+                QPushButton {{ color: {C.PRI}; background: transparent; border: 1px solid {C.BORDER}; border-radius: 7px; }}
+                QPushButton:hover {{ background: {C.PRI_GHO}; border-color: {C.PRI}; }}
+            """)
+            if text == "FULL":
+                b.clicked.connect(lambda _=False: owner.set_dock(False))
+            else:
+                b.clicked.connect(callback)
+            controls.addWidget(b)
+        drop.addLayout(controls)
+        lay.addWidget(self._drop)
+        self._drop.hide()
+        self._tick = QTimer(self)
+        self._tick.timeout.connect(self.refresh)
+        self._tick.start(1000)
+        self.refresh()
+
+    def resizeEvent(self, event):
+        self._root.setGeometry(self.rect())
+        super().resizeEvent(event)
+
+    def enterEvent(self, event):
+        self._collapse_timer.stop()
+        self._set_expanded(True)
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        delay = int(_read_full_config().get("dock_hover_delay_ms", 650) or 650)
+        self._collapse_timer.start(max(150, min(3000, delay)))
+        super().leaveEvent(event)
+
+    def contextMenuEvent(self, event):
+        menu = QMenu(self)
+        opacity = menu.addMenu("Opacity")
+        choices = {}
+        for pct in (100, 92, 84, 76):
+            choices[opacity.addAction(f"{pct}%")] = pct / 100.0
+        action = menu.exec(event.globalPos())
+        if action in choices:
+            self.setWindowOpacity(choices[action])
+            _save_cfg(dock_opacity=choices[action])
+
+    def _set_expanded(self, on: bool):
+        if bool(on) == self._expanded:
+            return
+        self._expanded = bool(on)
+        self._drop.setVisible(self._expanded)
+        self._place()
+        if self._expanded:
+            self._input.setFocus()
+
+    def _place(self):
+        cfg = _read_full_config()
+        width = max(420, min(1000, int(cfg.get("dock_width", 640) or 640)))
+        screen = QApplication.primaryScreen().availableGeometry()
+        height = self._EXPANDED_H if self._expanded else self._COLLAPSED_H
+        self.setGeometry(screen.x() + (screen.width() - width) // 2, screen.y(), width, height)
+
+    def show_dock(self):
+        self._expanded = False
+        self._drop.hide()
+        self._place()
+        self.setWindowOpacity(max(0.50, min(1.0, float(_read_full_config().get("dock_opacity", 0.92) or 0.92))))
+        self.show()
+        self.raise_()
+
+    def set_state(self, state: str):
+        self._state = str(state or "LISTENING")
+        self.refresh()
+
+    def _add_task(self):
+        text = self._input.text().strip()
+        self._input.clear()
+        if text:
+            self.owner._task_add(text)
+
+    def refresh(self):
+        state = "MUTED" if self.owner._muted else self._state
+        color = C.RED if state == "MUTED" else (C.GREEN if state == "LISTENING" else C.PRI)
+        self._status.setText(f"● {state}")
+        self._status.setStyleSheet(f"color: {color}; background: transparent;")
+        self._clock.setText(time.strftime("%H:%M"))
+        tasks = list(self.owner._tasks)
+        done = sum(1 for task in tasks if task.get("done"))
+        self._tasks.setText(f"TASKS {done}/{len(tasks)}")
+        while self._task_lay.count():
+            item = self._task_lay.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        for task in tasks[:4]:
+            button = QPushButton(("☑  " if task.get("done") else "☐  ") + task.get("text", ""))
+            button.setFlat(True)
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
+            button.setFont(QFont(_FONT, 8))
+            button.setStyleSheet(f"QPushButton {{ text-align: left; color: {C.TEXT_DIM if task.get('done') else C.TEXT}; background: transparent; border: none; padding: 2px; }} QPushButton:hover {{ color: {C.PRI}; }}")
+            button.clicked.connect(lambda _=False, task=task: self.owner._task_toggle(task))
+            self._task_lay.addWidget(button)
+        if not tasks:
+            empty = QLabel("No open tasks — add one below or ask JARVIS.")
+            empty.setFont(QFont(_FONT, 8))
+            empty.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
+            self._task_lay.addWidget(empty)
+
+
 class MainWindow(QMainWindow):
     _log_sig = pyqtSignal(str)
     _state_sig = pyqtSignal(str)
@@ -4702,6 +4902,8 @@ class MainWindow(QMainWindow):
         # Mini (orb-only) mode state
         self._mini = False
         self._mini_on_top = True
+        self._dock_active = False
+        self._dock: TopDock | None = None
         self._normal_geom = None
         self._vis_content = False
         self._vis_quiz = False
@@ -5023,6 +5225,8 @@ class MainWindow(QMainWindow):
         sc_intr.activated.connect(self._do_interrupt)
         sc_mini = QShortcut(QKeySequence("F9"), self)
         sc_mini.activated.connect(lambda: self.set_mini(not self._mini))
+        sc_dock = QShortcut(QKeySequence("F10"), self)
+        sc_dock.activated.connect(lambda: self.set_dock(not self._dock_active))
         for _seq, _fn in (
             ("Ctrl+B", lambda: self._toggle_side("left")),
             ("Ctrl+Shift+B", lambda: self._toggle_side("right")),
@@ -5039,6 +5243,8 @@ class MainWindow(QMainWindow):
         # orb, it comes back as the small orb (handy with auto-start).
         if self._ready and _cfg.get("mini_mode"):
             QTimer.singleShot(400, lambda: self.set_mini(True))
+        elif self._ready and _cfg.get("presentation_mode") == "dock":
+            QTimer.singleShot(400, lambda: self.set_dock(True))
 
     # ── Sidebars, rails, focus mode ──────────────────────────────────────────
     # The model is VS Code's. Each sidebar has a *preference* the user sets (the
@@ -5630,18 +5836,24 @@ class MainWindow(QMainWindow):
         self._tasks.append({"text": text[:200], "done": False})
         self._tasks_save()
         self._tasks_render()
+        if self._dock is not None:
+            self._dock.refresh()
         self._toast("TASK ADDED", text[:80], "ok", 2200)
 
     def _task_toggle(self, task: dict) -> None:
         task["done"] = not task["done"]
         self._tasks_save()
         QTimer.singleShot(0, self._tasks_render)  # not inside the clicked button's slot
+        if self._dock is not None:
+            QTimer.singleShot(0, self._dock.refresh)
 
     def _task_remove(self, task: dict) -> None:
         if task in self._tasks:
             self._tasks.remove(task)
         self._tasks_save()
         QTimer.singleShot(0, self._tasks_render)
+        if self._dock is not None:
+            QTimer.singleShot(0, self._dock.refresh)
 
     def _tasks_render(self) -> None:
         lay = self._task_lay
@@ -5773,11 +5985,21 @@ class MainWindow(QMainWindow):
         g = self.geometry()
         _save_cfg(mini_geom=[g.x(), g.y(), g.width(), g.height()])
 
+    def _mini_opacity(self) -> float:
+        """A persistent, bounded opacity for the unobtrusive mini orb."""
+        try:
+            value = float(_read_full_config().get("mini_opacity", _MINI_DEFAULT_OPACITY))
+            return max(0.45, min(1.0, value))
+        except Exception:
+            return _MINI_DEFAULT_OPACITY
+
     def set_mini(self, on: bool, persist: bool = True) -> None:
         """Enter or leave mini mode. Safe to call repeatedly."""
         on = bool(on)
         if on == self._mini:
             return
+        if on and self._dock_active:
+            self.set_dock(False, persist=False)
         if on and not self._ready:
             return  # first-run setup still needs the full window
 
@@ -5818,8 +6040,10 @@ class MainWindow(QMainWindow):
             self.hud.mini_bar.set_muted(self._muted)
             self.setMinimumSize(_MINI_MIN_W, _MINI_MIN_H)
             self._reflag(self._mini_flags(), True, self._mini_target_geom())
+            self.setWindowOpacity(self._mini_opacity())
             if persist:
                 _save_cfg(mini_mode=True)
+                _save_cfg(presentation_mode="mini")
         else:
             self._save_mini_geom()
             self._mini = False
@@ -5838,6 +6062,37 @@ class MainWindow(QMainWindow):
             QTimer.singleShot(0, self._relayout_split)
             if persist:
                 _save_cfg(mini_mode=False)
+                _save_cfg(presentation_mode="full")
+
+    def set_dock(self, on: bool, persist: bool = True) -> None:
+        """Switch between the full HUD and the hover-expandable Top Dock."""
+        on = bool(on)
+        if on == self._dock_active:
+            return
+        if on and not self._ready:
+            return
+        if on:
+            if self._mini:
+                self.set_mini(False, persist=False)
+            self._close_transient()
+            self._close_controls()
+            if self._dock is None:
+                self._dock = TopDock(self)
+            self._dock_active = True
+            self._dock.set_state(self.hud.state)
+            self._dock.show_dock()
+            self.hide()
+            if persist:
+                _save_cfg(mini_mode=False, presentation_mode="dock")
+        else:
+            self._dock_active = False
+            if self._dock is not None:
+                self._dock.hide()
+            self.showNormal()
+            self.raise_()
+            self.activateWindow()
+            if persist:
+                _save_cfg(presentation_mode="full")
 
     def _relayout_split(self) -> None:
         total = self._center_split.height()
@@ -5867,7 +6122,7 @@ class MainWindow(QMainWindow):
         a_top.setChecked(self._mini_on_top)
         sub = m.addMenu("Opacity")
         op_map = {}
-        for pct in (100, 85, 70, 55):
+        for pct in (100, 90, 80, 70, 60):
             op_map[sub.addAction(f"{pct}%")] = pct
 
         act = m.exec(gpos)
@@ -5885,7 +6140,9 @@ class MainWindow(QMainWindow):
                 0, lambda: self._reflag(self._mini_flags(), True, self.geometry())
             )
         elif act in op_map:
-            self.setWindowOpacity(op_map[act] / 100.0)
+            opacity = op_map[act] / 100.0
+            self.setWindowOpacity(opacity)
+            _save_cfg(mini_opacity=opacity)
 
     def closeEvent(self, e):
         if self._mini:
@@ -8620,6 +8877,8 @@ class MainWindow(QMainWindow):
     def _apply_state(self, state: str):
         self.hud.state = state
         self.hud.speaking = state == "SPEAKING"
+        if self._dock is not None:
+            self._dock.set_state(state)
         self._update_statusbar()
 
     def _check_config(self) -> bool:
@@ -8946,6 +9205,11 @@ class JarvisUI:
     @property
     def is_mini(self) -> bool:
         return bool(self._win._mini)
+
+    @property
+    def is_compact_mode(self) -> bool:
+        """True when the full HUD is intentionally not available for panels."""
+        return bool(self._win._mini or self._win._dock_active)
 
     @property
     def assistant_name(self) -> str:
