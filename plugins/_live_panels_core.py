@@ -2042,31 +2042,99 @@ def _open(
     return True
 
 
+def open_panel(
+    player,
+    panel_id: str,
+    factory: Callable[[Any, Optional[QWidget]], Board],
+    setup: Optional[Callable[[Board], None]] = None,
+) -> bool:
+    """Open a plugin-owned Board in the HUD's shared live-panel surface.
+
+    This is the public extension point for visual plugins.  The core owns only
+    placement, scaling, theming, lifecycle and GUI-thread dispatch; a plugin
+    owns its Board subclass, data collection and any setup callback.
+    """
+    clean_id = str(panel_id or "").strip().lower()
+    if not clean_id:
+        return False
+
+    # Mini mode is intentionally only a compact, always-on-top JARVIS
+    # presence indicator.  A dashboard squeezed into it is unreadable and its
+    # QWidget minimum size can spill over neighbouring applications.  Keep the
+    # orb undisturbed; the user can expand it with F9/double-click and rerun the
+    # visual request when they want the full interactive panel.
+    try:
+        compact_state = getattr(player, "is_compact_mode", getattr(player, "is_mini", False))
+        is_compact = compact_state() if callable(compact_state) else bool(compact_state)
+        if is_compact:
+            log = getattr(player, "write_log", None)
+            if callable(log):
+                log("SYS: Visual dashboard not opened in Mini Orb mode — expand JARVIS first.")
+            return False
+    except Exception:
+        return False
+    return bool(_gui(lambda: _open(player, clean_id, factory, setup)))
+
+
+def panel_status(panel_id: str) -> bool:
+    """Return whether a named shared live panel is currently visible."""
+
+    clean_id = str(panel_id or "").strip().lower()
+
+    def job() -> bool:
+        board = _boards.get(clean_id)
+        return bool(board is not None and not sip.isdeleted(board) and board.isVisible())
+
+    return bool(clean_id and _gui(job, timeout=3.0))
+
+
+def close_panel(panel_id: str) -> bool:
+    """Close one shared live panel without affecting other panel types."""
+
+    clean_id = str(panel_id or "").strip().lower()
+
+    def job() -> bool:
+        board = _boards.get(clean_id)
+        if board is None or sip.isdeleted(board):
+            return False
+        was_visible = board.isVisible()
+        board.close_view()
+        return bool(was_visible)
+
+    return bool(clean_id and _gui(job, timeout=3.0))
+
+
 def show_system(player) -> bool:
     """Open the live diagnostics board. Safe from any thread."""
-    return bool(_gui(lambda: _open(player, "system", SystemBoard)))
+    return open_panel(player, "system", SystemBoard)
+
+
+def system_status() -> bool:
+    """Return whether the live system board is visible. Safe from any thread."""
+
+    return panel_status("system")
+
+
+def close_system() -> bool:
+    """Close only the live system board. Safe from any thread."""
+
+    return close_panel("system")
 
 
 def show_weather(player, place: dict, fc: dict) -> bool:
     """Open (or re-point) the live weather board. Safe from any thread."""
-    return bool(
-        _gui(
-            lambda: _open(
-                player, "weather", WeatherBoard, lambda b: b.set_data(place, fc)
-            )
-        )
-    )
+    return open_panel(player, "weather", WeatherBoard, lambda b: b.set_data(place, fc))
+
+
+def close_weather() -> bool:
+    """Close only the weather board, leaving another live panel untouched."""
+
+    return close_panel("weather")
 
 
 def show_trading(player, payload: dict) -> bool:
     """Open (or re-point) the live trading board. Safe from any thread."""
-    return bool(
-        _gui(
-            lambda: _open(
-                player, "trading", TradingBoard, lambda b: b.set_data(payload)
-            )
-        )
-    )
+    return open_panel(player, "trading", TradingBoard, lambda b: b.set_data(payload))
 
 
 def close_all() -> None:
