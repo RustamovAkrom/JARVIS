@@ -2,10 +2,45 @@
 
 # JARVIS (v2)
 [ENGLISH DOCS](/README.md)
+
+> **Gemini: ключ, модели, квоты и безопасность** — подробное руководство:
+> [docs/gemini-ru.md](/docs/gemini-ru.md). Оно объясняет, где получить ключ,
+> как JARVIS применяет AI и какие модели фактически настроены в проекте.
+
+> **Локальные модели:** [docs/local-llm-ru.md](/docs/local-llm-ru.md) описывает
+> Ollama и LM Studio, конфигурацию и текущий статус экспериментального клиента.
+
 ### Персональный ИИ-ассистент реального времени для вашего компьютера — Akrom Rustamov
 
 
 Голосовой ИИ-ассистент реального времени, который умеет слышать, видеть, говорить, запоминать и управлять вашим компьютером. JARVIS (v2) построен вокруг Gemini Live API, модульной системы действий, динамической архитектуры плагинов, постоянной локальной памяти, компьютерного зрения, обработки аудио в реальном времени и HUD-интерфейса на PyQt6.
+
+## ⚡ Начните здесь: установка за несколько минут
+
+Нужны Python 3.11+ и ключ Gemini. Сначала получите ключ в
+[Google AI Studio](https://aistudio.google.com/apikey), затем выполните:
+
+```powershell
+git clone https://github.com/RustamovAkrom/JARVIS.git
+cd JARVIS
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+python main.py
+```
+
+Для macOS/Linux после создания окружения используйте
+`source .venv/bin/activate` вместо команды `Activate.ps1`.
+
+При первом запуске откроется окно **INITIALISATION REQUIRED**:
+
+1. Вставьте ключ из Google AI Studio в поле **GEMINI API KEY**.
+2. Подтвердите определённую автоматически ОС или выберите **Windows**, **macOS**
+   либо **Linux**.
+3. Нажмите **INITIALISE SYSTEMS**.
+
+JARVIS сохранит ключ и ОС локально в `config/api_keys.json`. Больше ничего для
+первого разговора настраивать не нужно. Подробности: [Gemini в JARVIS](/docs/gemini-ru.md).
 
 
 ---
@@ -660,7 +695,7 @@ config/api_keys.json
 ```
 
 
-Конфигурация can include:
+Конфигурация может включать:
 
 
 - конфигурацию Gemini API
@@ -734,15 +769,15 @@ config/api_keys.json
 
 |---|---|
 
-| \*\*ОС\*\* | Windows, macОС, or Linux depending on enabled platform features |
+| **ОС** | Windows, macOS или Linux; отдельные возможности зависят от платформы |
 
-| \*\*Python\*\* | Python 3.x compatible with the project's dependency lock |
+| **Python** | 3.11–3.13: этот диапазон проверяет установщик проекта |
 
 | \*\*Микрофон\*\* | Требуется для голосового взаимодействия |
 
 | \*\*Динамики / наушники\*\* | Требуется для голосовых ответов |
 
-| \*\*API-ключ Gemini\*\* | Требуется для возможностей на базе Gemini |
+| **API-ключ Gemini** | Требуется для возможностей на базе Gemini; см. [настройку Gemini](/docs/gemini-ru.md) |
 
 | \*\*GPU\*\* | Не требуется для базовой архитектуры аватара/HUD |
 
@@ -760,7 +795,7 @@ config/api_keys.json
 ---
 
 
-## ⚡ Быстрый старт
+## Дополнительные сведения по установке
 
 
 ```bash
@@ -795,7 +830,7 @@ source .venv/bin/activate
 ```
 
 
-Установите зависимости:
+Установите зависимости проекта:
 
 
 ```bash
@@ -813,6 +848,17 @@ pip install -r requirements.txt
 python main.py
 
 ```
+
+При первом запуске откроется окно **INITIALISATION REQUIRED**. В нём:
+
+1. Вставьте ключ из Google AI Studio в поле **GEMINI API KEY**.
+2. Проверьте автоматически определённую ОС или выберите **Windows**, **macOS**
+   либо **Linux**.
+3. Нажмите **INITIALISE SYSTEMS**.
+
+Выбор ОС сохраняется вместе с ключом в локальном `config/api_keys.json` и нужен
+JARVIS для платформенных действий. Полная инструкция по ключу, моделям и
+безопасности: [Gemini в JARVIS](/docs/gemini-ru.md).
 
 
 ---
@@ -833,7 +879,7 @@ JARVIS построен вокруг local-first управления и чёт�
 
 - Необратимые действия требуют подтверждения через UI.
 
-- Плагины run through a controlled plugin registry.
+- Плагины загружаются через контролируемый реестр.
 
 - Загрузчик действий проверяет определения инструментов перед активацией.
 

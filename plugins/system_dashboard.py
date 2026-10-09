@@ -49,7 +49,11 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
     try:
         is_open = _live_panels.panel_status("system")
         if action == "status":
-            return "System dashboard is open." if is_open else "System dashboard is closed."
+            return (
+                "System dashboard is open."
+                if is_open
+                else "System dashboard is closed."
+            )
 
         if action == "close":
             return (
@@ -64,12 +68,12 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
 
         if player is None:
             return "The system dashboard needs the JARVIS HUD to be running."
-        compact_state = getattr(player, "is_compact_mode", getattr(player, "is_mini", False))
+        compact_state = getattr(
+            player, "is_compact_mode", getattr(player, "is_mini", False)
+        )
         if compact_state() if callable(compact_state) else bool(compact_state):
             return "System dashboard is unavailable in Mini Orb or Top Dock mode. Expand JARVIS with F9 or the FULL button first."
-        if not _live_panels.open_panel(
-            player, "system", _live_panels.SystemBoard
-        ):
+        if not _live_panels.open_panel(player, "system", _live_panels.SystemBoard):
             return "I couldn't open the system dashboard."
         return "Live system dashboard opened on the HUD."
     except Exception as exc:

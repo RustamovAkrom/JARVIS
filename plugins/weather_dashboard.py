@@ -59,7 +59,11 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
             closed = _live_panels.close_weather()
         except Exception as exc:
             return f"I couldn't close the weather dashboard: {exc}"
-        return "Weather dashboard closed." if closed else "The weather dashboard is not open."
+        return (
+            "Weather dashboard closed."
+            if closed
+            else "The weather dashboard is not open."
+        )
 
     if action not in {"open", "refresh"}:
         return "Weather dashboard action must be open, refresh, or close."
@@ -69,7 +73,9 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
         return "Which city should I show in the weather dashboard?"
     if player is None:
         return "The weather dashboard needs the JARVIS HUD to be running."
-    compact_state = getattr(player, "is_compact_mode", getattr(player, "is_mini", False))
+    compact_state = getattr(
+        player, "is_compact_mode", getattr(player, "is_mini", False)
+    )
     if compact_state() if callable(compact_state) else bool(compact_state):
         return "Weather dashboard is unavailable in Mini Orb or Top Dock mode. Expand JARVIS with F9 or the FULL button first."
 
