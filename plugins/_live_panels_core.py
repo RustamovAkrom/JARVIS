@@ -2064,12 +2064,16 @@ def open_panel(
     # orb undisturbed; the user can expand it with F9/double-click and rerun the
     # visual request when they want the full interactive panel.
     try:
-        compact_state = getattr(player, "is_compact_mode", getattr(player, "is_mini", False))
+        compact_state = getattr(
+            player, "is_compact_mode", getattr(player, "is_mini", False)
+        )
         is_compact = compact_state() if callable(compact_state) else bool(compact_state)
         if is_compact:
             log = getattr(player, "write_log", None)
             if callable(log):
-                log("SYS: Visual dashboard not opened in Mini Orb mode — expand JARVIS first.")
+                log(
+                    "SYS: Visual dashboard not opened in Mini Orb mode — expand JARVIS first."
+                )
             return False
     except Exception:
         return False
@@ -2083,7 +2087,9 @@ def panel_status(panel_id: str) -> bool:
 
     def job() -> bool:
         board = _boards.get(clean_id)
-        return bool(board is not None and not sip.isdeleted(board) and board.isVisible())
+        return bool(
+            board is not None and not sip.isdeleted(board) and board.isVisible()
+        )
 
     return bool(clean_id and _gui(job, timeout=3.0))
 

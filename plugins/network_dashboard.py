@@ -59,6 +59,7 @@ PLUGIN = {
 # Network sampler
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class _NetSampler:
     def __init__(self):
         self.lock = threading.Lock()
@@ -106,8 +107,12 @@ class _NetSampler:
                 dt = max(0.25, t1 - t0)
 
                 if net0 is not None:
-                    down = max(0.0, (net1.bytes_recv - net0.bytes_recv) * 8 / dt / 1_000_000)
-                    up = max(0.0, (net1.bytes_sent - net0.bytes_sent) * 8 / dt / 1_000_000)
+                    down = max(
+                        0.0, (net1.bytes_recv - net0.bytes_recv) * 8 / dt / 1_000_000
+                    )
+                    up = max(
+                        0.0, (net1.bytes_sent - net0.bytes_sent) * 8 / dt / 1_000_000
+                    )
                 else:
                     down = up = 0.0
 
@@ -116,8 +121,12 @@ class _NetSampler:
                 # connections
                 try:
                     conns = psutil.net_connections(kind="inet")
-                    established = sum(1 for c in conns if getattr(c, "status", "") == "ESTABLISHED")
-                    listening = sum(1 for c in conns if getattr(c, "status", "") == "LISTEN")
+                    established = sum(
+                        1 for c in conns if getattr(c, "status", "") == "ESTABLISHED"
+                    )
+                    listening = sum(
+                        1 for c in conns if getattr(c, "status", "") == "LISTEN"
+                    )
                 except Exception:
                     established = listening = 0
 
@@ -131,14 +140,18 @@ class _NetSampler:
                             continue
                         ip = ""
                         for a in addrs.get(name, []):
-                            if a.family == socket.AF_INET and not a.address.startswith("127."):
+                            if a.family == socket.AF_INET and not a.address.startswith(
+                                "127."
+                            ):
                                 ip = a.address
                                 break
-                        ifaces.append({
-                            "name": name,
-                            "ip": ip or "–",
-                            "speed": st.speed,
-                        })
+                        ifaces.append(
+                            {
+                                "name": name,
+                                "ip": ip or "–",
+                                "speed": st.speed,
+                            }
+                        )
                 except Exception:
                     pass
 
@@ -226,6 +239,7 @@ class _NetSampler:
 # NetworkBoard
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class NetworkBoard(_live_panels.Board):
     def __init__(self, acc, parent: Optional[QWidget] = None):
         super().__init__(acc, parent)
@@ -274,7 +288,7 @@ class NetworkBoard(_live_panels.Board):
         # ── speed rings ────────────────────────────────────────────────────
         rings = [
             ("down", "DOWNLOAD", f"{self.shown['down']:.2f} Mbps"),
-            ("up",   "UPLOAD",   f"{self.shown['up']:.2f} Mbps"),
+            ("up", "UPLOAD", f"{self.shown['up']:.2f} Mbps"),
         ]
         for i, (k, label, value) in enumerate(rings):
             cx = 280 + i * 520
@@ -286,7 +300,14 @@ class NetworkBoard(_live_panels.Board):
             # Scale: 0–50 Mbps fills the ring nicely for most home connections
             pct = min(100.0, self.shown[k] / 50.0 * 100.0)
             self.ring(
-                p, cx, 300, r, pct, label, value, "",
+                p,
+                cx,
+                300,
+                r,
+                pct,
+                label,
+                value,
+                "",
                 selected=(k == self.selected),
                 hover=over,
             )
@@ -301,7 +322,9 @@ class NetworkBoard(_live_panels.Board):
             x = 1100 + i * 230
             box = QRectF(x, 200, 210, 160)
             self.panel(p, box, 0.12)
-            self.text(p, x + 20, 220, name.upper(), self.font("mono", 16), _live_panels.DIM)
+            self.text(
+                p, x + 20, 220, name.upper(), self.font("mono", 16), _live_panels.DIM
+            )
 
             if ms is not None:
                 if ms > 100:
@@ -310,10 +333,20 @@ class NetworkBoard(_live_panels.Board):
                     col = _live_panels.WARN
                 else:
                     col = self.acc
-                self.text(p, x + 20, 270, f"{ms:.0f}", self.font("display", 52), col, glow=True)
+                self.text(
+                    p,
+                    x + 20,
+                    270,
+                    f"{ms:.0f}",
+                    self.font("display", 52),
+                    col,
+                    glow=True,
+                )
                 self.text(p, x + 20, 325, "ms", self.font("mono", 20), _live_panels.DIM)
             else:
-                self.text(p, x + 20, 280, "–", self.font("display", 48), _live_panels.DIM)
+                self.text(
+                    p, x + 20, 280, "–", self.font("display", 48), _live_panels.DIM
+                )
 
             self.text(p, x + 20, 345, host, self.font("mono", 15), _live_panels.DIM)
 
@@ -321,21 +354,30 @@ class NetworkBoard(_live_panels.Board):
         L = QRectF(70, 520, 900, 400)
         self.panel(p, L)
         self.text(
-            p, 100, 545,
+            p,
+            100,
+            545,
             f"HISTORY · {self.selected.upper()} (60 s)",
-            self.font("mono", 20), self.acc,
+            self.font("mono", 20),
+            self.acc,
         )
 
         vals = hist.get(self.selected, [])
         if vals:
             hi = max(max(vals) * 1.25, 1.0)
             self.graph(
-                p, QRectF(100, 590, 840, 280),
-                vals, 0, hi, self.acc,
+                p,
+                QRectF(100, 590, 840, 280),
+                vals,
+                0,
+                hi,
+                self.acc,
                 lambda v: f"{v:.1f}",
             )
             self.text(p, 100, 890, "60 s ago", self.font("mono", 15), _live_panels.DIM)
-            self.text(p, 940, 890, "now", self.font("mono", 15), _live_panels.DIM, align="r")
+            self.text(
+                p, 940, 890, "now", self.font("mono", 15), _live_panels.DIM, align="r"
+            )
 
         # ── right panel ────────────────────────────────────────────────────
         R = QRectF(1000, 520, 530, 400)
@@ -345,14 +387,23 @@ class NetworkBoard(_live_panels.Board):
 
         stats = [
             ("ESTABLISHED", str(d.get("established", "–"))),
-            ("LISTENING",   str(d.get("listening", "–"))),
-            ("TOTAL ↓",     f"{d.get('total_recv_gb', 0):.2f} GB"),
-            ("TOTAL ↑",     f"{d.get('total_sent_gb', 0):.2f} GB"),
+            ("LISTENING", str(d.get("listening", "–"))),
+            ("TOTAL ↓", f"{d.get('total_recv_gb', 0):.2f} GB"),
+            ("TOTAL ↑", f"{d.get('total_sent_gb', 0):.2f} GB"),
         ]
         for i, (k, v) in enumerate(stats):
             y = 590 + i * 48
             self.text(p, 1030, y, k, self.font("mono", 17), _live_panels.DIM)
-            self.text(p, 1480, y, v, self.font("display", 26), _live_panels.TEXT, align="r", glow=True)
+            self.text(
+                p,
+                1480,
+                y,
+                v,
+                self.font("display", 26),
+                _live_panels.TEXT,
+                align="r",
+                glow=True,
+            )
 
         self.text(p, 1030, 800, "INTERFACES", self.font("mono", 16), _live_panels.DIM)
         ifaces = d.get("ifaces") or []
@@ -361,7 +412,9 @@ class NetworkBoard(_live_panels.Board):
             name = (iface.get("name") or "")[:18]
             ip = iface.get("ip") or "–"
             self.text(p, 1030, y, name, self.font("mono", 16), _live_panels.TEXT)
-            self.text(p, 1480, y, ip, self.font("mono", 15), _live_panels.DIM, align="r")
+            self.text(
+                p, 1480, y, ip, self.font("mono", 15), _live_panels.DIM, align="r"
+            )
 
 
 def run(parameters: dict, player=None, session_memory=None) -> str:
@@ -396,7 +449,9 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
     if player is None:
         return "The network dashboard needs the JARVIS HUD to be running."
 
-    compact_state = getattr(player, "is_compact_mode", getattr(player, "is_mini", False))
+    compact_state = getattr(
+        player, "is_compact_mode", getattr(player, "is_mini", False)
+    )
     is_compact = compact_state() if callable(compact_state) else bool(compact_state)
     if is_compact:
         return (

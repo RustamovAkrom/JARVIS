@@ -1,9 +1,39 @@
 ![banner](/assets/images/banner.png)
 # JARVIS (v2)
 [RUSSIAN DOCS](/README_ru.md)
+
+> **Gemini setup, configured models, quotas, and security:** see the Russian
+> operational guide [docs/gemini-ru.md](/docs/gemini-ru.md). It includes the
+> current project model mapping and official Google links.
+
+> **Local models:** the Russian guide [docs/local-llm-ru.md](/docs/local-llm-ru.md)
+> covers the experimental Ollama/LM Studio client and its current limitations.
+
 ### The Real-Time Personal AI Assistant for Your Computer — By Akrom Rustamov
 
 A real-time voice AI assistant that can hear, see, speak, remember, and control your computer. JARVIS (v2) is built around the Gemini Live API, a modular action system, a dynamic plugin architecture, persistent local memory, computer vision, real-time audio, and a PyQt6 HUD.
+
+## ⚡ Start here: installation in minutes
+
+You need Python 3.11+ and a Gemini API key. Create the key in
+[Google AI Studio](https://aistudio.google.com/apikey), then run:
+
+```powershell
+git clone https://github.com/RustamovAkrom/JARVIS.git
+cd JARVIS
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+python main.py
+```
+
+On macOS/Linux, use `source .venv/bin/activate` after creating the environment.
+
+On the first launch, the **INITIALISATION REQUIRED** window opens. Paste your key
+into **GEMINI API KEY**, verify or select **Windows**, **macOS**, or **Linux**, and
+click **INITIALISE SYSTEMS**. JARVIS stores the key and OS locally in
+`config/api_keys.json`; no additional configuration is needed for your first
+conversation.
 
 ---
 
@@ -427,7 +457,7 @@ Plugin-specific configuration is handled through the shared configuration manage
 
 ---
 
-## ⚡ Quick Start
+## Additional installation details
 
 ```bash
 git clone https://github.com/RustamovAkrom/JARVIS.git

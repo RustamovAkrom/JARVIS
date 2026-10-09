@@ -63,7 +63,9 @@ class _BatterySampler:
         if self.thread and self.thread.is_alive():
             return
         self.stop = threading.Event()
-        self.thread = threading.Thread(target=self._run, name="battery-sampler", daemon=True)
+        self.thread = threading.Thread(
+            target=self._run, name="battery-sampler", daemon=True
+        )
         self.thread.start()
 
     def _run(self) -> None:
@@ -113,6 +115,7 @@ class _BatterySampler:
         extra = {}
         try:
             import wmi  # type: ignore
+
             c = wmi.WMI()
             for bat in c.Win32_Battery():
                 if getattr(bat, "EstimatedRunTime", None) not in (None, 71582788):
@@ -193,7 +196,11 @@ class BatteryBoard(_live_panels.Board):
 
         # background track
         p.setBrush(Qt.BrushStyle.NoBrush)
-        p.setPen(QPen(_live_panels._q(_live_panels._mix(_live_panels.BG, self.acc, 0.18)), wdt))
+        p.setPen(
+            QPen(
+                _live_panels._q(_live_panels._mix(_live_panels.BG, self.acc, 0.18)), wdt
+            )
+        )
         p.drawEllipse(box)
 
         # ticks
@@ -209,19 +216,30 @@ class BatteryBoard(_live_panels.Board):
             # we need lines, so rebuild properly
         # redraw ticks properly
         from PyQt6.QtCore import QLineF
+
         groups = {"on": [], "major": [], "minor": []}
         for i in range(60):
             a = math.radians(i * 6 - 90)
             r0, r1 = r + 10, r + (20 if i % 5 == 0 else 14)
             g = "on" if i < lit else ("major" if i % 5 == 0 else "minor")
-            groups[g].append(QLineF(
-                cx + r0 * math.cos(a), cy + r0 * math.sin(a),
-                cx + r1 * math.cos(a), cy + r1 * math.sin(a),
-            ))
+            groups[g].append(
+                QLineF(
+                    cx + r0 * math.cos(a),
+                    cy + r0 * math.sin(a),
+                    cx + r1 * math.cos(a),
+                    cy + r1 * math.sin(a),
+                )
+            )
         for g, c in (
             ("on", _live_panels._q(col, 200)),
-            ("major", _live_panels._q(_live_panels._mix(_live_panels.BG, self.acc, 0.5))),
-            ("minor", _live_panels._q(_live_panels._mix(_live_panels.BG, self.acc, 0.25))),
+            (
+                "major",
+                _live_panels._q(_live_panels._mix(_live_panels.BG, self.acc, 0.5)),
+            ),
+            (
+                "minor",
+                _live_panels._q(_live_panels._mix(_live_panels.BG, self.acc, 0.25)),
+            ),
         ):
             if groups[g]:
                 p.setPen(QPen(c, 2))
@@ -240,27 +258,68 @@ class BatteryBoard(_live_panels.Board):
 
         # inner circle
         ri = r - wdt - 14
-        p.setPen(QPen(_live_panels._q(_live_panels._mix(_live_panels.BG, self.acc, 0.3)), 1))
+        p.setPen(
+            QPen(_live_panels._q(_live_panels._mix(_live_panels.BG, self.acc, 0.3)), 1)
+        )
         p.drawEllipse(QPointF(cx, cy), ri, ri)
 
         # text
-        self.text(p, cx, cy - 8, value, self.font("display", r / 2.1),
-                  _live_panels.TEXT, align="c", valign="mid", glow=True)
-        self.text(p, cx, cy + r / 3 + 4, label, self.font("mono", max(16, r / 7)),
-                  col, align="c", valign="mid")
+        self.text(
+            p,
+            cx,
+            cy - 8,
+            value,
+            self.font("display", r / 2.1),
+            _live_panels.TEXT,
+            align="c",
+            valign="mid",
+            glow=True,
+        )
+        self.text(
+            p,
+            cx,
+            cy + r / 3 + 4,
+            label,
+            self.font("mono", max(16, r / 7)),
+            col,
+            align="c",
+            valign="mid",
+        )
         if sub:
-            self.text(p, cx, cy + r + 44, sub, self.font("mono", 20),
-                      _live_panels.DIM, align="c", valign="mid")
+            self.text(
+                p,
+                cx,
+                cy + r + 44,
+                sub,
+                self.font("mono", 20),
+                _live_panels.DIM,
+                align="c",
+                valign="mid",
+            )
 
     def draw(self, p: QPainter, dt: float, now: float) -> None:
         d, hist = self.sampler.snapshot()
 
         if not d.get("present"):
-            self.text(p, 800, 420, "NO BATTERY DETECTED",
-                      self.font("display", 42), _live_panels.DIM, align="c", glow=True)
-            self.text(p, 800, 490,
-                      "This PC does not report a battery (desktop or virtual machine).",
-                      self.font("mono", 22), _live_panels.DIM, align="c")
+            self.text(
+                p,
+                800,
+                420,
+                "NO BATTERY DETECTED",
+                self.font("display", 42),
+                _live_panels.DIM,
+                align="c",
+                glow=True,
+            )
+            self.text(
+                p,
+                800,
+                490,
+                "This PC does not report a battery (desktop or virtual machine).",
+                self.font("mono", 22),
+                _live_panels.DIM,
+                align="c",
+            )
             return
 
         pct = float(d.get("percent") or 0)
@@ -273,7 +332,10 @@ class BatteryBoard(_live_panels.Board):
 
         # ── custom battery ring (correct colours) ──────────────────────────
         self._draw_battery_ring(
-            p, 420, 380, 210,
+            p,
+            420,
+            380,
+            210,
             self.shown_pct,
             "CHARGE",
             f"{self.shown_pct:.0f}%",
@@ -284,8 +346,13 @@ class BatteryBoard(_live_panels.Board):
         # ── right cards ────────────────────────────────────────────────────
         cards = []
 
-        cards.append(("STATUS", "CHARGING" if plugged else "ON BATTERY",
-                      self.acc if plugged else _live_panels.WARN))
+        cards.append(
+            (
+                "STATUS",
+                "CHARGING" if plugged else "ON BATTERY",
+                self.acc if plugged else _live_panels.WARN,
+            )
+        )
 
         time_label = "TIME TO FULL" if plugged else "REMAINING"
         time_val = self._format_time(secsleft, plugged, pct)
@@ -293,27 +360,34 @@ class BatteryBoard(_live_panels.Board):
 
         health = d.get("health")
         if health is not None:
-            hcol = (_live_panels.HOT if health < 70
-                    else self.acc if health >= 85
-                    else _live_panels.WARN)
+            hcol = (
+                _live_panels.HOT
+                if health < 70
+                else self.acc if health >= 85 else _live_panels.WARN
+            )
             cards.append(("HEALTH", f"{health:.0f}%", hcol))
         else:
             cards.append(("HEALTH", "—", _live_panels.DIM))
 
-        cards.append(("POWER", "AC Adapter" if plugged else "Battery", _live_panels.TEXT))
+        cards.append(
+            ("POWER", "AC Adapter" if plugged else "Battery", _live_panels.TEXT)
+        )
 
         for i, (label, value, c) in enumerate(cards):
             y = 200 + i * 110
             box = QRectF(780, y, 700, 95)
             self.panel(p, box, 0.11)
             self.text(p, 810, y + 22, label, self.font("mono", 18), _live_panels.DIM)
-            self.text(p, 810, y + 58, str(value), self.font("display", 36), c, glow=True)
+            self.text(
+                p, 810, y + 58, str(value), self.font("display", 36), c, glow=True
+            )
 
         # ── history ────────────────────────────────────────────────────────
         L = QRectF(70, 680, 1460, 250)
         self.panel(p, L)
-        self.text(p, 100, 705, "CHARGE HISTORY (last ~5 min)",
-                  self.font("mono", 20), self.acc)
+        self.text(
+            p, 100, 705, "CHARGE HISTORY (last ~5 min)", self.font("mono", 20), self.acc
+        )
 
         clean = [v if v is not None else pct for v in hist]
         if len(clean) >= 2:
@@ -322,14 +396,26 @@ class BatteryBoard(_live_panels.Board):
             if hi - lo < 5:  # avoid flat line looking broken
                 lo, hi = max(0, pct - 5), min(100, pct + 5)
             self.graph(
-                p, QRectF(100, 745, 1400, 150),
-                clean, lo, hi, col,
+                p,
+                QRectF(100, 745, 1400, 150),
+                clean,
+                lo,
+                hi,
+                col,
                 lambda v: f"{v:.0f}%",
             )
 
         if pct <= 20 and not plugged:
-            self.text(p, 800, 640, "⚠ LOW BATTERY — consider plugging in",
-                      self.font("mono", 22), _live_panels.HOT, align="c", glow=True)
+            self.text(
+                p,
+                800,
+                640,
+                "⚠ LOW BATTERY — consider plugging in",
+                self.font("mono", 22),
+                _live_panels.HOT,
+                align="c",
+                glow=True,
+            )
 
 
 def run(parameters: dict, player=None, session_memory=None) -> str:
@@ -341,16 +427,22 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
             open_now = _live_panels.panel_status("battery")
         except Exception as exc:
             return f"I couldn't check the battery dashboard: {exc}"
-        return ("Battery dashboard is currently open." if open_now
-                else "Battery dashboard is closed.")
+        return (
+            "Battery dashboard is currently open."
+            if open_now
+            else "Battery dashboard is closed."
+        )
 
     if action == "close":
         try:
             closed = _live_panels.close_panel("battery")
         except Exception as exc:
             return f"I couldn't close the battery dashboard: {exc}"
-        return ("Battery dashboard closed." if closed
-                else "The battery dashboard is not open.")
+        return (
+            "Battery dashboard closed."
+            if closed
+            else "The battery dashboard is not open."
+        )
 
     if action not in {"open", "refresh"}:
         return "Battery dashboard action must be open, close, or status."
@@ -358,11 +450,15 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
     if player is None:
         return "The battery dashboard needs the JARVIS HUD to be running."
 
-    compact_state = getattr(player, "is_compact_mode", getattr(player, "is_mini", False))
+    compact_state = getattr(
+        player, "is_compact_mode", getattr(player, "is_mini", False)
+    )
     is_compact = compact_state() if callable(compact_state) else bool(compact_state)
     if is_compact:
-        return ("Battery dashboard is unavailable in Mini Orb or Top Dock mode. "
-                "Expand JARVIS with F9 or the FULL button first.")
+        return (
+            "Battery dashboard is unavailable in Mini Orb or Top Dock mode. "
+            "Expand JARVIS with F9 or the FULL button first."
+        )
 
     try:
         ok = _live_panels.open_panel(player, "battery", BatteryBoard)

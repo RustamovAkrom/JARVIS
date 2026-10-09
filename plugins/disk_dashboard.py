@@ -53,6 +53,7 @@ PLUGIN = {
 # Safe cache cleaner
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _safe_clear_dir(path: Path, max_depth: int = 2) -> int:
     """Delete files inside a directory. Returns bytes freed. Never deletes the dir itself."""
     freed = 0
@@ -108,7 +109,9 @@ def clean_system_cache() -> dict:
         # Chrome / Edge caches (only Cache folders)
         for browser in ("Google/Chrome", "Microsoft/Edge"):
             targets.append(Path(local) / browser / "User Data" / "Default" / "Cache")
-            targets.append(Path(local) / browser / "User Data" / "Default" / "Code Cache")
+            targets.append(
+                Path(local) / browser / "User Data" / "Default" / "Code Cache"
+            )
 
     total_freed = 0
     cleaned = []
@@ -141,6 +144,7 @@ def _gb(n: float) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 # Sampler
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class _DiskSampler:
     def __init__(self):
@@ -177,15 +181,17 @@ class _DiskSampler:
                         continue
                     try:
                         u = psutil.disk_usage(p.mountpoint)
-                        parts.append({
-                            "device": p.device,
-                            "mount": p.mountpoint,
-                            "fstype": p.fstype,
-                            "total": u.total,
-                            "used": u.used,
-                            "free": u.free,
-                            "percent": u.percent,
-                        })
+                        parts.append(
+                            {
+                                "device": p.device,
+                                "mount": p.mountpoint,
+                                "fstype": p.fstype,
+                                "total": u.total,
+                                "used": u.used,
+                                "free": u.free,
+                                "percent": u.percent,
+                            }
+                        )
                     except Exception:
                         continue
                 parts.sort(key=lambda x: x["total"], reverse=True)
@@ -211,8 +217,12 @@ class _DiskSampler:
                 dt = max(0.25, t1 - t0)
 
                 if io0 is not None and io1 is not None:
-                    read_mb = max(0.0, (io1.read_bytes - io0.read_bytes) / dt / 1_000_000)
-                    write_mb = max(0.0, (io1.write_bytes - io0.write_bytes) / dt / 1_000_000)
+                    read_mb = max(
+                        0.0, (io1.read_bytes - io0.read_bytes) / dt / 1_000_000
+                    )
+                    write_mb = max(
+                        0.0, (io1.write_bytes - io0.write_bytes) / dt / 1_000_000
+                    )
                 else:
                     read_mb = write_mb = 0.0
 
@@ -253,7 +263,7 @@ class DiskBoard(_live_panels.Board):
         self.shown_write = 0.0
         self.selected = "read"
         self._moving = True
-        self.clean_msg = ""          # result message after cleanup
+        self.clean_msg = ""  # result message after cleanup
         self.clean_msg_until = 0.0
         self.cleaning = False
 
@@ -271,7 +281,10 @@ class DiskBoard(_live_panels.Board):
         parts = d.get("partitions") or []
         if parts:
             free = _gb(parts[0]["free"])
-            return ("Disk Diagnostics", f"Main free: {free}  ·  {time.strftime('%H:%M:%S')}")
+            return (
+                "Disk Diagnostics",
+                f"Main free: {free}  ·  {time.strftime('%H:%M:%S')}",
+            )
         return ("Disk Diagnostics", time.strftime("%H:%M:%S"))
 
     def clicked(self, key: str) -> None:
@@ -305,38 +318,72 @@ class DiskBoard(_live_panels.Board):
         d, hist = self.sampler.snapshot()
         parts = d.get("partitions") or []
 
-        self.shown_read = _live_panels._approach(self.shown_read, float(d.get("read_mb") or 0), dt, 8)
-        self.shown_write = _live_panels._approach(self.shown_write, float(d.get("write_mb") or 0), dt, 8)
+        self.shown_read = _live_panels._approach(
+            self.shown_read, float(d.get("read_mb") or 0), dt, 8
+        )
+        self.shown_write = _live_panels._approach(
+            self.shown_write, float(d.get("write_mb") or 0), dt, 8
+        )
         self._moving = (
             abs(self.shown_read - float(d.get("read_mb") or 0)) > 0.05
             or abs(self.shown_write - float(d.get("write_mb") or 0)) > 0.05
         )
 
         # ── IO rings ───────────────────────────────────────────────────────
-        for i, (key, label, val) in enumerate([
-            ("read", "READ", self.shown_read),
-            ("write", "WRITE", self.shown_write),
-        ]):
+        for i, (key, label, val) in enumerate(
+            [
+                ("read", "READ", self.shown_read),
+                ("write", "WRITE", self.shown_write),
+            ]
+        ):
             cx = 260 + i * 420
             r = 120
-            over = self.hit(QRectF(cx - r - 15, 280 - r - 15, 2 * r + 30, 2 * r + 60), f"io:{key}")
+            over = self.hit(
+                QRectF(cx - r - 15, 280 - r - 15, 2 * r + 30, 2 * r + 60), f"io:{key}"
+            )
             pct = min(100.0, val / 200.0 * 100)
-            self.ring(p, cx, 280, r, pct, label, f"{val:.1f} MB/s", "",
-                      selected=(self.selected == key), hover=over)
+            self.ring(
+                p,
+                cx,
+                280,
+                r,
+                pct,
+                label,
+                f"{val:.1f} MB/s",
+                "",
+                selected=(self.selected == key),
+                hover=over,
+            )
 
         # ── main drive card + Clean Cache button ───────────────────────────
         if parts:
             main = parts[0]
             box = QRectF(1050, 160, 470, 260)
             self.panel(p, box, 0.12)
-            self.text(p, 1075, 185, "MAIN DRIVE", self.font("mono", 18), _live_panels.DIM)
-            self.text(p, 1075, 230, main["mount"], self.font("display", 34), self.acc, glow=True)
+            self.text(
+                p, 1075, 185, "MAIN DRIVE", self.font("mono", 18), _live_panels.DIM
+            )
+            self.text(
+                p,
+                1075,
+                230,
+                main["mount"],
+                self.font("display", 34),
+                self.acc,
+                glow=True,
+            )
 
             used_pct = main["percent"]
             col = _disk_color(used_pct, self.acc)
             self.text(p, 1075, 285, f"{used_pct:.0f}% used", self.font("mono", 22), col)
-            self.text(p, 1075, 320, f"{_gb(main['free'])} free of {_gb(main['total'])}",
-                      self.font("mono", 18), _live_panels.TEXT)
+            self.text(
+                p,
+                1075,
+                320,
+                f"{_gb(main['free'])} free of {_gb(main['total'])}",
+                self.font("mono", 18),
+                _live_panels.TEXT,
+            )
 
             # ── Clean Cache button ─────────────────────────────────────────
             btn = QRectF(1075, 360, 420, 42)
@@ -344,15 +391,30 @@ class DiskBoard(_live_panels.Board):
             active = over_btn or self.cleaning
             self.panel(p, btn, 0.25 if active else 0.12, active=active)
             label = "CLEANING…" if self.cleaning else "CLEAR CACHE"
-            self.text(p, btn.center().x(), btn.center().y(),
-                      label, self.font("mono", 18),
-                      self.acc if active else _live_panels.TEXT,
-                      align="c", valign="mid", glow=active)
+            self.text(
+                p,
+                btn.center().x(),
+                btn.center().y(),
+                label,
+                self.font("mono", 18),
+                self.acc if active else _live_panels.TEXT,
+                align="c",
+                valign="mid",
+                glow=active,
+            )
 
         # ── result toast ───────────────────────────────────────────────────
         if now < self.clean_msg_until and self.clean_msg:
-            self.text(p, 800, 450, self.clean_msg,
-                      self.font("mono", 20), self.acc, align="c", glow=True)
+            self.text(
+                p,
+                800,
+                450,
+                self.clean_msg,
+                self.font("mono", 20),
+                self.acc,
+                align="c",
+                glow=True,
+            )
 
         # ── partitions ─────────────────────────────────────────────────────
         L = QRectF(70, 500, 900, 420)
@@ -360,7 +422,14 @@ class DiskBoard(_live_panels.Board):
         self.text(p, 100, 525, "PARTITIONS", self.font("mono", 20), self.acc)
 
         if not parts:
-            self.text(p, 100, 580, "No partitions found", self.font("mono", 22), _live_panels.DIM)
+            self.text(
+                p,
+                100,
+                580,
+                "No partitions found",
+                self.font("mono", 22),
+                _live_panels.DIM,
+            )
         else:
             for i, part in enumerate(parts[:5]):
                 y = 560 + i * 68
@@ -371,32 +440,65 @@ class DiskBoard(_live_panels.Board):
                 if len(name) > 18:
                     name = name[:16] + "…"
                 self.text(p, 100, y + 6, name, self.font("mono", 20), _live_panels.TEXT)
-                self.text(p, 100, y + 32, f"{_gb(part['used'])} / {_gb(part['total'])}",
-                          self.font("mono", 15), _live_panels.DIM)
+                self.text(
+                    p,
+                    100,
+                    y + 32,
+                    f"{_gb(part['used'])} / {_gb(part['total'])}",
+                    self.font("mono", 15),
+                    _live_panels.DIM,
+                )
 
                 bar = QRectF(380, y + 14, 520, 20)
                 p.setPen(Qt.PenStyle.NoPen)
-                p.setBrush(_live_panels._q(_live_panels._mix(_live_panels.BG, self.acc, 0.15)))
+                p.setBrush(
+                    _live_panels._q(_live_panels._mix(_live_panels.BG, self.acc, 0.15))
+                )
                 p.drawRoundedRect(bar, 4, 4)
                 fill_w = bar.width() * min(pct, 100) / 100
                 p.setBrush(_live_panels._q(col, 200))
-                p.drawRoundedRect(QRectF(bar.left(), bar.top(), fill_w, bar.height()), 4, 4)
-                self.text(p, 920, y + 24, f"{pct:.0f}%", self.font("mono", 18),
-                          col, align="r", valign="mid")
+                p.drawRoundedRect(
+                    QRectF(bar.left(), bar.top(), fill_w, bar.height()), 4, 4
+                )
+                self.text(
+                    p,
+                    920,
+                    y + 24,
+                    f"{pct:.0f}%",
+                    self.font("mono", 18),
+                    col,
+                    align="r",
+                    valign="mid",
+                )
 
         # ── IO history ─────────────────────────────────────────────────────
         R = QRectF(1000, 500, 520, 420)
         self.panel(p, R)
-        self.text(p, 1030, 525, f"HISTORY · {self.selected.upper()} (60 s)",
-                  self.font("mono", 18), self.acc)
+        self.text(
+            p,
+            1030,
+            525,
+            f"HISTORY · {self.selected.upper()} (60 s)",
+            self.font("mono", 18),
+            self.acc,
+        )
 
         vals = hist.get(self.selected, [])
         if vals:
             hi = max(max(vals) * 1.3, 1.0)
-            self.graph(p, QRectF(1030, 570, 460, 290), vals, 0, hi, self.acc,
-                       lambda v: f"{v:.0f}")
+            self.graph(
+                p,
+                QRectF(1030, 570, 460, 290),
+                vals,
+                0,
+                hi,
+                self.acc,
+                lambda v: f"{v:.0f}",
+            )
             self.text(p, 1030, 885, "60 s ago", self.font("mono", 14), _live_panels.DIM)
-            self.text(p, 1490, 885, "now", self.font("mono", 14), _live_panels.DIM, align="r")
+            self.text(
+                p, 1490, 885, "now", self.font("mono", 14), _live_panels.DIM, align="r"
+            )
 
 
 def run(parameters: dict, player=None, session_memory=None) -> str:
@@ -415,16 +517,18 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
             open_now = _live_panels.panel_status("disk")
         except Exception as exc:
             return f"I couldn't check the disk dashboard: {exc}"
-        return ("Disk dashboard is currently open." if open_now
-                else "Disk dashboard is closed.")
+        return (
+            "Disk dashboard is currently open."
+            if open_now
+            else "Disk dashboard is closed."
+        )
 
     if action == "close":
         try:
             closed = _live_panels.close_panel("disk")
         except Exception as exc:
             return f"I couldn't close the disk dashboard: {exc}"
-        return ("Disk dashboard closed." if closed
-                else "The disk dashboard is not open.")
+        return "Disk dashboard closed." if closed else "The disk dashboard is not open."
 
     if action not in {"open", "refresh"}:
         return "Disk dashboard action must be open, close, status or clean_cache."
@@ -432,11 +536,15 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
     if player is None:
         return "The disk dashboard needs the JARVIS HUD to be running."
 
-    compact_state = getattr(player, "is_compact_mode", getattr(player, "is_mini", False))
+    compact_state = getattr(
+        player, "is_compact_mode", getattr(player, "is_mini", False)
+    )
     is_compact = compact_state() if callable(compact_state) else bool(compact_state)
     if is_compact:
-        return ("Disk dashboard is unavailable in Mini Orb or Top Dock mode. "
-                "Expand JARVIS with F9 or the FULL button first.")
+        return (
+            "Disk dashboard is unavailable in Mini Orb or Top Dock mode. "
+            "Expand JARVIS with F9 or the FULL button first."
+        )
 
     try:
         ok = _live_panels.open_panel(player, "disk", DiskBoard)
