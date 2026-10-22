@@ -1,4 +1,4 @@
-# ── Jarvis v2 — Python dependencies ─────────────────────────────────────────────
+# ── Jarvis (V2) — Python dependencies ────────────────────────────────────────────
 # pip skips any line whose sys_platform marker does not match your OS, so this
 # one file serves Windows, macOS and Linux. `python setup.py` runs it for you.
 
@@ -14,6 +14,10 @@ PyQt6>=6.6,<7
 sounddevice>=0.4,<1
 numpy>=1.24,<3
 google-genai>=2.8.0,<3
+# Declared even though google-genai already installs it. providers/ imports it
+# directly, and a package you import is a package you depend on — relying on
+# somebody else's transitive dependency works right up until they drop it.
+httpx>=0.27,<1
 
 # ── Web search & browser control ──────────────────────────────────────────────
 requests>=2.31,<3
@@ -98,6 +102,33 @@ pynvml                       # system_monitor + the HUD's GPU meter (NVIDIA)
 #   pip install pydub        # file_processor: audio metadata and conversion
 #                            #   (also needs ffmpeg on PATH for most formats)
 #   pip install mediapipe    # pushup_counter: elbow-angle rep detection
+
+# ── Optional: running the assistant on your own models ───────────────────────
+# ⚙ → ENGINE & PROVIDERS lets you replace Gemini Live with your own speech
+# recognition, language model and voice — or point only the assistant's
+# background requests at another provider.
+#
+# NOTHING IS NEEDED FOR MOST OF IT. Talking to a model — Ollama, LM Studio,
+# llama.cpp, vLLM, or a hosted API like Groq, OpenAI, DeepSeek or OpenRouter —
+# uses httpx, which is already above. The system's own voices (SAPI on Windows,
+# `say` on macOS, espeak-ng on Linux) need no Python package at all.
+#
+# Two things are downloads, and both install with one click from that panel:
+#
+#   pip install faster-whisper   # hearing: Whisper on YOUR CPU. No GPU, no
+#                                #   ffmpeg — the microphone's samples go
+#                                #   straight in. ~50 languages, detected per
+#                                #   sentence rather than configured.
+#   pip install piper-tts        # speaking: a neural voice on this machine, in
+#                                #   about 50 languages. Voices are ~60 MB each
+#                                #   and fetched on demand; the assistant uses
+#                                #   the one matching whatever language it just
+#                                #   heard you speak.
+#
+# Left out of the install for the same reason as everything else in this
+# section: together they are several hundred megabytes, and a fresh clone that
+# only ever uses Gemini should not pay for them. Deleting providers/ removes
+# the whole feature and the app runs exactly as it did before it existed.
 
 # ── Optional: local wake word ("Hey Jarvis") ──────────────────────────────────
 # Deliberately NOT installed by default — it's opt-in. Enable it (and download

@@ -23,7 +23,6 @@ Discovery runs once at startup; import errors, validation errors, and name
 collisions are logged and the offending file is skipped — they NEVER raise out
 of discover_actions() and never abort the scan of the remaining files.
 """
-
 from __future__ import annotations
 
 import importlib.util
@@ -50,9 +49,51 @@ _BEHAVIORS = ("BLOCKING", "NON_BLOCKING")
 _SCHEDULING = ("WHEN_IDLE", "SILENT", "INTERRUPT")
 
 
+# Keys this project puts on a declaration for its own bookkeeping. They live
+# here because this file documents what a TOOL dict may contain, and both
+# loaders produce them.
+#
+# THEY MUST NEVER REACH A VENDOR. Gemini validates function declarations
+# against a fixed schema and an unknown field is an error, not something it
+# ignores — so main.py calls strip_meta() before building the Live config.
+#
+# The definition is here rather than in providers/schema.py, which is the only
+# other place that cares, because main.py must be able to strip them WITHOUT
+# importing providers: a default install never loads that package, and the
+# measured cost of deciding not to is the release's headline number.
+META_KEYS = ("tier", "brief")
+
+
+def strip_meta(decls):
+    """Declarations without META_KEYS. Non-dict entries pass through untouched;
+    a declaration carrying none is returned as the same object, so what an API
+    receives is byte-for-byte what it received before these keys existed."""
+    out = []
+    for decl in decls:
+        if isinstance(decl, dict) and any(k in decl for k in META_KEYS):
+            out.append({k: v for k, v in decl.items() if k not in META_KEYS})
+        else:
+            out.append(decl)
+    return out
+
+
 def _opt_upper(value, allowed: tuple[str, ...]) -> Optional[str]:
     v = str(value or "").strip().upper()
     return v if v in allowed else None
+
+def _opt_tier(value) -> Optional[str]:
+    """"core" or "extra" from a declaration, or None when it did not say.
+
+    Anything else is treated as "did not say" rather than as an error: a typo
+    should fall back to the default ranking, not stop a working tool loading.
+    """
+    text = str(value or "").strip().lower()
+    return text if text in ("core", "extra") else None
+
+
+def _opt_text(value) -> Optional[str]:
+    text = str(value or "").strip()
+    return text or None
 
 
 @dataclass
@@ -64,13 +105,22 @@ class ActionRecord:
     file: str = ""
     valid: bool = False
     error: str = ""
-    behavior: Optional[str] = None  # None = the API's default (blocking)
-    scheduling: Optional[str] = None  # None = the API's default (WHEN_IDLE)
+    behavior: Optional[str] = None     # None = the API's default (blocking)
+    scheduling: Optional[str] = None   # None = the API's default (WHEN_IDLE)
+    # Read by providers/schema.py when a small model gets a tool budget; never
+    # sent to any API — main.py strips both before the Gemini config is built.
+    #   tier   "core" | "extra" — this file's own opinion of whether it should
+    #          survive a tight budget, instead of that being decided by the
+    #          order files happen to be discovered in.
+    #   brief  a short description used in place of the long one when a budget
+    #          is in force. Nothing is deleted: Gemini still gets the full text.
+    tier: Optional[str] = None
+    brief: Optional[str] = None
 
 
 class ActionRegistry:
     def __init__(self, actions: dict[str, ActionRecord], logger: Callable[[str], None]):
-        self._actions = actions  # name -> ActionRecord, VALID entries only
+        self._actions = actions          # name -> ActionRecord, VALID entries only
         self._all_records: list[ActionRecord] = []
         self._logger = logger
 
@@ -78,13 +128,17 @@ class ActionRegistry:
     def get_tool_declarations(self) -> list[dict]:
         out = []
         for rec in self._actions.values():
-            decl = {
-                "name": rec.name,
-                "description": rec.description,
-                "parameters": rec.parameters,
-            }
+            decl = {"name": rec.name, "description": rec.description,
+                    "parameters": rec.parameters}
             if rec.behavior:
                 decl["behavior"] = rec.behavior
+            # Budget metadata. NOT part of any API's schema — main.py calls
+            # providers.schema.strip_meta() before the Gemini config is built,
+            # and budget() consumes them on the local-engine path.
+            if rec.tier:
+                decl["tier"] = rec.tier
+            if rec.brief:
+                decl["brief"] = rec.brief
             out.append(decl)
         return out
 
@@ -117,9 +171,7 @@ def _call_handler(fn: Callable, parameters: dict, ctx: dict) -> str:
     (or all of them if it has **kwargs), so each action's existing signature
     works unchanged."""
     sig = inspect.signature(fn)
-    has_var_kw = any(
-        p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
-    )
+    has_var_kw = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
     kwargs = {}
     for key in _CTX_KEYS:
         if has_var_kw or key in sig.parameters:
@@ -131,58 +183,39 @@ def _validate(module, filename: str) -> ActionRecord:
     """Returns an ActionRecord; .valid=False + .error set on any problem. Never raises."""
     tool = getattr(module, "TOOL", None)
     if not isinstance(tool, dict):
-        return ActionRecord(
-            name=Path(filename).stem,
-            file=filename,
-            error="No module-level TOOL dict (not a discoverable action).",
-        )
+        return ActionRecord(name=Path(filename).stem, file=filename,
+                            error="No module-level TOOL dict (not a discoverable action).")
 
     name = tool.get("name")
     if not isinstance(name, str) or not _NAME_RE.match(name):
-        return ActionRecord(
-            name=str(name or Path(filename).stem),
-            file=filename,
-            error="TOOL['name'] missing or not a valid identifier.",
-        )
+        return ActionRecord(name=str(name or Path(filename).stem), file=filename,
+                            error="TOOL['name'] missing or not a valid identifier.")
 
     description = tool.get("description")
     if not isinstance(description, str) or not description.strip():
-        return ActionRecord(
-            name=name, file=filename, error="TOOL['description'] missing or empty."
-        )
+        return ActionRecord(name=name, file=filename,
+                            error="TOOL['description'] missing or empty.")
 
     parameters = tool.get("parameters", _DEFAULT_PARAMS)
     if not isinstance(parameters, dict) or parameters.get("type") != "OBJECT":
-        return ActionRecord(
-            name=name,
-            file=filename,
-            error='TOOL[\'parameters\'] must be a dict with "type": "OBJECT".',
-        )
+        return ActionRecord(name=name, file=filename,
+                            error="TOOL['parameters'] must be a dict with \"type\": \"OBJECT\".")
 
     handler = tool.get("handler")
     if not callable(handler):
-        return ActionRecord(
-            name=name, file=filename, error="TOOL['handler'] missing or not callable."
-        )
+        return ActionRecord(name=name, file=filename,
+                            error="TOOL['handler'] missing or not callable.")
 
-    return ActionRecord(
-        name=name,
-        description=description.strip(),
-        parameters=parameters,
-        handler=handler,
-        file=filename,
-        valid=True,
-        error="",
-        behavior=_opt_upper(tool.get("behavior"), _BEHAVIORS),
-        scheduling=_opt_upper(tool.get("scheduling"), _SCHEDULING),
-    )
+    return ActionRecord(name=name, description=description.strip(), parameters=parameters,
+                        handler=handler, file=filename, valid=True, error="",
+                        behavior=_opt_upper(tool.get("behavior"), _BEHAVIORS),
+                        scheduling=_opt_upper(tool.get("scheduling"), _SCHEDULING),
+                        tier=_opt_tier(tool.get("tier")),
+                        brief=_opt_text(tool.get("brief")))
 
 
-def discover_actions(
-    actions_dir: Path,
-    reserved_names: set[str] | None = None,
-    logger: Callable[[str], None] = print,
-) -> ActionRegistry:
+def discover_actions(actions_dir: Path, reserved_names: set[str] | None = None,
+                     logger: Callable[[str], None] = print) -> ActionRegistry:
     """
     Scans actions_dir for *.py files (skips files starting with '_'). A file is
     only treated as an action if it exposes a module-level TOOL dict; files
@@ -195,9 +228,7 @@ def discover_actions(
     valid: dict[str, ActionRecord] = {}
     all_records: list[ActionRecord] = []
 
-    files = sorted(
-        actions_dir.glob("*.py"), key=lambda p: p.name
-    )  # deterministic order
+    files = sorted(actions_dir.glob("*.py"), key=lambda p: p.name)  # deterministic order
     for path in files:
         if path.name.startswith("_"):
             continue
@@ -219,28 +250,21 @@ def discover_actions(
                     raise
 
             if getattr(module, "TOOL", None) is None:
-                continue  # not an action file — a helper/capture-only module
+                continue   # not an action file — a helper/capture-only module
 
             rec = _validate(module, path.name)
 
             if rec.valid and rec.name in reserved:
-                rec = ActionRecord(
-                    name=rec.name,
-                    file=path.name,
-                    error=f"Name '{rec.name}' collides with a reserved core tool — rejected.",
-                )
+                rec = ActionRecord(name=rec.name, file=path.name,
+                                   error=f"Name '{rec.name}' collides with a reserved core tool — rejected.")
             elif rec.valid and rec.name in valid:
                 other = valid[rec.name].file
-                rec = ActionRecord(
-                    name=rec.name,
-                    file=path.name,
-                    error=f"Name '{rec.name}' already used by action '{other}' — rejected.",
-                )
+                rec = ActionRecord(name=rec.name, file=path.name,
+                                   error=f"Name '{rec.name}' already used by action '{other}' — rejected.")
 
         except Exception as e:
-            rec = ActionRecord(
-                name=path.stem, file=path.name, error=f"Failed to load: {e}"
-            )
+            rec = ActionRecord(name=path.stem, file=path.name,
+                               error=f"Failed to load: {e}")
             traceback.print_exc()
 
         all_records.append(rec)

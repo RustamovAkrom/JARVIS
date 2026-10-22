@@ -1,563 +1,142 @@
-![banner](/assets/images/banner.png)
-# JARVIS (v2)
-[RUSSIAN DOCS](/README_ru.md)
+# JARVIS / MARK LIV
 
-> **Gemini setup, configured models, quotas, and security:** see the Russian
-> operational guide [docs/gemini-ru.md](/docs/gemini-ru.md). It includes the
-> current project model mapping and official Google links.
+[Документация на русском](README_ru.md) · [Plugins and development](docs/plugins.md) · [Gemini](docs/gemini.md) · [Local and third-party models](docs/local-llm.md)
 
-> **Local models:** the Russian guide [docs/local-llm-ru.md](/docs/local-llm-ru.md)
-> covers the experimental Ollama/LM Studio client and its current limitations.
+JARVIS is a Python and PyQt6 desktop voice assistant. It brings together spoken conversation, computer tools, local memory, and a HUD. Gemini Live is the default engine; an optional pipeline combines selected providers and can run fully locally.
 
-### The Real-Time Personal AI Assistant for Your Computer — By Akrom Rustamov
+> The current code calls this build MARK LIV. JARVIS is also used in the interface and project history.
 
-A real-time voice AI assistant that can hear, see, speak, remember, and control your computer. JARVIS (v2) is built around the Gemini Live API, a modular action system, a dynamic plugin architecture, persistent local memory, computer vision, real-time audio, and a PyQt6 HUD.
+## Contents
 
-## ⚡ Start here: installation in minutes
+- [Capabilities](#capabilities)
+- [Install](#install)
+- [Interface and controls](#interface-and-controls)
+- [Settings](#settings)
+- [Models and AI](#models-and-ai)
+- [Actions and plugins](#actions-and-plugins)
+- [Data and privacy](#data-and-privacy)
+- [For developers](#for-developers)
+- [Troubleshooting](#troubleshooting)
 
-You need Python 3.11+ and a Gemini API key. Create the key in
-[Google AI Studio](https://aistudio.google.com/apikey), then run:
+## Capabilities
+
+**Voice and conversation:** Gemini Live combines microphone input, speech recognition, spoken responses, and tool calls in one session. The UI also supports typed messages and file attachments. Push-to-talk and the local “Hey Jarvis” wake word are optional switches.
+
+**Computer tools:** built-in actions in `actions/` open applications and websites, search the web, process files, control windows and selected OS settings, manage reminders, play video, and use screen or camera context. Availability depends on OS, permissions, and installed software. The app may ask before irreversible operations; some reversible operations support undo.
+
+**HUD and memory:** animated avatar with speech synchronisation, CPU/memory/network and available sensor metrics, conversation/task/history/content/quiz panels, local long-term memory, mini window, appearance controls, and command palette.
+
+**Integrations:** optional dashboards and tools are loaded as plugins. The repository includes Obsidian, Spotify, and Telegram integrations; system/disk/network/battery/weather dashboards; and other plugins. Features may require credentials, authorisation, third-party apps, or internet access.
+
+## Install
+
+`setup.py` targets Python 3.11–3.13. Newer versions are allowed with a warning but are not guaranteed to work. Audio and multimedia dependencies can make installation take a while.
 
 ```powershell
 git clone https://github.com/RustamovAkrom/JARVIS.git
 cd JARVIS
-python -m venv .venv
+py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+python setup.py
 python main.py
 ```
 
-On macOS/Linux, use `source .venv/bin/activate` after creating the environment.
+If PowerShell blocks activation, run `.venv\Scripts\python.exe setup.py`, then `.venv\Scripts\python.exe main.py`. On macOS/Linux, use `source .venv/bin/activate`, followed by `python setup.py` and `python main.py`. The installer prints additional Linux system dependencies when needed.
 
-On the first launch, the **INITIALISATION REQUIRED** window opens. Paste your key
-into **GEMINI API KEY**, verify or select **Windows**, **macOS**, or **Linux**, and
-click **INITIALISE SYSTEMS**. JARVIS stores the key and OS locally in
-`config/api_keys.json`; no additional configuration is needed for your first
-conversation.
+On first launch, enter a Gemini API key from [Google AI Studio](https://aistudio.google.com/apikey) in the setup window and confirm the detected OS. The key and settings are stored in `config/api_keys.json`. Do not publish or commit this file.
 
----
+The setup script installs `requirements.txt` and Playwright Chromium/Firefox browsers. If the browser download fails, it prints a retry command; the rest of the app can run without browser automation.
 
-## ✨ Overview
+## Interface and controls
 
-JARVIS (v2) is designed as a practical extension of your computer rather than a simple chatbot.
+- The centre shows the avatar or active media. System metrics are on the left; `L`, `R`, and `DOC` hide the corresponding panels.
+- Conversation and tasks are on the right. Type a message or use the microphone. Attach a file and describe what to do with it.
+- **SETUP** (`⚙`) contains configuration and integrations. **CONTROLS** (`🎛`) contains everyday switches.
+- **PLUGINS** enables/disables plugins; **PLUGIN SETTINGS** configures their integrations.
+- **ENGINE & PROVIDERS** switches between Gemini Live and the alternate STT/LLM/TTS pipeline.
 
-It combines real-time voice interaction with visual awareness, computer control, persistent memory, background tasks, plugins, live system telemetry, interactive content, remote control, and a custom PyQt6 HUD.
+Shortcuts: `F4` toggles microphone, `Escape` interrupts a response, `F11` toggles full screen, `Ctrl+K` opens the command palette, and `Ctrl+Shift+Space` opens the mini window. Available buttons can vary slightly by OS.
 
-The central runtime stays separate from individual capabilities. Built-in computer actions are automatically discovered from `actions/`, while specialized capabilities can be added as standalone plugins in `plugins/`.
+## Settings
 
-JARVIS can work with voice, keyboard input, screen context, webcam input, files, browser interaction, and remote commands while keeping the main interaction inside one assistant session.
+Prefer the UI over editing JSON by hand: it validates fields and stores the format expected by the current code. Most settings live in `config/api_keys.json`.
 
-It's not just a chatbot — it's a personal computer intelligence system.
+Depending on the build, **SETUP** configures the Gemini key and assistant name, HUD theme/colour, audio devices, providers, plugins, and OS-specific integrations. **CONTROLS** includes the morning brief, wake word, sleep/wake, push-to-talk, and behaviour options.
 
----
+Additional keys recognised by the current code include `media_resolution` (`low`, `medium`, `high`, `default`), `thinking_enabled`, `proactive_audio`, the `turn_tuning` object, `plugins_enabled`, and `providers`. The exact format is defined by `memory/config_manager.py` and `providers/`. Back up the file before manual edits. Example shape only; do not replace your file with it:
 
-## 🚀 Capabilities
-
-### Core Features
-| Feature | Description |
-|---|---|
-| 🧑‍🎤 Holographic Avatar | Software-rendered 3D-style facial avatar with real face geometry, lighting, expressions, and animated status states |
-| 👄 Real Lip-Sync | Audio and transcript driven viseme system with multiple mouth shapes for natural speech animation |
-| 🙂 Facial Acting | Animated blinking, gaze movement, brows, nods, and expression changes tied to assistant activity |
-| 😐 Face as Status | The avatar changes its behavior while listening, thinking, speaking, sleeping, and displaying new content |
-| 🎚️ Push-to-Talk | Global `Ctrl+Space` push-to-talk on Windows with platform-specific fallback behavior |
-| 🔇 Self-Echo Guard | Detects and suppresses the assistant's own audio echo so JARVIS does not answer itself |
-| 🪪 Runtime Self-Knowledge | JARVIS can build its identity, operating-system information, capabilities, and limits from the live runtime |
-| 🎙️ Wake Word | Local `Hey Jarvis` wake-word detection with background processing |
-| ⚡ Instant Acknowledgment | Gives a short spoken acknowledgment before longer operations so the interaction does not feel silent |
-| 🧩 Self-Describing Actions | Every bundled action exposes a `TOOL` definition and is automatically discovered at startup |
-| 🧠 Persistent Memory | Long-term local memory stores projects, preferences, identity information, and other user-approved context |
-| 🧠 Recallable Memory | JARVIS can search its local memory when information is not included directly in the active prompt |
-| ↩️ Undo | Reversible computer operations can register an inverse action and be undone through JARVIS |
-| ⚠️ Real Confirmation | Irreversible operations require confirmation issued by the UI rather than a model-generated parameter |
-| 🎧 Audio Device Picker | Microphone and speaker devices can be selected and validated through the audio-device system |
-| 🔗 Session Continuity | Live-session resumption preserves conversation context across supported reconnects |
-| 🧩 Plugin System | Drop a Python plugin into `plugins/` and JARVIS can discover it on the next launch |
-| 🗺️ Interactive Map | MapLibre-based map panel with layers, routing, markers, measuring, drawing, globe mode, and dynamic JARVIS theming |
-| 📺 Video on the HUD | Video content can use the central HUD area where the avatar normally appears |
-| 🪜 Gemini Model Fallback | Centralized Gemini one-shot calls use a fallback strategy with timeouts and model availability handling |
-| 🎙️ Real-Time Voice | Low-latency voice interaction through the Gemini Live API |
-| 🎨 Live Theming | HUD colors can be customized through the JARVIS interface and configuration |
-| 〰️ Reactive HUD | Audio visualization reacts to microphone and assistant speech activity |
-| 🎙️ Voice Selection | Supported Gemini voice configurations can be selected from the UI |
-| ♾️ Long Sessions | Session handling and context management are designed for extended conversations |
-| 🖥️ System Control | Applications, volume, brightness, Wi-Fi, power operations, shortcuts, windows, and desktop controls |
-| 🧩 Autonomous Tasks | Multi-step tasks can be planned and executed through the action/plugin system |
-| 👁️ Visual Awareness | Screen and webcam information can be supplied to the assistant for visual reasoning |
-| 🧠 Context-Aware Memory | JARVIS can use stored project and preference context across sessions |
-| ⌨️ Hybrid Input | Voice and text commands can be used through the same assistant interaction path |
-| 🌤️ Weather | Live weather information can be presented through JARVIS's content interface |
-| 📊 Hardware Monitoring | CPU, RAM, GPU, temperature, network, and process information can be displayed and monitored |
-| 🗺️ Dynamic Content | Web results, research, maps, reports, and other information can be displayed inside the HUD content area |
-| 🔍 Web Search | Search and research capabilities through the centralized web-search action |
-| ⏰ Smart Reminders | Background reminder plugins can manage recurring tasks and notifications |
-| 📂 File Processing | Local documents and files can be read, summarized, and analyzed |
-| 🌐 Browser Control | Browser navigation and computer interaction can be performed through dedicated actions |
-| 📨 Messaging | Messaging integrations can send commands and messages through supported services |
-| 🖱️ Desktop Control | Keyboard, mouse, window, taskbar, and desktop-level operations |
-| 📱 Telegram Remote | JARVIS can be controlled remotely through a secured Telegram integration |
-| 📋 Clipboard Intelligence | Clipboard content can be processed for explanation, translation, summarization, and correction |
-| 🪪 Assistant Customization | Assistant name, user name, voice, and UI color can be configured |
-| 📧 Email Monitoring | Gmail monitoring plugin for checking relevant email changes through OAuth |
-| 📝 Document Review | Documents can be analyzed and presented with findings grouped by severity |
-| 📊 Excel Generation | Natural-language spreadsheet requests can produce real `.xlsx` files |
-| ⏱️ Pomodoro | Background focus sessions, breaks, statistics, and persistent focus history |
-| 💧 Water Reminder | Periodic hydration reminders and daily intake tracking |
-| 🧠 Quiz Mode | Interactive quizzes displayed directly inside the JARVIS HUD |
-| 💬 Chat Takeover | Screen-based conversation assistance for supported visible chat interfaces |
-| 🍎 Food Analysis | Camera-based food recognition and nutrition estimation |
-| 💹 Trading Intelligence | Public market quotes, news, analysis, charts, comparisons, watchlists, and macro information |
-| 🔎 OSINT Research | Extendable public-source investigation workflows for entities, domains, companies, usernames, and other research targets |
-
----
-
-## 🧠 Architecture
-
-JARVIS (v2) is organized around a modular runtime.
-
-### Core Runtime
-
-`main.py` coordinates the live assistant session, audio input/output, Gemini Live communication, tool execution, memory, plugins, background behavior, and UI integration.
-
-`ui.py` provides the PyQt6 HUD, avatar interface, system panels, camera/video surfaces, content panels, settings, plugin settings, memory interfaces, remote controls, quiz/review views, and interaction callbacks.
-
-The main runtime and UI are deliberately kept separate from individual capabilities.
-
-### Actions
-
-Built-in computer capabilities live inside:
-
-```text
-actions/
-```
-
-Every action exposes a module-level `TOOL` dictionary.
-
-Example:
-```py
-TOOL = {
-    "name": "example_action",
-    "description": "Example computer action",
-    "parameters": {
-        "type": "OBJECT",
-        "properties": {}
-    },
-    "handler": handler,
+```json
+{
+  "gemini_api_key": "<your key>",
+  "plugins_enabled": {"pomodoro": true, "trading_agent": false}
 }
 ```
 
-The action loader automatically discovers valid action files at startup.
+## Models and AI
 
-Adding a new built-in action does not require manually registering it in the main runtime.
+Open **SETUP → ENGINE & PROVIDERS**.
 
-### Plugins
+### Gemini Live
 
-Additional capabilities live inside:
+The default mode. It requires a Gemini API key and internet access. The model handles conversation, audio, and tool calls in one session. Model access depends on your Google project and can change.
 
-```text
-plugins/
-```
+### MY OWN SETUP: STT → LLM → TTS pipeline
 
-A plugin exposes a `PLUGIN` definition and a runtime entry point:
+The three independent parts can be mixed:
 
- - [plugins/_template.py](/plugins/_template.py)
+| Part | Implementations | Notes |
+|---|---|---|
+| STT — speech to text | Local faster-whisper; remote OpenAI-compatible transcription endpoint | Local Whisper defaults to CPU and model `base`; the model loads on first use. |
+| LLM — responses and tools | Ollama, LM Studio, llama.cpp server, vLLM, Jan; OpenAI and compatible services including Groq, DeepSeek, Mistral, xAI, OpenRouter, Together, Cerebras | Requires Base URL, model ID, and sometimes a key. The model list may be fetched from the server. |
+| TTS — text to speech | Local Piper; OS voices; ElevenLabs | Piper may download a voice model. ElevenLabs requires a key and internet access. |
 
-Plugins are discovered automatically and can optionally provide their own settings schema.
+For a local LLM, start its server separately, choose the matching provider, check the URL and model ID, use TEST if available, then **SAVE & APPLY**. Preset addresses: Ollama `127.0.0.1:11434/v1`, LM Studio `:1234/v1`, llama.cpp `:8080/v1`, vLLM `:8000/v1`, Jan `:1337/v1`.
 
-This keeps specialized functionality outside the core runtime.
+For another hosted LLM, select a vendor and enter the model, URL, and key. A custom service must be compatible with OpenAI Chat Completions and the tool-calling format in use; a proprietary incompatible API needs a dedicated adapter.
 
----
-## Plugins
- - [all optional plugins](/docs/plugins.md)
----
+An optional **sidecar** is a separate model for short background requests. It does not replace the main conversational model. Some local models use a reduced tool budget; advanced options are under **MORE**.
 
-## 👁️ Visual Intelligence
+A fully local pipeline requires local STT, LLM, and TTS. A local LLM alone does not make search, cloud STT/TTS, plugins, or network actions offline. The pipeline is usually slower than Gemini Live, and tool support depends on the model and engine. See [local and third-party models](docs/local-llm.md) and [Gemini](docs/gemini.md).
 
-JARVIS can work with both screen and camera context.
+## Actions and plugins
 
-The visual system can provide:
+**Actions** in `actions/` are core computer tools. They are discovered at startup; there is no individual action toggle in the UI. Some depend on the OS.
 
-- screen capture
-- webcam capture
-- document images
-- visual content displayed on the HUD
-- camera-based food analysis
-- visual chat analysis
-- contextual information from the active desktop
+**Plugins** in `plugins/` are optional tools and dashboards. Toggle them in **PLUGINS** and back on without restarting. A disabled plugin is no longer offered to the model. You can delete an unneeded plugin file; some modules share `plugins/_*.py` helpers, so check dependencies first. The [plugin guide](docs/plugins.md) lists the current modules and explains removal.
 
-Different visual capabilities use the existing JARVIS session and UI rather than creating separate assistant runtimes.
+The current folder includes battery, disk, network, system, and weather dashboards; image-based calorie estimation, document review, chat assistance, and OSINT; Excel, game, Obsidian, Spotify, and Telegram integrations; Pomodoro, quizzes, market information, and water reminders. Some require external accounts or keys. Plugins execute trusted Python code with the user’s permissions; they are not sandboxed.
 
----
+## Data and privacy
 
-## 🎧 Audio System
+- `config/api_keys.json` stores keys and settings locally. Treat it as a secret.
+- `memory/` stores long-term memory and feature state; `config/` also contains UI history, tasks, and reminders.
+- Cloud providers receive the prompts and context sent to them. Screen, camera, microphone, files, and tool results may be sent to an AI/service depending on the enabled feature.
+- For local processing, check all three STT/LLM/TTS slots and disable cloud plugins you do not need. A local model alone does not guarantee every feature is local.
 
-The audio architecture is split into independent components:
-
-- microphone input
-- speech-to-text
-- wake-word detection
-- echo protection
-- audio-device selection
-- Gemini Live audio streaming
-- text-to-speech
-- reactive audio visualization
-- viseme generation for avatar lip-sync
-
-Supported speech components include local and cloud-assisted pipelines such as Whisper/faster-whisper, Vosk, Edge TTS, Kokoro, and ElevenLabs where configured.
-
----
-
-## 🧠 Memory System
-
-JARVIS stores long-term memory locally.
-
-The memory system separates persistent storage from the prompt budget.
+## For developers
 
 ```text
-memory/
-├── memory_manager.py
-├── config_manager.py
-└── long_term.json
+main.py                  startup and conversation loop
+ui.py                    PyQt6 HUD, panels, and settings
+actions/                 system tools
+plugins/                 optional dynamically discovered tools
+core/                    Gemini, audio, confirmation, loaders, OS helpers
+providers/               STT/LLM/TTS contracts and alternate engine
+memory/config_manager.py settings persistence
+dashboard/               web dashboard and HTTP integrations
 ```
 
-The assistant can store information about:
+Add a plugin as a module in `plugins/` with a `PLUGIN` declaration (`name`, `description`, `parameters` of type `OBJECT`) and a `run(parameters, ...)` function. Optional `PLUGIN_SETTINGS` renders a settings form; the loader passes `player` and `session_memory` only when declared in the function signature. Discovery happens at startup, while toggling a discovered plugin applies immediately. Adding a file or changing code requires a restart. See the [developer guide](docs/plugins.md) for the contract and examples.
 
-- identity
-- preferences
-- projects
-- workflows
-- useful context
-- session-related information
+Project strengths include separation of UI, tools, integrations, and AI providers; declarative tool schemas; configurable plugins; a shared event contract for the alternate engine; and a default Gemini path that does not depend on enabling the `providers/` package. Actual OS support is feature-specific.
 
-Memory can be searched locally when required instead of sending the entire store to the model on every request.
+## Troubleshooting
 
-The UI also provides a memory interface for reviewing and removing stored facts.
+- **App does not start:** use a supported Python version and the active `.venv`.
+- **Gemini does not answer:** check the key, model access, and network; enable development mode for diagnostics.
+- **No audio:** check OS permissions, **AUDIO DEVICES**, and selected STT/TTS.
+- **Local server is unavailable:** start it separately and check Base URL, model ID, and API compatibility.
+- **Plugin is BROKEN:** read its **PLUGINS** entry; dependencies, shared helpers, or authorisation may be missing.
+- **Browser automation fails:** run `python -m playwright install chromium firefox`.
 
----
-
-## ↩️ Undo & Safety
-
-JARVIS uses two different mechanisms for reversible and irreversible operations.
-
-### Undo
-
-Reversible operations can register an inverse operation.
-
-Examples include:
-
-- file moves
-- renames
-- file creation
-- copies
-- writes
-- desktop organization
-- supported settings changes
-
-The undo stack is thread-safe and keeps a limited number of recent operations.
-
-### Confirmation
-
-Irreversible operations use a UI-issued confirmation token.
-
-The model cannot simply pass:
-
-```text
-confirmed=yes
-```
-
-and execute a dangerous operation.
-
-The confirmation must come from the user interface.
-
-This mechanism is intended for operations such as shutdown, restart, Wi-Fi changes, and other genuinely irreversible or disruptive actions.
-
----
-
-## 📱 Remote Control
-
-JARVIS can be extended with remote control through Telegram.
-
-The remote architecture uses:
-
-- Telegram long polling
-- private-chat restrictions
-- user allowlists
-- pairing
-- freshness checks
-- rate limiting
-- constant-time pairing comparison
-- shared JARVIS command handling
-
-Remote text commands are routed into the same assistant command path used by the desktop interface.
-
-Voice messages can use the existing recognition pipeline.
-
----
-
-## 🖥️ HUD & Interface
-
-The JARVIS interface is built with PyQt6.
-
-The main HUD includes:
-
-- animated avatar
-- real-time waveform
-- system metrics
-- activity log
-- camera view
-- video view
-- dynamic content panel
-- quiz interface
-- document-review interface
-- settings drawer
-- controls drawer
-- plugin settings
-- memory management
-- remote controls
-- customizable accent color
-- clock and system information
-
-The central HUD uses a shared surface stack so the avatar, camera, and video/content surfaces can occupy the same main visual area without requiring multiple application windows.
-
----
-
-## 🧱 Project Structure
-
-```text
-JARVIS/
-├── main.py
-├── ui.py
-├── dev.py
-├── setup.py
-├── pyproject.toml
-├── requirements.txt
-│
-├── actions/
-│   ├── web_search.py
-│   ├── screen_processor.py
-│   ├── background_monitor.py
-│   ├── proactive.py
-│   ├── reminder.py
-│   ├── system_monitor.py
-│   ├── computer_settings.py
-│   ├── computer_control.py
-│   ├── open_app.py
-│   ├── browser_control.py
-│   ├── file_controller.py
-│   ├── file_processor.py
-│   ├── send_message.py
-│   ├── weather_report.py
-│   ├── video_player.py
-│   └── desktop.py
-│
-├── plugins/
-│   ├── map_assistant.py
-│   ├── email_monitor.py
-│   ├── calorie_counter.py
-│   ├── chat_takeover.py
-│   ├── document_review.py
-│   ├── excel_writer.py
-│   ├── game_updater.py
-│   ├── pomodoro.py
-│   ├── quiz.py
-│   ├── telegram_remote.py
-│   ├── trading_agent.py
-│   ├── water_reminder.py
-│   └── _template.py
-│
-├── core/
-│   ├── gemini.py
-│   ├── llm_client.py
-│   ├── prompt.txt
-│   ├── avatar_mesh.py
-│   ├── viseme.py
-│   ├── echo.py
-│   ├── hotkey.py
-│   ├── undo.py
-│   ├── confirm.py
-│   ├── audio_devices.py
-│   ├── plugin_loader.py
-│   ├── action_loader.py
-│   ├── wake_word.py
-│   ├── stt.py
-│   └── tts.py
-│
-├── memory/
-│   ├── memory_manager.py
-│   ├── config_manager.py
-│   └── long_term.json
-│
-├── dashboard/
-├── config/
-└── .vault/
-```
-
----
-
-## ⚙️ Configuration
-
-JARVIS stores runtime configuration under:
-
-```text
-config/api_keys.json
-```
-
-Configuration can include:
-
-- Gemini API configuration
-- assistant name
-- user name
-- selected voice
-- UI accent color
-- plugin configuration
-- enabled/disabled plugin states
-- remote configuration
-- audio preferences
-
-Plugin-specific configuration is handled through the shared configuration manager.
-
----
-
-## 🛠️ Technology Stack
-
-| Area | Technology |
-|---|---|
-| Language | Python |
-| GUI | PyQt6 |
-| AI | Google Gemini / Gemini Live API |
-| Local LLM | Ollama / OpenAI-compatible local servers |
-| STT | faster-whisper, Vosk |
-| TTS | Edge TTS, Kokoro, ElevenLabs |
-| Computer Vision | OpenCV, NumPy, MediaPipe-based geometry |
-| Database / Storage | Local JSON and application state |
-| Maps | MapLibre GL JS + Qt WebEngine |
-| Automation | PyAutoGUI and OS-specific APIs |
-| Async Processing | asyncio, threads, worker executors |
-| Containers / Deployment | Docker-compatible tooling where required |
-| Monitoring | Prometheus / Grafana / Loki / Sentry where integrated |
-| Frontend Technologies | HTML, CSS, JavaScript inside selected embedded panels |
-
----
-
-## 📋 Requirements
-
-| Requirement | Details |
-|---|---|
-| **OS** | Windows, macOS, or Linux depending on enabled platform features |
-| **Python** | Python 3.x compatible with the project's dependency lock |
-| **Microphone** | Required for voice interaction |
-| **Speakers / Headphones** | Required for spoken responses |
-| **Gemini API Key** | Required for Gemini-powered capabilities |
-| **GPU** | Not required for the core avatar/HUD architecture |
-| **Internet** | Required for Gemini Live and cloud-based integrations |
-| **Camera** | Optional; required for camera-based visual plugins |
-| **Telegram** | Optional; required only for Telegram remote control |
-| **Gmail OAuth** | Optional; required only for Gmail monitoring |
-| **Map dependencies** | Required only when using the interactive map plugin |
-
----
-
-## Additional installation details
-
-```bash
-git clone https://github.com/RustamovAkrom/JARVIS.git
-cd JARVIS
-
-python -m venv .venv
-```
-
-Windows:
-
-```bash
-.venv\Scripts\activate
-```
-
-Linux/macOS:
-
-```bash
-source .venv/bin/activate
-```
-
-Install dependencies:
-
-```bash
-pip install -r requirements.txt
-```
-
-Start JARVIS:
-
-```bash
-python main.py
-```
-
----
-
-## 🔐 Security
-
-JARVIS is designed around local-first control and explicit boundaries.
-
-Important principles include:
-
-- API keys are kept outside source code.
-- Sensitive configuration should not be committed to Git.
-- Irreversible actions require UI confirmation.
-- Plugins run through a controlled plugin registry.
-- Action loading validates tool definitions before activation.
-- Remote Telegram control uses allowlists, pairing, rate limiting, and private-chat restrictions.
-- Memory is stored locally.
-- Specialized plugins should not bypass the existing action/plugin architecture.
-
----
-
-## 🧩 Extending JARVIS
-
-A new built-in computer capability belongs in:
-
-```text
-actions/
-```
-
-A specialized optional capability belongs in:
-
-```text
-plugins/
-```
-
-The plugin architecture supports:
-
-- automatic discovery
-- tool declarations
-- parameter schemas
-- enable/disable state
-- plugin settings
-- background execution
-- access to the JARVIS player/UI
-- access to session memory
-- isolated error handling
-
-This makes it possible to expand JARVIS without continuously modifying the central runtime.
-
----
-
-## 🎯 Project Direction
-
-JARVIS (v2) is being developed toward a more autonomous personal computer assistant with:
-
-- stronger visual intelligence
-- richer computer control
-- deeper memory
-- advanced OSINT research
-- remote control
-- interactive maps
-- more specialized plugins
-- proactive assistance
-- improved real-time voice interaction
-- better HUD visualization
-- more reliable model fallback
-- stronger safety and confirmation mechanisms
-
-The goal is a modular JARVIS-style system that can grow through independent actions and plugins instead of becoming a single monolithic application.
-
----
-
-## [📜 License](/LICENSE)
+When filing an issue, include the OS, Python version, and reproduction steps. Remove keys, tokens, personal data, and private file contents from logs.

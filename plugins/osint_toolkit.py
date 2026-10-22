@@ -22,6 +22,7 @@ from typing import Any, Optional
 
 try:
     from memory.config_manager import get_plugin_config, save_plugin_config
+
     _HAS_CONFIG = True
 except ImportError:
     _HAS_CONFIG = False
@@ -114,6 +115,7 @@ PLUGIN = {
 
 # ── HTTP ─────────────────────────────────────────────────────────────────────
 
+
 def _get(url: str, timeout: float = _TIMEOUT) -> tuple[int, str, dict]:
     h = {"User-Agent": _cfg().get("user_agent") or _UA, "Accept": "*/*"}
     try:
@@ -195,10 +197,12 @@ def tool_username(target: str, cfg: dict) -> dict:
     if cfg.get("use_sherlock") and _which("sherlock"):
         code, out, err = _run_cmd(
             [
-                "sherlock", user,
+                "sherlock",
+                user,
                 "--print-found",
                 "--no-color",
-                "--timeout", str(min(15, int(cfg.get("timeout_sec") or 10))),
+                "--timeout",
+                str(min(15, int(cfg.get("timeout_sec") or 10))),
             ],
             timeout=float(cfg.get("sherlock_timeout") or 45),
         )
@@ -232,7 +236,10 @@ def tool_username(target: str, cfg: dict) -> dict:
         code, body, _ = _get(url, timeout=float(cfg.get("timeout_sec") or 8))
         if code == 200:
             low = body.lower()
-            if any(x in low for x in ("not found", "doesn't exist", "page not found", "404")):
+            if any(
+                x in low
+                for x in ("not found", "doesn't exist", "page not found", "404")
+            ):
                 return name, url, False
             return name, url, True
         return name, url, False if code else None
@@ -257,6 +264,7 @@ def tool_username(target: str, cfg: dict) -> dict:
 
 
 # ── Email (Holehe → MX) ──────────────────────────────────────────────────────
+
 
 def tool_email(target: str, cfg: dict) -> dict:
     email = target.strip().lower()
@@ -288,10 +296,14 @@ def tool_email(target: str, cfg: dict) -> dict:
         result["engine"] = "holehe"
         result["registered_on"] = sites
         result["registered_count"] = len(sites)
-        result["note"] = "Holehe checks registration via public endpoints (no alert to target)."
+        result["note"] = (
+            "Holehe checks registration via public endpoints (no alert to target)."
+        )
     else:
         result["engine"] = "mx"
-        result["note"] = "Install Holehe for site registration check: pip install holehe"
+        result["note"] = (
+            "Install Holehe for site registration check: pip install holehe"
+        )
 
     # MX always
     dns = tool_dns(domain, cfg)
@@ -302,6 +314,7 @@ def tool_email(target: str, cfg: dict) -> dict:
 
 
 # ── Phone (phonenumbers + PhoneInfoga) ───────────────────────────────────────
+
 
 def tool_phone(target: str, cfg: dict) -> dict:
     raw = target.strip()
@@ -324,7 +337,9 @@ def tool_phone(target: str, cfg: dict) -> dict:
 
             region = cfg.get("default_region") or "UZ"
             try:
-                num = phonenumbers.parse(cleaned, None if cleaned.startswith("+") else region)
+                num = phonenumbers.parse(
+                    cleaned, None if cleaned.startswith("+") else region
+                )
             except NumberParseException:
                 num = phonenumbers.parse(cleaned, region)
 
@@ -332,8 +347,12 @@ def tool_phone(target: str, cfg: dict) -> dict:
             result["valid"] = phonenumbers.is_valid_number(num)
             result["possible"] = phonenumbers.is_possible_number(num)
             result["e164"] = phonenumbers.format_number(num, PhoneNumberFormat.E164)
-            result["international"] = phonenumbers.format_number(num, PhoneNumberFormat.INTERNATIONAL)
-            result["national"] = phonenumbers.format_number(num, PhoneNumberFormat.NATIONAL)
+            result["international"] = phonenumbers.format_number(
+                num, PhoneNumberFormat.INTERNATIONAL
+            )
+            result["national"] = phonenumbers.format_number(
+                num, PhoneNumberFormat.NATIONAL
+            )
             result["country_code"] = num.country_code
             result["region"] = phonenumbers.region_code_for_number(num)
             result["location"] = geocoder.description_for_number(num, "en") or None
@@ -389,6 +408,7 @@ def tool_phone(target: str, cfg: dict) -> dict:
 
 # ── IP / DNS / Domain / GitHub ───────────────────────────────────────────────
 
+
 def tool_ip(target: str, cfg: dict) -> dict:
     ip = target.strip()
     if not re.match(r"^[\da-fA-F:\.]+$", ip):
@@ -442,7 +462,10 @@ def tool_domain(target: str, cfg: dict) -> dict:
     host = re.sub(r"^https?://", "", target.strip().lower()).split("/")[0].rstrip(".")
     if not host:
         return {"error": "Invalid domain", "target": target}
-    result: dict[str, Any] = {"domain": host, "dns": tool_dns(host, cfg).get("records") or {}}
+    result: dict[str, Any] = {
+        "domain": host,
+        "dns": tool_dns(host, cfg).get("records") or {},
+    }
 
     rdap = _json_get(f"https://rdap.org/domain/{urllib.parse.quote(host)}", timeout=12)
     if rdap:
@@ -494,7 +517,9 @@ def tool_github(target: str, cfg: dict) -> dict:
     user = re.sub(r"[^a-zA-Z0-9\-]", "", target.strip())[:39]
     if not user:
         return {"error": "Invalid GitHub username", "target": target}
-    data = _json_get(f"https://api.github.com/users/{urllib.parse.quote(user)}", timeout=10)
+    data = _json_get(
+        f"https://api.github.com/users/{urllib.parse.quote(user)}", timeout=10
+    )
     if not data or "message" in data:
         return {"error": (data or {}).get("message") or "Not found", "target": user}
     return {
@@ -518,16 +543,21 @@ def tool_github(target: str, cfg: dict) -> dict:
 
 # ── Auto investigate ─────────────────────────────────────────────────────────
 
+
 def _detect_type(target: str) -> str:
     t = target.strip()
     if re.match(r"^[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}$", t, re.I):
         return "email"
     # phone: mostly digits, optional +, length 8–15
     digits = re.sub(r"\D", "", t)
-    if (t.startswith("+") or digits.startswith("998") or digits.startswith("7")) and 8 <= len(digits) <= 15:
+    if (
+        t.startswith("+") or digits.startswith("998") or digits.startswith("7")
+    ) and 8 <= len(digits) <= 15:
         if re.match(r"^[\d\s\-\+\(\)]+$", t):
             return "phone"
-    if re.match(r"^\d{1,3}(\.\d{1,3}){3}$", t) or (":" in t and re.match(r"^[\da-fA-F:]+$", t)):
+    if re.match(r"^\d{1,3}(\.\d{1,3}){3}$", t) or (
+        ":" in t and re.match(r"^[\da-fA-F:]+$", t)
+    ):
         return "ip"
     if "." in t and " " not in t and re.match(r"^[a-z0-9.\-]+\.[a-z]{2,}$", t, re.I):
         return "domain"
@@ -570,6 +600,7 @@ def tool_investigate(target: str, cfg: dict) -> dict:
 
 # ── Format for voice / chat ──────────────────────────────────────────────────
 
+
 def _fmt(report: dict) -> str:
     if report.get("error") and len(report) <= 3:
         return f"Error: {report['error']}"
@@ -583,7 +614,9 @@ def _fmt(report: dict) -> str:
     def block_username(b: dict):
         if not isinstance(b, dict) or "found" not in b:
             return
-        lines.append(f"Username «{b.get('target')}» [{b.get('engine')}] — {b.get('found_count', 0)} hits")
+        lines.append(
+            f"Username «{b.get('target')}» [{b.get('engine')}] — {b.get('found_count', 0)} hits"
+        )
         for f in (b.get("found") or [])[:20]:
             lines.append(f"  • {f.get('platform')}: {f.get('url')}")
         lines.append("")
@@ -594,7 +627,9 @@ def _fmt(report: dict) -> str:
         lines.append(f"Email {b['email']} [{b.get('engine')}]")
         lines.append(f"  MX: {'yes' if b.get('has_mx') else 'no'}")
         if b.get("registered_on"):
-            lines.append(f"  Registered on ({b.get('registered_count')}): {', '.join(b['registered_on'][:15])}")
+            lines.append(
+                f"  Registered on ({b.get('registered_count')}): {', '.join(b['registered_on'][:15])}"
+            )
         lines.append("")
 
     def block_phone(b: dict):
@@ -605,7 +640,9 @@ def _fmt(report: dict) -> str:
             return
         lines.append(f"Phone {b.get('e164') or b.get('normalized') or b.get('input')}")
         if b.get("valid") is not None:
-            lines.append(f"  Valid: {b.get('valid')}  ·  Type: {b.get('line_type') or '—'}")
+            lines.append(
+                f"  Valid: {b.get('valid')}  ·  Type: {b.get('line_type') or '—'}"
+            )
         if b.get("location") or b.get("region"):
             lines.append(f"  Location: {b.get('location') or b.get('region')}")
         if b.get("carrier"):
@@ -643,10 +680,14 @@ def _fmt(report: dict) -> str:
         for ev in (rdap.get("events") or [])[:3]:
             lines.append(f"  {ev.get('action')}: {ev.get('date')}")
         if b.get("subdomains_sample"):
-            lines.append(f"  Subdomains (sample): {', '.join(b['subdomains_sample'][:8])}")
+            lines.append(
+                f"  Subdomains (sample): {', '.join(b['subdomains_sample'][:8])}"
+            )
         http = b.get("http")
         if http:
-            lines.append(f"  HTTP: {http.get('scheme')} → {http.get('status')} ({http.get('server') or '—'})")
+            lines.append(
+                f"  HTTP: {http.get('scheme')} → {http.get('status')} ({http.get('server') or '—'})"
+            )
         lines.append("")
 
     def block_github(b: dict):
@@ -657,7 +698,9 @@ def _fmt(report: dict) -> str:
             lines.append(f"  Name: {b['name']}")
         if b.get("bio"):
             lines.append(f"  Bio: {str(b['bio'])[:100]}")
-        lines.append(f"  Repos: {b.get('public_repos')}  ·  Followers: {b.get('followers')}")
+        lines.append(
+            f"  Repos: {b.get('public_repos')}  ·  Followers: {b.get('followers')}"
+        )
         if b.get("html_url"):
             lines.append(f"  {b['html_url']}")
         lines.append("")
@@ -700,6 +743,7 @@ def _fmt(report: dict) -> str:
 
 # ── Entry ────────────────────────────────────────────────────────────────────
 
+
 def run(parameters: dict, player=None, session_memory=None) -> str:
     params = parameters if isinstance(parameters, dict) else {}
     action = str(params.get("action") or "investigate").strip().lower()
@@ -716,6 +760,7 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
             engines.append("phoneinfoga")
         try:
             import phonenumbers  # noqa: F401
+
             engines.append("phonenumbers")
         except ImportError:
             pass

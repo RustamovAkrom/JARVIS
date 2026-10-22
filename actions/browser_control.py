@@ -1,7 +1,9 @@
+
 from __future__ import annotations
 
 import asyncio
 import concurrent.futures
+import importlib.util
 import os
 import platform
 import shutil
@@ -9,18 +11,77 @@ import subprocess
 import threading
 import webbrowser
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
-from playwright.async_api import (
-    async_playwright,
-    BrowserContext,
-    Page,
-    Playwright,
-    TimeoutError as PlaywrightTimeout,
-)
+from core import appidentity, outcome
 
-_OS = platform.system()  # "Windows" | "Darwin" | "Linux"
+# Importing playwright cost 198 ms at every launch, paid by action discovery
+# whether or not a browser was ever opened. It is the second-largest import in
+# the project after pyautogui, and together the two were 78% of all module
+# import time on the boot path.
+#
+# WHY THIS STILL RAISES WHEN PLAYWRIGHT IS MISSING
+#     The eager import had a second job nobody wrote down: when playwright was
+#     absent this module failed to load, action_loader dropped it, and the model
+#     was never offered a browser tool it could not serve. Deferring the import
+#     without keeping that would declare `browser_control` on a machine that
+#     cannot run it — the model would call it, get an exception, and describe a
+#     page it never opened. Exactly the failure mode this project spent Mark LVI
+#     removing from local engines.
+#
+#     So the check stays at module scope and still stops the module loading; it
+#     just asks find_spec instead of executing the package. 1 ms instead of 198,
+#     same outcome, and a sentence that says what to install.
+if importlib.util.find_spec("playwright") is None:      # pragma: no cover
+    raise ImportError(
+        "browser_control needs playwright, which is not installed. "
+        "Run: pip install playwright  &&  playwright install chromium"
+    )
 
+# Annotations only — `from __future__ import annotations` above makes every one
+# of them a string, so these names are never looked up at runtime and cost
+# nothing outside a type checker.
+if TYPE_CHECKING:
+    from playwright.async_api import BrowserContext, Page, Playwright
+
+# WHY THIS FILE DOES NOT USE core/lazyimport.py's LazyModule LIKE THE OTHERS
+#     Every other deferral in this project stands a proxy in for a whole module,
+#     because the call sites say `pyautogui.press(...)` and a proxy answers that
+#     the same way the module would. What this file needs are two SYMBOLS out of
+#     a module: a factory function, and an exception class used in `except`.
+#
+#     `except` will not take a proxy. It requires a real class inheriting from
+#     BaseException, checked by the interpreter at the moment the exception is
+#     raised, and a LazyModule there raises TypeError instead of catching
+#     anything — the original error then disappears underneath a complaint about
+#     the except clause. So these two are bound as real globals instead.
+#
+# PlaywrightTimeout starts as a private class that is never raised, so an
+# `except PlaywrightTimeout:` somehow reached before a session exists catches
+# nothing rather than failing that same way.
+class _PlaywrightNotLoaded(Exception):
+    """Placeholder exception — declared so `except` clauses stay valid, and
+    deliberately never raised anywhere."""
+
+
+async_playwright = None
+PlaywrightTimeout: type[BaseException] = _PlaywrightNotLoaded
+
+
+def _load_playwright() -> None:
+    """Import playwright and bind the two runtime symbols. Idempotent."""
+    global async_playwright, PlaywrightTimeout
+    if async_playwright is not None:
+        return
+    from playwright.async_api import (          # noqa: PLC0415 — deliberate
+        async_playwright as _ap,
+        TimeoutError as _timeout,
+    )
+    async_playwright = _ap
+    PlaywrightTimeout = _timeout
+
+
+_OS = platform.system()   # "Windows" | "Darwin" | "Linux"
 
 def _normalize_url(url: str) -> str:
     """
@@ -60,50 +121,46 @@ def _user_agent() -> str:
 
 
 def _real_profile_dir(browser: str) -> str:
-    home = Path.home()
+    home  = Path.home()
     local = os.environ.get("LOCALAPPDATA", "")
-    roam = os.environ.get("APPDATA", "")
+    roam  = os.environ.get("APPDATA", "")
 
     candidates: list[Path] = []
 
     if _OS == "Windows":
         m = {
-            "chrome": [Path(local) / "Google" / "Chrome" / "User Data"],
-            "edge": [Path(local) / "Microsoft" / "Edge" / "User Data"],
-            "brave": [Path(local) / "BraveSoftware" / "Brave-Browser" / "User Data"],
-            "vivaldi": [Path(local) / "Vivaldi" / "User Data"],
-            "opera": [
-                Path(roam) / "Opera Software" / "Opera Stable",
-                Path(local) / "Opera Software" / "Opera Stable",
-            ],
-            "operagx": [
-                Path(roam) / "Opera Software" / "Opera GX Stable",
-                Path(local) / "Opera Software" / "Opera GX Stable",
-            ],
+            "chrome":   [Path(local) / "Google"          / "Chrome"          / "User Data"],
+            "edge":     [Path(local) / "Microsoft"        / "Edge"            / "User Data"],
+            "brave":    [Path(local) / "BraveSoftware"    / "Brave-Browser"   / "User Data"],
+            "vivaldi":  [Path(local) / "Vivaldi"          / "User Data"],
+            "opera":    [Path(roam)  / "Opera Software"   / "Opera Stable",
+                         Path(local) / "Opera Software"   / "Opera Stable"],
+            "operagx":  [Path(roam)  / "Opera Software"   / "Opera GX Stable",
+                         Path(local) / "Opera Software"   / "Opera GX Stable"],
         }
         candidates = m.get(browser, [])
 
     elif _OS == "Darwin":
         lib = home / "Library" / "Application Support"
         m = {
-            "chrome": [lib / "Google" / "Chrome"],
-            "edge": [lib / "Microsoft Edge"],
-            "brave": [lib / "BraveSoftware" / "Brave-Browser"],
-            "vivaldi": [lib / "Vivaldi"],
-            "opera": [lib / "com.operasoftware.Opera"],
-            "operagx": [lib / "com.operasoftware.OperaGX"],
+            "chrome":   [lib / "Google"             / "Chrome"],
+            "edge":     [lib / "Microsoft Edge"],
+            "brave":    [lib / "BraveSoftware"       / "Brave-Browser"],
+            "vivaldi":  [lib / "Vivaldi"],
+            "opera":    [lib / "com.operasoftware.Opera"],
+            "operagx":  [lib / "com.operasoftware.OperaGX"],
         }
         candidates = m.get(browser, [])
 
     elif _OS == "Linux":
         cfg = home / ".config"
         m = {
-            "chrome": [cfg / "google-chrome", cfg / "chromium"],
-            "edge": [cfg / "microsoft-edge"],
-            "brave": [cfg / "BraveSoftware" / "Brave-Browser"],
-            "vivaldi": [cfg / "vivaldi"],
-            "opera": [cfg / "opera"],
-            "operagx": [cfg / "opera-gx"],
+            "chrome":   [cfg / "google-chrome", cfg / "chromium"],
+            "edge":     [cfg / "microsoft-edge"],
+            "brave":    [cfg / "BraveSoftware" / "Brave-Browser"],
+            "vivaldi":  [cfg / "vivaldi"],
+            "opera":    [cfg / "opera"],
+            "operagx":  [cfg / "opera-gx"],
         }
         candidates = m.get(browser, [])
 
@@ -116,7 +173,6 @@ def _real_profile_dir(browser: str) -> str:
     fallback.mkdir(parents=True, exist_ok=True)
     print(f"[Browser] ⚠️  Real profile not found for {browser}, using: {fallback}")
     return str(fallback)
-
 
 def _firefox_profile_dir() -> Optional[str]:
     home = Path.home()
@@ -157,17 +213,16 @@ def _firefox_profile_dir() -> Optional[str]:
         return default_path
     return None
 
-
 def _find_opera_windows() -> Optional[str]:
-    local = os.environ.get("LOCALAPPDATA", "")
-    prog = os.environ.get("PROGRAMFILES", "")
+    local  = os.environ.get("LOCALAPPDATA", "")
+    prog   = os.environ.get("PROGRAMFILES", "")
     prog86 = os.environ.get("PROGRAMFILES(X86)", "")
 
     candidates = [
-        Path(local) / "Programs" / "Opera" / "opera.exe",
-        Path(local) / "Programs" / "Opera GX" / "opera.exe",
-        Path(prog) / "Opera" / "opera.exe",
-        Path(prog86) / "Opera" / "opera.exe",
+        Path(local)  / "Programs" / "Opera"    / "opera.exe",
+        Path(local)  / "Programs" / "Opera GX" / "opera.exe",
+        Path(prog)   / "Opera"    / "opera.exe",
+        Path(prog86) / "Opera"    / "opera.exe",
     ]
     for p in candidates:
         if p.exists():
@@ -176,7 +231,6 @@ def _find_opera_windows() -> Optional[str]:
 
     try:
         import winreg
-
         keys = [
             r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\opera.exe",
             r"SOFTWARE\Clients\StartMenuInternet\OperaStable\shell\open\command",
@@ -186,7 +240,7 @@ def _find_opera_windows() -> Optional[str]:
         for key_path in keys:
             for hive in (winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER):
                 try:
-                    k = winreg.OpenKey(hive, key_path)
+                    k   = winreg.OpenKey(hive, key_path)
                     val = winreg.QueryValue(k, None)
                     winreg.CloseKey(k)
                     exe = val.strip().strip('"').split('"')[0].split(" --")[0].strip()
@@ -200,11 +254,9 @@ def _find_opera_windows() -> Optional[str]:
 
     return shutil.which("opera") or None
 
-
 def _find_exe_windows(prog_name: str) -> Optional[str]:
     try:
         import winreg
-
         paths_to_try = [
             rf"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\{prog_name}.exe",
             rf"SOFTWARE\Clients\StartMenuInternet\{prog_name}\shell\open\command",
@@ -212,7 +264,7 @@ def _find_exe_windows(prog_name: str) -> Optional[str]:
         for key_path in paths_to_try:
             for hive in (winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER):
                 try:
-                    k = winreg.OpenKey(hive, key_path)
+                    k   = winreg.OpenKey(hive, key_path)
                     val = winreg.QueryValue(k, None)
                     winreg.CloseKey(k)
                     exe = val.strip().strip('"').split('"')[0].split(" --")[0].strip()
@@ -224,106 +276,64 @@ def _find_exe_windows(prog_name: str) -> Optional[str]:
         pass
     return None
 
-
 _BROWSER_SPECS: dict[str, dict] = {
     "Windows": {
-        "chrome": {"engine": "chromium", "channel": "chrome", "bins": []},
-        "edge": {"engine": "chromium", "channel": "msedge", "bins": []},
-        "firefox": {"engine": "firefox", "channel": None, "bins": ["firefox.exe"]},
-        "opera": {
-            "engine": "chromium",
-            "channel": None,
-            "bins": ["opera.exe"],
-            "special": "opera_windows",
-        },
-        "operagx": {
-            "engine": "chromium",
-            "channel": None,
-            "bins": [],
-            "special": "opera_windows",
-        },
-        "brave": {"engine": "chromium", "channel": None, "bins": ["brave.exe"]},
-        "vivaldi": {"engine": "chromium", "channel": None, "bins": ["vivaldi.exe"]},
-        "safari": None,
+        "chrome":   {"engine": "chromium", "channel": "chrome",  "bins": []},
+        "edge":     {"engine": "chromium", "channel": "msedge",  "bins": []},
+        "firefox":  {"engine": "firefox",  "channel": None,      "bins": ["firefox.exe"]},
+        "opera":    {"engine": "chromium", "channel": None,      "bins": ["opera.exe"],  "special": "opera_windows"},
+        "operagx":  {"engine": "chromium", "channel": None,      "bins": [],             "special": "opera_windows"},
+        "brave":    {"engine": "chromium", "channel": None,      "bins": ["brave.exe"]},
+        "vivaldi":  {"engine": "chromium", "channel": None,      "bins": ["vivaldi.exe"]},
+        "safari":   None,
     },
     "Darwin": {
-        "chrome": {"engine": "chromium", "channel": "chrome", "bins": []},
-        "edge": {"engine": "chromium", "channel": "msedge", "bins": ["microsoft-edge"]},
-        "firefox": {"engine": "firefox", "channel": None, "bins": ["firefox"]},
-        "opera": {"engine": "chromium", "channel": None, "bins": ["opera"]},
-        "operagx": {"engine": "chromium", "channel": None, "bins": ["opera"]},
-        "brave": {
-            "engine": "chromium",
-            "channel": None,
-            "bins": ["brave browser", "brave"],
-        },
-        "vivaldi": {"engine": "chromium", "channel": None, "bins": ["vivaldi"]},
-        "safari": {"engine": "webkit", "channel": None, "bins": []},
+        "chrome":   {"engine": "chromium", "channel": "chrome",  "bins": []},
+        "edge":     {"engine": "chromium", "channel": "msedge",  "bins": ["microsoft-edge"]},
+        "firefox":  {"engine": "firefox",  "channel": None,      "bins": ["firefox"]},
+        "opera":    {"engine": "chromium", "channel": None,      "bins": ["opera"]},
+        "operagx":  {"engine": "chromium", "channel": None,      "bins": ["opera"]},
+        "brave":    {"engine": "chromium", "channel": None,      "bins": ["brave browser", "brave"]},
+        "vivaldi":  {"engine": "chromium", "channel": None,      "bins": ["vivaldi"]},
+        "safari":   {"engine": "webkit",   "channel": None,      "bins": []},
     },
     "Linux": {
-        "chrome": {
-            "engine": "chromium",
-            "channel": None,
-            "bins": [
-                "google-chrome",
-                "google-chrome-stable",
-                "chromium-browser",
-                "chromium",
-            ],
-        },
-        "edge": {
-            "engine": "chromium",
-            "channel": None,
-            "bins": ["microsoft-edge", "microsoft-edge-stable"],
-        },
-        "firefox": {"engine": "firefox", "channel": None, "bins": ["firefox"]},
-        "opera": {
-            "engine": "chromium",
-            "channel": None,
-            "bins": ["opera", "opera-stable"],
-        },
-        "operagx": {
-            "engine": "chromium",
-            "channel": None,
-            "bins": ["opera", "opera-stable"],
-        },
-        "brave": {
-            "engine": "chromium",
-            "channel": None,
-            "bins": ["brave-browser", "brave"],
-        },
-        "vivaldi": {
-            "engine": "chromium",
-            "channel": None,
-            "bins": ["vivaldi-stable", "vivaldi"],
-        },
-        "safari": None,
+        "chrome":   {"engine": "chromium", "channel": None,
+                     "bins": ["google-chrome", "google-chrome-stable", "chromium-browser", "chromium"]},
+        "edge":     {"engine": "chromium", "channel": None,
+                     "bins": ["microsoft-edge", "microsoft-edge-stable"]},
+        "firefox":  {"engine": "firefox",  "channel": None, "bins": ["firefox"]},
+        "opera":    {"engine": "chromium", "channel": None, "bins": ["opera", "opera-stable"]},
+        "operagx":  {"engine": "chromium", "channel": None, "bins": ["opera", "opera-stable"]},
+        "brave":    {"engine": "chromium", "channel": None, "bins": ["brave-browser", "brave"]},
+        "vivaldi":  {"engine": "chromium", "channel": None, "bins": ["vivaldi-stable", "vivaldi"]},
+        "safari":   None,
     },
 }
 
 _ALIASES: dict[str, str] = {
-    "google chrome": "chrome",
-    "google-chrome": "chrome",
-    "microsoft edge": "edge",
-    "ms edge": "edge",
-    "msedge": "edge",
+    "google chrome":   "chrome",
+    "google-chrome":   "chrome",
+    "microsoft edge":  "edge",
+    "ms edge":         "edge",
+    "msedge":          "edge",
     "mozilla firefox": "firefox",
-    "opera gx": "operagx",
-    "opera_gx": "operagx",
+    "opera gx":        "operagx",
+    "opera_gx":        "operagx",
 }
 
 
 def _resolve_browser(name: str) -> dict | None:
-    name = _ALIASES.get(name.lower().strip(), name.lower().strip())
+    name   = _ALIASES.get(name.lower().strip(), name.lower().strip())
     os_map = _BROWSER_SPECS.get(_OS, {})
-    spec = os_map.get(name)
+    spec   = os_map.get(name)
     if spec is None:
         return None
 
-    engine = spec["engine"]
+    engine  = spec["engine"]
     channel = spec.get("channel")
-    bins = spec.get("bins", [])
-    exe = None
+    bins    = spec.get("bins", [])
+    exe     = None
 
     if spec.get("special") == "opera_windows":
         exe = _find_opera_windows()
@@ -339,11 +349,11 @@ def _resolve_browser(name: str) -> dict | None:
 
     if not exe and _OS == "Darwin":
         app_names = {
-            "chrome": ["Google Chrome.app"],
-            "edge": ["Microsoft Edge.app"],
+            "chrome":  ["Google Chrome.app"],
+            "edge":    ["Microsoft Edge.app"],
             "firefox": ["Firefox.app"],
-            "opera": ["Opera.app", "Opera GX.app"],
-            "brave": ["Brave Browser.app"],
+            "opera":   ["Opera.app", "Opera GX.app"],
+            "brave":   ["Brave Browser.app"],
             "vivaldi": ["Vivaldi.app"],
         }
         for app in app_names.get(name, []):
@@ -364,7 +374,6 @@ def _detect_default_browser() -> str:
     try:
         if _OS == "Windows":
             import winreg
-
             k = winreg.OpenKey(
                 winreg.HKEY_CURRENT_USER,
                 r"Software\Microsoft\Windows\Shell\Associations"
@@ -377,33 +386,18 @@ def _detect_default_browser() -> str:
                     return kw
         elif _OS == "Darwin":
             out = subprocess.run(
-                [
-                    "defaults",
-                    "read",
-                    "com.apple.LaunchServices/com.apple.launchservices.secure",
-                    "LSHandlers",
-                ],
-                capture_output=True,
-                text=True,
-                timeout=5,
+                ["defaults", "read",
+                 "com.apple.LaunchServices/com.apple.launchservices.secure",
+                 "LSHandlers"],
+                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5,
             ).stdout.lower()
-            for kw in (
-                "firefox",
-                "opera",
-                "brave",
-                "vivaldi",
-                "safari",
-                "chrome",
-                "edge",
-            ):
+            for kw in ("firefox", "opera", "brave", "vivaldi", "safari", "chrome", "edge"):
                 if kw in out:
                     return kw
         elif _OS == "Linux":
             out = subprocess.run(
                 ["xdg-settings", "get", "default-web-browser"],
-                capture_output=True,
-                text=True,
-                timeout=5,
+                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5,
             ).stdout.lower()
             for kw in ("firefox", "opera", "brave", "vivaldi", "chrome", "edge"):
                 if kw in out:
@@ -414,21 +408,21 @@ def _detect_default_browser() -> str:
 
 
 _SEARCH_ENGINES: dict[str, str] = {
-    "google": "https://www.google.com/search?q=",
-    "bing": "https://www.bing.com/search?q=",
+    "google":     "https://www.google.com/search?q=",
+    "bing":       "https://www.bing.com/search?q=",
     "duckduckgo": "https://duckduckgo.com/?q=",
-    "yandex": "https://yandex.com/search/?text=",
+    "yandex":     "https://yandex.com/search/?text=",
 }
 
 _MAC_APP_NAMES: dict[str, str] = {
-    "chrome": "Google Chrome",
-    "edge": "Microsoft Edge",
+    "chrome":  "Google Chrome",
+    "edge":    "Microsoft Edge",
     "firefox": "Firefox",
-    "opera": "Opera",
+    "opera":   "Opera",
     "operagx": "Opera GX",
-    "brave": "Brave Browser",
+    "brave":   "Brave Browser",
     "vivaldi": "Vivaldi",
-    "safari": "Safari",
+    "safari":  "Safari",
 }
 
 # Windows registry lookup names for browsers whose spec has no explicit binary
@@ -468,7 +462,7 @@ def _open_native(url: str, browser_name: Optional[str]) -> str:
                     print(f"[Browser] 'open -a {app}' failed ({e}), trying binary…")
 
         spec = _resolve_browser(name)
-        exe = spec.get("exe") if spec else None
+        exe  = spec.get("exe") if spec else None
         if not exe and _OS == "Windows":
             if name in ("opera", "operagx"):
                 exe = _find_opera_windows()
@@ -478,8 +472,7 @@ def _open_native(url: str, browser_name: Optional[str]) -> str:
             try:
                 subprocess.Popen(
                     [exe, url] if url else [exe],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                 )
                 return f"Opened in {name}: {url}" if url else f"Opened {name}."
             except Exception as e:
@@ -487,28 +480,47 @@ def _open_native(url: str, browser_name: Optional[str]) -> str:
         print(f"[Browser] '{name}' not found — falling back to default browser.")
 
     if not url:
-        return "Could not find a browser to open."
+        return outcome.failed(
+            "browser_control",
+            "no browser was found and no address was given to open")
 
     # Default browser via the OS — exactly like the user clicking a link.
     try:
         if _OS == "Windows":
-            os.startfile(url)  # ShellExecute → default browser
+            os.startfile(url)                       # ShellExecute → default browser
         elif _OS == "Darwin":
             subprocess.run(["open", url], check=True, timeout=10)
         else:
             subprocess.Popen(
                 ["xdg-open", url],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             )
-        return f"Opened in your default browser: {url}"
+        # HANDED TO THE OPERATING SYSTEM, NOT CONFIRMED.
+        #
+        # os.startfile / open / xdg-open all return as soon as the request is
+        # accepted. None of them waits for a browser, and none reports whether
+        # the page loaded — the same gap that made open_app say "Opened
+        # Spotify." off the back of a shell starting. Unlike the playwright
+        # path above there is no page object here to read a url from, so this
+        # says what it actually knows.
+        return outcome.unverified(
+            "browser_control",
+            "the address was handed to the system's default browser, which "
+            "does not report back - the page is not confirmed open",
+            url=url)
     except Exception:
         try:
             if webbrowser.open(url):
-                return f"Opened in your default browser: {url}"
+                return outcome.unverified(
+                    "browser_control",
+                    "the address was handed to the default browser, which does "
+                    "not report back - the page is not confirmed open",
+                    url=url)
         except Exception:
             pass
-        return f"Could not open a browser for: {url}"
+        return outcome.failed(
+            "browser_control",
+            "no browser on this system could be opened", url=url)
 
 
 class _BrowserSession:
@@ -519,15 +531,20 @@ class _BrowserSession:
 
     def __init__(self, browser_name: str):
         self.browser_name = browser_name
-        self._spec = _resolve_browser(browser_name)
+        self._spec        = _resolve_browser(browser_name)
 
-        self._loop: asyncio.AbstractEventLoop | None = None
-        self._thread: threading.Thread | None = None
-        self._ready = threading.Event()
+        self._loop:    asyncio.AbstractEventLoop | None = None
+        self._thread:  threading.Thread | None          = None
+        self._ready    = threading.Event()
 
-        self._pw: Playwright | None = None
+        self._pw:      Playwright     | None = None
         self._context: BrowserContext | None = None
-        self._page: Page | None = None
+        self._page:    Page           | None = None
+        # "real" when the user's own browser profile was opened, "separate"
+        # when their browser was already running and a private automation
+        # profile had to be used instead. The difference is every sign-in they
+        # have, so it is reported rather than only printed.
+        self.profile_kind: str = ""
 
     def start(self):
         if self._thread and self._thread.is_alive():
@@ -548,6 +565,10 @@ class _BrowserSession:
         self._loop.run_forever()
 
     async def _async_init(self):
+        # The one door into a live session: nothing in this class reaches
+        # async_playwright or PlaywrightTimeout without coming through here
+        # first, so binding them at this point is enough for the whole file.
+        _load_playwright()
         self._pw = await async_playwright().start()
 
     def run(self, coro, timeout: int = 60) -> str:
@@ -597,36 +618,30 @@ class _BrowserSession:
             )
 
         engine_name = self._spec["engine"]
-        exe = self._spec["exe"]
-        channel = self._spec["channel"]
-        engine_obj = getattr(self._pw, engine_name)
+        exe         = self._spec["exe"]
+        channel     = self._spec["channel"]
+        engine_obj  = getattr(self._pw, engine_name)
 
         if engine_name == "firefox":
             profile = _firefox_profile_dir() or str(
                 Path.home() / ".jarvis_profiles" / "firefox"
             )
             kwargs: dict = {
-                "headless": False,
-                "slow_mo": 0,
-                "viewport": None,
+                "headless":    False,
+                "slow_mo":     0,
+                "viewport":    None,
                 "no_viewport": True,
-                "timeout": 25_000,
+                "timeout":     25_000,
             }
             if exe:
                 kwargs["executable_path"] = exe
             try:
-                self._context = await engine_obj.launch_persistent_context(
-                    profile, **kwargs
-                )
+                self._context = await engine_obj.launch_persistent_context(profile, **kwargs)
             except Exception as e:
-                print(
-                    f"[Browser] Firefox real profile failed ({e}), using JARVIS profile"
-                )
+                print(f"[Browser] Firefox real profile failed ({e}), using JARVIS profile")
                 jarvis = str(Path.home() / ".jarvis_profiles" / "firefox_jarvis")
                 Path(jarvis).mkdir(parents=True, exist_ok=True)
-                self._context = await engine_obj.launch_persistent_context(
-                    jarvis, **kwargs
-                )
+                self._context = await engine_obj.launch_persistent_context(jarvis, **kwargs)
 
             self._page = await self._adopt_page()
             print(f"[Browser] ✅ Firefox launched")
@@ -636,15 +651,13 @@ class _BrowserSession:
             safari_profile = str(Path.home() / ".jarvis_profiles" / "safari")
             Path(safari_profile).mkdir(parents=True, exist_ok=True)
             kwargs = {
-                "headless": False,
-                "slow_mo": 0,
-                "viewport": None,
+                "headless":    False,
+                "slow_mo":     0,
+                "viewport":    None,
                 "no_viewport": True,
-                "timeout": 25_000,
+                "timeout":     25_000,
             }
-            self._context = await engine_obj.launch_persistent_context(
-                safari_profile, **kwargs
-            )
+            self._context = await engine_obj.launch_persistent_context(safari_profile, **kwargs)
             self._page = await self._adopt_page()
             print(f"[Browser] ✅ Safari launched")
             return
@@ -652,11 +665,11 @@ class _BrowserSession:
         profile = _real_profile_dir(self.browser_name)
 
         kwargs = {
-            "headless": False,
-            "slow_mo": 0,
-            "viewport": None,
+            "headless":    False,
+            "slow_mo":     0,
+            "viewport":    None,
             "no_viewport": True,
-            "timeout": 25_000,
+            "timeout":     25_000,
             "args": [
                 "--start-maximized",
                 "--disable-blink-features=AutomationControlled",
@@ -677,15 +690,34 @@ class _BrowserSession:
             + (f" @ {exe}" if exe else "")
         )
 
-        try:
-            self._context = await engine_obj.launch_persistent_context(
-                profile, **kwargs
-            )
-            self._page = await self._adopt_page()
-            print(f"[Browser] ✅ Launched [{label}] profile={profile}")
-            return
-        except Exception as e:
-            print(f"[Browser] ⚠️  Real profile failed for {label}: {e}")
+        # ASK FIRST, INSTEAD OF WAITING 25 SECONDS TO BE TOLD.
+        #
+        # A Chromium profile can only be open once. If the user already has the
+        # browser running — which is the normal state of a browser — then
+        # launch_persistent_context on their real profile cannot succeed, and
+        # the way it fails is by sitting on the timeout above before raising.
+        # Every "open this page" then cost twenty-five seconds of nothing
+        # before the fallback even started, and the fallback is a profile with
+        # none of their sign-ins in it.
+        #
+        # Whether the browser is running is a question the process table
+        # answers in milliseconds, and core/appidentity was already built to
+        # ask it. Knowing up front turns a long silence into an immediate,
+        # explainable outcome.
+        already = appidentity.running(self.browser_name)
+        if already:
+            print(f"[Browser] {self.browser_name} is already running "
+                  f"({len(already)} processes) — its profile is locked, so the "
+                  f"separate automation profile will be used.")
+        else:
+            try:
+                self._context = await engine_obj.launch_persistent_context(profile, **kwargs)
+                self._page = await self._adopt_page()
+                self.profile_kind = "real"
+                print(f"[Browser] ✅ Launched [{label}] profile={profile}")
+                return
+            except Exception as e:
+                print(f"[Browser] ⚠️  Real profile failed for {label}: {e}")
 
         # The real profile could not be opened (browser already open / locked
         # profile / newer Chrome versions block the real profile under
@@ -696,16 +728,14 @@ class _BrowserSession:
         print(f"[Browser] Retrying with JARVIS profile: {jarvis_profile}")
 
         try:
-            self._context = await engine_obj.launch_persistent_context(
-                jarvis_profile, **kwargs
-            )
+            self._context = await engine_obj.launch_persistent_context(jarvis_profile, **kwargs)
             self._page = await self._adopt_page()
-            print(
-                f"[Browser] ✅ Launched [{label}] with JARVIS profile "
-                f"(sign-ins persist across sessions)"
-            )
+            self.profile_kind = "separate"
+            print(f"[Browser] ✅ Launched [{label}] with JARVIS profile "
+                  f"(sign-ins persist across sessions)")
         except Exception as e2:
             raise RuntimeError(f"Could not launch {self.browser_name}: {e2}") from e2
+
 
     async def _get_page(self) -> Page:
         await self._launch()
@@ -717,8 +747,8 @@ class _BrowserSession:
 
     async def go_to(self, url: str) -> str:
 
-        url = _normalize_url(url)
-        page = await self._get_page()
+        url      = _normalize_url(url)
+        page     = await self._get_page()
         prev_url = page.url
 
         async def _do_goto(p: Page) -> str:
@@ -727,29 +757,50 @@ class _BrowserSession:
                 await p.goto(url, wait_until="domcontentloaded", timeout=30_000)
                 await asyncio.sleep(0.3)
             except PlaywrightTimeout:
-                pass  # page may have partially loaded — check URL below
+                pass   # page may have partially loaded — check URL below
             except Exception as e:
                 print(f"[Browser] goto exception (non-fatal): {e}")
             return p.url
 
         result_url = await _do_goto(page)
 
-        if result_url in ("about:blank", "", None, prev_url) and prev_url in (
-            "about:blank",
-            "",
-            None,
-        ):
+        if result_url in ("about:blank", "", None, prev_url) and prev_url in ("about:blank", "", None):
             print(f"[Browser] Still blank after goto — retrying on new tab: {url}")
             try:
-                new_page = await self._context.new_page()
+                new_page   = await self._context.new_page()
                 self._page = new_page
                 result_url = await _do_goto(new_page)
             except Exception as e:
                 print(f"[Browser] New-tab retry failed: {e}")
 
         if result_url and result_url not in ("about:blank", "", None):
-            return f"Opened: {result_url}"
-        return f"Could not open: {url}"
+            # Verified, and cheaply: this is the page's OWN url read back after
+            # navigation, not the one we asked for. A redirect, a login wall or
+            # a captive portal all show up here as a different address, which
+            # is exactly what the user needs to hear about.
+            #
+            # The profile is reported for the same reason. When the user's
+            # browser was already running its profile is locked, so the page
+            # opens in a separate one where they are signed in to nothing —
+            # and a Gmail that asks them to log in looks like a broken
+            # assistant unless somebody says why.
+            if self.profile_kind == "separate":
+                return outcome.unverified(
+                    "browser_control",
+                    f"the page opened at {result_url}, but "
+                    f"{self.browser_name} was already running so its profile "
+                    f"was locked - this window uses a separate profile where "
+                    f"the user is NOT signed in to anything. Closing "
+                    f"{self.browser_name} first would let their own profile be "
+                    f"used",
+                    opened=result_url, profile="separate")
+            return outcome.done("browser_control", opened=result_url,
+                                profile=self.profile_kind or "real",
+                                verified=True)
+        return outcome.failed(
+            "browser_control",
+            "the page stayed blank - the address may be wrong, or the site may "
+            "not have answered", url=url)
 
     async def search(self, query: str, engine: str = "google") -> str:
         base = _SEARCH_ENGINES.get(engine.lower(), _SEARCH_ENGINES["google"])
@@ -764,22 +815,27 @@ class _BrowserSession:
             if selector:
                 await page.click(selector, timeout=8_000)
                 return f"Clicked selector: {selector}"
-            return "No selector or text provided."
+            return outcome.failed("browser_control",
+                                  "no element was named to click")
         except PlaywrightTimeout:
-            return "Element not found (timeout)."
+            return outcome.failed(
+                "browser_control",
+                "no element matching that appeared on the page in time",
+                selector=selector or text)
         except Exception as e:
             return f"Click error: {e}"
 
-    async def type_text(
-        self, selector: str = None, text: str = "", clear_first: bool = True
-    ) -> str:
+    async def type_text(self, selector: str = None, text: str = "",
+                        clear_first: bool = True) -> str:
         page = await self._get_page()
         try:
             el = page.locator(selector).first if selector else page.locator(":focus")
             if clear_first:
                 await el.clear()
             await el.type(text, delay=50)
-            return "Text typed."
+            # playwright raises when the field is not there, so reaching this
+            # line means the text went into a real input.
+            return outcome.done("browser_control", typed=True, verified=True)
         except Exception as e:
             return f"Type error: {e}"
 
@@ -813,7 +869,7 @@ class _BrowserSession:
         return page.url
 
     async def fill_form(self, fields: dict) -> str:
-        page = await self._get_page()
+        page    = await self._get_page()
         results = []
         for selector, value in fields.items():
             try:
@@ -836,12 +892,8 @@ class _BrowserSession:
             except Exception:
                 pass
         for attempt in (
-            lambda: page.get_by_text(description, exact=False).first.click(
-                timeout=5_000
-            ),
-            lambda: page.get_by_placeholder(description, exact=False).first.click(
-                timeout=5_000
-            ),
+            lambda: page.get_by_text(description, exact=False).first.click(timeout=5_000),
+            lambda: page.get_by_placeholder(description, exact=False).first.click(timeout=5_000),
             lambda: page.locator(
                 f'[alt*="{description}" i],[title*="{description}" i],'
                 f'[aria-label*="{description}" i]'
@@ -858,10 +910,10 @@ class _BrowserSession:
         page = await self._get_page()
         candidates = [
             ("placeholder", page.get_by_placeholder(description, exact=False)),
-            ("label", page.get_by_label(description, exact=False)),
-            ("role", page.get_by_role("textbox", name=description)),
-            ("searchbox", page.get_by_role("searchbox")),
-            ("combobox", page.get_by_role("combobox", name=description)),
+            ("label",       page.get_by_label(description, exact=False)),
+            ("role",        page.get_by_role("textbox", name=description)),
+            ("searchbox",   page.get_by_role("searchbox")),
+            ("combobox",    page.get_by_role("combobox", name=description)),
         ]
         for method, loc in candidates:
             try:
@@ -877,8 +929,8 @@ class _BrowserSession:
 
     async def new_tab(self, url: str = "") -> str:
         page = await self._get_page()
-        ctx = page.context
-        new = await ctx.new_page()
+        ctx  = page.context
+        new  = await ctx.new_page()
         self._page = new
         if url:
             return await self.go_to(url)
@@ -887,7 +939,7 @@ class _BrowserSession:
     async def close_tab(self) -> str:
         page = self._page
         if page and not page.is_closed():
-            ctx = page.context
+            ctx   = page.context
             await page.close()
             pages = ctx.pages
             self._page = pages[-1] if pages else None
@@ -931,24 +983,21 @@ class _BrowserSession:
         await self._async_close()
         return f"{self.browser_name} closed."
 
-
 class _SessionRegistry:
     """Manages all active browser sessions."""
 
     def __init__(self):
-        self._sessions: dict[str, _BrowserSession] = {}
-        self._active_browser: str = ""
-        self._lock = threading.Lock()
-        self._last_native_url: str = ""
+        self._sessions:        dict[str, _BrowserSession] = {}
+        self._active_browser:  str                        = ""
+        self._lock             = threading.Lock()
+        self._last_native_url: str                        = ""
 
     def has(self, browser_name: str | None = None) -> bool:
         """Is there an active automation session for this browser (or any)?"""
         with self._lock:
             if not browser_name:
                 return bool(self._sessions)
-            name = _ALIASES.get(
-                browser_name.lower().strip(), browser_name.lower().strip()
-            )
+            name = _ALIASES.get(browser_name.lower().strip(), browser_name.lower().strip())
             return name in self._sessions
 
     def note_native_url(self, url: str) -> None:
@@ -971,17 +1020,13 @@ class _SessionRegistry:
     def get(self, browser_name: str | None = None) -> _BrowserSession:
         if not browser_name:
             browser_name = self._active_browser or _detect_default_browser()
-        browser_name = _ALIASES.get(
-            browser_name.lower().strip(), browser_name.lower().strip()
-        )
+        browser_name = _ALIASES.get(browser_name.lower().strip(), browser_name.lower().strip())
         sess = self._get_or_create(browser_name)
         self._active_browser = browser_name
         return sess
 
     def switch(self, browser_name: str) -> str:
-        browser_name = _ALIASES.get(
-            browser_name.lower().strip(), browser_name.lower().strip()
-        )
+        browser_name = _ALIASES.get(browser_name.lower().strip(), browser_name.lower().strip())
         self._get_or_create(browser_name)
         self._active_browser = browser_name
         return f"Active browser → {browser_name}"
@@ -998,7 +1043,7 @@ class _SessionRegistry:
 
     def close_all(self) -> str:
         with self._lock:
-            names = list(self._sessions.keys())
+            names    = list(self._sessions.keys())
             sessions = list(self._sessions.values())
             self._sessions.clear()
             self._active_browser = ""
@@ -1022,17 +1067,16 @@ class _SessionRegistry:
 
 _registry = _SessionRegistry()
 
-
 def browser_control(
-    parameters: dict = None,
+    parameters:    dict = None,
     response=None,
     player=None,
     session_memory=None,
 ) -> str:
-    params = parameters or {}
-    action = params.get("action", "").lower().strip()
+    params  = parameters or {}
+    action  = params.get("action", "").lower().strip()
     browser = params.get("browser", "").lower().strip() or None
-    result = "Unknown action."
+    result  = "Unknown action."
 
     if action == "switch":
         target = browser or params.get("target", "").lower().strip()
@@ -1067,11 +1111,8 @@ def browser_control(
             sess = _registry.get(browser)
             try:
                 if action == "search":
-                    result = sess.run(
-                        sess.search(
-                            params.get("query", ""), params.get("engine", "google")
-                        )
-                    )
+                    result = sess.run(sess.search(params.get("query", ""),
+                                                  params.get("engine", "google")))
                 elif action == "new_tab":
                     result = sess.run(sess.new_tab(params.get("url", "")))
                 else:
@@ -1084,9 +1125,8 @@ def browser_control(
             return result
 
         if action == "search":
-            base = _SEARCH_ENGINES.get(
-                params.get("engine", "google").lower(), _SEARCH_ENGINES["google"]
-            )
+            base    = _SEARCH_ENGINES.get(params.get("engine", "google").lower(),
+                                          _SEARCH_ENGINES["google"])
             nav_url = base + params.get("query", "").replace(" ", "+")
         else:
             nav_url = params.get("url", "").strip()
@@ -1119,27 +1159,16 @@ def browser_control(
         if action == "click":
             result = sess.run(sess.click(params.get("selector"), params.get("text")))
         elif action == "type":
-            result = sess.run(
-                sess.type_text(
-                    params.get("selector"),
-                    params.get("text", ""),
-                    params.get("clear_first", True),
-                )
-            )
+            result = sess.run(sess.type_text(
+                params.get("selector"), params.get("text", ""), params.get("clear_first", True)))
         elif action == "scroll":
-            result = sess.run(
-                sess.scroll(
-                    params.get("direction", "down"), int(params.get("amount", 500))
-                )
-            )
+            result = sess.run(sess.scroll(params.get("direction", "down"), int(params.get("amount", 500))))
         elif action == "fill_form":
             result = sess.run(sess.fill_form(params.get("fields", {})))
         elif action == "smart_click":
             result = sess.run(sess.smart_click(params.get("description", "")))
         elif action == "smart_type":
-            result = sess.run(
-                sess.smart_type(params.get("description", ""), params.get("text", ""))
-            )
+            result = sess.run(sess.smart_type(params.get("description", ""), params.get("text", "")))
         elif action == "get_text":
             result = sess.run(sess.get_text())
         elif action == "get_url":
@@ -1172,62 +1201,93 @@ def _log(player, text: str):
     short = str(text)[:80]
     print(f"[Browser] {short}")
     if player:
-        player.write_log(f"[browser] {short[:60]}")
+        print(f"[Browser] {short[:80]}")          # terminal, not the HUD
 
 
 # ── Tool declaration (auto-discovered by core/action_loader.py) ──────────────
 TOOL = {
     "name": "browser_control",
-    "description": "Controls any web browser. Use for: opening websites, searching the web, clicking elements, filling forms, scrolling, screenshots, navigation, any web-based task. Simple open/search requests launch the user's own browser normally (their real profile and logged-in accounts); interactive actions (click, type, fill_form...) attach an automation browser. Always pass the 'browser' parameter when the user specifies a browser (e.g. 'open in Edge', 'use Firefox', 'open Chrome'). Multiple browsers can run simultaneously.",
+    "description": (
+        "Controls the web browser: open an address, search, click, type, "
+        "scroll, read the page, manage tabs, go back and forward. "
+        "THIS TOOL OPENS THE BROWSER ITSELF. Never call open_app for the "
+        "browser first - doing both launches it twice, the second copy on a "
+        "different profile with none of the user's sign-ins. 'Open Chrome and "
+        "go to YouTube' is ONE call to this tool. "
+        "Read the status it returns. 'done' means it was confirmed - for an "
+        "open, the url reported back is the page's OWN address, so if it "
+        "differs from what was asked for the site redirected and the user "
+        "should be told. 'unverified' means the address was handed to the "
+        "system's default browser, which never reports back: say it was opened "
+        "but not confirmed, never that the page is up. 'failed' means nothing "
+        "happened."
+    ),
+    "brief": (
+        "Controls the web browser: open a URL, navigate, click, read the page."
+    ),
     "parameters": {
         "type": "OBJECT",
         "properties": {
             "action": {
                 "type": "STRING",
-                "description": "go_to | search | click | type | scroll | fill_form | smart_click | smart_type | get_text | get_url | press | new_tab | close_tab | screenshot | back | forward | reload | switch | list_browsers | close | close_all",
+                "description": "go_to | search | click | type | scroll | fill_form | smart_click | smart_type | get_text | get_url | press | new_tab | close_tab | screenshot | back | forward | reload | switch | list_browsers | close | close_all"
             },
             "browser": {
                 "type": "STRING",
-                "description": "Target browser: chrome | edge | firefox | opera | operagx | brave | vivaldi | safari. Omit to use the currently active browser.",
+                "description": "Target browser: chrome | edge | firefox | opera | operagx | brave | vivaldi | safari. Omit to use the currently active browser."
             },
-            "url": {"type": "STRING", "description": "URL for go_to / new_tab action"},
+            "url": {
+                "type": "STRING",
+                "description": "URL for go_to / new_tab action"
+            },
             "query": {
                 "type": "STRING",
-                "description": "Search query for search action",
+                "description": "Search query for search action"
             },
             "engine": {
                 "type": "STRING",
-                "description": "Search engine: google | bing | duckduckgo | yandex (default: google)",
+                "description": "Search engine: google | bing | duckduckgo | yandex (default: google)"
             },
             "selector": {
                 "type": "STRING",
-                "description": "CSS selector for click/type",
+                "description": "CSS selector for click/type"
             },
-            "text": {"type": "STRING", "description": "Text to click or type"},
+            "text": {
+                "type": "STRING",
+                "description": "Text to click or type"
+            },
             "description": {
                 "type": "STRING",
-                "description": "Element description for smart_click/smart_type",
+                "description": "Element description for smart_click/smart_type"
             },
-            "direction": {"type": "STRING", "description": "up | down for scroll"},
+            "direction": {
+                "type": "STRING",
+                "description": "up | down for scroll"
+            },
             "amount": {
                 "type": "INTEGER",
-                "description": "Scroll amount in pixels (default: 500)",
+                "description": "Scroll amount in pixels (default: 500)"
             },
             "key": {
                 "type": "STRING",
-                "description": "Key name for press action (e.g. Enter, Escape, F5)",
+                "description": "Key name for press action (e.g. Enter, Escape, F5)"
             },
-            "path": {"type": "STRING", "description": "Save path for screenshot"},
+            "path": {
+                "type": "STRING",
+                "description": "Save path for screenshot"
+            },
             "incognito": {
                 "type": "BOOLEAN",
-                "description": "Open in private/incognito mode",
+                "description": "Open in private/incognito mode"
             },
             "clear_first": {
                 "type": "BOOLEAN",
-                "description": "Clear field before typing (default: true)",
-            },
+                "description": "Clear field before typing (default: true)"
+            }
         },
-        "required": ["action"],
+        "required": [
+            "action"
+        ]
     },
     "handler": browser_control,
 }
