@@ -127,7 +127,7 @@ def _log(player, msg: str) -> None:
 def _panel(player, title: str, text: str) -> None:
     if player:
         try:
-            player.show_content(title, text)
+            player.show_content(title, text, key="pomodoro")
         except Exception:
             pass
 

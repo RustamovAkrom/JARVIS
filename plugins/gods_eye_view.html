@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>J.A.R.V.I.S. // GOD'S EYE</title>
+<style>
+:root{--cyan:#54eaff;--blue:#148dff;--bg:#030a12;--panel:rgba(5,18,31,.88);--line:rgba(69,220,255,.35);--muted:#82a8bd}*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 48% 45%,#09253a 0%,#030a12 62%,#01050a 100%);color:#dffaff;font:13px/1.4 'Segoe UI',Arial,sans-serif;overflow:hidden}button,input{font:inherit;color:inherit}button{background:linear-gradient(135deg,#0a3048,#061522);border:1px solid var(--line);padding:9px 12px;cursor:pointer;text-transform:uppercase;letter-spacing:1px;font-size:10px}button:hover{border-color:var(--cyan);box-shadow:0 0 14px #1bbbe544}input{background:#04111c;border:1px solid var(--line);padding:10px;outline:none;min-width:0}input:focus{border-color:var(--cyan)}.app{height:100dvh;display:grid;grid-template-rows:62px 1fr 27px;gap:10px;padding:12px;max-width:1900px;margin:auto}.top{display:flex;align-items:center;justify-content:space-between;border:1px solid var(--line);background:var(--panel);padding:10px 16px;clip-path:polygon(0 0,98% 0,100% 28%,100% 100%,2% 100%,0 70%)}.brand{font-weight:700;letter-spacing:3px;color:var(--cyan);font-size:17px}.sub{font-size:9px;color:var(--muted);letter-spacing:2px}.status{color:#7cffc2;font-size:10px;letter-spacing:1.4px}.main{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(300px,.9fr);gap:10px;min-height:0}.panel{position:relative;min-height:0;background:var(--panel);border:1px solid var(--line);box-shadow:inset 0 0 28px #0b8bb312}.panel:before{content:'';position:absolute;inset:5px;border:1px solid #38c9e612;pointer-events:none;z-index:2}.panelhead{height:42px;display:flex;align-items:center;justify-content:space-between;padding:0 15px;border-bottom:1px solid var(--line);color:var(--cyan);letter-spacing:2px;font-size:10px}.earthwrap{position:absolute;inset:42px 0 0;overflow:hidden}.earthwrap:after{content:'';position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,transparent 42%,#020811 100%),linear-gradient(0deg,#06111a22 1px,transparent 1px);background-size:auto,100% 5px}.earth{width:100%;height:100%;min-height:350px}#earth canvas{position:relative;left:-22px}.leftbottom{position:absolute;bottom:15px;left:15px;right:15px;display:flex;gap:8px;align-items:center;z-index:4;flex-wrap:wrap}.search{display:flex;gap:6px;flex:1;min-width:240px}.search input{flex:1}.chip{font-size:9px;color:#9bbccc;border:1px solid #1a5268;padding:6px 8px;background:#04111cbb}.right{display:grid;grid-template-rows:minmax(280px,1.05fr) minmax(260px,1fr);gap:10px;min-height:0;position:relative;z-index:0}.mapbody{height:calc(100% - 42px);position:relative;background:#06111b;overflow:hidden}.mapbody iframe{width:100%;height:100%;border:0}#mapFallback{width:100%;height:100%;position:absolute;inset:0}.mapmodes{display:flex;gap:4px;align-items:center}.mapmodes button{padding:5px 7px;font-size:8px;letter-spacing:.5px}.mapmodes button.active{background:#07516a;border-color:#54eaff;color:#fff}.leaflet-container{background:#06111b;font:11px Segoe UI,Arial,sans-serif}.leaflet-control-attribution{font-size:8px!important}.maphint{position:absolute;bottom:8px;left:8px;background:#020a12df;border:1px solid var(--line);padding:6px 8px;font-size:9px;color:#a5c7d7;z-index:3}.camcontent{padding:12px;display:grid;gap:9px;align-content:start;overflow:auto;max-height:calc(100% - 42px)}.camtoolbar{display:flex;gap:6px;flex-wrap:wrap}.camtoolbar input{flex:1;min-width:120px}.camgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:9px}.camcard{border:1px solid #1d5d72;background:#04111c;padding:10px;display:flex;flex-direction:column;gap:7px;min-width:0}.camcard b{display:block;color:#dffaff;font-size:11px}.camcard small{color:var(--muted);font-size:9px}.camcard a,.camcard button{color:var(--cyan);text-decoration:none;border:1px solid var(--line);padding:7px 8px;font-size:9px;white-space:nowrap;text-align:center}.camcard img{width:100%;height:100px;object-fit:cover;background:#061522;border:1px solid #12445b}.camplayer{width:100%;aspect-ratio:16/9;background:#01070d;border:1px solid var(--line)}.camplayer iframe{width:100%;height:100%;border:0}.camstatus{font-size:10px;color:#9bbccc}.ytlist{display:grid;gap:7px;margin-top:8px}.ytresult{display:grid;grid-template-columns:112px minmax(0,1fr);gap:9px;padding:8px;border:1px solid #1d5d72;background:#03101a;align-items:center}.ytresult img{width:112px;height:63px;object-fit:cover;background:#061522;border:1px solid #12445b}.ytresult b{font-size:10px;line-height:1.35}.ytresult small{display:block;color:var(--muted);font-size:9px;margin:4px 0}.ytresult .ytmeta{min-width:0;overflow-wrap:anywhere}.ytresult button{padding:6px 8px}.ytbadge{color:#7cffc2;font-size:8px;letter-spacing:1px}.ytresult .ytbuttons{display:flex;gap:5px;flex-wrap:wrap}@media(max-width:500px){.ytresult{grid-template-columns:85px minmax(0,1fr)}.ytresult img{width:85px;height:52px}}.camdistance{color:#7cffc2;font-size:9px}.camcard{border:1px solid #1d5d72;background:#04111c;padding:10px;display:flex;flex-direction:column;justify-content:flex-start;gap:7px;align-items:stretch;min-width:0}.camcard b{display:block;color:#dffaff;font-size:11px}.camcard small{color:var(--muted);font-size:9px}.camcard a{color:var(--cyan);text-decoration:none;border:1px solid var(--line);padding:7px 8px;font-size:9px;white-space:nowrap}.warning{color:#7d9daf;font-size:10px;margin:0}.footer{display:flex;align-items:center;justify-content:space-between;color:#537d91;font-size:9px;letter-spacing:1px}.modal{position:fixed;inset:0;background:#000d;display:none;align-items:center;justify-content:center;z-index:99999!important;isolation:isolate}.modalbox{width:min(500px,92vw);background:#061522;border:1px solid var(--cyan);padding:20px;box-shadow:0 0 40px #009dff33}.playbox{position:relative;z-index:100000;width:min(1000px,94vw);background:#020a12;border:1px solid var(--cyan);padding:12px;box-shadow:0 0 40px #009dff44}.playstage{width:100%;aspect-ratio:16/9;background:#000;display:flex;align-items:center;justify-content:center;margin-top:10px}.playstage iframe,.playstage video{width:100%;height:100%;border:0;background:#000}.playhead{display:flex;justify-content:space-between;align-items:center;gap:10px;color:var(--cyan);letter-spacing:1px;font-size:11px}.playnote{color:var(--muted);font-size:10px;margin:8px 0 0}.modalbox h3{color:var(--cyan);letter-spacing:2px}.modalbox input{width:100%;margin:8px 0}.close{float:right}.hint{color:var(--muted);font-size:11px}.crosshair{position:absolute;width:100px;height:100px;left:50%;top:50%;transform:translate(-50%,-50%);border:1px solid #39d8ff28;border-radius:50%;pointer-events:none;z-index:1}.crosshair:before,.crosshair:after{content:'';position:absolute;background:#39d8ff42}.crosshair:before{width:130px;height:1px;left:-16px;top:50%}.crosshair:after{height:130px;width:1px;top:-16px;left:50%}@media(max-width:850px){body{overflow:auto}.app{height:auto;min-height:100dvh;grid-template-rows:62px auto 27px}.main{grid-template-columns:1fr}.panel.globePanel{height:65vh;min-height:450px}.right{grid-template-rows:300px 270px}.footer{gap:10px}.brand{font-size:13px}}
+</style></head><body><div class="app"><header class="top"><div><div class="brand">J.A.R.V.I.S. <span style="color:#d9f9ff">// GOD'S EYE</span></div><div class="sub">GLOBAL RECONNAISSANCE • EARTH OBSERVATION SYSTEM</div></div><div style="display:flex;align-items:center;gap:12px"><span class="status">● SYSTEM ONLINE</span><button id="settingsBtn">DATA SOURCES ⚙</button></div></header>
+<div class="main"><section class="panel globePanel"><div class="panelhead"><span>01 / PLANETARY VIEW</span><span id="coords">LAT 20.00° N&nbsp;&nbsp; LON 0.00°</span></div><div class="earthwrap"><div class="crosshair"></div><div id="earth" class="earth"></div><div class="leftbottom"><div class="search"><input id="placeInput" placeholder="Search country, city, landmark…" value="Mumbai, India"><button id="goBtn">LOCATE</button></div><button id="resetBtn">GLOBAL VIEW</button><button id="mapModeBtn">REFRESH MAP</button><span class="chip" id="locationChip">TARGET: MUMBAI</span></div></div></section>
+<div class="right"><section class="panel"><div class="panelhead"><span>02 / TERRAIN & CARTOGRAPHY</span><div class="mapmodes"><button id="streetMapBtn" class="active" type="button">STREET</button><button id="satMapBtn" type="button">SATELLITE</button><button id="terrainMapBtn" type="button">TERRAIN</button></div></div><div class="mapbody"><div id="mapFallback"></div><div class="maphint" id="mapHint">Map preview • click LOCATE to focus a location</div></div></section>
+<section class="panel"><div class="panelhead"><span>03 / NEARBY PUBLIC CAMERAS</span><span>OPEN SOURCES</span></div><div class="camcontent" id="cams"><div class="camtoolbar"><label class="hint">SEARCH RADIUS</label><select id="camRadius" style="background:#04111c;border:1px solid var(--line);color:#dffaff;padding:7px"><option value="10">10 km</option><option value="25" selected>25 km</option><option value="50">50 km</option><option value="100">100 km</option><option value="250">250 km</option></select><button id="findCamsBtn">SCAN NEARBY</button></div><div class="camstatus" id="camStatus">Searches public camera listings near the selected location. Embeds only where providers permit it; otherwise opens the official camera/player page.</div><div class="camgrid" id="camResults"></div></div></section></div></div><footer class="footer"><span>J.A.R.V.I.S. SYSTEMS // EARTH OBSERVATION</span><span id="clock">LOCAL SESSION • ONLINE MAP DATA</span><span>PUBLIC SOURCES ONLY</span></footer></div>
+<div class="modal" id="settings"><div class="modalbox"><button class="close" id="closeSettings">CLOSE ✕</button><h3>MAP SOURCE STATUS</h3><p class="hint">The original OpenStreetMap embed is restored. It does not require a Google Maps API key.</p><p class="hint">If the map is blank, check your internet connection and reload GOD’S EYE.</p><div style="display:flex;gap:8px;margin-top:10px"><button id="closeSettings2">CLOSE</button></div></div></div><div class="modal" id="playerModal"><div class="playbox"><div class="playhead"><span id="playerTitle">PUBLIC CAMERA PLAYER</span><button id="closePlayer">CLOSE ✕</button></div><div class="playstage" id="playStage"></div><p class="playnote" id="playNote">Only publicly accessible streams are played. Some camera providers require opening their official page.</p></div></div>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><script src="https://unpkg.com/hls.js@1.5.17/dist/hls.min.js"></script><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="https://unpkg.com/globe.gl@2.41.2/dist/globe.gl.min.js"></script><script>
+const $=id=>document.getElementById(id);let target={name:'Mumbai, India',lat:19.076,lon:72.8777};let hudMap=null,hudMarker=null,mapLayers={},activeMapLayer='STREET';
+const globe=Globe()( $('earth')).globeImageUrl('https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg?v=day').bumpImageUrl('https://unpkg.com/three-globe/example/img/earth-topology.png').backgroundColor('rgba(0,0,0,0)').showAtmosphere(true).atmosphereColor('#25cfff').atmosphereAltitude(.18).pointOfView({lat:19.076,lng:72.8777,altitude:2.2},0).pointsData([{lat:19.076,lng:72.8777,size:.55,color:'#54eaff'}]).pointAltitude('size').pointColor('color').pointRadius(.18).onGlobeClick(({lat,lng})=>{target={name:`${lat.toFixed(3)}, ${lng.toFixed(3)}`,lat,lon:lng};updateTarget(false);reverseGeocode(lat,lng)});
+globe.controls().autoRotate=true;globe.controls().autoRotateSpeed=.28;globe.controls().enableDamping=true;
+function updateTarget(searchCams=true){$('coords').textContent=`LAT ${Math.abs(target.lat).toFixed(2)}° ${target.lat>=0?'N':'S'}  LON ${Math.abs(target.lon).toFixed(2)}° ${target.lon>=0?'E':'W'}`;$('locationChip').textContent='TARGET: '+target.name.toUpperCase().slice(0,34);globe.pointsData([{lat:target.lat,lng:target.lon,size:.75,color:'#76f7ff'}]);globe.pointOfView({lat:target.lat,lng:target.lon,altitude:1.65},1100);loadMap();if(searchCams){loadCameras();setTimeout(()=>searchYoutubeAndPlay(false),450);}}
+async function locate(){let q=$('placeInput').value.trim();if(!q)return; $('goBtn').textContent='SCANNING…';try{let r=await fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q='+encodeURIComponent(q));let d=await r.json();if(!d.length)throw Error('No matching location');target={name:d[0].display_name.split(',').slice(0,3).join(','),lat:+d[0].lat,lon:+d[0].lon};updateTarget();}catch(e){$('mapHint').textContent='Location search unavailable. Check internet and try again.'}finally{$('goBtn').textContent='LOCATE'}}
+async function reverseGeocode(lat,lon){try{let r=await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}`);let d=await r.json();if(d.display_name){target.name=d.name||d.display_name.split(',').slice(0,3).join(',');$('placeInput').value=target.name;$('locationChip').textContent='TARGET: '+target.name.toUpperCase().slice(0,34);loadCameras();setTimeout(()=>searchYoutubeAndPlay(false),450)}}catch(e){}}
+function setMapMode(mode){
+ activeMapLayer=mode;
+ document.querySelectorAll('.mapmodes button').forEach(b=>b.classList.toggle('active',b.id==={STREET:'streetMapBtn',SATELLITE:'satMapBtn',TERRAIN:'terrainMapBtn'}[mode]));
+ if(!hudMap){
+  if(!window.L){$('mapHint').textContent='Map library did not load. Check internet and reload.';return;}
+  hudMap=L.map('mapFallback',{zoomControl:true,scrollWheelZoom:true,preferCanvas:true}).setView([target.lat,target.lon],11);
+  mapLayers.STREET=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'});
+  mapLayers.SATELLITE=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,attribution:'Tiles © Esri'});
+  mapLayers.TERRAIN=L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',{maxZoom:17,attribution:'© OpenTopoMap contributors'});
+  hudMarker=L.marker([target.lat,target.lon]).addTo(hudMap);
+  mapLayers[mode].addTo(hudMap);
+ }else{
+  Object.values(mapLayers).forEach(layer=>{if(hudMap.hasLayer(layer))hudMap.removeLayer(layer)});
+  mapLayers[mode].addTo(hudMap);hudMap.invalidateSize();
+ }
+ if($('mapState'))$('mapState').textContent=({STREET:'STREET MAP',SATELLITE:'SATELLITE IMAGERY',TERRAIN:'TERRAIN MAP'})[mode];
+ $('mapHint').textContent=`${target.name} • ${target.lat.toFixed(4)}, ${target.lon.toFixed(4)} • ${mode.toLowerCase()} view`;
+}
+function loadMap(){
+ if(!window.L){$('mapHint').textContent='Loading map library…';return;}
+ if(!hudMap){setMapMode(activeMapLayer||'STREET');return;}
+ hudMap.setView([target.lat,target.lon],Math.max(hudMap.getZoom(),11),{animate:false});
+ if(hudMarker)hudMarker.setLatLng([target.lat,target.lon]);
+ hudMap.invalidateSize();
+ if($('mapState'))$('mapState').textContent=({STREET:'STREET MAP',SATELLITE:'SATELLITE IMAGERY',TERRAIN:'TERRAIN MAP'})[activeMapLayer];
+ $('mapHint').textContent=`${target.name} • ${target.lat.toFixed(4)}, ${target.lon.toFixed(4)} • ${activeMapLayer.toLowerCase()} view`;
+}
+function webDiscoveryCards(){
+ const place=target.name||`${target.lat.toFixed(3)}, ${target.lon.toFixed(3)}`;
+ const q=encodeURIComponent(`"${place}" live webcam OR live camera OR traffic camera`);
+ const yt=encodeURIComponent(`${place} live webcam`);
+ const ytLive=`https://www.youtube.com/results?search_query=${yt}&sp=EgJAAQ%253D%253D`;
+ const google=`https://www.google.com/search?q=${q}`;
+ const bing=`https://www.bing.com/search?q=${q}`;
+ const windy=`https://www.windy.com/webcams/${target.lat.toFixed(4)}/${target.lon.toFixed(4)}/8`;
+ return `<div class="camcard" style="grid-column:1/-1"><b>⌕ J.A.R.V.I.S. DIRECT SEARCH</b><small>Ask JARVIS to search a topic, or type any query here. Results stay in this HUD; choose a video to play it.</small><div class="camtoolbar"><input id="jarvisSearchInput" placeholder="Search anything: Tokyo live cams, Eiffel Tower, space station…" aria-label="Search query"><button type="button" id="jarvisSearchBtn">SEARCH</button></div><div class="camtoolbar"><a id="webGoogleLink" target="_blank" rel="noopener" href="https://www.google.com/search?q=${encodeURIComponent(place)}">GOOGLE RESULTS ↗</a><a id="webBingLink" target="_blank" rel="noopener" href="https://www.bing.com/search?q=${encodeURIComponent(place)}">BING RESULTS ↗</a></div><div class="camtoolbar"><button type="button" id="ytSearchBtn">SEARCH LIVESTREAMS</button><span class="camstatus" id="ytAutoStatus">Ready to search.</span></div><div id="ytResultsList" class="ytlist"><p class="warning">Search results will appear here.</p></div></div><div class="camcard"><b>◉ PEEK THE WORLD — LIVE CAMERA</b><small>Some camera pages block in-HUD embedding; YouTube streams are preferred.</small><button type="button" id="peekWorldBtn">VIEW CAMERA IN HUD</button></div><div class="camcard"><b>▶ YOUTUBE LIVE SEARCH</b><small>Searches public live video for ${esc(place)}.</small><a target="_blank" rel="noopener" href="${ytLive}">OPEN SEARCH ↗</a></div><div class="camcard"><b>⌕ WEB-WIDE CAMERA SEARCH</b><small>Search for live webcams and public traffic feeds near this target.</small><div style="display:flex;gap:6px;flex-wrap:wrap"><a target="_blank" rel="noopener" href="${google}">GOOGLE ↗</a><a target="_blank" rel="noopener" href="${bing}">BING ↗</a></div></div><div class="camcard"><b>◎ WINDY WEBCAMS</b><small>Browse mapped webcams around the selected coordinates. Some cameras provide still images only.</small><a target="_blank" rel="noopener" href="${windy}">OPEN NEARBY CAMERAS ↗</a></div><div class="camcard"><b>◉ OTHER PUBLIC CAMERA MAPS</b><small>Browse other public camera directories.</small><div style="display:flex;gap:6px;flex-wrap:wrap"><a target="_blank" rel="noopener" href="https://earf.tv/">EARF LIVE MAP ↗</a><a target="_blank" rel="noopener" href="https://livepublicwebcams.com/public-webcams-map">WEBCAM MAP ↗</a></div></div>`;
+}
+let ytSearchSequence=0;
+async function searchYoutubeAndPlay(automatic=false, queryOverride=""){
+ const seq=++ytSearchSequence;
+ const status=$('ytAutoStatus')||$('camStatus');
+ const list=$('ytResultsList');
+ const searchTerm=(queryOverride||'').trim() || (target.name+' live webcam live stream camera');
+ if(status)status.textContent='Searching YouTube for “'+searchTerm+'”…';
+ if(list)list.innerHTML='<p class="warning">Searching YouTube…</p>';
+ try{
+  const r=await fetch('/api/youtube-search?q='+encodeURIComponent(searchTerm),{cache:'no-store'});
+  const data=await r.json();if(seq!==ytSearchSequence)return;
+  if(!r.ok||!data.ok)throw new Error(data.error||'Local YouTube search is unavailable');
+  const entries=(data.results||[]).filter(x=>x&&x.id&&(x.is_live===true||x.live_status==='is_live'));
+  window.currentYoutubeItems=entries;
+  if(!entries.length){if(list)list.innerHTML='<p class="warning">No confirmed currently LIVE streams found. Recorded videos, upcoming streams, and unverified results are hidden. Try another search or location.</p>';if(status)status.textContent='No confirmed active livestreams found. Only streams explicitly marked LIVE by YouTube are shown.';return;}
+  if(list)list.innerHTML=entries.map((item,i)=>{
+   const live=true;
+   const badge=live?'● LIVE NOW':(item.live_status==='is_upcoming'?'◷ UPCOMING':'YOUTUBE RESULT');
+   const thumb=item.thumbnail?`<img loading="lazy" src="${esc(item.thumbnail)}" alt="Livestream thumbnail" onerror="this.style.display='none'">`:'<div style="width:112px;height:63px;border:1px solid #12445b;display:flex;align-items:center;justify-content:center;color:#54eaff">▶ VIDEO</div>';
+   return `<article class="ytresult">${thumb}<div class="ytmeta"><b>${esc(item.title||'YouTube livestream')}</b><small>${esc(item.uploader||'YouTube channel')}</small><span class="ytbadge">${badge}</span><div class="ytbuttons"><button type="button" data-yt-play="${i}">PLAY IN HUD ▶</button><a target="_blank" rel="noopener" href="${esc(item.url||('https://www.youtube.com/watch?v='+encodeURIComponent(item.id)))}">OPEN YOUTUBE ↗</a></div></div></article>`;
+  }).join('');
+  const liveCount=entries.filter(x=>x.is_live||x.live_status==='is_live').length;
+  if(status)status.textContent=`${entries.length} currently LIVE streams for “${searchTerm}”. Recorded and upcoming videos are filtered out. Select one to play.`;
+ }catch(err){if(list)list.innerHTML='<p class="warning">Could not load YouTube results. Check JARVIS local server and internet, then search again.</p>';if(status)status.textContent='Search unavailable: '+err.message;}
+}
+async function runJarvisSearch(query){
+ const q=(query||$('jarvisSearchInput')?.value||'').trim();
+ if(!q)return;
+ const box=$('jarvisSearchInput');if(box)box.value=q;
+ const g=$('webGoogleLink'),b=$('webBingLink');
+ if(g)g.href='https://www.google.com/search?q='+encodeURIComponent(q);
+ if(b)b.href='https://www.bing.com/search?q='+encodeURIComponent(q);
+ const status=$('ytAutoStatus');if(status)status.textContent='JARVIS SEARCH: '+q;
+ await searchYoutubeAndPlay(false,q);
+}
+let jarvisHashProcessed=false;
+function processJarvisHash(){
+ if(jarvisHashProcessed)return;
+ let raw=location.hash.slice(1);if(!raw)return;
+ const params=new URLSearchParams(raw);const search=params.get('search');const locationQuery=params.get('location');
+ if(!document.getElementById('ytResultsList')){setTimeout(processJarvisHash,350);return;}
+ jarvisHashProcessed=true;
+ if(search){runJarvisSearch(search);}
+ else if(locationQuery){$('placeInput').value=locationQuery;locate().then(()=>{runJarvisSearch(locationQuery);});}
+}
+function playYoutubeInHud(id,title){
+ if(!id)return;$('playerTitle').textContent=title||'YOUTUBE LIVE STREAM';$('playStage').innerHTML='';
+ const frame=document.createElement('iframe');frame.src='https://www.youtube.com/embed/'+encodeURIComponent(id)+'?autoplay=1&mute=1&playsinline=1&rel=0';frame.title=title||'YouTube live stream';frame.allow='autoplay; encrypted-media; picture-in-picture; fullscreen';frame.allowFullscreen=true;frame.referrerPolicy='strict-origin-when-cross-origin';frame.style.cssText='width:100%;height:100%;border:0;background:#000';$('playStage').appendChild(frame);$('playNote').textContent='YouTube search selected a public result. Playback may start muted because browsers block autoplay with sound.';$('playerModal').style.display='flex';
+}
+function loadCameras(){
+ const status=$('camStatus'),results=$('camResults');
+ if(!status||!results)return;
+ status.textContent=`Searching nearby camera catalogue and adding wider web searches for ${target.name}…`;results.innerHTML='';
+ const radius=+$('camRadius')?.value||25;
+ const discovery=webDiscoveryCards();
+ // OpenEye is one source only. Add web-wide discovery links whether its API succeeds or fails.
+ fetch(`https://api.openeye.cam/v1/catalog?near=${target.lat},${target.lon}&radius_km=${radius}&limit=24`)
+  .then(r=>{if(!r.ok)throw Error('Camera catalogue unavailable');return r.json()})
+  .then(data=>{
+    const items=Array.isArray(data)?data:(data.items||data.results||[]);
+    window.currentCameraItems=items;
+    results.innerHTML=(items.length?items.map((c,i)=>cameraCard(c,i)).join(''):'<p class="warning">No catalogue cameras matched this radius. Wider web searches are available below.</p>')+discovery;
+    status.textContent=`${items.length} catalogue camera(s) found within ${radius} km, plus web-wide live-feed searches. Some sources play here; others must open on their official site.`;
+  }).catch(()=>{
+    window.currentCameraItems=[];
+    results.innerHTML='<p class="warning">Nearby catalogue unavailable right now. Use the broader public-web searches below.</p>'+discovery;
+    status.textContent='Catalogue unavailable • wider web discovery is ready.';
+  });
+}
+function cameraCard(c,i){
+ const title=c.title||c.name||c.handle||'Public camera';
+ const place=c.location?.name||c.place||c.city||c.country||c.category||'Public webcam directory';
+ const distance=Number(c.distance_km??c.distanceKm);
+ const view=c.view||{};
+ const preview=c.preview_url||c.preview?.url||c.image_url||c.thumbnail||(view.render==='image'?view.url:'')||'';
+ const source=c.live_url||c.stream_url||c.embed_url||c.hls_url||c.video_url||c.playback_url||c.source_url||c.page_url||c.viewer_url||c.url||(view.render==='link'?view.url:'')||'';
+ const attribution=c.redistribution?.attribution?.name||c.attribution?.name||c.publisher||'';
+ const live=c.live===true?'LIVE / RECENT FRAME':(c.live===false?'NOT CURRENTLY LIVE':'PUBLIC CAMERA');
+ const dist=Number.isFinite(distance)?`<span class="camdistance">${distance.toFixed(1)} km away</span>`:'';
+ const img=preview?`<img loading="lazy" src="${esc(preview)}" alt="Public camera preview" onerror="this.style.display='none'">`:`<div aria-label="No thumbnail provided; use the official stream link" style="height:72px;display:flex;align-items:center;justify-content:center;border:1px solid #12445b;background:linear-gradient(135deg,#061522,#0a2635);color:#54eaff;font-size:10px;letter-spacing:2px">◉ PUBLIC FEED</div>`;
+ const playable=source?`<button type="button" data-camera-play="${i}">PLAY / OPEN ↗</button>`:'';
+ const directory=`<a target="_blank" rel="noopener" href="https://openeye.cam/">OPEN DIRECTORY ↗</a>`;
+ const ts=Number(c.last_frame_age_s);const freshness=Number.isFinite(ts)?`<small>Last frame: ${ts<60?Math.round(ts)+' sec':Math.round(ts/60)+' min'} ago</small>`:'';
+ const still=view.render==='image'||!!preview;
+ return `<article class="camcard">${img}<b>◉ ${esc(title)}</b><small>${esc(place)}</small>${dist}<small>${live}${still?' • preview image':''}</small>${freshness}${attribution?`<small>Source: ${esc(attribution)}</small>`:''}<div style="display:flex;gap:6px;flex-wrap:wrap">${playable}${directory}</div></article>`;
+}
+function cameraPlayUrl(url){
+ try { const u=new URL(url);const host=u.hostname.replace(/^www\./,'');
+  if(host==='youtube.com'||host==='m.youtube.com'||host==='youtu.be'||host==='youtube-nocookie.com'){
+   let id=u.searchParams.get('v');if(host==='youtu.be')id=u.pathname.slice(1).split('/')[0];if(u.pathname.includes('/embed/'))id=u.pathname.split('/embed/')[1].split('/')[0];if(u.pathname.includes('/live/'))id=u.pathname.split('/live/')[1].split('/')[0];if(id)return {type:'iframe',url:`https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}?autoplay=1&mute=0&playsinline=1`};
+  }
+  if(host==='twitch.tv'||host==='m.twitch.tv'){const parts=u.pathname.split('/').filter(Boolean);if(parts[0]&&parts[0]!=='videos')return {type:'iframe',url:`https://player.twitch.tv/?channel=${encodeURIComponent(parts[0])}&parent=${encodeURIComponent(location.hostname||'localhost')}&autoplay=true&muted=false`};}
+  if(/\.(mp4|webm|ogg)(\?.*)?$/i.test(u.href))return {type:'video',url:u.href};
+  if(/\.m3u8(\?.*)?$/i.test(u.href))return {type:'hls',url:u.href};
+ }catch(e){}
+ return null;
+}
+let activeHls=null;
+function stopCameraPlayer(){if(activeHls){activeHls.destroy();activeHls=null;}$('playStage').innerHTML='';$('playerModal').style.display='none'}
+function playCamera(c,index){
+ const title=c.title||c.name||c.handle||'Public camera';const view=c.view||{};const source=c.live_url||c.stream_url||c.embed_url||c.hls_url||c.video_url||c.playback_url||c.source_url||c.page_url||c.viewer_url||c.url||(view.render==='link'?view.url:'')||'';
+ const result=source?cameraPlayUrl(source):null;
+ if(!result){if(!source){$('camStatus').textContent='This camera has no playable public stream URL; its preview may be a still image.';return;}$('playerTitle').textContent=title;$('playStage').innerHTML='';const frame=document.createElement('iframe');frame.src=source;frame.title=title;frame.allow='autoplay; fullscreen; picture-in-picture';frame.allowFullscreen=true;frame.style.cssText='width:100%;height:100%;border:0;background:#000';$('playStage').appendChild(frame);$('playNote').textContent='Showing the camera source inside the HUD. Some providers prohibit embedding.';$('playerModal').style.display='flex';return;}
+ $('playerTitle').textContent=title;$('playStage').innerHTML='';$('playNote').textContent='Public source playback. If the provider blocks embedding, use its official player page.';$('playerModal').style.display='flex';
+ if(result.type==='iframe'){$('playStage').innerHTML=`<iframe allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin" src="${esc(result.url)}"></iframe>`;return;}
+ const video=document.createElement('video');video.controls=true;video.autoplay=true;video.playsInline=true;video.muted=false;$('playStage').appendChild(video);
+ if(result.type==='video'){video.src=result.url;video.play().catch(()=>{});return;}
+ if(video.canPlayType('application/vnd.apple.mpegurl')){video.src=result.url;video.play().catch(()=>{});}else if(window.Hls&&Hls.isSupported()){activeHls=new Hls();activeHls.loadSource(result.url);activeHls.attachMedia(video);activeHls.on(Hls.Events.MANIFEST_PARSED,()=>video.play().catch(()=>{}));activeHls.on(Hls.Events.ERROR,(_,data)=>{if(data.fatal){$('playNote').textContent='This stream format or provider is not supported inside the HUD. Try another camera source.'}});}else{$('playNote').textContent='This browser cannot play this stream format inside the HUD.';}
+}
+function esc(s){return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+$('camResults').addEventListener('click',e=>{
+ if(e.target.closest('#ytSearchBtn')){searchYoutubeAndPlay(false);return;}
+ if(e.target.closest('#jarvisSearchBtn')){runJarvisSearch();return;}
+ const ytPlay=e.target.closest('[data-yt-play]');if(ytPlay){const item=(window.currentYoutubeItems||[])[+ytPlay.dataset.ytPlay];if(item)playYoutubeInHud(item.id,item.title||'YouTube livestream');return;}
+ const peekButton=e.target.closest('#peekWorldBtn');
+ if(peekButton){
+   const requested=$('placeInput').value.trim()||target.name||'Helsinki';
+   const city=requested.split(',')[0].trim();
+   const slug=city.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+   $('playerTitle').textContent='PEEK THE WORLD // '+city.toUpperCase();
+   $('playStage').innerHTML='';
+   const frame=document.createElement('iframe');
+   frame.src='https://peektheworld.com/?camera='+encodeURIComponent(slug);
+   frame.title='PeekTheWorld camera — '+city;
+   frame.allow='autoplay; fullscreen; picture-in-picture';
+   frame.allowFullscreen=true;
+   frame.referrerPolicy='strict-origin-when-cross-origin';
+   frame.style.cssText='width:100%;height:100%;border:0;background:#000';
+   $('playStage').appendChild(frame);
+   $('playNote').textContent='Loading the requested camera inside GOD’S EYE. If blank, the site may block iframe embedding.';
+   $('playerModal').style.display='flex';
+   return;
+ }
+ const b=e.target.closest('[data-camera-play]');if(!b)return;
+ const cards=window.currentCameraItems||[];const camera=cards[+b.dataset.cameraPlay];
+ if(camera)playCamera(camera,+b.dataset.cameraPlay);
+});$('closePlayer').onclick=stopCameraPlayer;$('playerModal').addEventListener('click',e=>{if(e.target===$('playerModal'))stopCameraPlayer()});$('goBtn').onclick=locate;$('findCamsBtn')?.addEventListener('click',loadCameras);$('camRadius')?.addEventListener('change',loadCameras);$('placeInput').addEventListener('keydown',e=>{if(e.key==='Enter')locate()});$('camResults').addEventListener('keydown',e=>{if(e.target.id==='jarvisSearchInput'&&e.key==='Enter')runJarvisSearch()});$('resetBtn').onclick=()=>{target={name:'Earth',lat:20,lon:0};$('placeInput').value='';globe.pointOfView({lat:20,lng:0,altitude:2.5},1000);updateTarget()};$('mapModeBtn').onclick=()=>{loadMap();$('mapHint').textContent='Map refreshed • use STREET / SATELLITE / TERRAIN above';};$('streetMapBtn').onclick=()=>setMapMode('STREET');$('satMapBtn').onclick=()=>setMapMode('SATELLITE');$('terrainMapBtn').onclick=()=>setMapMode('TERRAIN');$('settingsBtn').onclick=()=>$('settings').style.display='flex';$('closeSettings').onclick=()=>$('settings').style.display='none';$('closeSettings2')?.addEventListener('click',()=>$('settings').style.display='none');
+setInterval(()=>$('clock').textContent='SYSTEM TIME • '+new Date().toLocaleTimeString(),1000);loadMap();loadCameras();setTimeout(()=>searchYoutubeAndPlay(false),1800);setTimeout(processJarvisHash,650);setTimeout(()=>globe.width($('earth').clientWidth).height($('earth').clientHeight),300);window.addEventListener('resize',()=>globe.width($('earth').clientWidth).height($('earth').clientHeight));
+</script></body></html>

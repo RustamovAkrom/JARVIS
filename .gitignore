@@ -9,6 +9,7 @@
 config/certs/
 config/whatsapp_web/
 config/ui_tasks.json
+config/api_keyss_old.json
 **/token*.json
 **/client_secret*.json
 *credentials*.json
@@ -21,6 +22,7 @@ dev.py
 memory/long_term.json
 memory/water_state.json
 memory/*.db
+example_ui.py
 
 # ── Python build noise ────────────────────────────────────────────────────────
 __pycache__/
