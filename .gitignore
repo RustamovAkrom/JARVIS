@@ -9,6 +9,7 @@
 config/certs/
 config/whatsapp_web/
 config/ui_tasks.json
+config/api_keyss_old.json
 **/token*.json
 **/client_secret*.json
 *credentials*.json
