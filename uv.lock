@@ -1137,6 +1137,7 @@ dependencies = [
     { name = "spotipy" },
     { name = "tinytuya" },
     { name = "uvicorn", extra = ["standard"] },
+    { name = "webview-python" },
     { name = "win10toast", marker = "sys_platform == 'win32'" },
     { name = "wmi", marker = "sys_platform == 'win32'" },
     { name = "youtube-transcript-api" },
@@ -1193,6 +1194,7 @@ requires-dist = [
     { name = "spotipy", specifier = ">=2.26.0" },
     { name = "tinytuya", specifier = ">=1.20.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.27,<1" },
+    { name = "webview-python", specifier = ">=1.1.3" },
     { name = "win10toast", marker = "sys_platform == 'win32'", specifier = ">=0.9" },
     { name = "wmi", marker = "sys_platform == 'win32'", specifier = ">=1.5.1" },
     { name = "youtube-transcript-api", specifier = ">=1.2.4" },
@@ -2627,6 +2629,19 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/49/b2/b6987faf330f5af5c787a2610124c2e8403d51724f9001ec4fff6311fe7a/websockets-16.1.1-cp314-cp314t-win32.whl", hash = "sha256:8483c2096363120eea8b07c06ae7304d520f686665fffd4811fad423930a65d7", size = 179729, upload-time = "2026-07-17T22:50:53.269Z" },
     { url = "https://files.pythonhosted.org/packages/a2/6e/fbac6ed878dd362fbad7d415fa4f84d38e3e33fed8cde45c64e783acf826/websockets-16.1.1-cp314-cp314t-win_amd64.whl", hash = "sha256:bcce07e23e5769375158f5efdcdafa8d5cd014b93c6683865b840ed65b96f231", size = 180072, upload-time = "2026-07-17T22:50:54.969Z" },
     { url = "https://files.pythonhosted.org/packages/be/4d/2d0d67834092e354d2b0498f014a41249a89556bc406cf86f3e1557bb463/websockets-16.1.1-py3-none-any.whl", hash = "sha256:6abbd3e82c731c8e531714466acd5d87b5e88ac3243465337ba71d68e23ae7e3", size = 173814, upload-time = "2026-07-17T22:51:04.184Z" },
+]
+
+[[package]]
+name = "webview-python"
+version = "1.1.3"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/1c/d6/49b1bebbe58a98ac27c51412ff9f4817ef5093c9e39f2d9308c13887381a/webview_python-1.1.3-cp314-cp314-macosx_10_15_x86_64.whl", hash = "sha256:88b943111896b9bf77cac71aa4ce71d4616c6f67d77179c6ea2f0471a48446bf", size = 48709, upload-time = "2026-02-28T01:30:10.007Z" },
+    { url = "https://files.pythonhosted.org/packages/32/37/bea91d14f310b6de8a44fce408a8c634eedcb36da6d4519209d7f6f6cf09/webview_python-1.1.3-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:7cd45c2361355da7e35038eb98ebcdaa0d91ada8e8d9a51656df2300f1a2084a", size = 49055, upload-time = "2026-02-28T01:30:10.887Z" },
+    { url = "https://files.pythonhosted.org/packages/f7/df/91870c7dabf3452e6b6a6565f1b261ef4bcc6eca66a2ebc122ffe0456af1/webview_python-1.1.3-cp314-cp314-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl", hash = "sha256:4ad5579da376d89675c617787bb69391202a2febbc9012b323527ce06d68d33a", size = 64986, upload-time = "2026-02-28T01:30:12.071Z" },
+    { url = "https://files.pythonhosted.org/packages/38/b3/a646f9d2bcfcf053785b08c08a6471645b86177d8c856f46a5a6fb4329d1/webview_python-1.1.3-cp314-cp314-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:e52689b557211e5f95f390151f00a863593375d6195bb5cca05fd2ab93873762", size = 66121, upload-time = "2026-02-28T01:30:13.238Z" },
+    { url = "https://files.pythonhosted.org/packages/11/f1/7eacacf6ff6247b666b8beaae82e82e4b0aa0893644501f0516aa92964bf/webview_python-1.1.3-cp314-cp314-win_amd64.whl", hash = "sha256:2f6eedca09e20173d7c0e4e1186ea461f87b71164c50eb23933c159c5c4a405f", size = 51677, upload-time = "2026-02-28T01:30:14.15Z" },
+    { url = "https://files.pythonhosted.org/packages/7e/bb/c011267e6e8890a2b533756d9d977ffebbd447f93a39db51e7ad30134268/webview_python-1.1.3-cp314-cp314-win_arm64.whl", hash = "sha256:813bd9ddc71e35cc57f0a98ccddad7602437c5c067e69383370780c75e46529c", size = 50446, upload-time = "2026-02-28T01:30:15.053Z" },
 ]
 
 [[package]]
