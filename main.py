@@ -1432,17 +1432,6 @@ class JarvisLive:
         if not self.ui.muted:
             self.ui.set_state("LISTENING")
 
-        # Tool results normally go back to the model for its spoken reply.
-        # When the user has the detached Reader open, mirror the raw dispatch
-        # result there as well; otherwise the window can stay blank even though
-        # the tool completed successfully.
-        _visible_result = str(result or "").strip()
-        if (_visible_result
-                and _visible_result not in {"Done.", "ok"}
-                and not _visible_result.startswith("[VISION_ACTIVE]")
-                and name != "web_search"):
-            self.ui.show_content(f"{name.upper()} RESULT", _visible_result)
-
         print(f"[JARVIS] 📤 {name} → {str(result)[:80]}")
 
         # A tool that declared itself NON_BLOCKING also says when its answer may
