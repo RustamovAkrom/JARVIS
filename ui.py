@@ -7,12 +7,14 @@ import os
 import platform
 import random
 import re
+import signal
 import shutil
 import subprocess
 import sys
 import threading
 import time
 import uuid
+from dataclasses import dataclass
 from pathlib import Path
 
 import psutil
@@ -224,20 +226,23 @@ def apply_ui_accent(accent_hex: str) -> bool:
         return True
 
     if accent_hex == "#ffffff":
-        # White is a neutral monochrome accent; keep the interface dark and
-        # readable instead of treating white as a hue with zero saturation.
+        # White is a neutral monochrome preset with light surfaces and dark text.
         for key, value in _PALETTE_DEFAULTS.items():
             setattr(C, key, value)
         for key, value in _STATUS_DEFAULTS.items():
             setattr(C, key, value)
-        for key in _STATUS_COLORS:
-            setattr(C, key, "#ffffff")
         for key, value in {
-            "BG": "#080c10", "PANEL": "#0d1318", "PANEL2": "#121a20",
-            "BORDER": "#26313a", "BORDER_B": "#3a4650", "BORDER_A": "#202a32",
-            "PRI": "#f2f5f7", "PRI_DIM": "#bac4cc", "PRI_GHO": "#202830",
-            "TEXT": "#e7edf1", "TEXT_DIM": "#89959e", "TEXT_MED": "#b6c0c7",
-            "WHITE": "#ffffff", "DARK": "#05080b", "BAR_BG": "#090e12",
+            "ACC": "#b54708", "ACC2": "#815b00",
+            "GREEN": "#137333", "GREEN_D": "#116329",
+            "RED": "#b42318", "MUTED_C": "#b42318",
+        }.items():
+            setattr(C, key, value)
+        for key, value in {
+            "BG": "#f3f5f7", "PANEL": "#ffffff", "PANEL2": "#f7f9fb",
+            "BORDER": "#d8dee5", "BORDER_B": "#b7c1cc", "BORDER_A": "#c6d0da",
+            "PRI": "#36434f", "PRI_DIM": "#62717f", "PRI_GHO": "#e8edf2",
+            "TEXT": "#1f2933", "TEXT_DIM": "#61707d", "TEXT_MED": "#45515d",
+            "WHITE": "#111820", "DARK": "#ffffff", "BAR_BG": "#f7f9fb",
         }.items():
             setattr(C, key, value)
         return True
@@ -256,7 +261,7 @@ def apply_ui_accent(accent_hex: str) -> bool:
     base_h            = _hsv(_PALETTE_DEFAULTS["PRI"])[0]
     acc_h, acc_s, _av = _hsv(accent_hex)
     dh   = acc_h - base_h
-    grey = acc_s < 0.08   # near-grey accent в†’ the whole theme is desaturated
+    grey = acc_s < 0.08   # near-grey accent → the whole theme is desaturated
 
     for key, hex0 in _PALETTE_DEFAULTS.items():
         h, s, v = _hsv(hex0)
@@ -316,7 +321,7 @@ def qcol(h: str, a: int = 255) -> QColor:
 
 def _tint_icon(icon: QIcon, color: str) -> QIcon:
     """Tint an icon while preserving its alpha mask."""
-    if color.lower() != "#f2f5f7":
+    if C.PANEL.lower() != "#ffffff":
         return icon
     source = icon.pixmap(QSize(24, 24))
     if source.isNull():
@@ -336,7 +341,7 @@ def _accent_icon(path: Path, color: str) -> QIcon:
     return _tint_icon(QIcon(str(path)), color)
 
 
-# в”Ђв”Ђ DESIGN SYSTEM: shared styling for the main window в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+# ── DESIGN SYSTEM: shared styling for the main window ──────────────────────
 FONT_UI   = "Segoe UI" if _OS == "Windows" else ("Helvetica Neue" if _OS == "Darwin" else "Noto Sans")
 FONT_MONO = "Consolas" if _OS == "Windows" else ("Menlo" if _OS == "Darwin" else "DejaVu Sans Mono")
 R_L, R_S  = 16, 8
@@ -428,7 +433,7 @@ def _tabs_qss() -> str:
             + close)
 
 
-# в”Ђв”Ђ Windows GPU via NVML DLL (no subprocess, no console window) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+# ── Windows GPU via NVML DLL (no subprocess, no console window) ──────────────
 _nvml_lib: object = None   # cached ctypes DLL
 _nvml_ok:  object = None   # None=untested, True=works, False=unavailable
 
@@ -757,7 +762,7 @@ class HudCanvas(QWidget):
         self._tick += 1
         now = time.time()
 
-        # в”Ђв”Ђ Live audio reactivity в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        # ── Live audio reactivity ────────────────────────────────────────────
         # A viseme schedule, if one is playing, gives both the level and the
         # mouth shape for this exact instant; otherwise fall back to the peak
         # level the audio threads pushed in.
@@ -873,7 +878,7 @@ class HudCanvas(QWidget):
         except Exception:
             return True      # never let a visibility check stop the HUD drawing
 
-    # в”Ђв”Ђ reactor core в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    # ── reactor core ─────────────────────────────────────────────────────────
     # The centrepiece for anyone who did not want a face looking back at them.
     # Built from the same budget as the head — software QPainter, no GPU — and
     # from the same principle: everything on it means something. The rings turn
@@ -1125,7 +1130,7 @@ class HudCanvas(QWidget):
         cx, cy = W / 2, H / 2
         fw = min(W, H)
 
-        # в”Ђв”Ђ holographic head в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        # ── holographic head ────────────────────────────────────────────────
         # Sized to the band between the top of the canvas and the status line,
         # capped by width, so it fills the HUD at any window size — including
         # fullscreen — without ever colliding with the status text below.
@@ -1630,13 +1635,13 @@ class _DropCanvas(QWidget):
         p.setFont(QFont(FONT_MONO, 7))
         p.setPen(QPen(qcol("#1a4a5a"), 1))
         p.drawText(QRectF(0, cy + 24, W, 14), Qt.AlignmentFlag.AlignCenter,
-                   "Images В· Video В· Audio В· PDF В· Docs В· Code В· Data")
+                   "Images · Video · Audio · PDF · Docs · Code · Data")
 
     def _paint_drag_over(self, p, W, H):
         cx, cy = W / 2, H / 2
         p.setFont(QFont(FONT_MONO, 20))
         p.setPen(QPen(qcol(C.PRI), 1))
-        p.drawText(QRectF(0, cy - 24, W, 32), Qt.AlignmentFlag.AlignCenter, "в¬‡")
+        p.drawText(QRectF(0, cy - 24, W, 32), Qt.AlignmentFlag.AlignCenter, "⬇")
         p.setFont(QFont(FONT_MONO, 8, QFont.Weight.Bold))
         p.setPen(QPen(qcol(C.PRI), 1))
         p.drawText(QRectF(0, cy + 12, W, 16), Qt.AlignmentFlag.AlignCenter, "Release to load")
@@ -1666,7 +1671,7 @@ class _DropCanvas(QWidget):
         p.setPen(QPen(qcol(C.TEXT_DIM), 1))
         p.drawText(QRectF(tx, H * 0.18 + 18, tw, 14),
                    Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-                   f"{ext_str}  В·  {size_str}")
+                   f"{ext_str}  ·  {size_str}")
 
         p.setFont(QFont(FONT_MONO, 6))
         p.setPen(QPen(qcol("#1e5c6a"), 1))
@@ -1677,7 +1682,7 @@ class _DropCanvas(QWidget):
 
         p.setFont(QFont(FONT_MONO, 9, QFont.Weight.Bold))
         p.setPen(QPen(qcol(C.RED, 180), 1))
-        p.drawText(QRectF(W - 34, 0, 28, H), Qt.AlignmentFlag.AlignCenter, "вњ•")
+        p.drawText(QRectF(W - 34, 0, 28, H), Qt.AlignmentFlag.AlignCenter, "✕")
 
     def mousePressEvent(self, e):
         z = self._z
@@ -1697,7 +1702,7 @@ class _CameraPreview(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(f"""
             _CameraPreview {{
-                background: rgba(0, 6, 10, 242);
+                background: {C.PANEL};
                 border: 1px solid {C.PRI};
                 border-radius: 6px;
             }}
@@ -1709,12 +1714,12 @@ class _CameraPreview(QWidget):
         lay.setSpacing(4)
 
         hdr = QHBoxLayout()
-        title = QLabel("в—€  VISUAL INPUT")
+        title = QLabel("◈  VISUAL INPUT")
         title.setFont(QFont(FONT_MONO, 7, QFont.Weight.Bold))
         title.setStyleSheet(f"color: {C.PRI}; background: transparent;")
         hdr.addWidget(title)
         hdr.addStretch()
-        close_btn = QPushButton("вњ•")
+        close_btn = QPushButton("✕")
         close_btn.setFixedSize(16, 16)
         close_btn.setFont(QFont(FONT_MONO, 8))
         close_btn.setStyleSheet(
@@ -1762,7 +1767,7 @@ class SetupOverlay(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(f"""
             SetupOverlay {{
-                background: rgba(0, 6, 10, 245);
+                background: {C.PANEL};
                 border: 1px solid {C.BORDER_B};
                 border-radius: 6px;
             }}
@@ -1786,7 +1791,7 @@ class SetupOverlay(QWidget):
             w.setStyleSheet(f"color: {color}; background: transparent;")
             return w
 
-        layout.addWidget(_lbl("в—€  INITIALISATION REQUIRED", 13, True))
+        layout.addWidget(_lbl("◈  INITIALISATION REQUIRED", 13, True))
         layout.addWidget(_lbl("Configure J.A.R.V.I.S. before first boot.", 9, color=C.PRI_DIM))
         layout.addSpacing(6)
 
@@ -1803,7 +1808,7 @@ class SetupOverlay(QWidget):
         self._key_input.setFixedHeight(32)
         self._key_input.setStyleSheet(f"""
             QLineEdit {{
-                background: #000d12; color: {C.TEXT};
+                background: {C.PANEL2}; color: {C.TEXT};
                 border: 1px solid {C.BORDER}; border-radius: 3px; padding: 4px 8px;
             }}
             QLineEdit:focus {{ border: 1px solid {C.PRI}; }}
@@ -1836,7 +1841,7 @@ class SetupOverlay(QWidget):
         self._sel(detected)
         layout.addSpacing(12)
 
-        init_btn = QPushButton("в–ё  INITIALISE SYSTEMS")
+        init_btn = QPushButton("▸  INITIALISE SYSTEMS")
         init_btn.setFont(QFont(FONT_MONO, 10, QFont.Weight.Bold))
         init_btn.setFixedHeight(36)
         init_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -1854,7 +1859,8 @@ class SetupOverlay(QWidget):
 
     def _sel(self, key: str):
         self._sel_os = key
-        pal = {"windows":(C.PRI,"#001a22"),"mac":(C.ACC2,"#1a1400"),"linux":(C.GREEN,"#001a0d")}
+        pal = {"windows":(C.PRI,C.PRI_GHO),"mac":(C.ACC2,C.PRI_GHO),
+               "linux":(C.GREEN,C.PRI_GHO)}
         for k, btn in self._os_btns.items():
             if k == key:
                 fg, bg = pal[k]
@@ -1867,7 +1873,7 @@ class SetupOverlay(QWidget):
             else:
                 btn.setStyleSheet(f"""
                     QPushButton {{
-                        background: #000d12; color: {C.TEXT_DIM};
+                        background: {C.PANEL2}; color: {C.TEXT_DIM};
                         border: 1px solid {C.BORDER}; border-radius: 3px;
                     }}
                     QPushButton:hover {{ color: {C.TEXT}; border: 1px solid {C.BORDER_B}; }}
@@ -1904,7 +1910,7 @@ class HueWheel(QWidget):
         self._drag = False
         self.set_color(initial_hex)
 
-    # в”Ђв”Ђ API в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    # ── API ──────────────────────────────────────────────────────────────────
     def color(self) -> str:
         return QColor.fromHsvF(self._hue, 1.0, 1.0).name()
 
@@ -1914,7 +1920,7 @@ class HueWheel(QWidget):
             self._hue = c.hsvHueF()
             self.update()
 
-    # в”Ђв”Ђ geometry helpers в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    # ── geometry helpers ─────────────────────────────────────────────────────
     def _ring_rect(self) -> QRectF:
         m = self._RING / 2 + 3
         return QRectF(self.rect()).adjusted(m, m, -m, -m)
@@ -1923,10 +1929,10 @@ class HueWheel(QWidget):
         c  = QRectF(self.rect()).center()
         dx = pos.x() - c.x()
         dy = c.y() - pos.y()          # screen y goes down — flip to math axis
-        ang = math.atan2(dy, dx)      # [-ПЂ, ПЂ], counter-clockwise
+        ang = math.atan2(dy, dx)      # [-π, π], counter-clockwise
         return (ang / (2 * math.pi)) % 1.0
 
-    # в”Ђв”Ђ drawing в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    # ── drawing ──────────────────────────────────────────────────────────────
     def paintEvent(self, _):
         p = QPainter(self)
         if not p.isActive():
@@ -1959,7 +1965,7 @@ class HueWheel(QWidget):
         p.drawEllipse(QPointF(hx, hy), 7.5, 7.5)
         p.end()
 
-    # в”Ђв”Ђ fare в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    # ── fare ─────────────────────────────────────────────────────────────────
     def mousePressEvent(self, e):
         self._drag = True
         self._hue  = self._hue_from_pos(e.position())
@@ -1990,7 +1996,7 @@ class CustomizeOverlay(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(f"""
             CustomizeOverlay {{
-                background: rgba(0, 6, 10, 245);
+                background: {C.PANEL};
                 border: 1px solid {C.BORDER_B};
                 border-radius: 6px;
             }}
@@ -2006,7 +2012,7 @@ class CustomizeOverlay(QWidget):
             w.setStyleSheet(f"color: {color}; background: transparent;")
             return w
 
-        _fs = (f"QLineEdit {{ background: #000d12; color: {C.TEXT}; "
+        _fs = (f"QLineEdit {{ background: {C.PANEL2}; color: {C.TEXT}; "
                f"border: 1px solid {C.BORDER}; border-radius: 3px; padding: 4px 8px; }}"
                f"QLineEdit:focus {{ border: 1px solid {C.PRI}; }}")
 
@@ -2120,7 +2126,7 @@ class CustomizeOverlay(QWidget):
         lay.addSpacing(6)
         btn_row = QHBoxLayout(); btn_row.setSpacing(8)
 
-        save_btn = QPushButton("в–ё  APPLY CHANGES")
+        save_btn = QPushButton("▸  APPLY CHANGES")
         save_btn.setFixedHeight(34)
         save_btn.setFont(QFont(FONT_MONO, 9, QFont.Weight.Bold))
         save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -2149,7 +2155,7 @@ class CustomizeOverlay(QWidget):
         btn_row.addWidget(cancel_btn)
         lay.addLayout(btn_row)
 
-    # в”Ђв”Ђ voice selection в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    # ── voice selection ──────────────────────────────────────────────────────
     def _on_voice_pick(self, name: str):
         self._sel_voice = name
         self._refresh_voice_btns()
@@ -2171,7 +2177,7 @@ class CustomizeOverlay(QWidget):
                     QPushButton:hover {{ color: {C.TEXT}; border-color: {C.BORDER_B}; }}
                 """)
 
-    # в”Ђв”Ђ colour flow в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    # ── colour flow ──────────────────────────────────────────────────────────
     def _set_color(self, hx: str, update_wheel: bool = True, preview: bool = True):
         """Updates the selected colour; hex box + wheel stay in sync, theme is live-previewed."""
         self._sel_color = hx.strip().lower()
@@ -2191,7 +2197,7 @@ class CustomizeOverlay(QWidget):
         self._hex_input.blockSignals(False)
 
     def _on_wheel_commit(self, hx: str):
-        # Handle released в†’ live-preview the whole interface
+        # Handle released → live-preview the whole interface
         self._set_color(hx, update_wheel=False)
 
     def _on_hex_edited(self, text: str):
@@ -2226,7 +2232,7 @@ class PluginManagerOverlay(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(f"""
             PluginManagerOverlay {{
-                background: rgba(0, 6, 10, 245);
+                background: {C.PANEL};
                 border: 1px solid {C.BORDER_B};
                 border-radius: 6px;
             }}
@@ -2305,10 +2311,10 @@ class PluginManagerOverlay(QWidget):
             btn.setText("ON")
             btn.setStyleSheet(f"""
                 QPushButton {{
-                    background: #001a08; color: {C.GREEN};
+                    background: {C.PANEL2}; color: {C.GREEN};
                     border: 1px solid {C.GREEN_D}; border-radius: 3px;
                 }}
-                QPushButton:hover {{ background: #002010; }}
+                QPushButton:hover {{ background: {C.PRI_GHO}; }}
             """)
         else:
             btn.setText("OFF")
@@ -2398,7 +2404,7 @@ class ConfirmBanner(_HudOverlay):
 
         row = QHBoxLayout(); row.setSpacing(8)
 
-        yes = QPushButton("в–ё  CONFIRM")
+        yes = QPushButton("▸  CONFIRM")
         yes.setFixedHeight(32)
         yes.setFont(QFont(FONT_MONO, 9, QFont.Weight.Bold))
         yes.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -2465,7 +2471,7 @@ class AudioDeviceOverlay(_HudOverlay):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(f"""
             AudioDeviceOverlay {{
-                background: rgba(0, 6, 10, 245);
+                background: {C.PANEL};
                 border: 1px solid {C.BORDER_B};
                 border-radius: 6px;
             }}
@@ -2486,10 +2492,10 @@ class AudioDeviceOverlay(_HudOverlay):
         lay.addWidget(sep)
 
         _combo_css = (
-            f"QComboBox {{ background: #000d12; color: {C.TEXT}; "
+            f"QComboBox {{ background: {C.PANEL2}; color: {C.TEXT}; "
             f"border: 1px solid {C.BORDER}; border-radius: 3px; padding: 4px 8px; }}"
             f"QComboBox:hover {{ border-color: {C.BORDER_B}; }}"
-            f"QComboBox QAbstractItemView {{ background: #000d12; color: {C.TEXT}; "
+            f"QComboBox QAbstractItemView {{ background: {C.PANEL2}; color: {C.TEXT}; "
             f"selection-background-color: {C.PRI_GHO}; border: 1px solid {C.BORDER}; }}"
         )
 
@@ -2556,7 +2562,7 @@ class AudioDeviceOverlay(_HudOverlay):
             meter.setTextVisible(False)
             meter.setFixedHeight(6)
             meter.setStyleSheet(
-                f"QProgressBar {{ background: #000d12; border: 1px solid {C.BORDER}; "
+                f"QProgressBar {{ background: {C.PANEL2}; border: 1px solid {C.BORDER}; "
                 f"border-radius: 3px; }}"
                 f"QProgressBar::chunk {{ background: {C.PRI}; border-radius: 2px; }}")
             meter.hide()
@@ -2586,7 +2592,7 @@ class AudioDeviceOverlay(_HudOverlay):
         self._out_box = _row("SPEAKERS — what JARVIS talks through",
                              "output", get_output_device())
 
-        # в”Ђв”Ђ Output volume, beside the output device в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        # ── Output volume, beside the output device ──────────────────────────
         #
         # Choosing "Realtek(R) Audio" here and finding it far too quiet used to
         # mean leaving this panel, opening the system sound settings, finding
@@ -2616,7 +2622,7 @@ class AudioDeviceOverlay(_HudOverlay):
             self._vol.setValue(int(_vol_now))
             self._vol.setFixedHeight(22)
             self._vol.setStyleSheet(
-                f"QSlider::groove:horizontal {{ background: #000d12; height: 4px; "
+                f"QSlider::groove:horizontal {{ background: {C.PANEL2}; height: 4px; "
                 f"border: 1px solid {C.BORDER}; border-radius: 2px; }}"
                 f"QSlider::sub-page:horizontal {{ background: {C.PRI_DIM}; "
                 f"border-radius: 2px; }}"
@@ -2648,7 +2654,7 @@ class AudioDeviceOverlay(_HudOverlay):
         lay.addWidget(note)
 
         row = QHBoxLayout(); row.setSpacing(8)
-        ok = QPushButton("в–ё  APPLY")
+        ok = QPushButton("▸  APPLY")
         ok.setFixedHeight(32)
         ok.setFont(QFont(FONT_MONO, 9, QFont.Weight.Bold))
         ok.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -2804,7 +2810,7 @@ class MemoryOverlay(_HudOverlay):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(f"""
             MemoryOverlay {{
-                background: rgba(0, 6, 10, 246);
+                background: {C.PANEL};
                 border: 1px solid {C.BORDER_B};
                 border-radius: 6px;
             }}
@@ -2935,7 +2941,7 @@ class MemoryOverlay(_HudOverlay):
                 meta.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
                 line.addWidget(meta)
 
-                rm = QPushButton("вњ•")
+                rm = QPushButton("✕")
                 rm.setFixedSize(20, 20)
                 rm.setFont(QFont(FONT_MONO, 8, QFont.Weight.Bold))
                 rm.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -2979,7 +2985,7 @@ class MemoryOverlay(_HudOverlay):
         from memory.memory_manager import forget
         forget(key, category)
         # Rebuild on the NEXT event-loop turn, not inside this click handler.
-        # The rebuild destroys the very вњ• button that emitted this signal, and
+        # The rebuild destroys the very ✕ button that emitted this signal, and
         # Qt is entitled to touch the sender after a slot returns; tearing it
         # down mid-emission is how a widget ends up half-alive on screen.
         QTimer.singleShot(0, self._rebuild)
@@ -3064,8 +3070,8 @@ class ProvidersOverlay(_HudOverlay):
     # somebody configuring it would use, not the words the code uses.
     _SLOTS = (
         ("stt", "MIC", "HEARING",  "turns what you say into words"),
-        ("llm", "в‘Ў", "THINKING", "understands, decides, uses your tools"),
-        ("tts", "в‘ў", "SPEAKING", "reads the answer out loud"),
+        ("llm", "②", "THINKING", "understands, decides, uses your tools"),
+        ("tts", "③", "SPEAKING", "reads the answer out loud"),
     )
 
     def __init__(self, parent=None):
@@ -3109,7 +3115,7 @@ class ProvidersOverlay(_HudOverlay):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(f"""
             ProvidersOverlay {{
-                background: rgba(0, 6, 10, 249);
+                background: {C.PANEL};
                 border: 1px solid {C.BORDER_B};
                 border-radius: 8px;
             }}
@@ -3132,7 +3138,7 @@ class ProvidersOverlay(_HudOverlay):
         sub.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
         outer.addWidget(sub)
 
-        # в”Ђв”Ђ Mode: two cards, not a dropdown в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        # ── Mode: two cards, not a dropdown ─────────────────────────────────
         # A dropdown hides the option you did not choose. This is the one
         # decision on the panel that changes everything below it, and both
         # answers deserve to be readable at the same time.
@@ -3153,7 +3159,7 @@ class ProvidersOverlay(_HudOverlay):
         cards.addWidget(self._card_local)
         outer.addLayout(cards)
 
-        # в”Ђв”Ђ Body в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        # ── Body ────────────────────────────────────────────────────────────
         self._scroll = QScrollArea()
         self._scroll.setWidgetResizable(True)
         self._scroll.setFrameShape(QFrame.Shape.NoFrame)
@@ -3191,7 +3197,7 @@ class ProvidersOverlay(_HudOverlay):
         outer.addWidget(self._footer)
 
         row = QHBoxLayout(); row.setSpacing(8)
-        apply_btn = QPushButton("в–ё  SAVE  &  APPLY")
+        apply_btn = QPushButton("▸  SAVE  &  APPLY")
         apply_btn.setFixedHeight(34)
         apply_btn.setFont(QFont(FONT_MONO, 9, QFont.Weight.Bold))
         apply_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -3217,7 +3223,7 @@ class ProvidersOverlay(_HudOverlay):
         outer.addLayout(row)
         self._refresh_cards()
 
-    # в”Ђв”Ђ pieces в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    # ── pieces ───────────────────────────────────────────────────────────────
     def _mode_card(self, title: str, body: str, value: str) -> QPushButton:
         b = QPushButton()
         b.setCheckable(True)
@@ -3249,7 +3255,7 @@ class ProvidersOverlay(_HudOverlay):
         if not self.isHidden():
             self._rebuild_body()
 
-    # в”Ђв”Ђ Asking an endpoint what it has, without being asked to в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    # ── Asking an endpoint what it has, without being asked to ──────────────
     def _fetch_models(self, pid: str) -> None:
         """Go and get the model list in the background.
 
@@ -3314,7 +3320,7 @@ class ProvidersOverlay(_HudOverlay):
 
         def report(ok, msg):
             colour = C.TEXT_DIM if ok is None else (C.GREEN if ok else C.RED)
-            mark = "" if ok is None else ("вњ“  " if ok else "вњ•  ")
+            mark = "" if ok is None else ("✓  " if ok else "✕  ")
             QTimer.singleShot(0, lambda: self._say(pid, mark + msg, colour))
 
         threading.Thread(target=lambda: fn(values, report), daemon=True).start()
@@ -3412,7 +3418,7 @@ class ProvidersOverlay(_HudOverlay):
         b.clicked.connect(slot)
         return b
 
-    # в”Ђв”Ђ catalog в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    # ── catalog ──────────────────────────────────────────────────────────────
     def _catalog(self, kind: str) -> list[tuple[str, str, dict, dict]]:
         """(provider id, entry id, entry, declaration) for one slot.
 
@@ -3462,7 +3468,7 @@ class ProvidersOverlay(_HudOverlay):
                 return eid
         return best or (entries[0][0] if len(entries) == 1 else "")
 
-    # в”Ђв”Ђ body в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    # ── body ─────────────────────────────────────────────────────────────────
     def _clear(self, lay) -> None:
         while lay.count():
             item = lay.takeAt(0)
@@ -3522,7 +3528,7 @@ class ProvidersOverlay(_HudOverlay):
                 label = f"    {label}"
             note = entry.get("note") or ""
             if not decl.get("_available", True):
-                note = (note + " В· needs install").strip(" В·")
+                note = (note + " · needs install").strip(" ·")
             box.addItem(f"{label}{'   —  ' + note if note else ''}", (pid, eid))
 
         pid_now = self._pipe.get(slot, "")
@@ -3657,10 +3663,10 @@ class ProvidersOverlay(_HudOverlay):
         # chosen. This is the button for when it did not — the server was
         # starting up, or a model has just been pulled.
         if any(k in shown for k in ("model", "voice_id", "voice")):
-            brow.addWidget(self._btn("в†» REFRESH", lambda _=0, p=pid: self._list(p)))
+            brow.addWidget(self._btn("↻ REFRESH", lambda _=0, p=pid: self._list(p)))
         if advanced:
             brow.addWidget(self._btn(
-                ("вЊѓ LESS" if self._more.get(pid) else "вЊ„ MORE"),
+                ("⌃ LESS" if self._more.get(pid) else "⌄ MORE"),
                 lambda _=0, p=pid: self._toggle_more(p)))
         if not decl.get("_available", True) and decl.get("install"):
             brow.addWidget(self._btn(f"INSTALL {decl['install']}",
@@ -3673,7 +3679,7 @@ class ProvidersOverlay(_HudOverlay):
         lay.addWidget(status)
 
         if self._more.get(pid):
-            lay.addWidget(self._label("в”Ђ" * 46, 7, C.BORDER))
+            lay.addWidget(self._label("─" * 46, 7, C.BORDER))
             for f, w in advanced:
                 lay.addWidget(self._label(f"{f.label}   (optional)", 7, C.TEXT_DIM))
                 lay.addWidget(w)
@@ -3767,15 +3773,15 @@ class ProvidersOverlay(_HudOverlay):
         self._first_combo.setCurrentIndex(1 if self._sidecar_first else 0)
         lay.addWidget(self._first_combo)
 
-        # In pipeline mode the model chosen for в‘Ў THINKING answers these too, so
-        # there is nothing more to fill in. In Gemini mode there IS no в‘Ў section
+        # In pipeline mode the model chosen for ② THINKING answers these too, so
+        # there is nothing more to fill in. In Gemini mode there IS no ② section
         # — and the first version still said "it uses whatever you set up under
-        # в‘Ў THINKING", which named a box that was not on the screen. So a
+        # ② THINKING", which named a box that was not on the screen. So a
         # service picked here gets its own form, right here.
         if cur_pid:
             if self._mode == "pipeline" and cur_pid == self._pipe.get("llm"):
                 lay.addWidget(self._label(
-                    "Uses the model you chose for в‘Ў THINKING.", 7, C.TEXT_DIM))
+                    "Uses the model you chose for ② THINKING.", 7, C.TEXT_DIM))
             else:
                 self._fields_into(lay, "llm", cur_pid, cur_eid)
         else:
@@ -3828,7 +3834,7 @@ class ProvidersOverlay(_HudOverlay):
             self._footer.setText(
                 "All three set. SAVE & APPLY reconnects; the conversation is kept.")
 
-    # в”Ђв”Ђ actions в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    # ── actions ──────────────────────────────────────────────────────────────
     def _live_choices(self, pid: str, key: str) -> tuple:
         try:
             decl = self._registry.get_declaration(pid)
@@ -3894,9 +3900,9 @@ class ProvidersOverlay(_HudOverlay):
                 return
             ok, msg = probe()
         except Exception as e:
-            self._say(pid, f"вњ•  {type(e).__name__}: {str(e)[:150]}", C.RED)
+            self._say(pid, f"✕  {type(e).__name__}: {str(e)[:150]}", C.RED)
             return
-        self._say(pid, ("вњ“  " if ok else "вњ•  ") + msg, C.GREEN if ok else C.ACC)
+        self._say(pid, ("✓  " if ok else "✕  ") + msg, C.GREEN if ok else C.ACC)
         # TEST is also where "can this model see?" gets answered — by asking the
         # endpoint, not the user. Write the answer back into the stored settings
         # so the assistant is told the truth about its own eyes.
@@ -3922,12 +3928,12 @@ class ProvidersOverlay(_HudOverlay):
                 self._say(pid, "Nothing to list for this one.", C.TEXT_DIM)
                 return
         except Exception as e:
-            self._say(pid, f"вњ•  {type(e).__name__}: {str(e)[:150]}", C.RED)
+            self._say(pid, f"✕  {type(e).__name__}: {str(e)[:150]}", C.RED)
             return
 
         entry = self._edits.get(pid, {}).get(key)
         if entry is None or not items:
-            self._say(pid, f"вњ“  {len(items)} found." if items else "None found.",
+            self._say(pid, f"✓  {len(items)} found." if items else "None found.",
                       C.GREEN if items else C.TEXT_DIM)
             return
         box = entry[0]
@@ -3939,7 +3945,7 @@ class ProvidersOverlay(_HudOverlay):
             j = box.findData(keep)
             box.setCurrentIndex(j if j >= 0 else 0)
         else:
-            self._say(pid, f"вњ“  {len(items)} available: "
+            self._say(pid, f"✓  {len(items)} available: "
                            f"{', '.join(str(v) for v, _ in items[:8])}", C.GREEN)
             return
         self._say(pid, f"✓  {len(items)} available — pick one above.", C.GREEN)
@@ -4025,7 +4031,7 @@ class ClipboardPanel(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(f"""
             ClipboardPanel {{
-                background: rgba(0, 8, 14, 248);
+                background: {C.PANEL};
                 border: 1px solid {C.BORDER_B};
                 border-radius: 6px;
             }}
@@ -4038,11 +4044,11 @@ class ClipboardPanel(QWidget):
         lay.setSpacing(4)
 
         hdr = QHBoxLayout(); hdr.setSpacing(4)
-        icon_lbl = QLabel("в—€  CLIPBOARD DETECTED")
+        icon_lbl = QLabel("◈  CLIPBOARD DETECTED")
         icon_lbl.setFont(QFont(FONT_MONO, 7, QFont.Weight.Bold))
         icon_lbl.setStyleSheet(f"color: {C.ACC2}; background: transparent;")
         hdr.addWidget(icon_lbl); hdr.addStretch()
-        x_btn = QPushButton("вњ•")
+        x_btn = QPushButton("✕")
         x_btn.setFixedSize(16, 16)
         x_btn.setFont(QFont(FONT_MONO, 8))
         x_btn.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent; border: none;")
@@ -4119,7 +4125,7 @@ class PluginSettingsOverlay(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(f"""
             PluginSettingsOverlay {{
-                background: rgba(0, 6, 10, 245);
+                background: {C.PANEL};
                 border: 1px solid {C.BORDER_B};
                 border-radius: 6px;
             }}
@@ -4130,7 +4136,7 @@ class PluginSettingsOverlay(QWidget):
         self._status_labels: dict[str, QLabel] = {} # namespace -> status QLabel
         self._test_done.connect(self._on_test_done)
 
-        self._fs = (f"QLineEdit {{ background: #000d12; color: {C.TEXT}; "
+        self._fs = (f"QLineEdit {{ background: {C.PANEL2}; color: {C.TEXT}; "
                     f"border: 1px solid {C.BORDER}; border-radius: 3px; padding: 4px 8px; }}"
                     f"QLineEdit:focus {{ border: 1px solid {C.PRI}; }}")
 
@@ -4164,10 +4170,10 @@ class PluginSettingsOverlay(QWidget):
             scroll.setWidget(inner)
             root.addWidget(scroll, 1)
 
-        # в”Ђв”Ђ bottom buttons в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        # ── bottom buttons ───────────────────────────────────────────────────
         btn_row = QHBoxLayout(); btn_row.setSpacing(8)
         if self._sections:
-            save_btn = QPushButton("в–ё  SAVE")
+            save_btn = QPushButton("▸  SAVE")
             save_btn.setFixedHeight(34)
             save_btn.setFont(QFont(FONT_MONO, 9, QFont.Weight.Bold))
             save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -4192,7 +4198,7 @@ class PluginSettingsOverlay(QWidget):
         btn_row.addWidget(close_btn)
         root.addLayout(btn_row)
 
-    # в”Ђв”Ђ helpers в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    # ── helpers ───────────────────────────────────────────────────────────────
     def _lbl(self, txt, fs=9, bold=False, color=C.PRI,
              align=Qt.AlignmentFlag.AlignLeft):
         w = QLabel(txt); w.setAlignment(align); w.setWordWrap(True)
@@ -4227,9 +4233,9 @@ class PluginSettingsOverlay(QWidget):
                 w.setFont(QFont(FONT_MONO, 9))
                 w.setFixedHeight(30)
                 w.setStyleSheet(
-                    f"QComboBox {{ background: #000d12; color: {C.TEXT}; "
+                    f"QComboBox {{ background: {C.PANEL2}; color: {C.TEXT}; "
                     f"border: 1px solid {C.BORDER}; border-radius: 3px; padding: 2px 8px; }}"
-                    f"QComboBox QAbstractItemView {{ background: #000d12; color: {C.TEXT}; "
+                    f"QComboBox QAbstractItemView {{ background: {C.PANEL2}; color: {C.TEXT}; "
                     f"selection-background-color: {C.PRI_GHO}; }}")
                 if stored is not None:
                     w.setCurrentText(str(stored))
@@ -4265,7 +4271,7 @@ class PluginSettingsOverlay(QWidget):
             ab.setFont(QFont(FONT_MONO, 8, QFont.Weight.Bold))
             ab.setCursor(Qt.CursorShape.PointingHandCursor)
             ab.setStyleSheet(f"""
-                QPushButton {{ background: #00091a; color: {C.PRI};
+                QPushButton {{ background: {C.PANEL2}; color: {C.PRI};
                     border: 1px solid {C.PRI_DIM}; border-radius: 3px; }}
                 QPushButton:hover {{ background: {C.PRI_GHO}; border-color: {C.PRI}; }}
             """)
@@ -4290,7 +4296,7 @@ class PluginSettingsOverlay(QWidget):
             btn.setStyleSheet(f"QPushButton {{ background: transparent; color: {C.TEXT_MED}; "
                               f"border: 1px solid {C.BORDER}; border-radius: 3px; }}")
 
-    # в”Ђв”Ђ data в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    # ── data ──────────────────────────────────────────────────────────────────
     def _gather(self, ns: str) -> dict:
         out = {}
         for (n, key), w in self._widgets.items():
@@ -4316,7 +4322,7 @@ class PluginSettingsOverlay(QWidget):
                 self._save_ns(ns)
                 lbl = self._status_labels.get(ns)
                 if lbl:
-                    lbl.setText("Saved вњ“")
+                    lbl.setText("Saved ✓")
                     lbl.setStyleSheet(f"color: {C.PRI}; background: transparent;")
 
     def _run_action(self, ns: str):
@@ -4370,7 +4376,7 @@ class RemoteKeyOverlay(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(f"""
             RemoteKeyOverlay {{
-                background: rgba(0, 4, 12, 0.95);
+                background: {C.PANEL};
                 border: 1px solid {C.BORDER_B};
                 border-radius: 14px;
             }}
@@ -4394,12 +4400,12 @@ class RemoteKeyOverlay(QWidget):
             w.setWordWrap(True)
             return w
 
-        lay.addWidget(_lbl("в—€  REMOTE ACCESS", 12, True))
+        lay.addWidget(_lbl("◈  REMOTE ACCESS", 12, True))
         sep = QFrame(); sep.setFrameShape(QFrame.Shape.HLine)
         sep.setStyleSheet(f"color: {C.BORDER}; margin: 1px 0;")
         lay.addWidget(sep)
 
-        # в”Ђв”Ђ QR code в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        # ── QR code ───────────────────────────────────────────────────────────
         self._qr_label = QLabel()
         self._qr_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._qr_label.setFixedSize(176, 176)
@@ -4446,7 +4452,7 @@ class RemoteKeyOverlay(QWidget):
                 "Python, so your phone cannot reach this page. Restart JARVIS "
                 "and accept the Windows prompt, or remove the rules named "
                 + ", ".join(sorted({n for n, _ in _blocked}))
-                + " under Windows Defender Firewall в†’ Inbound Rules.",
+                + " under Windows Defender Firewall → Inbound Rules.",
                 8, color="#f4b942")
             lay.addWidget(warn)
 
@@ -4577,10 +4583,10 @@ class RemoteKeyOverlay(QWidget):
             padding: 6px 4px;
             letter-spacing: 4px;
         """)
-        self._qr_label.setText("вњ“")
+        self._qr_label.setText("✓")
         self._qr_label.setFont(QFont(FONT_MONO, 54, QFont.Weight.Bold))
         self._qr_label.setStyleSheet(
-            "color: #00ff88; background: #001a0d; border-radius: 10px;"
+            f"color: {C.GREEN}; background: {C.PANEL2}; border-radius: 10px;"
         )
         self._timer_lbl.setText("Phone connected — JARVIS ready")
         self._timer_lbl.setStyleSheet(f"color: {C.GREEN}; background: transparent;")
@@ -4664,19 +4670,19 @@ class CommandPalette(QWidget):
 
     def _actions(self):
         return [
-            ("в–Ј  Open mini window", self._owner._toggle_mini_window),
-            ("в—‰  Wake JARVIS now", lambda: self._owner._tap_wake_manual()),
-            ("вЊЃ  Toggle microphone", self._owner._toggle_mute),
+            ("▣  Open mini window", self._owner._toggle_mini_window),
+            ("◉  Wake JARVIS now", lambda: self._owner._tap_wake_manual()),
+            ("⌁  Toggle microphone", self._owner._toggle_mute),
             ("⚙  Personalise assistant", self._owner._open_customize),
-            ("в—€  Audio devices", self._owner._open_audio_devices),
-            ("в–Ј  Engine & providers", self._owner._open_providers),
-            ("в—Њ  Plugins", self._owner._open_plugin_manager),
-            ("в—‰  Memory", self._owner._open_memory_panel),
-            ("вЊ‚  Remote control", self._owner._open_remote),
-            ("в‡Ґ  Explain clipboard", lambda: self._clipboard("Explain this code step by step: {text}")),
-            ("в‰Ў  Summarise clipboard", lambda: self._clipboard("Summarise this: {text}")),
-            ("в†”  Translate clipboard", lambda: self._clipboard("Translate this text to English: {text}")),
-            ("в—·  Plan my day", lambda: self._owner._dispatch_text("Help me plan my day. Ask what is on my list.")),
+            ("◈  Audio devices", self._owner._open_audio_devices),
+            ("▣  Engine & providers", self._owner._open_providers),
+            ("◌  Plugins", self._owner._open_plugin_manager),
+            ("◉  Memory", self._owner._open_memory_panel),
+            ("⌂  Remote control", self._owner._open_remote),
+            ("⇥  Explain clipboard", lambda: self._clipboard("Explain this code step by step: {text}")),
+            ("≡  Summarise clipboard", lambda: self._clipboard("Summarise this: {text}")),
+            ("↔  Translate clipboard", lambda: self._clipboard("Translate this text to English: {text}")),
+            ("◷  Plan my day", lambda: self._owner._dispatch_text("Help me plan my day. Ask what is on my list.")),
         ]
 
     def _clear_rows(self):
@@ -4726,73 +4732,161 @@ class MiniOrb(QWidget):
     """Compact always-on-top JARVIS interface used in place of the main window."""
     def __init__(self, owner):
         # Deliberately parentless: hiding the full window must not hide this one.
-        super().__init__(None, Qt.WindowType.Tool | Qt.WindowType.WindowStaysOnTopHint)
+        super().__init__(
+            None,
+            Qt.WindowType.Tool | Qt.WindowType.WindowStaysOnTopHint
+            | Qt.WindowType.FramelessWindowHint,
+        )
         self.owner = owner
         self._phase = 0.0
+        self._collapsed = False
+        self._last_muted = None
         self.setWindowTitle("JARVIS Mini")
-        self.setMinimumWidth(330)
-        self.setStyleSheet(
-            f"QWidget#MiniOrb {{ background:{C.DARK}; color:{C.TEXT}; "
-            f"border:1px solid {C.PRI_DIM}; border-radius:9px; }}"
-            f"QLineEdit {{ background:{C.PANEL2}; color:{C.WHITE}; "
-            f"border:1px solid {C.BORDER}; border-radius:4px; padding:5px; }}"
-            f"QPushButton {{ background:{C.PANEL}; color:{C.PRI}; "
-            f"border:1px solid {C.BORDER_B}; border-radius:4px; padding:4px 7px; }}"
-            f"QPushButton:hover {{ border-color:{C.PRI}; }}"
-        )
         self.setObjectName("MiniOrb")
         root = QVBoxLayout(self)
-        root.setContentsMargins(9, 7, 9, 8)
-        root.setSpacing(6)
+        self._root_layout = root
+        root.setContentsMargins(6, 5, 6, 5)
+        root.setSpacing(4)
         bar = QHBoxLayout()
+        bar.setSpacing(4)
         self.orb = _MiniOrbPaint(self)
+        self.orb.clicked.connect(self._expand)
         bar.addWidget(self.orb)
-        title = QLabel("JARVIS  В·  MINI")
-        title.setFont(QFont(FONT_MONO, 9, QFont.Weight.Bold))
-        title.setStyleSheet(f"color:{C.PRI}; border:none;")
-        bar.addWidget(title)
+        self.title = _MiniOrbTitle(self)
+        self.title.setText("JARVIS")
+        self.title.setFont(QFont(FONT_MONO, 8, QFont.Weight.Bold))
+        self.title.setToolTip("Drag to move JARVIS Mini")
+        bar.addWidget(self.title)
+        self.status = QLabel("• READY")
+        self.status.setFont(QFont(FONT_MONO, 7))
+        bar.addWidget(self.status)
         bar.addStretch(1)
-        restore = QPushButton("в†— FULL UI")
-        restore.setToolTip("Return to the full JARVIS interface")
-        restore.clicked.connect(owner._restore_full_window)
-        bar.addWidget(restore)
-        close = QPushButton("Г—")
-        close.setFixedWidth(26)
-        close.clicked.connect(self.hide)
-        bar.addWidget(close)
+        self.full_button = self._icon_button(
+            "fullscreen.svg", "Return to the full JARVIS interface",
+            owner._restore_full_window,
+        )
+        bar.addWidget(self.full_button)
+        self.mic = self._icon_button(
+            "microphone.svg", "Mute microphone", owner._toggle_mute)
+        bar.addWidget(self.mic)
+        self.stop_button = self._icon_button(
+            "stop.svg", "Interrupt JARVIS", owner._do_interrupt)
+        bar.addWidget(self.stop_button)
+        self.collapse_button = self._icon_button(
+            "collapse.svg", "Collapse to a small floating orb",
+            lambda: self._set_collapsed(True),
+        )
+        bar.addWidget(self.collapse_button)
+        self.close_button = self._icon_button(
+            "close.svg", "Hide JARVIS Mini", self.hide)
+        bar.addWidget(self.close_button)
         root.addLayout(bar)
+
         row = QHBoxLayout()
+        row.setSpacing(4)
         self.prompt = QLineEdit()
-        self.prompt.setPlaceholderText("Write to JARVIS…")
+        self.prompt.setPlaceholderText("Ask JARVIS…")
         self.prompt.returnPressed.connect(self._send)
+        self.prompt.setFixedHeight(27)
         row.addWidget(self.prompt, 1)
-        send = QPushButton("вћ¤")
-        send.clicked.connect(self._send)
-        row.addWidget(send)
+        self.attach_button = self._icon_button(
+            "attach.svg", "Attach a file", self._attach)
+        row.addWidget(self.attach_button)
+        self.send_button = self._icon_button(
+            "send.svg", "Send message", self._send)
+        row.addWidget(self.send_button)
         root.addLayout(row)
-        controls = QHBoxLayout()
-        attach = QPushButton("пј‹ Attach")
-        attach.clicked.connect(self._attach)
-        controls.addWidget(attach)
-        self.mic = QPushButton()
-        self.mic.clicked.connect(owner._toggle_mute)
-        controls.addWidget(self.mic)
-        interrupt = QPushButton("вњ‹ Stop")
-        interrupt.clicked.connect(owner._do_interrupt)
-        controls.addWidget(interrupt)
-        root.addLayout(controls)
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._tick)
         self._timer.start(40)
         self._tick()
-        self.resize(370, 112)
+        self._apply_theme()
+        self.setFixedSize(292, 68)
         screen = QApplication.primaryScreen().availableGeometry()
         self.move(screen.right() - self.width() - 24, screen.bottom() - self.height() - 48)
+
+    def _icon_button(self, filename: str, hint: str, callback) -> QPushButton:
+        button = QPushButton()
+        icon = QIcon(str(BASE_DIR / "assets" / "icons" / filename))
+        button._mini_original_icon = icon
+        button.setIcon(icon)
+        button.setIconSize(QSize(15, 15))
+        button.setFixedSize(25, 25)
+        button.setCursor(Qt.CursorShape.PointingHandCursor)
+        button.setToolTip(hint)
+        button.setAccessibleName(hint)
+        button.clicked.connect(callback)
+        return button
+
+    def _apply_theme(self):
+        self.setStyleSheet(
+            f"QWidget#MiniOrb {{ background:{C.PANEL}; color:{C.TEXT}; "
+            f"border:1px solid {C.BORDER}; border-radius:8px; }}"
+            f"QLineEdit {{ background:{C.PANEL2}; color:{C.TEXT}; "
+            f"border:1px solid {C.BORDER}; border-radius:5px; padding:3px 6px; }}"
+            f"QLineEdit:focus {{ border-color:{C.PRI_DIM}; }}"
+            f"QPushButton {{ background:{C.PANEL2}; color:{C.PRI}; "
+            f"border:1px solid {C.BORDER}; border-radius:5px; padding:0; }}"
+            f"QPushButton:hover {{ background:{C.PRI_GHO}; border-color:{C.PRI_DIM}; }}"
+        )
+        self.title.setStyleSheet(f"color:{C.PRI}; border:none; background:transparent;")
+        self.status.setStyleSheet(f"color:{C.TEXT_DIM}; border:none; background:transparent;")
+        for button in self.findChildren(QPushButton):
+            original = button._mini_original_icon
+            button.setIcon(_tint_icon(original, C.PRI) if C.PANEL == "#ffffff" else original)
+        self._update_mic_button(force=True)
+
+    def _update_mic_button(self, force: bool = False):
+        muted = self.owner._muted
+        if muted == self._last_muted and not force:
+            return
+        self._last_muted = muted
+        icon_name = "microphone-muted.svg" if muted else "microphone.svg"
+        icon = QIcon(str(BASE_DIR / "assets" / "icons" / icon_name))
+        self.mic._mini_original_icon = icon
+        self.mic.setIcon(_tint_icon(icon, C.MUTED_C if muted else C.GREEN)
+                         if C.PANEL == "#ffffff" else icon)
+        self.mic.setToolTip(
+            "Unmute microphone" if muted else "Mute microphone")
+        self.mic.setAccessibleName(self.mic.toolTip())
+
+    def _set_collapsed(self, collapsed: bool):
+        if self._collapsed == collapsed:
+            return
+        bottom_right = self.frameGeometry().bottomRight()
+        self._collapsed = collapsed
+        for widget in (
+            self.title, self.status, self.full_button, self.mic,
+            self.stop_button, self.collapse_button, self.close_button,
+            self.prompt, self.attach_button, self.send_button,
+        ):
+            widget.setVisible(not collapsed)
+        if collapsed:
+            self.orb.setFixedSize(30, 30)
+            self.orb.setToolTip("Open JARVIS Mini")
+            self._root_layout.setContentsMargins(5, 5, 5, 5)
+            self._root_layout.setSpacing(0)
+            self.setFixedSize(42, 42)
+        else:
+            self.orb.setFixedSize(22, 22)
+            self.orb.setToolTip("JARVIS is ready")
+            self._root_layout.setContentsMargins(6, 5, 6, 5)
+            self._root_layout.setSpacing(4)
+            self.setFixedSize(292, 68)
+        self.move(bottom_right.x() - self.width() + 1,
+                  bottom_right.y() - self.height() + 1)
+
+    def _expand(self):
+        if self._collapsed:
+            self._set_collapsed(False)
+            self.prompt.setFocus()
 
     def _tick(self):
         self._phase = (self._phase + 0.08) % (math.pi * 2)
         self.orb.update()
-        self.mic.setText("🎙 Mic on" if not self.owner._muted else "🔇 Mic off")
+        self._update_mic_button()
+        state = getattr(getattr(self.owner, "hud", None), "state", "READY")
+        self.status.setText(f"• {state}")
 
     def _send(self):
         text = self.prompt.text().strip()
@@ -4805,11 +4899,41 @@ class MiniOrb(QWidget):
         if path:
             self.owner._on_file_selected(path)
 
+
+class _MiniOrbTitle(QLabel):
+    def __init__(self, owner):
+        super().__init__(owner)
+        self._owner = owner
+        self._drag_offset = None
+        self.setCursor(Qt.CursorShape.SizeAllCursor)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._drag_offset = event.globalPosition().toPoint() - self._owner.frameGeometry().topLeft()
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if self._drag_offset is not None and event.buttons() & Qt.MouseButton.LeftButton:
+            self._owner.move(event.globalPosition().toPoint() - self._drag_offset)
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        self._drag_offset = None
+        super().mouseReleaseEvent(event)
+
+
 class _MiniOrbPaint(QWidget):
+    clicked = pyqtSignal()
+
     def __init__(self, mini):
         super().__init__(mini)
         self.mini = mini
-        self.setFixedSize(24, 24)
+        self.setFixedSize(22, 22)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
 
     def paintEvent(self, event):
         p = QPainter(self)
@@ -4823,6 +4947,13 @@ class _MiniOrbPaint(QWidget):
         p.setBrush(QColor(C.GREEN))
         p.drawEllipse(center, 3.2, 3.2)
         p.end()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.clicked.emit()
+            event.accept()
+            return
+        super().mousePressEvent(event)
 
 
 class ContentReaderWindow(QWidget):
@@ -4844,7 +4975,7 @@ class ContentReaderWindow(QWidget):
         self._title.setFont(QFont(FONT_UI, 13, QFont.Weight.Bold))
         self._title.setStyleSheet(f"color: {C.PRI}; background: transparent;")
         head.addWidget(self._title, 1)
-        dock = QPushButton("в†™  RETURN TO JARVIS")
+        dock = QPushButton("↙  RETURN TO JARVIS")
         dock.clicked.connect(owner._reattach_content)
         head.addWidget(dock)
         root.addLayout(head)
@@ -5003,21 +5134,36 @@ class _TerminalBridge(QObject):
     """Private Qt WebChannel bridge between xterm.js and the local PTY."""
     output = pyqtSignal(str)
 
-    def __init__(self, owner):
+    def __init__(self, owner, session_id: str):
         super().__init__(owner)
         self._owner = owner
+        self._session_id = session_id
 
     @pyqtSlot(str)
     def send(self, data: str):
-        self._owner._terminal_write(data)
+        self._owner._terminal_write(data, self._session_id)
 
     @pyqtSlot(int, int)
     def resize(self, columns: int, rows: int):
-        self._owner._terminal_resize(columns, rows)
+        self._owner._terminal_resize(columns, rows, self._session_id)
 
     @pyqtSlot()
     def ready(self):
-        self._owner._terminal_client_ready()
+        self._owner._terminal_client_ready(self._session_id)
+
+
+@dataclass
+class _TerminalSession:
+    session_id: str
+    view: QWebEngineView
+    bridge: _TerminalBridge
+    channel: QWebChannel
+    pty: object | None = None
+    restart_pending: bool = False
+    closing: bool = False
+    client_is_ready: bool = False
+    output_buffer: str = ""
+    pending_output: str = ""
 
 
 class MainWindow(QMainWindow):
@@ -5027,7 +5173,7 @@ class MainWindow(QMainWindow):
     _reconfig_sig   = pyqtSignal()           # trigger setup overlay from any thread
     _camera_sig     = pyqtSignal(bytes)      # show camera frame preview (small overlay)
     _cam_stream_sig = pyqtSignal(bool)       # True=start live stream, False=stop
-    _cam_frame_sig  = pyqtSignal(bytes)      # live camera frame в†’ HUD area
+    _cam_frame_sig  = pyqtSignal(bytes)      # live camera frame → HUD area
     _video_open_sig  = pyqtSignal(str, str, bool, str)  # video, title, muted, audio
     _wake_btns_sig   = pyqtSignal()          # wake state resolved off-thread
     _video_close_sig = pyqtSignal()
@@ -5058,11 +5204,9 @@ class MainWindow(QMainWindow):
         self._reading_saved_layout = None
         self._side_restore_width = {0: _LEFT_W, 2: _RIGHT_W}
         self._workspace_split_sizes = None
-        self._terminal_pty = None
-        self._terminal_restart_pending = False
-        self._terminal_client_is_ready = False
-        self._terminal_output_buffer = ""
-        self._terminal_pending_output = ""
+        self._terminal_sessions: dict[str, _TerminalSession] = {}
+        self._terminal_active_id = ""
+        self._terminal_sequence = 0
         self._terminal_poll_timer = QTimer(self)
         self._terminal_poll_timer.setInterval(25)
         self._terminal_poll_timer.timeout.connect(self._poll_terminal_output)
@@ -5129,18 +5273,18 @@ class MainWindow(QMainWindow):
 
         # Live camera container — replaces HUD when camera stream is active
         _cam_cont = QWidget()
-        _cam_cont.setStyleSheet("background: #000308;")
+        _cam_cont.setStyleSheet(f"background: {C.BG};")
         _cam_v = QVBoxLayout(_cam_cont)
         _cam_v.setContentsMargins(0, 0, 0, 0)
         _cam_v.setSpacing(0)
         _cam_hdr = QHBoxLayout()
         _cam_hdr.setContentsMargins(8, 5, 8, 5)
-        _cam_title = QLabel("в—€  CAMERA FEED")
+        _cam_title = QLabel("◈  CAMERA FEED")
         _cam_title.setFont(QFont(FONT_MONO, 8, QFont.Weight.Bold))
         _cam_title.setStyleSheet(f"color: {C.PRI}; background: transparent;")
         _cam_hdr.addWidget(_cam_title)
         _cam_hdr.addStretch()
-        _cam_x = QPushButton("вњ•  CLOSE")
+        _cam_x = QPushButton("✕  CLOSE")
         _cam_x.setFont(QFont(FONT_MONO, 8, QFont.Weight.Bold))
         _cam_x.setCursor(Qt.CursorShape.PointingHandCursor)
         _cam_x.setStyleSheet(f"""
@@ -5161,7 +5305,7 @@ class MainWindow(QMainWindow):
         )
         _cam_v.addWidget(self._cam_live_lbl, stretch=1)
 
-        # в”Ђв”Ђ Video surface в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        # ── Video surface ────────────────────────────────────────────────
         # Built exactly like the camera page above and stacked beside it,
         # because it is the same idea: something takes the centre of the HUD
         # for a while and then gives it back. Sharing the stack rather than
@@ -5180,7 +5324,7 @@ class MainWindow(QMainWindow):
         _vid_v.setSpacing(4)
 
         _vid_hdr = QHBoxLayout()
-        self._video_title = QLabel("в–¶  VIDEO")
+        self._video_title = QLabel("▶  VIDEO")
         self._video_title.setFont(QFont(FONT_MONO, 9, QFont.Weight.Bold))
         self._video_title.setText("VIDEO")
         self._video_title.setStyleSheet(f"color: {C.PRI}; background: transparent;")
@@ -5212,7 +5356,7 @@ class MainWindow(QMainWindow):
         self._video_mute_btn.clicked.connect(self._toggle_video_mute)
         _vid_hdr.addWidget(self._video_mute_btn)
 
-        _vid_x = _vid_btn("вњ•  CLOSE")
+        _vid_x = _vid_btn("✕  CLOSE")
         _vid_x.setText("CLOSE")
         _vid_x.setIcon(_accent_icon(BASE_DIR / "assets" / "icons" / "close.svg", C.PRI))
         _vid_x.setIconSize(QSize(12, 12))
@@ -5295,9 +5439,9 @@ class MainWindow(QMainWindow):
         controls_row.setContentsMargins(7, 4, 7, 4)
         controls_row.setSpacing(6)
 
-        self._video_back_btn = _vid_btn("в€’10")
+        self._video_back_btn = _vid_btn("−10")
         self._video_back_btn.setFixedSize(38, 26)
-        self._video_back_btn.setToolTip("Back 10 seconds (в†ђ)")
+        self._video_back_btn.setToolTip("Back 10 seconds (←)")
         self._video_back_btn.setText("")
         self._video_back_btn.setFixedSize(28, 26)
         self._video_back_btn.setIcon(_accent_icon(BASE_DIR / "assets" / "icons" / "rewind.svg", C.PRI))
@@ -5306,7 +5450,7 @@ class MainWindow(QMainWindow):
         self._video_back_btn.clicked.connect(lambda: self._seek_video(-10_000))
         controls_row.addWidget(self._video_back_btn)
 
-        self._video_play_btn = _vid_btn("в–¶  PLAY")
+        self._video_play_btn = _vid_btn("▶  PLAY")
         self._video_play_btn.setFixedSize(82, 26)
         self._video_play_btn.setToolTip("Play or pause (Space)")
         self._video_play_btn.setText("")
@@ -5318,7 +5462,7 @@ class MainWindow(QMainWindow):
 
         self._video_forward_btn = _vid_btn("+10")
         self._video_forward_btn.setFixedSize(38, 26)
-        self._video_forward_btn.setToolTip("Forward 10 seconds (в†’)")
+        self._video_forward_btn.setToolTip("Forward 10 seconds (→)")
         self._video_forward_btn.setText("")
         self._video_forward_btn.setFixedSize(28, 26)
         self._video_forward_btn.setIcon(_accent_icon(BASE_DIR / "assets" / "icons" / "fast-forward.svg", C.PRI))
@@ -5538,14 +5682,14 @@ class MainWindow(QMainWindow):
             icon_path = BASE_DIR / "assets" / "icons" / filename
             button.setText("")
             button.setIcon(QIcon(str(icon_path)))
-            button.setIconSize(QSize(14, 14))
+            button.setIconSize(QSize(16, 16))
             button.setToolTip(hint)
             button.setAccessibleName(hint)
-            button.setFixedSize(22, 22)
+            button.setFixedSize(28, 28)
 
         # Keep every icon monochrome in the white preset, including icons
         # loaded from assets whose SVG strokes use a fixed green accent.
-        monochrome = C.PRI.lower() == "#f2f5f7"
+        monochrome = C.PANEL.lower() == "#ffffff"
         for widget in QApplication.allWidgets():
             if not isinstance(widget, QPushButton) or widget.icon().isNull():
                 continue
@@ -5593,7 +5737,7 @@ class MainWindow(QMainWindow):
         for button in (self._drawer_btn, self._ctrl_btn, self._mini_btn,
                        self._left_toggle_btn, self._right_toggle_btn,
                        self._content_toggle_btn, self._terminal_toggle_btn):
-            # These compact header buttons are only 26 px wide. The shared
+            # These compact header buttons are only 28 px wide. The shared
             # ghost style's 12 px side padding consumed the whole text area.
             put(button, _ghost_qss() + "QPushButton { padding: 0px; }")
 
@@ -5614,7 +5758,13 @@ class MainWindow(QMainWindow):
         put(self._history_list, _inset_qss("QListWidget"))
         put(self._task_list, _inset_qss("QListWidget"))
         put(self._log, _inset_qss("QTextEdit"))
-        put(self._terminal_view, _inset_qss("QWebEngineView"))
+        put(self._terminal_tabs, _tabs_qss())
+        terminal_theme = json.dumps(self._terminal_theme(), separators=(",", ":"))
+        for session in self._terminal_sessions.values():
+            session.view.setStyleSheet(
+                f"background:{C.DARK}; border:1px solid {C.BORDER}; border-radius:5px;")
+            session.view.page().runJavaScript(
+                f"window.setTerminalTheme && window.setTerminalTheme({terminal_theme})")
         for field in (self._input, self._task_input):
             put(field, _input_qss())
         for button in self._right_panel.findChildren(QPushButton):
@@ -5656,6 +5806,8 @@ class MainWindow(QMainWindow):
             button.setFixedSize(25, 25)
         self._sync_reader_content()
         self._refresh_chat()
+        if self._mini_window is not None:
+            self._mini_window._apply_theme()
 
     def _show_camera_frame(self, img_bytes: bytes):
         """Slot — display camera preview overlay (main thread)."""
@@ -5746,14 +5898,14 @@ class MainWindow(QMainWindow):
         # A video and the live camera cannot share the centre of the HUD.
         self._cam_stop.set()
 
-        self._video_title.setText(f"в–¶  {(title or 'VIDEO')[:44].upper()}")
+        self._video_title.setText(f"▶  {(title or 'VIDEO')[:44].upper()}")
         self._video_split = bool(audio_source)
         self._video_seeking = False
         self._video_seek_slider.setRange(0, 0)
         self._video_seek_slider.setValue(0)
         self._video_seek_slider.setEnabled(False)
         self._video_time_lbl.setText("00:00 / 00:00")
-        self._video_play_btn.setText("в…Ў  PAUSE")
+        self._video_play_btn.setText("Ⅱ  PAUSE")
         self._set_video_muted(bool(muted))
 
         url = (QUrl.fromLocalFile(source) if Path(source).exists()
@@ -5825,7 +5977,7 @@ class MainWindow(QMainWindow):
     def _sync_video_play_btn(self, *_args) -> None:
         playing = bool(self._video_player and self._video_player.playbackState()
                        == QMediaPlayer.PlaybackState.PlayingState)
-        self._video_play_btn.setText("в…Ў  PAUSE" if playing else "в–¶  PLAY")
+        self._video_play_btn.setText("Ⅱ  PAUSE" if playing else "▶  PLAY")
         self._video_play_btn.setToolTip("Pause (Space)" if playing
                                         else "Resume playback (Space)")
         self._video_play_btn.setText("")
@@ -5974,7 +6126,7 @@ class MainWindow(QMainWindow):
     @staticmethod
     def _build_jarvis_icon(out_path: Path) -> bool:
         """
-        Render a JARVIS arc-reactor icon at 4Г— resolution and downsample
+        Render a JARVIS arc-reactor icon at 4× resolution and downsample
         for crisp results at all sizes. Saves a multi-res .ico to out_path.
         Returns True on success.
         """
@@ -5993,26 +6145,26 @@ class MainWindow(QMainWindow):
         WHITE  = (220, 240, 255)
 
         def _render(sz: int) -> PIL.Image.Image:
-            S  = sz * 4                     # draw at 4Г— then downscale
+            S  = sz * 4                     # draw at 4× then downscale
             img = PIL.Image.new("RGBA", (S, S), (0, 0, 0, 0))
             d   = PIL.ImageDraw.Draw(img)
             cx = cy = S // 2
 
-            # в”Ђв”Ђ filled background circle в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+            # ── filled background circle ──────────────────────────────────
             R = S // 2 - 2
             d.ellipse([cx-R, cy-R, cx+R, cy+R], fill=(*DARK, 255))
 
-            # в”Ђв”Ђ outer border ring в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+            # ── outer border ring ─────────────────────────────────────────
             lw = max(2, S // 40)
             d.ellipse([cx-R, cy-R, cx+R, cy+R],
                       outline=(*CYAN, 220), width=lw)
 
-            # в”Ђв”Ђ mid decorative ring в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+            # ── mid decorative ring ───────────────────────────────────────
             R2 = int(R * 0.72)
             d.ellipse([cx-R2, cy-R2, cx+R2, cy+R2],
                       outline=(*DIM, 180), width=max(1, lw // 2))
 
-            # в”Ђв”Ђ 6 radial spokes (hex bolt) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+            # ── 6 radial spokes (hex bolt) ────────────────────────────────
             R_inner = int(R * 0.30)
             R_outer = int(R * 0.62)
             spoke_w = max(1, S // 80)
@@ -6024,7 +6176,7 @@ class MainWindow(QMainWindow):
                 y2 = cy + int(R_outer * math.sin(angle))
                 d.line([x1, y1, x2, y2], fill=(*GLOW, 200), width=spoke_w)
 
-            # в”Ђв”Ђ 6 tick marks on outer ring в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+            # ── 6 tick marks on outer ring ────────────────────────────────
             for i in range(6):
                 angle = math.radians(i * 60)
                 for dr in range(lw * 2):
@@ -6035,12 +6187,12 @@ class MainWindow(QMainWindow):
                         fill=(*WHITE, 220),
                     )
 
-            # в”Ђв”Ђ inner glowing ring в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+            # ── inner glowing ring ────────────────────────────────────────
             Ri = int(R * 0.26)
             d.ellipse([cx-Ri, cy-Ri, cx+Ri, cy+Ri],
                       outline=(*CYAN, 255), width=max(2, lw))
 
-            # в”Ђв”Ђ bright glow soft blur applied before core в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+            # ── bright glow soft blur applied before core ─────────────────
             # (draw a slightly larger cyan circle on a separate layer)
             glow_layer = PIL.Image.new("RGBA", (S, S), (0, 0, 0, 0))
             gd = PIL.ImageDraw.Draw(glow_layer)
@@ -6051,10 +6203,10 @@ class MainWindow(QMainWindow):
             img = PIL.Image.alpha_composite(img, glow_layer)
             d   = PIL.ImageDraw.Draw(img)
 
-            # в”Ђв”Ђ core dot в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+            # ── core dot ──────────────────────────────────────────────────
             d.ellipse([cx-Rc, cy-Rc, cx+Rc, cy+Rc], fill=(*WHITE, 255))
 
-            # в”Ђв”Ђ downscale to target size в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+            # ── downscale to target size ──────────────────────────────────
             return img.resize((sz, sz), PIL.Image.LANCZOS)
 
         try:
@@ -6068,7 +6220,7 @@ class MainWindow(QMainWindow):
             )
             return True
         except Exception as e:
-            print(f"[Shortcut] ?пёЏ  Icon generation failed: {e}")
+            print(f"[Shortcut] ?️  Icon generation failed: {e}")
             return False
 
     @staticmethod
@@ -6079,7 +6231,7 @@ class MainWindow(QMainWindow):
         Tries win32com (pywin32) first; falls back to wscript.exe + VBScript.
         wscript.exe is a GUI-mode host — it never opens a console window.
         """
-        # в”Ђв”Ђ Option 1: pywin32 (pure Python COM, zero subprocess) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        # ── Option 1: pywin32 (pure Python COM, zero subprocess) ──────────
         try:
             from win32com.client import Dispatch   # type: ignore
             sh = Dispatch("WScript.Shell")
@@ -6094,7 +6246,7 @@ class MainWindow(QMainWindow):
         except ImportError:
             pass
 
-        # в”Ђв”Ђ Option 2: wscript.exe + VBScript (always available on Windows,
+        # ── Option 2: wscript.exe + VBScript (always available on Windows,
         #    GUI-mode executable — never opens a console window) ────────────
         vbs = "\n".join([
             'Set ws = CreateObject("WScript.Shell")',
@@ -6138,7 +6290,7 @@ class MainWindow(QMainWindow):
 
         if _os == "Windows":
             # ── 1) SHGetKnownFolderPath(FOLDERID_Desktop) — the canonical
-            #       answer; follows OneDrive redirection. No dependencies. в”Ђв”Ђ
+            #       answer; follows OneDrive redirection. No dependencies. ──
             try:
                 import ctypes
                 from ctypes import wintypes
@@ -6163,7 +6315,7 @@ class MainWindow(QMainWindow):
             except Exception:
                 pass
 
-            # в”Ђв”Ђ 2) Registry: User Shell Folders (may contain %VARS%) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+            # ── 2) Registry: User Shell Folders (may contain %VARS%) ──────
             try:
                 import winreg
                 with winreg.OpenKey(
@@ -6221,7 +6373,7 @@ class MainWindow(QMainWindow):
         try:
             _os = platform.system()
 
-            # в”Ђв”Ђ Windows в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+            # ── Windows ───────────────────────────────────────────────────────
             if _os == "Windows":
                 pythonw  = python.parent / "pythonw.exe"
                 target   = str(pythonw if pythonw.exists() else python)
@@ -6284,7 +6436,7 @@ class MainWindow(QMainWindow):
 
             # ── Linux — .desktop file (Terminal=false, no console) ────────────
             else:
-                # Export .ico в†’ .png for better desktop integration
+                # Export .ico → .png for better desktop integration
                 png_path = ico_path.with_suffix(".png")
                 if not png_path.exists() and ico_path.exists():
                     try:
@@ -6392,7 +6544,7 @@ class MainWindow(QMainWindow):
         tmp = snap["tmp"]
         if tmp >= 0:
             tmp_pct = min(100, (tmp / 100) * 100)
-            self._bar_tmp.set_value(tmp_pct, f"{tmp:.0f}В°C")
+            self._bar_tmp.set_value(tmp_pct, f"{tmp:.0f}°C")
         else:
             self._bar_tmp.set_value(0, "N/A")
 
@@ -6424,7 +6576,7 @@ class MainWindow(QMainWindow):
         nav.setSpacing(5)
 
         self._drawer_btn = QPushButton("⚙")
-        self._drawer_btn.setFixedSize(22, 22)
+        self._drawer_btn.setFixedSize(28, 28)
         self._drawer_btn.setFont(QFont(FONT_MONO, 11))
         self._drawer_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._drawer_btn.setToolTip("Settings & Controls")
@@ -6448,7 +6600,7 @@ class MainWindow(QMainWindow):
         # day. Separating them by that — setup behind ⚙, everyday behind 🎛 —
         # is what makes each list short enough to read at a glance.
         self._ctrl_btn = QPushButton("🎛")
-        self._ctrl_btn.setFixedSize(22, 22)
+        self._ctrl_btn.setFixedSize(28, 28)
         self._ctrl_btn.setFont(QFont(FONT_MONO, 11))
         self._ctrl_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._ctrl_btn.setToolTip("Controls — the everyday switches")
@@ -6458,8 +6610,8 @@ class MainWindow(QMainWindow):
         nav.addSpacing(4)
         nav.addWidget(self._ctrl_btn)
 
-        self._mini_btn = QPushButton("в—‰")
-        self._mini_btn.setFixedSize(22, 22)
+        self._mini_btn = QPushButton("◉")
+        self._mini_btn.setFixedSize(28, 28)
         self._mini_btn.setToolTip("Open the floating JARVIS mini window  [Ctrl+Shift+Space]")
         self._mini_btn.setStyleSheet(self._drawer_btn.styleSheet())
         self._mini_btn.clicked.connect(self._toggle_mini_window)
@@ -6467,8 +6619,8 @@ class MainWindow(QMainWindow):
 
         self._left_toggle_btn = QPushButton()
         self._left_toggle_btn.setIcon(QIcon(str(BASE_DIR / "assets" / "icons" / "system.svg")))
-        self._left_toggle_btn.setIconSize(QSize(14, 14))
-        self._left_toggle_btn.setFixedSize(22, 22)
+        self._left_toggle_btn.setIconSize(QSize(16, 16))
+        self._left_toggle_btn.setFixedSize(28, 28)
         self._left_toggle_btn.setFont(QFont(FONT_UI, 8, QFont.Weight.Bold))
         self._left_toggle_btn.setCheckable(True)
         self._left_toggle_btn.setChecked(True)
@@ -6480,8 +6632,8 @@ class MainWindow(QMainWindow):
 
         self._right_toggle_btn = QPushButton()
         self._right_toggle_btn.setIcon(QIcon(str(BASE_DIR / "assets" / "icons" / "chat.svg")))
-        self._right_toggle_btn.setIconSize(QSize(14, 14))
-        self._right_toggle_btn.setFixedSize(22, 22)
+        self._right_toggle_btn.setIconSize(QSize(16, 16))
+        self._right_toggle_btn.setFixedSize(28, 28)
         self._right_toggle_btn.setFont(QFont(FONT_UI, 8, QFont.Weight.Bold))
         self._right_toggle_btn.setCheckable(True)
         self._right_toggle_btn.setChecked(True)
@@ -6492,8 +6644,8 @@ class MainWindow(QMainWindow):
 
         self._content_toggle_btn = QPushButton()
         self._content_toggle_btn.setIcon(QIcon(str(BASE_DIR / "assets" / "icons" / "results.svg")))
-        self._content_toggle_btn.setIconSize(QSize(14, 14))
-        self._content_toggle_btn.setFixedSize(22, 22)
+        self._content_toggle_btn.setIconSize(QSize(16, 16))
+        self._content_toggle_btn.setFixedSize(28, 28)
         self._content_toggle_btn.setCheckable(True)
         self._content_toggle_btn.setToolTip("Show or hide the lower results panel")
         self._content_toggle_btn.setStyleSheet(self._drawer_btn.styleSheet())
@@ -6502,8 +6654,8 @@ class MainWindow(QMainWindow):
 
         self._terminal_toggle_btn = QPushButton()
         self._terminal_toggle_btn.setIcon(QIcon(str(BASE_DIR / "assets" / "icons" / "terminal.svg")))
-        self._terminal_toggle_btn.setIconSize(QSize(14, 14))
-        self._terminal_toggle_btn.setFixedSize(22, 22)
+        self._terminal_toggle_btn.setIconSize(QSize(16, 16))
+        self._terminal_toggle_btn.setFixedSize(28, 28)
         self._terminal_toggle_btn.setCheckable(True)
         self._terminal_toggle_btn.setToolTip("Show or hide the terminal")
         self._terminal_toggle_btn.setStyleSheet(self._drawer_btn.styleSheet())
@@ -6646,7 +6798,7 @@ class MainWindow(QMainWindow):
         lay.setSpacing(5)
 
         def _sec(txt):
-            l = QLabel(f"в–ё {txt}")
+            l = QLabel(f"▸ {txt}")
             l.setFont(QFont(FONT_MONO, 7, QFont.Weight.Bold))
             l.setStyleSheet(f"color: {C.TEXT_MED}; background: transparent;")
             return l
@@ -6845,7 +6997,7 @@ class MainWindow(QMainWindow):
         """Floating overlay panel shown when the ⚙ header button is toggled."""
         _BTN_STYLE_PRI = f"""
             QPushButton {{
-                background: #00091a; color: {C.PRI};
+                background: {C.PANEL2}; color: {C.PRI};
                 border: 1px solid {C.PRI_DIM}; border-radius: 3px;
                 text-align: left; padding: 0 8px;
             }}
@@ -6880,7 +7032,7 @@ class MainWindow(QMainWindow):
         lay.setContentsMargins(10, 8, 10, 10)
         lay.setSpacing(5)
 
-        hdr = QLabel("в—€ SETUP")
+        hdr = QLabel("◈ SETUP")
         hdr.setFont(QFont(FONT_MONO, 7, QFont.Weight.Bold))
         hdr.setStyleSheet(f"color: {C.PRI_DIM}; background: transparent; "
                           f"border-bottom: 1px solid {C.BORDER}; padding-bottom: 4px;")
@@ -6994,7 +7146,7 @@ class MainWindow(QMainWindow):
         lay.setContentsMargins(10, 8, 10, 10)
         lay.setSpacing(5)
 
-        hdr = QLabel("в—€ CONTROLS")
+        hdr = QLabel("◈ CONTROLS")
         hdr.setFont(QFont(FONT_MONO, 7, QFont.Weight.Bold))
         hdr.setStyleSheet(f"color: {C.PRI_DIM}; background: transparent; "
                           f"border-bottom: 1px solid {C.BORDER}; padding-bottom: 4px;")
@@ -7009,7 +7161,7 @@ class MainWindow(QMainWindow):
             lay.addWidget(button)
             return button
 
-        fs_btn = _row(QPushButton("в›¶  FULLSCREEN  [F11]"), self._BTN_DIM)
+        fs_btn = _row(QPushButton("⛶  FULLSCREEN  [F11]"), self._BTN_DIM)
         fs_btn.clicked.connect(self._toggle_fullscreen)
 
         self._brief_btn = _row(QPushButton())
@@ -7133,56 +7285,71 @@ class MainWindow(QMainWindow):
         self._terminal_cwd.setStyleSheet(f"color:{C.TEXT_DIM}; background:transparent;")
         header.addWidget(self._terminal_cwd)
         header.addStretch(1)
-        interrupt_btn = QPushButton()
-        interrupt_btn.setIcon(QIcon(str(BASE_DIR / "assets" / "icons" / "stop.svg")))
-        interrupt_btn.setIconSize(QSize(13, 13))
-        interrupt_btn.setFixedSize(23, 23)
-        interrupt_btn.setToolTip("Interrupt running command (Ctrl+C)")
-        interrupt_btn.clicked.connect(self._interrupt_terminal)
-        header.addWidget(interrupt_btn)
-        new_btn = QPushButton()
-        new_btn.setIcon(QIcon(str(BASE_DIR / "assets" / "icons" / "terminal-new.svg")))
-        new_btn.setIconSize(QSize(13, 13))
-        new_btn.setFixedSize(23, 23)
-        new_btn.setToolTip("New terminal (restart shell)")
-        new_btn.clicked.connect(self._restart_terminal)
-        header.addWidget(new_btn)
-        clear_btn = QPushButton()
-        clear_btn.setIcon(QIcon(str(BASE_DIR / "assets" / "icons" / "clear.svg")))
-        clear_btn.setIconSize(QSize(13, 13))
-        clear_btn.setFixedSize(23, 23)
-        clear_btn.setToolTip("Clear terminal output")
-        clear_btn.clicked.connect(lambda: self._terminal_view.page().runJavaScript(
-            "window.clearTerminal && window.clearTerminal()"))
-        header.addWidget(clear_btn)
-        close_btn = QPushButton()
-        close_btn.setIcon(QIcon(str(BASE_DIR / "assets" / "icons" / "close.svg")))
-        close_btn.setIconSize(QSize(13, 13))
-        close_btn.setFixedSize(23, 23)
-        close_btn.setToolTip("Hide terminal")
-        close_btn.clicked.connect(self._toggle_terminal_panel)
-        header.addWidget(close_btn)
-        layout.addLayout(header)
 
-        self._terminal_view = QWebEngineView()
-        self._terminal_view.setMinimumSize(0, 0)
-        self._terminal_view.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
-        )
-        self._terminal_view.setContextMenuPolicy(Qt.ContextMenuPolicy.NoContextMenu)
-        self._terminal_view.setStyleSheet(
-            f"background:{C.DARK}; border:1px solid {C.BORDER}; border-radius:5px;"
-        )
-        self._terminal_bridge = _TerminalBridge(self)
-        self._terminal_channel = QWebChannel(self._terminal_view.page())
-        self._terminal_channel.registerObject("bridge", self._terminal_bridge)
-        self._terminal_view.page().setWebChannel(self._terminal_channel)
-        layout.addWidget(self._terminal_view, 1)
+        def terminal_button(icon: str, hint: str, callback) -> QPushButton:
+            button = QPushButton()
+            button.setIcon(QIcon(str(BASE_DIR / "assets" / "icons" / icon)))
+            button.setIconSize(QSize(15, 15))
+            button.setFixedSize(28, 28)
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
+            button.setToolTip(hint)
+            button.setAccessibleName(hint)
+            button.clicked.connect(callback)
+            header.addWidget(button)
+            return button
+
+        terminal_button("terminal-new.svg", "New terminal", self._new_terminal)
+        terminal_button("stop.svg", "Interrupt command (Ctrl+C)", self._interrupt_terminal)
+        terminal_button("refresh.svg", "Restart this terminal", self._restart_terminal)
+        terminal_button("clear.svg", "Clear terminal output", self._clear_terminal)
+        terminal_button("close.svg", "Hide terminal", self._toggle_terminal_panel)
+
+        layout.addLayout(header)
+        self._terminal_tabs = QTabWidget()
+        self._terminal_tabs.setDocumentMode(True)
+        self._terminal_tabs.setTabsClosable(True)
+        self._terminal_tabs.setMovable(True)
+        self._terminal_tabs.currentChanged.connect(self._activate_terminal_session)
+        self._terminal_tabs.tabCloseRequested.connect(self._close_terminal_session)
+        layout.addWidget(self._terminal_tabs, 1)
+        self._add_terminal_session()
+        return panel
+
+    def _terminal_theme(self) -> dict[str, str]:
+        light = C.PANEL.lower() == "#ffffff"
+        if light:
+            colors = {
+                "black": "#25313b", "red": "#b42318", "green": "#137333",
+                "yellow": "#815b00", "blue": "#175caa", "magenta": "#7a3e9d",
+                "cyan": "#087e8b", "white": "#f0f3f6",
+                "brightBlack": "#52616d", "brightRed": "#d92d20",
+                "brightGreen": "#16803c", "brightYellow": "#946b00",
+                "brightBlue": "#2672c8", "brightMagenta": "#8f50b5",
+                "brightCyan": "#098b9a", "brightWhite": "#ffffff",
+            }
+        else:
+            colors = {
+                "black": "#07100b", "red": "#ff4567", "green": "#00d979",
+                "yellow": "#c9e800", "blue": "#5da9ff", "magenta": "#d579ff",
+                "cyan": "#42e4d2", "white": "#c8ded2",
+                "brightBlack": "#52665a", "brightRed": "#ff7188",
+                "brightGreen": "#55ffa3", "brightYellow": "#eaff50",
+                "brightBlue": "#82bdff", "brightMagenta": "#e3a0ff",
+                "brightCyan": "#80fff0", "brightWhite": "#f1fff6",
+            }
+        return {
+            "background": C.DARK,
+            "foreground": C.TEXT,
+            "cursor": C.PRI,
+            "selectionBackground": C.PRI_GHO,
+            **colors,
+        }
+
+    def _terminal_html(self) -> str:
         terminal_html = """<!doctype html><html><head><meta charset="utf-8">
 <link rel="stylesheet" href="xterm.css">
 <style>html,body,#terminal{width:100%;height:100%;margin:0;overflow:hidden}
-body{background:__DARK__}#terminal{box-sizing:border-box;padding:6px 8px}.xterm{height:100%}
-/* Hide Chromium and xterm scrollbars; mouse-wheel scrollback remains available. */
+body{background:__DARK__}#terminal{box-sizing:border-box;padding:6px 8px;background:__DARK__}.xterm{height:100%}
 *{scrollbar-width:none!important;scrollbar-color:transparent transparent!important}
 ::-webkit-scrollbar{display:none!important;width:0!important;height:0!important}
 .xterm-viewport{scrollbar-width:none!important}
@@ -7191,27 +7358,109 @@ body{background:__DARK__}#terminal{box-sizing:border-box;padding:6px 8px}.xterm{
 <script src="xterm.js"></script><script src="qrc:///qtwebchannel/qwebchannel.js"></script>
 <script src="addon-fit.js"></script><script>
 const term=new Terminal({cursorBlink:true,convertEol:true,fontSize:13,scrollback:3000,
- fontFamily:'Cascadia Code, Consolas, monospace',
- theme:{background:'__DARK__',foreground:'__TEXT__',cursor:'__PRI__',selectionBackground:'__SELECT__',
- black:'#07100b',red:'#ff4567',green:'#00d979',yellow:'#c9e800',blue:'#5da9ff',magenta:'#d579ff',cyan:'#42e4d2',white:'#c8ded2',
- brightBlack:'#52665a',brightRed:'#ff7188',brightGreen:'#55ffa3',brightYellow:'#eaff50',brightBlue:'#82bdff',brightMagenta:'#e3a0ff',brightCyan:'#80fff0',brightWhite:'#f1fff6'}});
+ fontFamily:'Cascadia Code, Consolas, monospace',theme:__THEME__});
 const fitAddon=new FitAddon.FitAddon();term.loadAddon(fitAddon);term.open(document.getElementById('terminal'));
 window.terminal=term;window.clearTerminal=()=>term.clear();
+window.setTerminalTheme=theme=>{term.options.theme=theme;document.body.style.background=theme.background;
+ document.getElementById('terminal').style.background=theme.background;};
 new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.bridge;
  bridge.output.connect(chunk=>term.write(chunk));term.onData(data=>bridge.send(data));
  const fit=()=>{fitAddon.fit();bridge.resize(term.cols,term.rows)};
  new ResizeObserver(fit).observe(document.body);window.addEventListener('resize',fit);setTimeout(fit,120);
  bridge.ready();
 });</script></body></html>"""
-        for token, value in {
-            "__DARK__": C.DARK, "__TEXT__": C.TEXT,
-            "__PRI__": C.PRI, "__SELECT__": C.PRI_GHO,
-        }.items():
-            terminal_html = terminal_html.replace(token, value)
+        terminal_html = terminal_html.replace("__DARK__", C.DARK)
+        terminal_html = terminal_html.replace(
+            "__THEME__", json.dumps(self._terminal_theme(), separators=(",", ":")))
+        return terminal_html
+
+    def _add_terminal_session(self):
+        self._terminal_sequence += 1
+        session_id = uuid.uuid4().hex
+        view = QWebEngineView()
+        view.setProperty("terminalSessionId", session_id)
+        view.setMinimumSize(0, 0)
+        view.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        view.setContextMenuPolicy(Qt.ContextMenuPolicy.NoContextMenu)
+        view.setStyleSheet(
+            f"background:{C.DARK}; border:1px solid {C.BORDER}; border-radius:5px;")
+        bridge = _TerminalBridge(self, session_id)
+        channel = QWebChannel(view.page())
+        channel.registerObject("bridge", bridge)
+        view.page().setWebChannel(channel)
+        session = _TerminalSession(session_id, view, bridge, channel)
+        self._terminal_sessions[session_id] = session
+        index = self._terminal_tabs.addTab(view, f"Terminal {self._terminal_sequence}")
+        self._terminal_tabs.setCurrentIndex(index)
         asset_root = BASE_DIR / "assets" / "vendor" / "xterm"
-        self._terminal_view.setHtml(
-            terminal_html, QUrl.fromLocalFile(str(asset_root.resolve()) + os.sep))
-        return panel
+        view.setHtml(
+            self._terminal_html(),
+            QUrl.fromLocalFile(str(asset_root.resolve()) + os.sep),
+        )
+        return session
+
+    def _active_terminal_session(self) -> _TerminalSession | None:
+        return self._terminal_sessions.get(self._terminal_active_id)
+
+    def _activate_terminal_session(self, index: int):
+        view = self._terminal_tabs.widget(index) if index >= 0 else None
+        session_id = view.property("terminalSessionId") if view else ""
+        if not session_id or session_id not in self._terminal_sessions:
+            return
+        self._terminal_active_id = session_id
+        self._terminal_cwd.setText(str(BASE_DIR))
+        if getattr(self, "_terminal_panel", None) is not None \
+                and self._terminal_panel.isVisible():
+            QTimer.singleShot(0, view.setFocus)
+
+    def _new_terminal(self):
+        session = self._add_terminal_session()
+        self._start_terminal_process(session.session_id)
+        self._terminal_panel.show()
+        self._terminal_toggle_btn.setChecked(True)
+        self._terminal_tabs.currentWidget().setFocus()
+
+    def _close_terminal_session(self, index: int):
+        view = self._terminal_tabs.widget(index)
+        session_id = view.property("terminalSessionId") if view else ""
+        session = self._terminal_sessions.get(session_id)
+        if session is None:
+            return
+        if session.pty is None:
+            self._remove_terminal_session(session_id)
+            return
+        session.closing = True
+        self._terminal_write("\x03", session_id, allow_closing=True)
+        QTimer.singleShot(
+            180,
+            lambda sid=session_id: self._terminal_write(
+                "exit\r", sid, allow_closing=True)
+            if sid in self._terminal_sessions
+            and self._terminal_sessions[sid].closing
+            and self._terminal_sessions[sid].pty is not None else None,
+        )
+
+    def _remove_terminal_session(self, session_id: str):
+        session = self._terminal_sessions.pop(session_id, None)
+        if session is None:
+            return
+        index = self._terminal_tabs.indexOf(session.view)
+        if index >= 0:
+            self._terminal_tabs.removeTab(index)
+        session.view.deleteLater()
+        if self._terminal_active_id == session_id:
+            self._terminal_active_id = ""
+            self._activate_terminal_session(self._terminal_tabs.currentIndex())
+        if not self._terminal_sessions:
+            self._terminal_active_id = ""
+            self._terminal_panel.hide()
+            self._terminal_toggle_btn.setChecked(False)
+
+    def _clear_terminal(self):
+        session = self._active_terminal_session()
+        if session is not None:
+            session.view.page().runJavaScript(
+                "window.clearTerminal && window.clearTerminal()")
 
     def _open_project_file(self, index):
         path = Path(self._file_model.filePath(index))
@@ -7232,6 +7481,8 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             self._terminal_panel.hide()
             self._terminal_toggle_btn.setChecked(False)
             return
+        if not self._terminal_sessions:
+            self._add_terminal_session()
         self._terminal_panel.show()
         available = max(1, self._workspace_split.height() - self._workspace_split.handleWidth())
         # Open at a useful height while preserving room for the dashboard.
@@ -7244,43 +7495,60 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             max(1, available - terminal_height), terminal_height
         ])
         self._terminal_toggle_btn.setChecked(True)
-        if self._terminal_pty is None:
-            self._start_terminal_process()
-        self._terminal_view.setFocus()
+        session = self._active_terminal_session()
+        if session is not None and session.pty is None:
+            self._start_terminal_process(session.session_id)
+        if session is not None:
+            session.view.setFocus()
 
     def _restart_terminal(self):
         """Start a fresh shell while keeping the terminal panel open."""
-        if self._terminal_pty is None:
-            self._terminal_view.page().runJavaScript("window.clearTerminal && window.clearTerminal()")
-            self._start_terminal_process()
-            self._terminal_view.setFocus()
+        session = self._active_terminal_session()
+        if session is None:
             return
-        if self._terminal_restart_pending:
+        if session.pty is None:
+            session.view.page().runJavaScript(
+                "window.clearTerminal && window.clearTerminal()")
+            self._start_terminal_process(session.session_id)
+            session.view.setFocus()
             return
-        self._terminal_restart_pending = True
-        self._terminal_view.page().runJavaScript("window.clearTerminal && window.clearTerminal()")
+        if session.restart_pending or session.closing:
+            return
+        session.restart_pending = True
+        session.view.page().runJavaScript(
+            "window.clearTerminal && window.clearTerminal()")
         # Interrupt a running foreground command, then exit its shell. The
         # normal PTY poller detects its exit and starts the replacement shell.
-        self._terminal_write("\x03")
-        QTimer.singleShot(180, lambda: self._terminal_write("exit\r")
-                          if self._terminal_restart_pending else None)
+        session_id = session.session_id
+        self._terminal_write("\x03", session_id)
+        QTimer.singleShot(
+            180,
+            lambda sid=session_id: self._terminal_write("exit\r", sid)
+            if sid in self._terminal_sessions
+            and self._terminal_sessions[sid].restart_pending else None,
+        )
 
     def _interrupt_terminal(self):
         """Send the terminal's interrupt character without browser copy handling."""
-        if self._terminal_pty is not None:
-            self._terminal_write("\x03")
+        session = self._active_terminal_session()
+        if session is not None and session.pty is not None:
+            self._terminal_write("\x03", session.session_id)
 
-    def _start_terminal_process(self):
+    def _start_terminal_process(self, session_id: str | None = None):
+        session_id = session_id or self._terminal_active_id
+        session = self._terminal_sessions.get(session_id)
+        if session is None or session.closing or session.pty is not None:
+            return
         try:
             if platform.system() == "Windows":
                 from winpty import PTY
-                self._terminal_pty = PTY(100, 24)
+                session.pty = PTY(100, 24)
                 powershell = shutil.which("pwsh") or shutil.which("powershell.exe")
                 if powershell:
-                    self._terminal_pty.spawn(
+                    session.pty.spawn(
                         powershell, cmdline="-NoLogo -NoProfile", cwd=str(BASE_DIR))
                 else:
-                    self._terminal_pty.spawn(
+                    session.pty.spawn(
                         os.environ.get("COMSPEC", "cmd.exe"),
                         cmdline="/Q /D", cwd=str(BASE_DIR))
             else:
@@ -7295,17 +7563,29 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                 )
                 os.close(slave_fd)
                 os.set_blocking(master_fd, False)
-                self._terminal_pty = {"fd": master_fd, "process": child}
+                session.pty = {"fd": master_fd, "process": child}
             self._terminal_poll_timer.start()
         except Exception as exc:
-            self._terminal_pty = None
-            self._append_terminal_output(f"\r\nCould not start terminal: {exc}\r\n")
+            session.pty = None
+            self._append_terminal_output(
+                f"\r\nCould not start terminal: {exc}\r\n", session_id=session_id)
 
     def _poll_terminal_output(self):
-        pty = self._terminal_pty
-        if pty is None:
+        for session_id in tuple(self._terminal_sessions):
+            session = self._terminal_sessions.get(session_id)
+            if session is None or session.pty is None:
+                continue
+            self._poll_terminal_session(session_id)
+        if not any(
+            session.pty is not None for session in self._terminal_sessions.values()
+        ):
             self._terminal_poll_timer.stop()
+
+    def _poll_terminal_session(self, session_id: str):
+        session = self._terminal_sessions.get(session_id)
+        if session is None or session.pty is None:
             return
+        pty = session.pty
         try:
             if isinstance(pty, dict):
                 try:
@@ -7322,74 +7602,97 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                 output = pty.read(blocking=False)
                 ended = not pty.isalive()
             if output:
-                self._terminal_pending_output += str(output)
+                session.pending_output += str(output)
                 # Bound memory if a command produces output faster than the UI
                 # can render it; the terminal view itself keeps a short scrollback.
-                if len(self._terminal_pending_output) > 1_000_000:
-                    self._terminal_pending_output = self._terminal_pending_output[-1_000_000:]
-            if self._terminal_pending_output:
-                chunk = self._terminal_pending_output[:8192]
-                self._terminal_pending_output = self._terminal_pending_output[8192:]
-                self._append_terminal_output(chunk)
-            if ended and not self._terminal_pending_output:
-                self._append_terminal_output("\r\n[terminal process ended]\r\n")
-                self._terminal_poll_timer.stop()
+                if len(session.pending_output) > 1_000_000:
+                    session.pending_output = session.pending_output[-1_000_000:]
+            if session.pending_output:
+                chunk = session.pending_output[:8192]
+                session.pending_output = session.pending_output[8192:]
+                self._append_terminal_output(chunk, session_id=session_id)
+            if ended and not session.pending_output:
+                self._append_terminal_output(
+                    "\r\n[terminal process ended]\r\n", session_id=session_id)
                 if isinstance(pty, dict):
                     try:
                         os.close(pty["fd"])
                     except OSError:
                         pass
-                self._terminal_pty = None
-                if self._terminal_restart_pending:
-                    self._terminal_restart_pending = False
-                    QTimer.singleShot(120, self._start_terminal_process)
+                session.pty = None
+                if session.closing:
+                    self._remove_terminal_session(session_id)
+                elif session.restart_pending:
+                    session.restart_pending = False
+                    QTimer.singleShot(
+                        120, lambda sid=session_id: self._start_terminal_process(sid))
         except Exception as exc:
-            self._append_terminal_output(f"\r\n[terminal read error: {exc}]\r\n")
-            self._terminal_poll_timer.stop()
-            self._terminal_pty = None
+            self._append_terminal_output(
+                f"\r\n[terminal read error: {exc}]\r\n", session_id=session_id)
+            session.pty = None
+            if session.closing:
+                self._remove_terminal_session(session_id)
 
-    def _terminal_write(self, data: str):
-        if self._terminal_pty is None:
-            self._start_terminal_process()
-        if self._terminal_pty is not None:
+    def _terminal_write(
+        self, data: str, session_id: str | None = None, allow_closing: bool = False
+    ):
+        session_id = session_id or self._terminal_active_id
+        session = self._terminal_sessions.get(session_id)
+        if session is None or (session.closing and not allow_closing):
+            return
+        if session.pty is None:
+            self._start_terminal_process(session_id)
+        if session.pty is not None:
             try:
-                if isinstance(self._terminal_pty, dict):
-                    os.write(self._terminal_pty["fd"], data.encode("utf-8", errors="replace"))
+                if isinstance(session.pty, dict):
+                    os.write(session.pty["fd"], data.encode("utf-8", errors="replace"))
                 else:
-                    self._terminal_pty.write(data)
+                    session.pty.write(data)
             except Exception as exc:
-                self._append_terminal_output(f"\r\n[terminal write error: {exc}]\r\n")
+                self._append_terminal_output(
+                    f"\r\n[terminal write error: {exc}]\r\n", session_id=session_id)
 
-    def _terminal_resize(self, columns: int, rows: int):
-        if self._terminal_pty is not None:
+    def _terminal_resize(
+        self, columns: int, rows: int, session_id: str | None = None
+    ):
+        session = self._terminal_sessions.get(session_id or self._terminal_active_id)
+        if session is not None and session.pty is not None:
             try:
                 columns, rows = max(2, columns), max(2, rows)
-                if isinstance(self._terminal_pty, dict):
+                if isinstance(session.pty, dict):
                     import fcntl
                     import struct
                     import termios
                     fcntl.ioctl(
-                        self._terminal_pty["fd"], termios.TIOCSWINSZ,
+                        session.pty["fd"], termios.TIOCSWINSZ,
                         struct.pack("HHHH", rows, columns, 0, 0))
                 else:
-                    self._terminal_pty.set_size(columns, rows)
+                    session.pty.set_size(columns, rows)
             except Exception:
                 pass
 
-    def _terminal_client_ready(self):
-        self._terminal_client_is_ready = True
-        if self._terminal_output_buffer:
-            self._terminal_bridge.output.emit(self._terminal_output_buffer)
-            self._terminal_output_buffer = ""
+    def _terminal_client_ready(self, session_id: str):
+        session = self._terminal_sessions.get(session_id)
+        if session is None:
+            return
+        session.client_is_ready = True
+        if session.output_buffer:
+            session.bridge.output.emit(session.output_buffer)
+            session.output_buffer = ""
 
-    def _append_terminal_output(self, text: str, error: bool = False):
+    def _append_terminal_output(
+        self, text: str, error: bool = False, session_id: str | None = None
+    ):
         if text:
             text = str(text)
-            if self._terminal_client_is_ready:
-                self._terminal_bridge.output.emit(text)
+            session = self._terminal_sessions.get(
+                session_id or self._terminal_active_id)
+            if session is None:
+                return
+            if session.client_is_ready:
+                session.bridge.output.emit(text)
             else:
-                self._terminal_output_buffer = (
-                    self._terminal_output_buffer + text)[-100_000:]
+                session.output_buffer = (session.output_buffer + text)[-100_000:]
 
     def _build_input_row(self) -> QHBoxLayout:
         row = QHBoxLayout(); row.setSpacing(5)
@@ -7455,10 +7758,10 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         lay.setContentsMargins(10, 6, 10, 7)
         lay.setSpacing(4)
 
-        # в”Ђв”Ђ header row в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        # ── header row ───────────────────────────────────────────────────────
         hdr = QHBoxLayout(); hdr.setSpacing(5)
 
-        dot = QLabel("в—€")
+        dot = QLabel("◈")
         dot.setFont(QFont(FONT_MONO, 9, QFont.Weight.Bold))
         dot.setStyleSheet(f"color: {C.PRI}; background: transparent;")
         hdr.addWidget(dot)
@@ -7493,7 +7796,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         self._content_expand_btn.clicked.connect(self._toggle_content_expand)
         hdr.addWidget(self._content_expand_btn)
 
-        self._content_pop_btn = QPushButton("в†—  DETACH")
+        self._content_pop_btn = QPushButton("↗  DETACH")
         self._content_pop_btn.setIcon(QIcon(str(BASE_DIR / "assets" / "icons" / "detach.svg")))
         self._content_pop_btn.setIconSize(QSize(14, 14))
         self._content_pop_btn.setFixedSize(25, 25)
@@ -7519,11 +7822,11 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         hdr.addWidget(dismiss)
         lay.addLayout(hdr)
 
-        # в”Ђв”Ђ separator в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        # ── separator ─────────────────────────────────────────────────────────
         sep = QFrame(); sep.setFrameShape(QFrame.Shape.HLine)
         sep.setStyleSheet(f"color: {C.BORDER};"); lay.addWidget(sep)
 
-        # в”Ђв”Ђ text display в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        # ── text display ──────────────────────────────────────────────────────
         self._content_display = QTextBrowser()
         self._content_display.setOpenExternalLinks(True)
         self._content_display.setFont(QFont(FONT_UI, 10))
@@ -7750,7 +8053,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             body = " ".join(item["body"])
             links = "".join(
                 f'<a href="{_html.escape(url, quote=True)}" '
-                f'style="color:{C.PRI};">Open source в†—</a> '
+                f'style="color:{C.PRI};">Open source ↗</a> '
                 for url in item["links"]
             )
             cards.append(
@@ -7938,7 +8241,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         self._content_pop_btn.setIcon(QIcon(str(BASE_DIR / "assets" / "icons" / "detach.svg")))
         self._content_pop_btn.setToolTip("Open results in a separate window")
 
-    # в”Ђв”Ђ document review в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    # ── document review ──────────────────────────────────────────────────────
     # Rendered as rich text into the content panel that already exists, rather
     # than into a panel of its own. A review is read, not clicked, so QTextEdit
     # gives scrolling, selection and copy for nothing, and the HUD gains no
@@ -7953,7 +8256,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
     # A shape carries it in every language, and shape plus colour still reads
     # for someone who cannot separate red from amber. What the marks mean
     # arrives the way everything else does: JARVIS says it out loud.
-    _REVIEW_MARKS = {"serious": ("RED", "в–І"), "caution": ("ACC2", "в—Џ"), "note": ("PRI_DIM", "В·")}
+    _REVIEW_MARKS = {"serious": ("RED", "▲"), "caution": ("ACC2", "●"), "note": ("PRI_DIM", "·")}
 
     @staticmethod
     def _esc(s) -> str:
@@ -7971,7 +8274,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                 f' padding-left:8px; margin-bottom:10px;">{e(summary)}</div>')
 
         for f in (findings or []):
-            key, mark = self._REVIEW_MARKS.get(f.get("severity"), ("PRI_DIM", "В·"))
+            key, mark = self._REVIEW_MARKS.get(f.get("severity"), ("PRI_DIM", "·"))
             colour = getattr(C, key)
             parts.append(f'<div style="margin-bottom:11px;">')
             parts.append(
@@ -8009,8 +8312,8 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         # Left as written, not upper-cased. The other content-panel titles are
         # the app's own English labels, but this one is the document's name in
         # the user's language, and str.upper() applies English casing rules to
-        # it: Turkish "SГ¶zleЕџmesi" comes back "SГ–ZLEЕћMESI", having lost the
-        # dotted capital Д°. Python has no locale-aware upper to reach for, and
+        # it: Turkish "Sözleşmesi" comes back "SÖZLEŞMESI", having lost the
+        # dotted capital İ. Python has no locale-aware upper to reach for, and
         # imposing one language's rules on all of them is the bug, not the fix.
         self._content_title_lbl.setText((title or "Document")[:48])
         self._content_ts_lbl.setText(_time.strftime("%H:%M:%S"))
@@ -8026,7 +8329,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             total = self._center_split.height()
             self._center_split.setSizes([max(total - 260, 120), 260, 0])
 
-    # в”Ђв”Ђ quiz panel в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    # ── quiz panel ───────────────────────────────────────────────────────────
     # An interactive twin of the content panel. The plugin only ever hands over
     # questions; everything about asking, marking and reporting happens here,
     # and the finished result is pushed back into the conversation the same way
@@ -8068,7 +8371,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         lay.setSpacing(6)
 
         hdr = QHBoxLayout(); hdr.setSpacing(6)
-        dot = QLabel("в—€")
+        dot = QLabel("◈")
         dot.setFont(QFont(FONT_MONO, 9, QFont.Weight.Bold))
         dot.setStyleSheet(f"color: {C.PRI}; background: transparent;")
         hdr.addWidget(dot)
@@ -8085,7 +8388,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         self._quiz_count_lbl.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
         hdr.addWidget(self._quiz_count_lbl)
 
-        quit_btn = QPushButton("DISMISS  вњ•")
+        quit_btn = QPushButton("DISMISS  ✕")
         quit_btn.setFont(QFont(FONT_MONO, 7))
         quit_btn.setFixedHeight(18)
         quit_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -8126,7 +8429,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
 
         foot = QHBoxLayout()
         foot.addStretch()
-        self._quiz_next_btn = self._quiz_btn("NEXT  в†’", primary=True)
+        self._quiz_next_btn = self._quiz_btn("NEXT  →", primary=True)
         self._quiz_next_btn.setFixedWidth(110)
         self._quiz_next_btn.clicked.connect(self._quiz_next)
         self._quiz_next_btn.hide()
@@ -8233,9 +8536,9 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                 wdg.setEnabled(False)
 
         if verdict is True:
-            mark, colour = "вњ“  correct", C.GREEN
+            mark, colour = "✓  correct", C.GREEN
         elif verdict is False:
-            mark, colour = "вњ•  " + str(q.get("answer", "")), C.RED
+            mark, colour = "✕  " + str(q.get("answer", "")), C.RED
         else:
             # Open answers and near-miss gap-fills are JARVIS's to judge. Saying
             # so is honest; marking it wrong here would be a guess.
@@ -8246,7 +8549,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         self._quiz_note_lbl.show()
 
         last = self._quiz["i"] >= len(self._quiz["questions"]) - 1
-        self._quiz_next_btn.setText("FINISH  в†’" if last else "NEXT  в†’")
+        self._quiz_next_btn.setText("FINISH  →" if last else "NEXT  →")
         self._quiz_next_btn.show()
         self._quiz_next_btn.setFocus()
 
@@ -8307,7 +8610,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             l.setStyleSheet(f"color: {color}; background: transparent;")
             return l
 
-        lay.addWidget(_fl("[F4] Mute  В·  [F11] Fullscreen  В·  [ESC] Interrupt  В·  [Ctrl+K] Commands"))
+        lay.addWidget(_fl("[F4] Mute  ·  [F11] Fullscreen  ·  [ESC] Interrupt  ·  [Ctrl+K] Commands"))
         lay.addStretch()
         lay.addWidget(_fl("By Akrom Rustamov", C.PRI_DIM))
         return w
@@ -8318,7 +8621,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         cat  = _file_category(p)
         icon, _ = _FILE_ICONS.get(cat, _FILE_ICONS["unknown"])
         size = _fmt_size(p.stat().st_size)
-        self._file_hint.setText(f"{icon}  {p.name}  В·  {size}  В·  Tell {self._assistant_name} what to do with it")
+        self._file_hint.setText(f"{icon}  {p.name}  ·  {size}  ·  Tell {self._assistant_name} what to do with it")
         self._log.append_log(f"FILE: {p.name} ({size}) loaded")
         if self.on_text_command:
             msg = (
@@ -8364,7 +8667,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         self._remote_overlay = ov
         self._log.append_log(f"SYS: Remote key generated — manual: {manual or url}")
 
-    # в”Ђв”Ђ Auto-start в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    # ── Auto-start ──────────────────────────────────────────────────────────────
 
     def _check_autostart(self) -> bool:
         """Returns True if auto-start is currently registered on this OS."""
@@ -8452,11 +8755,11 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             self._autostart_btn.setText("Auto-start: On")
             self._autostart_btn.setStyleSheet(f"""
                 QPushButton {{
-                    background: #001a08; color: {C.GREEN};
+                    background: {C.PANEL2}; color: {C.GREEN};
                     border: 1px solid {C.GREEN_D}; border-radius: 3px;
                     text-align: left; padding: 0 8px;
                 }}
-                QPushButton:hover {{ background: #002010; }}
+                QPushButton:hover {{ background: {C.PRI_GHO}; }}
             """)
         else:
             self._autostart_btn.setText("Auto-start: Off")
@@ -8475,7 +8778,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         save_brief_enabled(new_val)
         self._update_brief_btn(new_val)
 
-    # в”Ђв”Ђ Wake word settings в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    # ── Wake word settings ───────────────────────────────────────────────────
 
     def _wake_state(self) -> dict:
         """Combined state for the two wake-word buttons. Readiness is a cheap,
@@ -8504,10 +8807,10 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             return
         st = self._wake_state()
         _on = f"""
-            QPushButton {{ background: #001a08; color: {C.GREEN};
+            QPushButton {{ background: {C.PANEL2}; color: {C.GREEN};
                 border: 1px solid {C.GREEN_D}; border-radius: 3px;
                 text-align: left; padding: 0 8px; }}
-            QPushButton:hover {{ background: #002010; }}"""
+            QPushButton:hover {{ background: {C.PRI_GHO}; }}"""
         _off = f"""
             QPushButton {{ background: transparent; color: {C.TEXT_DIM};
                 border: 1px solid {C.BORDER}; border-radius: 3px;
@@ -8515,7 +8818,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             QPushButton:hover {{ color: {C.TEXT}; border: 1px solid {C.BORDER_B}; }}"""
         self._wake_btn.setEnabled(True)
         if not st["ready"]:
-            self._wake_btn.setText("в¬‡  WAKE WORD: DOWNLOAD")
+            self._wake_btn.setText("⬇  WAKE WORD: DOWNLOAD")
             self._wake_btn.setStyleSheet(_off)
             self._wake_sleep_btn.hide()
         elif st["enabled"]:
@@ -8536,10 +8839,10 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         from core.hotkey import chord_label
         from memory.config_manager import get_push_to_talk_enabled
         _on = f"""
-            QPushButton {{ background: #001a08; color: {C.GREEN};
+            QPushButton {{ background: {C.PANEL2}; color: {C.GREEN};
                 border: 1px solid {C.GREEN_D}; border-radius: 3px;
                 text-align: left; padding: 0 8px; }}
-            QPushButton:hover {{ background: #002010; }}"""
+            QPushButton:hover {{ background: {C.PRI_GHO}; }}"""
         _off = f"""
             QPushButton {{ background: transparent; color: {C.TEXT_DIM};
                 border: 1px solid {C.BORDER}; border-radius: 3px;
@@ -8637,7 +8940,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                 self._wake_dl_sig.emit(ok, msg)
             threading.Thread(target=_work, daemon=True).start()
             return
-        # Already downloaded в†’ just flip enabled/disabled through JarvisLive.
+        # Already downloaded → just flip enabled/disabled through JarvisLive.
         if self.on_wake_toggle:
             try:
                 self.on_wake_toggle(not st["enabled"])
@@ -8664,11 +8967,11 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             self._brief_btn.setText("вЂ  MORNING BRIEF: ON")
             self._brief_btn.setStyleSheet(f"""
                 QPushButton {{
-                    background: #001a08; color: {C.GREEN};
+                    background: {C.PANEL2}; color: {C.GREEN};
                     border: 1px solid {C.GREEN_D}; border-radius: 3px;
                     text-align: left; padding: 0 8px;
                 }}
-                QPushButton:hover {{ background: #002010; }}
+                QPushButton:hover {{ background: {C.PRI_GHO}; }}
             """)
         else:
             self._brief_btn.setText("вЂ  MORNING BRIEF: OFF")
@@ -8681,7 +8984,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                 QPushButton:hover {{ color: {C.TEXT}; border: 1px solid {C.BORDER_B}; }}
             """)
 
-    # в”Ђв”Ђ Customization в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    # ── Customization ────────────────────────────────────────────────────────────
 
     def _open_customize(self):
         cfg = _read_full_config()
@@ -8737,7 +9040,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                 self._apply_design_system()
                 color_changed = old["PRI"] != C.PRI
 
-        # Voice change в†’ persist and, if it actually changed, rebuild the Live
+        # Voice change → persist and, if it actually changed, rebuild the Live
         # session so the new voice takes effect (it's fixed at connect time).
         voice_changed = False
         if voice:
@@ -8776,7 +9079,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         ov.show()
         ov.raise_()
 
-    # в”Ђв”Ђ Audio devices в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    # ── Audio devices ────────────────────────────────────────────────────────
 
     def _open_audio_devices(self):
         ov = AudioDeviceOverlay(parent=self.centralWidget())
@@ -8789,7 +9092,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         if self.on_audio_device_change:
             self.on_audio_device_change()
 
-    # в”Ђв”Ђ Engine & providers в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    # ── Engine & providers ───────────────────────────────────────────────────
 
     def _open_providers(self):
         """Open the engine panel. Everything it needs is imported on this call.
@@ -8823,14 +9126,14 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         if self.on_audio_device_change:
             self.on_audio_device_change()
 
-    # в”Ђв”Ђ Memory panel в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    # ── Memory panel ─────────────────────────────────────────────────────────
 
     def _open_memory_panel(self):
         ov = MemoryOverlay(parent=self.centralWidget())
         self._centre_overlay(ov)
         self._memory_overlay = ov
 
-    # в”Ђв”Ђ Irreversible-action confirmation в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    # ── Irreversible-action confirmation ─────────────────────────────────────
 
     def _show_confirm_banner(self, title: str, detail: str):
         self._hide_confirm_banner()
@@ -8886,7 +9189,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         ov.raise_()
         self._plugin_settings_overlay = ov   # keep a reference so it isn't GC'd
 
-    # в”Ђв”Ђ Clipboard intelligence в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    # ── Clipboard intelligence ───────────────────────────────────────────────────
 
     def _on_clipboard_changed(self):
         try:
@@ -8913,7 +9216,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         if self.on_text_command:
             threading.Thread(target=self.on_text_command, args=(cmd,), daemon=True).start()
 
-    # в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    # ────────────────────────────────────────────────────────────────────────────
 
     def _do_interrupt(self):
         if self.on_interrupt:
@@ -8946,7 +9249,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             self._mute_btn.setToolTip("Microphone muted · click to unmute · F4")
             self._mute_btn.setStyleSheet(f"""
                 QPushButton {{
-                    background: rgba(20,0,6,150); color: {C.MUTED_C};
+                    background: {C.PANEL2}; color: {C.MUTED_C};
                     border: 1px solid {C.MUTED_C}; border-radius: 8px;
                 }}
             """)
@@ -8956,10 +9259,10 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             self._mute_btn.setToolTip("Microphone active · click to mute · F4")
             self._mute_btn.setStyleSheet(f"""
                 QPushButton {{
-                    background: rgba(0,20,10,150); color: {C.GREEN};
+                    background: {C.PANEL2}; color: {C.GREEN};
                     border: 1px solid {C.GREEN}; border-radius: 8px;
                 }}
-                QPushButton:hover {{ background: #001f10; }}
+                QPushButton:hover {{ background: {C.PRI_GHO}; }}
             """)
 
     def _send(self):
@@ -9197,7 +9500,9 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             if due <= now:
                 continue
             stamp = time.strftime("%b %d, %H:%M", time.localtime(due))
-            item = QListWidgetItem(f"вЏ°  {stamp}  В·  {reminder.get('message', 'Reminder')}")
+            item = QListWidgetItem(
+                f"REMINDER  |  {stamp}  |  {reminder.get('message', 'Reminder')}"
+            )
             item.setData(Qt.ItemDataRole.UserRole, ("reminder", str(reminder.get("id", ""))))
             item.setToolTip("Scheduled reminder")
             self._task_list.addItem(item)
@@ -9260,6 +9565,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             mini.hide()
         else:
             mini.show()
+            mini._set_collapsed(False)
             self.hide()
             mini.raise_()
             mini.activateWindow()
@@ -9311,6 +9617,25 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         self._apply_state("LISTENING")
         self._assistant_name = _read_full_config().get("assistant_name", "JARVIS") or "JARVIS"
         self._log.append_log(f"SYS: Initialised. OS={os_name.upper()}. {self._assistant_name} online.")
+
+    def closeEvent(self, event):
+        self._terminal_poll_timer.stop()
+        for session in self._terminal_sessions.values():
+            pty = session.pty
+            if pty is None:
+                continue
+            if isinstance(pty, dict):
+                pty["process"].terminate()
+                try:
+                    os.close(pty["fd"])
+                except OSError:
+                    pass
+                continue
+            try:
+                os.kill(pty.pid, signal.SIGTERM)
+            except OSError as exc:
+                print(f"[Terminal] Could not stop shell {pty.pid}: {exc}")
+        super().closeEvent(event)
 
 
 class _ConsoleMirror:

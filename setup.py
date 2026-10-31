@@ -21,8 +21,8 @@ from pathlib import Path
 OS = platform.system()  # "Windows" | "Darwin" | "Linux"
 HERE = Path(__file__).resolve().parent
 
-MIN_PY = (3, 11)  # hard floor: below this the syntax used here won't parse
-MAX_PY = (3, 13)  # highest version this is actually tested on
+MIN_PY = (3, 14)  # required by pyproject.toml and uv.lock
+MAX_PY = (3, 14)  # highest version currently tested
 
 
 def _run(label: str, args: list[str]) -> None:

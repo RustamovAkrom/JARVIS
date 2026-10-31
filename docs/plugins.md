@@ -26,6 +26,7 @@ Plugins run with the current user's permissions. They are not sandboxed: importi
 | `document_review.py` | Document explanation and structured review | Contents may be sent to the selected AI. |
 | `excel_writer.py` | Create/edit Excel workbooks | Check the path and output before replacing important files. |
 | `game_updater.py` | Steam/Epic game management | Requires the clients; installation and updates change files. |
+| `hermes_agent.py` | Run Hermes tasks with voice status and a final report | Requires the Hermes CLI; dangerous ACP requests require JARVIS confirmation. |
 | `network_dashboard.py` | Network status and diagnostics | Depends on OS support and system utilities. |
 | `obsidian_vault.py` | Search, read, and write Obsidian notes | Configure a vault; writes change notes. |
 | `osint_toolkit.py` | Public-source search | Follow laws, privacy expectations, and source policies. |
@@ -37,6 +38,18 @@ Plugins run with the current user's permissions. They are not sandboxed: importi
 | `trading_agent.py` | Quotes, news, and market analysis | Data may be delayed; not financial advice. |
 | `water_reminder.py` | Water tracking and reminders | Not medical advice. |
 | `weather_dashboard.py` | Weather by location | Requires network access and a data source. |
+
+### Hermes Agent
+
+The plugin starts Hermes through its official `hermes acp` interface. Say “send Hermes the task …”, then ask “what is Hermes doing?”, “Hermes report”, or “cancel the task”. The plugin displays tool events in the JARVIS log, can provide periodic spoken progress reports, and returns the final report when complete. It does not invent a completion percentage or ETA; ACP does not guarantee those values.
+
+Set the `hermes.exe` path if `hermes` is not on `PATH`, and choose Hermes' working directory; it is the task's current folder and is not necessarily the Windows Desktop. To save a file on the Desktop, give Hermes the full path (for example `C:\Users\<name>\Desktop\login.html`) or set the workspace to Desktop and request `login.html`. Configure the spoken-report cadence and maximum task duration under **PLUGIN SETTINGS → HERMES AGENT** (default 3,600 seconds; range 120–7,200). Only one task runs at a time; task state is available while JARVIS remains open.
+
+When an individual Hermes tool fails, JARVIS reports its name and a short reason; Hermes may continue the task after that failure. Ask for status or a report to see the error.
+
+The plugin uses ACP rather than Hermes `-z/--oneshot`: one-shot mode automatically bypasses dangerous-command approvals and does not expose progress. When ACP requests permission, JARVIS displays the operation and its details; approval applies to that request only. If details are missing or do not fit in the confirmation banner, the operation is denied. Hermes still runs with its own configured tools and the current user's permissions—the selected workspace is not a sandbox. Use a trusted Hermes installation and review its permissions and enabled tools.
+
+Task text and final reports are sent to the configured Hermes provider. Do not include passwords, keys, or information that should not be sent to that provider.
 
 ## Plugin contract
 

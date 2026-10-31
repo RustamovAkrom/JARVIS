@@ -30,12 +30,12 @@ JARVIS is a Python and PyQt6 desktop voice assistant. It brings together spoken 
 
 ## Install
 
-`setup.py` targets Python 3.11–3.13. Newer versions are allowed with a warning but are not guaranteed to work. Audio and multimedia dependencies can make installation take a while.
+The project requires Python 3.14 or newer. Audio and multimedia dependencies can make installation take a while.
 
 ```powershell
 git clone https://github.com/RustamovAkrom/JARVIS.git
 cd JARVIS
-py -3.12 -m venv .venv
+py -3.14 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python setup.py
 python main.py
@@ -104,7 +104,7 @@ A fully local pipeline requires local STT, LLM, and TTS. A local LLM alone does 
 
 **Plugins** in `plugins/` are optional tools and dashboards. Toggle them in **PLUGINS** and back on without restarting. A disabled plugin is no longer offered to the model. You can delete an unneeded plugin file; some modules share `plugins/_*.py` helpers, so check dependencies first. The [plugin guide](docs/plugins.md) lists the current modules and explains removal.
 
-The current folder includes battery, disk, network, system, and weather dashboards; image-based calorie estimation, document review, chat assistance, and OSINT; Excel, game, Obsidian, Spotify, and Telegram integrations; Pomodoro, quizzes, market information, and water reminders. Some require external accounts or keys. Plugins execute trusted Python code with the user’s permissions; they are not sandboxed.
+The current folder includes battery, disk, network, system, and weather dashboards; image-based calorie estimation, document review, chat assistance, and OSINT; Excel, game, Hermes Agent, Obsidian, Spotify, and Telegram integrations; Pomodoro, quizzes, market information, and water reminders. Some require external accounts or keys. Plugins execute trusted Python code with the user’s permissions; they are not sandboxed.
 
 ## Data and privacy
 
