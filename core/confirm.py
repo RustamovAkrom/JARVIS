@@ -53,6 +53,7 @@ class _Pending:
     detail:  str
     run:     Callable[[], str]
     at:      float
+    on_cancel: Optional[Callable[[], None]] = None
 
 
 _pending: Optional[_Pending] = None
@@ -79,7 +80,8 @@ def _log(msg: str) -> None:
             pass
 
 
-def request(key: str, title: str, detail: str, run: Callable[[], str]) -> str:
+def request(key: str, title: str, detail: str, run: Callable[[], str],
+            on_cancel: Optional[Callable[[], None]] = None) -> str:
     """Park an irreversible action behind the on-screen gate.
 
     Returns the sentence the tool should hand back to the model — phrased as an
@@ -94,14 +96,26 @@ def request(key: str, title: str, detail: str, run: Callable[[], str]) -> str:
                 f"not available, so I have not done it.")
 
     with _lock:
+        if _pending is not None and time.monotonic() - _pending.at <= TIMEOUT_SECONDS:
+            return (
+                f"I cannot ask to confirm '{title}' yet because another action "
+                "is already waiting for confirmation."
+            )
+        expired, _pending = _pending, None
         _pending = _Pending(key=key, title=title, detail=detail,
-                            run=run, at=time.monotonic())
+                            run=run, at=time.monotonic(), on_cancel=on_cancel)
+
+    if expired is not None:
+        _cancel(expired)
 
     try:
         _show_cb(title, detail)
     except Exception as e:
         with _lock:
-            _pending = None
+            if _pending is not None and _pending.key == key:
+                _pending = None
+        _cancel(_Pending(key=key, title=title, detail=detail,
+                         run=run, at=time.monotonic(), on_cancel=on_cancel))
         return f"Could not ask for confirmation: {e}. Nothing was done."
 
     _log(f"SYS: Awaiting confirmation — {title}")
@@ -112,15 +126,27 @@ def request(key: str, title: str, detail: str, run: Callable[[], str]) -> str:
     )
 
 
-def resolve(accepted: bool) -> None:
+def _cancel(p: _Pending) -> None:
+    if p.on_cancel is None:
+        return
+    try:
+        p.on_cancel()
+    except Exception as e:
+        _log(f"ERR: Confirmation cancellation callback failed — {e}")
+
+
+def resolve(accepted: bool, key: Optional[str] = None) -> None:
     """Called by the UI when the user presses CONFIRM or CANCEL.
 
     Runs the stored callable on a worker thread — this is invoked from the Qt
     thread, and shutting the machine down from inside a button handler would
-    freeze the interface on its way out."""
+    freeze the interface on its way out. An optional key lets a background
+    caller resolve only its own pending confirmation."""
     global _pending
 
     with _lock:
+        if key is not None and (_pending is None or _pending.key != key):
+            return
         p, _pending = _pending, None
 
     if _hide_cb:
@@ -134,10 +160,12 @@ def resolve(accepted: bool) -> None:
 
     if time.monotonic() - p.at > TIMEOUT_SECONDS:
         _log(f"SYS: Confirmation expired — {p.title}")
+        _cancel(p)
         return
 
     if not accepted:
         _log(f"SYS: Cancelled — {p.title}")
+        _cancel(p)
         return
 
     def _worker():
