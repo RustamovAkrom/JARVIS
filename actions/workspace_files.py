@@ -79,6 +79,11 @@ def read_project_file(relative_path: str) -> str:
     if root is None:
         return "No project folder is selected in JARVIS. Choose one in the PROJECT panel first."
     try:
+        # Resolve the root here as well as the target. macOS temporary folders
+        # may traverse /var -> /private/var, and Windows may expose an 8.3
+        # alias for the same directory; comparing either spelling directly
+        # with the resolved target makes relative_to fail.
+        root = root.resolve(strict=True)
         path = _resolve_workspace_file(root, relative_path)
         if path.stat().st_size > _MAX_FILE_BYTES:
             return f"File is too large to read safely (limit: {_MAX_FILE_BYTES} bytes)."
