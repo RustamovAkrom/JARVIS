@@ -1775,6 +1775,11 @@ class JarvisLive:
                         )
                         await self._flush_pending_vision()
         except Exception as e:
+            # Let the session supervisor handle expected Live policy closes.
+            # Printing a traceback here happens before TaskGroup wraps and
+            # forwards the exception to the reconnect logic below.
+            if _live_policy_close_reason(e):
+                raise
             print(f"[JARVIS] ❌ Recv: {e}")
             traceback.print_exc()
             raise
