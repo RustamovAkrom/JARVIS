@@ -1,6 +1,6 @@
 # JARVIS plugins: catalogue and development
 
-[Русская версия](plugins-ru.md) · [Main documentation](../README.md)
+[Main documentation](../README.md)
 
 A plugin is an optional tool or dashboard loaded from `plugins/`. Open its manager through **SETUP → PLUGINS**.
 

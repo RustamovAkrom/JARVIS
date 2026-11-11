@@ -1,6 +1,6 @@
 # Gemini in JARVIS
 
-[Русская версия](gemini-ru.md) · [Main documentation](../README.md)
+[Main documentation](../README.md)
 
 Gemini Live is the default conversation engine. It combines the audio session, responses, and calls to declared tools. One-shot helper requests and some plugins may also call Gemini, depending on enabled features.
 

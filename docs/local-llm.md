@@ -1,6 +1,6 @@
 # Local and third-party models
 
-[Русская версия](local-llm-ru.md) · [Main documentation](../README.md)
+[Main documentation](../README.md)
 
 Configure providers in **SETUP -> ENGINE & PROVIDERS**, then press **SAVE & APPLY**. Gemini Live remains the default mode.
 

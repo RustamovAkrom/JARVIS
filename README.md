@@ -165,7 +165,6 @@ Local Whisper and Piper backends are optional downloads and can be installed fro
 
 More details: [Gemini configuration](docs/gemini.md) · [Local and compatible models](docs/local-llm.md) · [Plugin guide](docs/plugins.md)
 
-Russian guides: [Gemini](docs/gemini-ru.md) | [local and third-party models](docs/local-llm-ru.md) | [plugins](docs/plugins-ru.md).
 
 ## Project structure
 
