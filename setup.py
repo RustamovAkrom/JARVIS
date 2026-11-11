@@ -35,6 +35,34 @@ def _platform_name(system: str | None = None) -> str:
         ) from exc
 
 
+def _ensure_pip() -> None:
+    """Bootstrap pip in environments created without it, when possible."""
+    pip_check = subprocess.run(
+        [sys.executable, "-m", "pip", "--version"],
+        cwd=HERE,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    if pip_check.returncode == 0:
+        return
+
+    print("pip is missing; trying to install it with Python's ensurepip...")
+    try:
+        subprocess.run(
+            [sys.executable, "-m", "ensurepip", "--upgrade"],
+            check=True,
+            cwd=HERE,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError) as exc:
+        raise RuntimeError(
+            "This Python environment has neither pip nor a working ensurepip. "
+            "Recreate .venv with the standard Python installer, then run setup.py "
+            "again. On Windows: remove .venv, run `py -3.14 -m venv .venv`, "
+            "then `python setup.py` using that environment."
+        ) from exc
+
+
 def _remove_deprecated_pynvml() -> None:
     """Remove the old shim that warns when the pynvml module is imported.
 
@@ -95,6 +123,7 @@ def main() -> None:
         raise FileNotFoundError(
             f"Dependency manifest not found: {REQUIREMENTS_FILE}")
 
+    _ensure_pip()
     _remove_deprecated_pynvml()
     _run(
         f"Installing Python dependencies for {os_name}...",

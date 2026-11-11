@@ -123,6 +123,18 @@ python3 -m venv .venv
 
 The installer handles Python packages and browser runtimes. Some Linux desktop actions also rely on native utilities supplied by the distribution; the setup script prints guidance for those optional integrations rather than installing system packages with elevated privileges.
 
+### Optional: install with uv
+
+If you already use [uv](https://docs.astral.sh/uv/) or want its fast, lockfile-based installation, install uv by following the [official installation guide](https://docs.astral.sh/uv/getting-started/installation/). From the project directory, run:
+
+```bash
+uv sync --no-install-project
+uv run --no-sync python -m playwright install chromium firefox
+uv run --no-sync python main.py
+```
+
+uv installs the dependencies declared in `pyproject.toml` using `uv.lock`. The `--no-install-project` option installs dependencies without trying to package JARVIS as a Python library. The Playwright command downloads the browser runtimes used by browser automation. See the [uv project guide](https://docs.astral.sh/uv/guides/projects/) and [environment syncing guide](https://docs.astral.sh/uv/concepts/projects/sync/) for details.
+
 On first launch, follow the setup screen to choose a language and configure the Gemini API key. Keep the key private. To use a different speech or model provider, open **SETUP → ENGINE & PROVIDERS** after startup.
 
 ### Browser runtime recovery

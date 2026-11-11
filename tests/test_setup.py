@@ -5,6 +5,33 @@ import setup
 
 
 class SetupTests(unittest.TestCase):
+    def test_missing_pip_is_bootstrapped_with_ensurepip(self):
+        missing_pip = setup.subprocess.CompletedProcess([], 1)
+        ensured_pip = setup.subprocess.CompletedProcess([], 0)
+        with patch.object(
+            setup.subprocess, "run", side_effect=[missing_pip, ensured_pip]
+        ) as run:
+            setup._ensure_pip()
+
+        self.assertEqual(run.call_count, 2)
+        self.assertEqual(
+            run.call_args_list[1].args[0],
+            [setup.sys.executable, "-m", "ensurepip", "--upgrade"],
+        )
+
+    def test_missing_pip_and_ensurepip_report_recovery_steps(self):
+        missing_pip = setup.subprocess.CompletedProcess([], 1)
+        with (
+            patch.object(
+                setup.subprocess, "run", side_effect=[
+                    missing_pip,
+                    setup.subprocess.CalledProcessError(1, "ensurepip"),
+                ],
+            ),
+            self.assertRaisesRegex(RuntimeError, "neither pip nor a working ensurepip"),
+        ):
+            setup._ensure_pip()
+
     def test_platform_names_cover_supported_desktops(self):
         for system, expected in (
             ("Windows", "Windows"),
