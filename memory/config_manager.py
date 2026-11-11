@@ -1,6 +1,7 @@
 import json
 import sys
 from pathlib import Path
+from pathlib import PurePosixPath, PureWindowsPath
 
 def get_base_dir() -> Path:
     if getattr(sys, "frozen", False):
@@ -59,6 +60,101 @@ def get_assistant_name() -> str:
 def get_user_name() -> str:
     """Return the configured user name for addressing."""
     return load_api_keys().get("user_name", "")
+
+
+def get_ui_opacity() -> int:
+    """Return the main-window opacity percentage, clamped to a readable range."""
+    value = load_api_keys().get("ui_opacity", 100)
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return 100
+    try:
+        value = round(value)
+    except (OverflowError, ValueError):
+        return 100
+    return max(60, min(100, value))
+
+
+def get_ui_language() -> str:
+    """Return a supported interface language, defaulting to English."""
+    from memory.translations import LANGUAGES
+    value = load_api_keys().get("ui_language", "en")
+    return value if isinstance(value, str) and value in LANGUAGES else "en"
+
+
+def save_ui_language(language: str) -> None:
+    """Save a supported language without disturbing other settings."""
+    from memory.translations import LANGUAGES
+    value = str(language or "").strip().lower()
+    if value not in LANGUAGES:
+        raise ValueError(f"Unsupported UI language: {language}")
+    _save_flag("ui_language", value)
+
+
+def get_workspace_path() -> str:
+    """Return the configured project folder if it still exists."""
+    value = load_api_keys().get("workspace_path", "")
+    if not isinstance(value, str) or not value.strip():
+        return ""
+    try:
+        path = Path(value).expanduser().resolve()
+    except (OSError, RuntimeError):
+        return ""
+    return str(path) if path.is_dir() else ""
+
+
+def save_workspace_path(path: str) -> None:
+    """Save an existing project directory as the active workspace."""
+    value = str(path or "").strip()
+    if not value:
+        _save_flag("workspace_path", "")
+        return
+    try:
+        resolved = Path(value).expanduser().resolve(strict=True)
+    except (OSError, RuntimeError) as exc:
+        raise ValueError(f"Workspace folder is unavailable: {value}") from exc
+    if not resolved.is_dir():
+        raise ValueError(f"Workspace path is not a folder: {resolved}")
+    _save_flag("workspace_path", str(resolved))
+
+
+def get_project_open_mode() -> str:
+    """Return whether project files open internally or in the OS default app."""
+    value = load_api_keys().get("project_open_mode", "jarvis")
+    return value if value in ("jarvis", "external") else "jarvis"
+
+
+def save_project_open_mode(mode: str) -> None:
+    """Save the project file opener preference."""
+    value = str(mode or "").strip().lower()
+    if value not in ("jarvis", "external"):
+        raise ValueError(f"Unsupported project file opener: {mode}")
+    _save_flag("project_open_mode", value)
+
+
+def get_active_project_file() -> str:
+    """Return the last opened project file as a workspace-relative path."""
+    value = load_api_keys().get("active_project_file", "")
+    return value if isinstance(value, str) else ""
+
+
+def save_active_project_file(path: str) -> None:
+    """Save a project-relative active file path without allowing absolute paths."""
+    value = str(path or "").strip()
+    if value:
+        # Config values may be moved between operating systems. Check both
+        # path syntaxes so a Windows absolute/traversal path cannot slip
+        # through validation performed on POSIX (or vice versa).
+        posix_path = PurePosixPath(value.replace("\\", "/"))
+        windows_path = PureWindowsPath(value)
+        if (
+            posix_path.is_absolute()
+            or windows_path.is_absolute()
+            or windows_path.drive
+            or ".." in posix_path.parts
+            or ".." in windows_path.parts
+        ):
+            raise ValueError("Active project file must be a relative path inside the project.")
+    _save_flag("active_project_file", value)
 
 
 def save_assistant_config(assistant_name: str, user_name: str) -> None:
@@ -257,6 +353,109 @@ def _save_flag(key: str, value) -> None:
             data = {}
     data[key] = bool(value) if isinstance(value, bool) else value
     CONFIG_FILE.write_text(json.dumps(data, indent=4), encoding="utf-8")
+
+
+CURSOR_STYLES = ("halo", "orb", "reticle", "dot")
+CURSOR_SIZES = (18, 24, 32, 40)
+CURSOR_HOTKEYS = ("Ctrl+Shift+Space", "Ctrl+Alt+J", "Ctrl+Shift+J")
+REGION_HOTKEYS = ("Ctrl+Alt+R", "Ctrl+Shift+R", "Ctrl+Shift+X")
+CURSOR_MENU_ACTIONS = (
+    "microphone", "ask", "attach", "summarize", "explain", "translate",
+    "fix", "screen", "interrupt", "settings",
+)
+DEFAULT_CURSOR_MENU_ACTIONS = (
+    "microphone", "ask", "attach", "summarize", "explain", "translate",
+    "fix", "screen", "interrupt", "settings",
+)
+DEFAULT_COMPUTER_PERMISSIONS = {
+    "observe_screen": True,
+    "find_elements": False,
+    "move_mouse": False,
+    "click": False,
+    "type": False,
+}
+
+
+def get_cursor_assistant_settings() -> dict:
+    cfg = load_api_keys().get("cursor_assistant")
+    cfg = cfg if isinstance(cfg, dict) else {}
+    style = str(cfg.get("style", "halo")).lower()
+    try:
+        size = int(cfg.get("size", 24))
+    except (TypeError, ValueError):
+        size = 24
+    actions = cfg.get("menu_actions", DEFAULT_CURSOR_MENU_ACTIONS)
+    if not isinstance(actions, list):
+        actions = list(DEFAULT_CURSOR_MENU_ACTIONS)
+    actions = list(dict.fromkeys(
+        action for action in actions if action in CURSOR_MENU_ACTIONS
+    ))
+    return {
+        "enabled": bool(cfg.get("enabled", True)),
+        "cursor_visible": bool(cfg.get("cursor_visible", True)),
+        "style": style if style in CURSOR_STYLES else "halo",
+        "size": size if size in CURSOR_SIZES else 24,
+        "hotkey": cfg.get("hotkey", CURSOR_HOTKEYS[0])
+        if cfg.get("hotkey", CURSOR_HOTKEYS[0]) in CURSOR_HOTKEYS
+        else CURSOR_HOTKEYS[0],
+        "region_hotkey": cfg.get("region_hotkey", REGION_HOTKEYS[0])
+        if cfg.get("region_hotkey", REGION_HOTKEYS[0]) in REGION_HOTKEYS
+        else REGION_HOTKEYS[0],
+        "menu_actions": actions,
+    }
+
+
+def save_cursor_assistant_settings(values: dict) -> None:
+    values = values if isinstance(values, dict) else {}
+    current = load_api_keys().get("cursor_assistant")
+    current = dict(current) if isinstance(current, dict) else {}
+    if "enabled" in values:
+        current["enabled"] = bool(values["enabled"])
+    if "cursor_visible" in values:
+        current["cursor_visible"] = bool(values["cursor_visible"])
+    if "style" in values:
+        style = str(values["style"]).lower()
+        current["style"] = style if style in CURSOR_STYLES else "halo"
+    if "size" in values:
+        try:
+            size = int(values["size"])
+        except (TypeError, ValueError):
+            size = 24
+        current["size"] = size if size in CURSOR_SIZES else 24
+    if "hotkey" in values:
+        hotkey = str(values["hotkey"])
+        current["hotkey"] = hotkey if hotkey in CURSOR_HOTKEYS else CURSOR_HOTKEYS[0]
+    if "region_hotkey" in values:
+        hotkey = str(values["region_hotkey"])
+        current["region_hotkey"] = (
+            hotkey if hotkey in REGION_HOTKEYS else REGION_HOTKEYS[0])
+    if "menu_actions" in values:
+        actions = values["menu_actions"]
+        if not isinstance(actions, (list, tuple, set)):
+            actions = DEFAULT_CURSOR_MENU_ACTIONS
+        current["menu_actions"] = list(dict.fromkeys(
+            action for action in actions if action in CURSOR_MENU_ACTIONS
+        ))
+    _patch_config(cursor_assistant=current)
+
+
+def get_computer_permissions() -> dict:
+    cfg = load_api_keys().get("computer_permissions")
+    cfg = cfg if isinstance(cfg, dict) else {}
+    return {
+        key: cfg.get(key) if isinstance(cfg.get(key), bool) else default
+        for key, default in DEFAULT_COMPUTER_PERMISSIONS.items()
+    }
+
+
+def save_computer_permissions(values: dict) -> None:
+    values = values if isinstance(values, dict) else {}
+    current = load_api_keys().get("computer_permissions")
+    current = dict(current) if isinstance(current, dict) else {}
+    for key in DEFAULT_COMPUTER_PERMISSIONS:
+        if isinstance(values.get(key), bool):
+            current[key] = values[key]
+    _patch_config(computer_permissions=current)
 
 
 def get_brief_enabled() -> bool:

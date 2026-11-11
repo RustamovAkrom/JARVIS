@@ -1,6 +1,6 @@
 # Gemini in JARVIS
 
-[??????? ??????](gemini-ru.md) ? [Main documentation](../README.md)
+[Main documentation](../README.md)
 
 Gemini Live is the default conversation engine. It combines the audio session, responses, and calls to declared tools. One-shot helper requests and some plugins may also call Gemini, depending on enabled features.
 
@@ -15,9 +15,9 @@ If a key is exposed, revoke it with Google and create a new one. Never embed a k
 
 ## Models and fallback
 
-The model list and retry order are defined by the current code in `core/gemini.py` and `main.py`; they may change with the API. Check current IDs and availability in Google?s official catalogue for your project. Gemini Live and the regular REST API have different interfaces and capabilities: a REST model cannot simply replace a Live model.
+The model list and retry order are defined by the current code in `core/gemini.py` and `main.py`; they may change with the API. Check current IDs and availability in Google's official catalogue for your project. Gemini Live and the regular REST API have different interfaces and capabilities: a REST model cannot simply replace a Live model.
 
-Before changing source model lists, verify Google?s documentation, required capabilities, tool calls, and fallback behaviour. Do not assume a preview model is available to every project.
+Before changing source model lists, verify Google's documentation, required capabilities, tool calls, and fallback behaviour. Do not assume a preview model is available to every project.
 
 ## Where AI is used
 
@@ -28,7 +28,7 @@ Before changing source model lists, verify Google?s documentation, required capa
 | Computer tools | Schemas from `actions/` and enabled plugins; executed by local Python code |
 | MY OWN SETUP | `providers/`; a separate pipeline, not Gemini Live |
 
-An API key does not guarantee free access or a fixed quota. Check Google?s current limits and pricing.
+An API key does not guarantee free access or a fixed quota. Check Google's current limits and pricing.
 
 ## Data and privacy
 

@@ -555,6 +555,37 @@ def computer_control(
     if not action:
         return "No action specified for computer_control."
 
+    required_permissions = {
+        "screenshot": ("observe_screen",),
+        "screen_find": ("find_elements",),
+        "focus_window": ("find_elements",),
+        "move": ("move_mouse",),
+        "scroll": ("move_mouse",),
+        "drag": ("move_mouse", "click"),
+        "click": ("click",),
+        "left_click": ("click",),
+        "double_click": ("click",),
+        "right_click": ("click",),
+        "screen_click": ("find_elements", "click"),
+        "type": ("type",),
+        "smart_type": ("type",),
+        "paste": ("type",),
+        "hotkey": ("type",),
+        "press": ("type",),
+        "clear_field": ("type",),
+    }.get(action, ())
+    if required_permissions:
+        from memory.config_manager import get_computer_permissions
+        permissions = get_computer_permissions()
+        denied = [name for name in required_permissions
+                  if not permissions.get(name, False)]
+        if denied:
+            return (
+                f"Permission denied: '{action}' is disabled in computer permissions. "
+                f"Disabled permission(s): {', '.join(denied)}. "
+                "The user can enable it in CONTROLS → COMPUTER PERMISSIONS."
+            )
+
     if player:
         # Terminal, not the HUD: the activity log is for the conversation and
         # for problems, not a receipt for every keystroke. See

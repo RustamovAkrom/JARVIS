@@ -1,142 +1,251 @@
-# JARVIS / MARK LIV
+# JARVIS
 
-[Документация на русском](README_ru.md) · [Plugins and development](docs/plugins.md) · [Gemini](docs/gemini.md) · [Local and third-party models](docs/local-llm.md)
+![JARVIS](assets/images/banner.png)
 
-JARVIS is a Python and PyQt6 desktop voice assistant. It brings together spoken conversation, computer tools, local memory, and a HUD. Gemini Live is the default engine; an optional pipeline combines selected providers and can run fully locally.
+[![Tests](https://github.com/RustamovAkrom/JARVIS/actions/workflows/tests.yml/badge.svg?branch=v2)](https://github.com/RustamovAkrom/JARVIS/actions/workflows/tests.yml?query=branch%3Av2)
 
-> The current code calls this build MARK LIV. JARVIS is also used in the interface and project history.
+JARVIS is a desktop AI assistant built around voice, a customizable HUD, and practical tools for everyday computer work. It combines Gemini Live with an optional, configurable speech and model pipeline, local memory, project-aware file access, and extensions that can be enabled when needed.
 
-## Contents
+The interface includes an animated orbital display, system telemetry, conversation and task panels, a project browser and editor, a terminal, and optional cursor and screen tools.
 
-- [Capabilities](#capabilities)
-- [Install](#install)
-- [Interface and controls](#interface-and-controls)
-- [Settings](#settings)
-- [Models and AI](#models-and-ai)
-- [Actions and plugins](#actions-and-plugins)
-- [Data and privacy](#data-and-privacy)
-- [For developers](#for-developers)
-- [Troubleshooting](#troubleshooting)
+## At a glance
+
+- **Talk or type:** speak with JARVIS in a live session, use typed messages, or attach files and screenshots.
+- **Choose how AI runs:** use Gemini Live or configure separate speech-to-text, language-model, and text-to-speech providers, including local services.
+- **Work with a project:** select a workspace, ask JARVIS to inspect its files, edit text in the built-in editor, and open a project-scoped terminal.
+- **Use computer tools deliberately:** enable optional screen and mouse/keyboard abilities from Controls; disabled abilities are not available to the assistant.
+- **Make it yours:** choose the interface language, accent, opacity, voice, cursor appearance, and shortcuts.
+- **Extend JARVIS:** turn optional plugins on or off from the interface.
 
 ## Capabilities
 
-**Voice and conversation:** Gemini Live combines microphone input, speech recognition, spoken responses, and tool calls in one session. The UI also supports typed messages and file attachments. Push-to-talk and the local “Hey Jarvis” wake word are optional switches.
+### Conversation, speech, and models
 
-**Computer tools:** built-in actions in `actions/` open applications and websites, search the web, process files, control windows and selected OS settings, manage reminders, play video, and use screen or camera context. Availability depends on OS, permissions, and installed software. The app may ask before irreversible operations; some reversible operations support undo.
+- Gemini Live supports spoken conversation, streamed audio, and tool use in one session. Typed input and file attachments are also available.
+- Push-to-talk and the local wake-word feature are optional.
+- The alternate provider pipeline can combine a speech recognizer, a language model, and a speech synthesizer. Providers can be local or hosted; the three stages are configured independently.
+- Eligible background requests can use a separately selected provider and model.
+- Assistant memory stores selected facts and session summaries locally and can retrieve relevant entries when asked.
 
-**HUD and memory:** animated avatar with speech synchronisation, CPU/memory/network and available sensor metrics, conversation/task/history/content/quiz panels, local long-term memory, mini window, appearance controls, and command palette.
+### Computer, browser, and project tools
 
-**Integrations:** optional dashboards and tools are loaded as plugins. The repository includes Obsidian, Spotify, and Telegram integrations; system/disk/network/battery/weather dashboards; and other plugins. Features may require credentials, authorisation, third-party apps, or internet access.
+Built-in actions cover web search, browser control, opening applications, file processing, reminders, desktop and window actions, selected operating-system settings, weather and flight information, messaging, and coding assistance. The exact actions available depend on the operating system, configured services, and installed applications.
 
-## Install
+JARVIS can inspect files in the folder selected in **PROJECT**. The project-file tool is read-only and restricted to that selected workspace. Text files can be opened in the built-in editor or in the system's default application. New terminal sessions start in the selected project folder, or the home folder if no project is selected.
 
-The project requires Python 3.14 or newer. Audio and multimedia dependencies can make installation take a while.
+### Screen, cursor, and computer permissions
+
+- Attach a screenshot or select a screen region for a question about visible content.
+- A clipboard action card can offer operations on copied text; the text is sent only after an action is selected.
+- The cursor assistant has configurable appearance, size, shortcut, and quick actions.
+- Computer permissions are separate switches. Screen capture is available by default; interface discovery, mouse movement, clicking or dragging, and keyboard input require explicit permission.
+- Some consequential actions request confirmation. Availability and behavior vary by platform.
+
+### HUD and system information
+
+- The HUD keeps JARVIS's animated orbital core and responds to voice activity and cursor movement.
+- The system panel displays CPU, memory, network, GPU, and temperature readings where available, plus recent CPU and memory history.
+- GPU and temperature sensors can report **N/A** on Windows or on systems without a supported sensor.
+- Conversation, archive, tasks, activity log, content, and quiz views are integrated into the desktop interface.
+- Accent color, window opacity, assistant voice, and interface language can be customized.
+
+### Reminders and background activity
+
+- Create and manage reminders and local tasks.
+- Optional morning brief, wake word, and push-to-talk controls are available in the interface.
+- Topic monitoring and context-aware check-ins can run when enabled.
+- Read-only background research can continue while JARVIS is being used and delivers its report in the content panel.
+
+### Remote dashboard
+
+The optional dashboard provides a browser-based view and remote controls for a paired device. It runs locally and can be configured for HTTPS. When exposing it beyond the computer, enable HTTPS and use the pairing controls; do not share dashboard credentials or pairing codes.
+
+## Plugins
+
+Plugins are optional extensions discovered from `plugins/`. Manage them in **SETUP → PLUGINS** and configure supported integrations in **PLUGIN SETTINGS**. A plugin may require an account, API key, companion application, or additional operating-system permissions.
+
+| Plugin | What it adds |
+|---|---|
+| Battery dashboard | Battery status and history |
+| Calorie counter | AI-assisted food and calorie estimates from an image |
+| Chat assistance | Optional help with the currently open chat |
+| Disk dashboard | Storage overview and selected cache maintenance |
+| Document review | Document explanation and structured review |
+| Excel writer | Spreadsheet creation and editing |
+| Game updater | Game-library discovery and selected install/update tasks |
+| God's Eye | Visual assistance and screen-oriented tools |
+| Network dashboard | Network status and diagnostics |
+| Obsidian vault | Search and work with a configured notes vault |
+| OSINT toolkit | Public-source lookup utilities |
+| Pomodoro | Focus and break sessions |
+| Quiz | Interactive quizzes in the JARVIS interface |
+| Spotify control | Control a configured Spotify account |
+| System dashboard | Live system diagnostics |
+| Telegram remote | Optional remote assistant controls through a configured bot |
+| Trading agent | Market quotes and analysis tools |
+| Water reminder | Local water-intake tracking and reminders |
+| Weather dashboard | Weather information and forecast panels |
+
+Plugins run as Python code with the current user's permissions; they are not sandboxed. Enable only extensions you trust and review their required access before use.
+
+## Quick start
+
+### Requirements
+
+- Python 3.14 or newer. Python 3.14 is the version currently tested by the project.
+- Windows, Linux, or macOS. Individual computer-control features vary by platform.
+- A Gemini API key for the default Gemini Live experience.
+- Internet access for package installation, hosted AI providers, and online integrations.
+
+### Install
+
+The setup script detects Windows, Linux, or macOS, installs the Python packages from `requirements.txt`, and downloads the Chromium and Firefox runtimes used by browser automation. Platform markers in the requirements file keep operating-system-specific Python packages off other platforms.
+
+**Windows (PowerShell):**
 
 ```powershell
 git clone https://github.com/RustamovAkrom/JARVIS.git
 cd JARVIS
 py -3.14 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python setup.py
-python main.py
+.\.venv\Scripts\python.exe setup.py
+.\.venv\Scripts\python.exe main.py
 ```
 
-If PowerShell blocks activation, run `.venv\Scripts\python.exe setup.py`, then `.venv\Scripts\python.exe main.py`. On macOS/Linux, use `source .venv/bin/activate`, followed by `python setup.py` and `python main.py`. The installer prints additional Linux system dependencies when needed.
+**Linux or macOS:**
 
-On first launch, enter a Gemini API key from [Google AI Studio](https://aistudio.google.com/apikey) in the setup window and confirm the detected OS. The key and settings are stored in `config/api_keys.json`. Do not publish or commit this file.
+```bash
+git clone https://github.com/RustamovAkrom/JARVIS.git
+cd JARVIS
+python3 -m venv .venv
+.venv/bin/python setup.py
+.venv/bin/python main.py
+```
 
-The setup script installs `requirements.txt` and Playwright Chromium/Firefox browsers. If the browser download fails, it prints a retry command; the rest of the app can run without browser automation.
+The installer handles Python packages and browser runtimes. Some Linux desktop actions also rely on native utilities supplied by the distribution; the setup script prints guidance for those optional integrations rather than installing system packages with elevated privileges.
+
+### Optional: install with uv
+
+If you already use [uv](https://docs.astral.sh/uv/) or want its fast, lockfile-based installation, install uv by following the [official installation guide](https://docs.astral.sh/uv/getting-started/installation/). From the project directory, run:
+
+```bash
+uv sync --no-install-project
+uv run --no-sync python -m playwright install chromium firefox
+uv run --no-sync python main.py
+```
+
+uv installs the dependencies declared in `pyproject.toml` using `uv.lock`. The `--no-install-project` option installs dependencies without trying to package JARVIS as a Python library. The Playwright command downloads the browser runtimes used by browser automation. See the [uv project guide](https://docs.astral.sh/uv/guides/projects/) and [environment syncing guide](https://docs.astral.sh/uv/concepts/projects/sync/) for details.
+
+On first launch, follow the setup screen to choose a language and configure the Gemini API key. Keep the key private. To use a different speech or model provider, open **SETUP → ENGINE & PROVIDERS** after startup.
+
+### Browser runtime recovery
+
+If the browser download is interrupted, the assistant can still run without browser automation. Retry it from the project environment:
+
+```bash
+python -m playwright install chromium firefox
+```
+
+On Windows, use `.venv\Scripts\python.exe -m playwright install chromium firefox`.
 
 ## Interface and controls
 
-- The centre shows the avatar or active media. System metrics are on the left; `L`, `R`, and `DOC` hide the corresponding panels.
-- Conversation and tasks are on the right. Type a message or use the microphone. Attach a file and describe what to do with it.
-- **SETUP** (`⚙`) contains configuration and integrations. **CONTROLS** (`🎛`) contains everyday switches.
-- **PLUGINS** enables/disables plugins; **PLUGIN SETTINGS** configures their integrations.
-- **ENGINE & PROVIDERS** switches between Gemini Live and the alternate STT/LLM/TTS pipeline.
+- **SETUP** contains provider, audio, integration, and assistant settings.
+- **CONTROLS** contains language, everyday behavior, cursor-assistant options, and computer permissions. Russian, Uzbek, and English are available for the interface.
+- **PROJECT** lets you select a workspace, browse its files, and choose whether text files open in the JARVIS editor or the system default application.
+- **TERMINAL** opens on demand. New sessions use the selected workspace when one is set.
+- The side panels can be shown or hidden independently. Hover over controls for concise descriptions.
 
-Shortcuts: `F4` toggles microphone, `Escape` interrupts a response, `F11` toggles full screen, `Ctrl+K` opens the command palette, and `Ctrl+Shift+Space` opens the mini window. Available buttons can vary slightly by OS.
+Useful shortcuts: `F4` toggles the microphone, `Escape` interrupts a response, `F11` toggles full screen, `Ctrl+K` opens the command palette, `Ctrl+Shift+Space` opens quick actions, and `Ctrl+Alt+R` starts region selection. Global shortcut availability depends on the operating system and desktop session.
 
-## Settings
+On Windows, `Win+Shift+S` is also available for selecting a region with the system capture tool. Return to JARVIS and press `Ctrl+V` to attach the image.
 
-Prefer the UI over editing JSON by hand: it validates fields and stores the format expected by the current code. Most settings live in `config/api_keys.json`.
+## Models and providers
 
-Depending on the build, **SETUP** configures the Gemini key and assistant name, HUD theme/colour, audio devices, providers, plugins, and OS-specific integrations. **CONTROLS** includes the morning brief, wake word, sleep/wake, push-to-talk, and behaviour options.
+Gemini Live is the default conversation mode. It needs a valid API key and network access. The optional pipeline lets you select separate providers for:
 
-Additional keys recognised by the current code include `media_resolution` (`low`, `medium`, `high`, `default`), `thinking_enabled`, `proactive_audio`, the `turn_tuning` object, `plugins_enabled`, and `providers`. The exact format is defined by `memory/config_manager.py` and `providers/`. Back up the file before manual edits. Example shape only; do not replace your file with it:
+| Stage | Available options |
+|---|---|
+| Speech-to-text | Local Whisper or a compatible hosted transcription service |
+| Language model | Local OpenAI-compatible servers and supported hosted providers |
+| Text-to-speech | System voices, local Piper, or a configured hosted voice service |
 
-```json
-{
-  "gemini_api_key": "<your key>",
-  "plugins_enabled": {"pomodoro": true, "trading_agent": false}
-}
-```
+Local services such as Ollama, LM Studio, llama.cpp servers, vLLM, and Jan must be installed and started separately. Configure the endpoint and model in **ENGINE & PROVIDERS**, then use the available connection test before applying changes.
 
-## Models and AI
+A local language model does not make the entire assistant offline: web search, hosted providers, remote integrations, and any feature that sends content to an external service still require network access. Check the provider selected for each feature before sharing sensitive material.
 
-Open **SETUP → ENGINE & PROVIDERS**.
+Local Whisper and Piper backends are optional downloads and can be installed from the provider setup instead of being included in the base environment.
 
-### Gemini Live
+More details: [Gemini configuration](docs/gemini.md) · [Local and compatible models](docs/local-llm.md) · [Plugin guide](docs/plugins.md)
 
-The default mode. It requires a Gemini API key and internet access. The model handles conversation, audio, and tool calls in one session. Model access depends on your Google project and can change.
 
-### MY OWN SETUP: STT → LLM → TTS pipeline
+## Project structure
 
-The three independent parts can be mixed:
-
-| Part | Implementations | Notes |
-|---|---|---|
-| STT — speech to text | Local faster-whisper; remote OpenAI-compatible transcription endpoint | Local Whisper defaults to CPU and model `base`; the model loads on first use. |
-| LLM — responses and tools | Ollama, LM Studio, llama.cpp server, vLLM, Jan; OpenAI and compatible services including Groq, DeepSeek, Mistral, xAI, OpenRouter, Together, Cerebras | Requires Base URL, model ID, and sometimes a key. The model list may be fetched from the server. |
-| TTS — text to speech | Local Piper; OS voices; ElevenLabs | Piper may download a voice model. ElevenLabs requires a key and internet access. |
-
-For a local LLM, start its server separately, choose the matching provider, check the URL and model ID, use TEST if available, then **SAVE & APPLY**. Preset addresses: Ollama `127.0.0.1:11434/v1`, LM Studio `:1234/v1`, llama.cpp `:8080/v1`, vLLM `:8000/v1`, Jan `:1337/v1`.
-
-For another hosted LLM, select a vendor and enter the model, URL, and key. A custom service must be compatible with OpenAI Chat Completions and the tool-calling format in use; a proprietary incompatible API needs a dedicated adapter.
-
-An optional **sidecar** is a separate model for short background requests. It does not replace the main conversational model. Some local models use a reduced tool budget; advanced options are under **MORE**.
-
-A fully local pipeline requires local STT, LLM, and TTS. A local LLM alone does not make search, cloud STT/TTS, plugins, or network actions offline. The pipeline is usually slower than Gemini Live, and tool support depends on the model and engine. See [local and third-party models](docs/local-llm.md) and [Gemini](docs/gemini.md).
-
-## Actions and plugins
-
-**Actions** in `actions/` are core computer tools. They are discovered at startup; there is no individual action toggle in the UI. Some depend on the OS.
-
-**Plugins** in `plugins/` are optional tools and dashboards. Toggle them in **PLUGINS** and back on without restarting. A disabled plugin is no longer offered to the model. You can delete an unneeded plugin file; some modules share `plugins/_*.py` helpers, so check dependencies first. The [plugin guide](docs/plugins.md) lists the current modules and explains removal.
-
-The current folder includes battery, disk, network, system, and weather dashboards; image-based calorie estimation, document review, chat assistance, and OSINT; Excel, game, Hermes Agent, Obsidian, Spotify, and Telegram integrations; Pomodoro, quizzes, market information, and water reminders. Some require external accounts or keys. Plugins execute trusted Python code with the user’s permissions; they are not sandboxed.
-
-## Data and privacy
-
-- `config/api_keys.json` stores keys and settings locally. Treat it as a secret.
-- `memory/` stores long-term memory and feature state; `config/` also contains UI history, tasks, and reminders.
-- Cloud providers receive the prompts and context sent to them. Screen, camera, microphone, files, and tool results may be sent to an AI/service depending on the enabled feature.
-- For local processing, check all three STT/LLM/TTS slots and disable cloud plugins you do not need. A local model alone does not guarantee every feature is local.
-
-## For developers
+The repository is organized by responsibility. These are the main entry points and modules; runtime state and generated settings are created locally and are not part of the source tree.
 
 ```text
-main.py                  startup and conversation loop
-ui.py                    PyQt6 HUD, panels, and settings
-actions/                 system tools
-plugins/                 optional dynamically discovered tools
-core/                    Gemini, audio, confirmation, loaders, OS helpers
-providers/               STT/LLM/TTS contracts and alternate engine
-memory/config_manager.py settings persistence
-dashboard/               web dashboard and HTTP integrations
+JARVIS/
+|-- .github/workflows/tests.yml    Cross-platform GitHub Actions test job
+|-- actions/                       Tools exposed to the assistant
+|   |-- background_tasks.py        Background research task commands
+|   |-- browser_control.py         Browser sessions and page interaction
+|   |-- computer_control.py        Permission-gated screen and input tools
+|   |-- file_controller.py         File and folder operations
+|   |-- reminder.py                Reminder scheduling and delivery
+|   |-- web_search.py              Search and research tools
+|   `-- workspace_files.py         Read-only access to the selected project
+|-- assets/                        Fonts, icons, images, and bundled terminal UI
+|-- config/                        App identity and local, ignored user settings
+|-- core/                          Runtime services and tool/plugin loading
+|   |-- background_tasks.py        Persistent background task manager
+|   |-- gemini.py                  Gemini Live session handling
+|   |-- confirm.py                 Confirmation for consequential actions
+|   |-- outcome.py                 Structured tool results and trust boundaries
+|   `-- platform_support.py        OS capability checks
+|-- dashboard/                     Local web dashboard and paired-device API
+|-- docs/                           Setup guides and plugin documentation
+|-- memory/                         Settings, translations, and assistant memory
+|   |-- config_manager.py           Settings validation and persistence
+|   |-- memory_manager.py           Long-term memory storage and retrieval
+|   `-- translations.py             English, Russian, and Uzbek UI strings
+|-- plugins/                        Optional integrations and dashboards
+|-- providers/                      Optional STT -> LLM -> TTS pipeline
+|-- tests/                          Unit tests for app behavior and UI
+|-- main.py                         Application startup and assistant session
+|-- ui.py                           PyQt desktop UI, HUD, editor, and terminal
+|-- setup.py                        Dependency and browser-runtime installer
+|-- requirements.txt                Install requirements and platform markers
+`-- pyproject.toml                  Python project metadata
 ```
 
-Add a plugin as a module in `plugins/` with a `PLUGIN` declaration (`name`, `description`, `parameters` of type `OBJECT`) and a `run(parameters, ...)` function. Optional `PLUGIN_SETTINGS` renders a settings form; the loader passes `player` and `session_memory` only when declared in the function signature. Discovery happens at startup, while toggling a discovered plugin applies immediately. Adding a file or changing code requires a restart. See the [developer guide](docs/plugins.md) for the contract and examples.
+`actions/` modules provide tools to the assistant. `plugins/` contains optional extensions managed in the UI. The `providers/` pipeline is an alternative to Gemini Live and is configured separately. Local credentials, history, and generated state belong to the running installation; do not add them to commits.
 
-Project strengths include separation of UI, tools, integrations, and AI providers; declarative tool schemas; configurable plugins; a shared event contract for the alternate engine; and a default Gemini path that does not depend on enabling the `providers/` package. Actual OS support is feature-specific.
+## Your data
 
-## Troubleshooting
+- **`config/api_keys.json`:** the Gemini key, provider credentials, language, appearance, permissions, and other settings.
+- **`config/ui_chat.json` and `config/ui_history.json`:** recent conversation and archived turns.
+- **`config/ui_tasks.json` and `config/ui_reminders.json`:** tasks and reminders created in the interface.
+- **`memory/long_term.json`:** facts and summaries retained by JARVIS.
+- **`~/.jarvis/background_tasks.json`:** background research task status and reports.
+- **`~/.jarvis/reminders/`:** operating-system reminder state and scheduling files.
+- **`~/.jarvis_profiles/`:** browser profiles created for JARVIS-controlled sessions.
 
-- **App does not start:** use a supported Python version and the active `.venv`.
-- **Gemini does not answer:** check the key, model access, and network; enable development mode for diagnostics.
-- **No audio:** check OS permissions, **AUDIO DEVICES**, and selected STT/TTS.
-- **Local server is unavailable:** start it separately and check Base URL, model ID, and API compatibility.
-- **Plugin is BROKEN:** read its **PLUGINS** entry; dependencies, shared helpers, or authorisation may be missing.
-- **Browser automation fails:** run `python -m playwright install chromium firefox`.
+Most settings and memory are currently stored alongside the project, in `config/` and `memory/`; background-task and reminder files use the home directory. Back up these files before reinstalling or moving the project. Never commit API keys, bot tokens, private conversation history, or personal project data. Content sent to a hosted model or integration leaves the computer and is governed by that service's policies.
 
-When filing an issue, include the OS, Python version, and reproduction steps. Remove keys, tokens, personal data, and private file contents from logs.
+## Development
+
+Run the test suite from the project environment:
+
+```bash
+python -m unittest discover -s tests
+```
+
+On Windows, run `.venv\Scripts\python.exe -m unittest discover -s tests`. Tests that create Qt widgets use the offscreen platform when configured by the test environment.
+
+Actions are discovered from `actions/`; plugins declare a schema and handler in a module under `plugins/`. Plugin settings are optional, and plugin failures are reported in the interface. See [docs/plugins.md](docs/plugins.md) before adding an extension.
+
+## Support
+
+- **Telegram:** [@Akrom_Rustamov](https://t.me/Akrom_Rustamov)
+- **Portfolio:** [akrom-rustamov.vercel.app](https://akrom-rustamov.vercel.app/)
+
+When reporting a problem, include your operating system, Python version, and steps to reproduce it. Remove keys, tokens, private file contents, and personal data from logs and screenshots.

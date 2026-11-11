@@ -1,7 +1,7 @@
 [project]
 name = "new-jarvis"
 version = "0.1.0"
-description = "Add your description here"
+description = "Cross-platform desktop AI assistant with voice, a customizable HUD, and computer tools."
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
@@ -35,7 +35,7 @@ dependencies = [
     "pycaw>=20260927 ; sys_platform == 'win32'",
     "pydub>=0.25.1",
     "pygetwindow>=0.0.9",
-    "pynvml>=13.0.1",
+    "nvidia-ml-py>=13.0.1",
     "pypdf2>=3.0.1",
     "pyperclip>=1.11.0",
     "pyqt6>=6.6,<7",
