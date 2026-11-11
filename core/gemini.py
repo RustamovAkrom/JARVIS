@@ -83,6 +83,7 @@ _KEY_FILE = _BASE / "config" / "api_keys.json"
 FAST = "fast"      # short classification, extraction, one-line decisions
 SMART = "smart"    # reasoning, generation, long documents, images
 SEARCH = "search"  # grounded search — REST only, see below
+VISION_FAST = "vision_fast"  # explicit image analysis, Flash Lite before other REST models
 
 # A rung that means "ask the Live model instead", through a short throwaway
 # session rather than the REST text API.
@@ -169,6 +170,8 @@ _LADDERS = {
     # returning an answer with no sources behind it.
     SEARCH: ("gemini-2.5-flash", "gemini-3.5-flash", "gemini-2.5-flash-lite",
              "gemini-flash-latest"),
+    VISION_FAST: ("gemini-3.5-flash-lite", "gemini-2.5-flash-lite",
+                  "gemini-3.1-flash-lite", "gemini-2.5-flash"),
 }
 
 # The conversation's own model, and ONE careful fallback behind it.
@@ -673,7 +676,7 @@ def call(contents, tier: str = FAST, config=None,
     # A configured provider joins the ladder — behind Gemini by default, in
     # front of it when the user has asked for that. One config read; on an
     # install with no provider this is an empty tuple and nothing changes.
-    rungs = _provider_rungs(tier)
+    rungs = () if tier == VISION_FAST else _provider_rungs(tier)
     if rungs:
         ladder = (rungs + tuple(ladder)) if _provider_first() \
             else (tuple(ladder) + rungs)

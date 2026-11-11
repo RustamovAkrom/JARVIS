@@ -7,15 +7,13 @@
 # fresh clone on the day it ships. Minor and patch updates flow in freely.
 
 # ── Core: UI, audio, Gemini Live ──────────────────────────────────────────────
-# PyQt6 and numpy also carry the holographic avatar: the head is rendered in
-# software with QPainter and posed with numpy, so the face costs no extra
-# package, no OpenGL and no GPU. Nothing below was added for it.
 PyQt6>=6.6,<7
 PyQt6-WebEngine>=6.6,<7
 pywinpty>=3.1.2,<4; sys_platform == "win32"
 sounddevice>=0.4,<1
 numpy>=1.24,<3
 google-genai>=2.8.0,<3
+av>=19.0.0
 # Declared even though google-genai already installs it. providers/ imports it
 # directly, and a package you import is a package you depend on — relying on
 # somebody else's transitive dependency works right up until they drop it.
@@ -59,6 +57,8 @@ uvicorn[standard]>=0.27,<1
 cryptography>=42,<50
 python-multipart>=0.0.9,<1
 qrcode[pil]>=7,<9
+google-auth-httplib2>=0.4.2
+webview-python>=1.1.3
 
 # ── Plugin extras ─────────────────────────────────────────────────────────────
 # Plugins are downloaded one file at a time from the community, so their
@@ -68,6 +68,7 @@ qrcode[pil]>=7,<9
 # disables exactly one plugin and never touches the rest of the app.
 google-api-python-client     # gmail_control, calendar_control — OAuth
 google-auth-oauthlib         # gmail_control, calendar_control — OAuth
+spotipy>=2.26.0              # spotify_control — Spotify API
 tinytuya                     # home_assistant — Tuya / Smart Life bulbs
 paho-mqtt                    # printer_control — MQTT printers
 openpyxl                     # excel_writer — spreadsheet output
@@ -95,6 +96,10 @@ pdfplumber                   # file_processor — PDF text and tables
 PyPDF2                       # file_processor — PDF fallback reader
 python-docx                  # file_processor — .docx reading
 pynvml                       # system_monitor + the HUD's GPU meter (NVIDIA)
+holehe>=1.61                 # osint_toolkit — email account discovery
+phoneinfoga>=0.1             # osint_toolkit — optional phone lookup CLI
+phonenumbers>=9.0.41         # osint_toolkit — phone number metadata
+sherlock-project>=0.14.4     # osint_toolkit — username lookup CLI
 
 # ── Optional: heavy extras, install only if you want the feature ──────────────
 # Left out on purpose — together they are several hundred megabytes, which is a

@@ -1,17 +1,4 @@
-"""
-MARK LIV — one-time setup.
-
-Installs the Python dependencies for THIS operating system only: the OS-specific
-packages in requirements.txt carry `sys_platform` markers, so a macOS or Linux
-user never pulls Windows-only libraries (and vice-versa). Then it fetches the
-Playwright browsers needed for web automation (current-OS builds only).
-
-Two things it deliberately does NOT install:
-  * the optional local wake word ("Hey Jarvis") — one-click, opt-in, from
-    ⚙ → WAKE WORD inside the app;
-  * anything for the avatar — the holographic head renders in software on the
-    PyQt6 and numpy already listed here. No GPU, no OpenGL, no extra packages.
-"""
+"""Install JARVIS Python dependencies and browser runtimes."""
 
 import platform
 import subprocess
@@ -20,14 +7,31 @@ from pathlib import Path
 
 OS = platform.system()  # "Windows" | "Darwin" | "Linux"
 HERE = Path(__file__).resolve().parent
+REQUIREMENTS_FILE = HERE / "requirements.txt"
+PLATFORM_NAMES = {
+    "Windows": "Windows",
+    "Linux": "Linux",
+    "Darwin": "macOS",
+}
 
 MIN_PY = (3, 14)  # required by pyproject.toml and uv.lock
 MAX_PY = (3, 14)  # highest version currently tested
 
 
 def _run(label: str, args: list[str]) -> None:
-    print(f"\n▶ {label}")
-    subprocess.run(args, check=True)
+    print(f"\n{label}")
+    subprocess.run(args, check=True, cwd=HERE)
+
+
+def _platform_name(system: str | None = None) -> str:
+    detected = system or OS
+    try:
+        return PLATFORM_NAMES[detected]
+    except KeyError as exc:
+        supported = ", ".join(PLATFORM_NAMES.values())
+        raise RuntimeError(
+            f"Unsupported operating system '{detected}'. Supported systems: {supported}."
+        ) from exc
 
 
 def _check_python() -> None:
@@ -43,15 +47,15 @@ def _check_python() -> None:
         # turns out to work fine, and if a wheel really is missing pip says
         # so plainly.
         print(
-            f"\n⚠️  Python {v[0]}.{v[1]} is newer than the "
-            f"{MAX_PY[0]}.{MAX_PY[1]} this is tested on. Continuing — if a "
+            f"\nWARNING: Python {v[0]}.{v[1]} is newer than the "
+            f"{MAX_PY[0]}.{MAX_PY[1]} this is tested on. Continuing; if a "
             f"package has no wheel yet, install Python "
             f"{MAX_PY[0]}.{MAX_PY[1]} and run setup with that."
         )
         return
     if v < MIN_PY:
         print(
-            f"\n❌ Python {v[0]}.{v[1]} detected — MARK LIV needs at "
+            f"\nERROR: Python {v[0]}.{v[1]} detected. JARVIS needs at "
             f"least Python {MIN_PY[0]}.{MIN_PY[1]}."
         )
         print("   Install a supported version and run setup with it, e.g.:")
@@ -60,28 +64,20 @@ def _check_python() -> None:
         sys.exit(1)
 
 
-def _check_assets() -> None:
-    """The avatar's face is a shipped file; a truncated clone should say so."""
-    face = HERE / "core" / "face_model.obj"
-    if not face.exists() or face.stat().st_size < 4096:
-        print(
-            "\n⚠️  core/face_model.obj is missing or truncated — the avatar will "
-            "fall back to the plain glowing core.\n"
-            "    Re-clone the repository, or fetch that one file again."
-        )
-
-
 def main() -> None:
+    os_name = _platform_name()
     print(
-        f"⚙  MARK LIV setup — detected OS: {OS or 'unknown'}, "
+        f"JARVIS setup - detected OS: {os_name}, "
         f"Python {sys.version_info[0]}.{sys.version_info[1]}"
     )
     _check_python()
+    if not REQUIREMENTS_FILE.is_file():
+        raise FileNotFoundError(
+            f"Dependency manifest not found: {REQUIREMENTS_FILE}")
 
-    # requirements.txt filters OS-specific extras by itself via pip markers.
     _run(
-        "Installing Python dependencies (OS-specific extras auto-filtered)…",
-        [sys.executable, "-m", "pip", "install", "-r", "requirements.txt"],
+        f"Installing Python dependencies for {os_name}...",
+        [sys.executable, "-m", "pip", "install", "-r", str(REQUIREMENTS_FILE)],
     )
 
     # Chromium covers Chrome/Edge/Opera/Brave/Vivaldi; Firefox for Firefox.
@@ -92,17 +88,15 @@ def main() -> None:
     # a user away from a working app.
     try:
         _run(
-            "Installing Playwright browsers (chromium + firefox)…",
+            "Installing Playwright browsers (chromium + firefox)...",
             [sys.executable, "-m", "playwright", "install", "chromium", "firefox"],
         )
     except (subprocess.CalledProcessError, FileNotFoundError) as e:
-        print(f"\n⚠️  Playwright browsers were not installed ({e}).")
+        print(f"\nWARNING: Playwright browsers were not installed ({e}).")
         print("    Everything except browser automation works. Retry later with:")
         print(f"    {sys.executable} -m playwright install chromium firefox")
 
-    _check_assets()
-
-    # ── OS-specific post-install notes ────────────────────────────────────────
+    # OS-specific post-install notes.
     if OS == "Windows":
         try:
             import win32com.client  # noqa: F401
@@ -111,31 +105,31 @@ def main() -> None:
                 Path(sys.executable).parent / "Scripts" / "pywin32_postinstall.py"
             )
             print(
-                "\n⚠️  pywin32 did not register correctly — desktop-shortcut "
+                "\nWARNING: pywin32 did not register correctly; desktop-shortcut "
                 "creation will use a slower fallback. To fix it, run:\n"
                 f'    "{sys.executable}" -m pip install --force-reinstall pywin32\n'
                 f'    "{sys.executable}" "{postinstall}" -install'
             )
     elif OS == "Linux":
         print(
-            "\nℹ️  Linux note — a few voice-controlled OS actions shell out to "
-            "native tools. Install the ones you'll use via your package manager:\n"
-            "    • volume      → pulseaudio-utils   (pactl)\n"
-            "    • brightness  → brightnessctl\n"
-            "    • reminders   → systemd (systemd-run) or 'at'\n"
-            "    • open URLs   → xdg-utils          (xdg-open)"
+            "\nLinux note: a few voice-controlled OS actions use native tools. "
+            "Install the ones you'll use via your package manager:\n"
+            "    - volume: pulseaudio-utils (pactl)\n"
+            "    - brightness: brightnessctl\n"
+            "    - reminders: systemd (systemd-run) or 'at'\n"
+            "    - open URLs: xdg-utils (xdg-open)"
         )
     elif OS == "Darwin":
         print(
-            "\nℹ️  macOS note — volume, brightness and reminders use the built-in "
+            "\nmacOS note: volume, brightness and reminders use the built-in "
             "'osascript' / LaunchAgents, so no extra tools are required.\n"
             "    For Safari automation only: python -m playwright install webkit"
         )
 
-    print("\n✅ Setup complete!")
+    print("\nSetup complete.")
     print("   1) Launch it:  python main.py")
     print("   2) Paste your free Gemini API key when the setup screen appears.")
-    print("   3) (Optional) Enable 'Hey Jarvis' from ⚙ → WAKE WORD.")
+    print("   3) (Optional) Enable 'Hey Jarvis' from Setup > Wake Word.")
 
 
 if __name__ == "__main__":

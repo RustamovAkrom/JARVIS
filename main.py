@@ -1091,6 +1091,8 @@ class JarvisLive:
         except Exception:
             self._asst_name = "JARVIS"
             _user_name = ""
+        from memory.config_manager import get_workspace_path
+        _workspace_path = get_workspace_path()
 
         memory     = load_memory()
         mem_str    = format_memory_for_prompt(memory)
@@ -1169,7 +1171,22 @@ class JarvisLive:
             ),
         })
 
-        parts = [time_ctx, identity_ctx]
+        project_ctx = (
+            "[PROJECT WORKSPACE]\n"
+            + (
+                f"The user-selected project folder is: {_workspace_path}\n"
+                if _workspace_path else
+                "No project folder is currently selected.\n"
+            )
+            + "When asked about project files or code, inspect the current "
+              "workspace with the workspace_files tool. List files first if "
+              "needed, then read the relevant file. Use read_current for the "
+              "file open in the JARVIS editor. Never claim to have seen project "
+              "contents until the tool returns them; unsaved editor changes "
+              "must be saved before the tool can read them.\n\n"
+        )
+
+        parts = [time_ctx, identity_ctx, project_ctx]
         if mem_str:
             parts.append(mem_str)
         parts.append(sys_prompt)
@@ -2451,6 +2468,12 @@ class JarvisLive:
                         self._awake = True
                         self.ui.set_state("LISTENING")
                         self.ui.write_log("SYS: JARVIS online.")
+
+                    try:
+                        from core.background_tasks import get_background_task_manager
+                        get_background_task_manager(self.ui)
+                    except (OSError, RuntimeError, ValueError) as exc:
+                        self.ui.write_log(f"ERR: Background research could not be restored: {exc}")
 
                     # What this machine will not permit, said once, on screen.
                     #
