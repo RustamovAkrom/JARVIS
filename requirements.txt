@@ -95,7 +95,7 @@ ddgs>=9,<10                  # web_search — the maintained successor to
 pdfplumber                   # file_processor — PDF text and tables
 PyPDF2                       # file_processor — PDF fallback reader
 python-docx                  # file_processor — .docx reading
-pynvml                       # system_monitor + the HUD's GPU meter (NVIDIA)
+nvidia-ml-py                 # system_monitor + the HUD's GPU meter (NVIDIA)
 holehe>=1.61                 # osint_toolkit — email account discovery
 phoneinfoga>=0.1             # osint_toolkit — optional phone lookup CLI
 phonenumbers>=9.0.41         # osint_toolkit — phone number metadata

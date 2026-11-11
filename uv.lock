@@ -1105,6 +1105,7 @@ dependencies = [
     { name = "mediapipe" },
     { name = "mss" },
     { name = "numpy" },
+    { name = "nvidia-ml-py" },
     { name = "opencv-python" },
     { name = "openpyxl" },
     { name = "paho-mqtt" },
@@ -1119,7 +1120,6 @@ dependencies = [
     { name = "pycaw", marker = "sys_platform == 'win32'" },
     { name = "pydub" },
     { name = "pygetwindow" },
-    { name = "pynvml" },
     { name = "pypdf2" },
     { name = "pyperclip" },
     { name = "pyqt6" },
@@ -1163,6 +1163,7 @@ requires-dist = [
     { name = "mediapipe", specifier = ">=1.0.1" },
     { name = "mss", specifier = ">=9,<11" },
     { name = "numpy", specifier = ">=1.24,<3" },
+    { name = "nvidia-ml-py", specifier = ">=13.0.1" },
     { name = "opencv-python", specifier = ">=4.8,<5" },
     { name = "openpyxl", specifier = ">=3.1.5" },
     { name = "paho-mqtt", specifier = ">=2.1.0" },
@@ -1177,7 +1178,6 @@ requires-dist = [
     { name = "pycaw", marker = "sys_platform == 'win32'", specifier = ">=20260927" },
     { name = "pydub", specifier = ">=0.25.1" },
     { name = "pygetwindow", specifier = ">=0.0.9" },
-    { name = "pynvml", specifier = ">=13.0.1" },
     { name = "pypdf2", specifier = ">=3.0.1" },
     { name = "pyperclip", specifier = ">=1.11.0" },
     { name = "pyqt6", specifier = ">=6.6,<7" },
@@ -1810,18 +1810,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/ae/6a/e80da7594ee598a776972d09e2813df2b06b3bc29218f440631dfa7c78a8/pymsgbox-2.0.1.tar.gz", hash = "sha256:98d055c49a511dcc10fa08c3043e7102d468f5e4b3a83c6d3c61df722c7d798d", size = 20768, upload-time = "2025-09-09T00:38:56.863Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/6f/3e/08c8cac81b2b2f7502746e6b9c8e5b0ec6432cd882c605560fc409aaf087/pymsgbox-2.0.1-py3-none-any.whl", hash = "sha256:5de8ec19bca2ca7e6c09d39c817c83f17c75cee80275235f43a9931db699f73b", size = 9994, upload-time = "2025-09-09T00:38:55.672Z" },
-]
-
-[[package]]
-name = "pynvml"
-version = "13.0.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "nvidia-ml-py" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/5c/57/da7dc63a79f59e082e26a66ac02d87d69ea316b35b35b7a00d82f3ce3d2f/pynvml-13.0.1.tar.gz", hash = "sha256:1245991d9db786b4d2f277ce66869bd58f38ac654e38c9397d18f243c8f6e48f", size = 35226, upload-time = "2025-09-05T20:33:25.377Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/d7/4a/cac76c174bb439a0c46c9a4413fcbea5c6cabfb01879f7bbdb9fdfaed76c/pynvml-13.0.1-py3-none-any.whl", hash = "sha256:e2b20e0a501eeec951e2455b7ab444759cf048e0e13a57b08049fa2775266aa8", size = 28810, upload-time = "2025-09-05T20:33:24.13Z" },
 ]
 
 [[package]]

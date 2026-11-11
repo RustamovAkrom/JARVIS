@@ -25,6 +25,28 @@ class SetupTests(unittest.TestCase):
         run.assert_called_once_with(
             ["python", "-m", "pip"], check=True, cwd=setup.HERE)
 
+    def test_deprecated_pynvml_is_removed_from_existing_installations(self):
+        with (
+            patch.object(setup.metadata, "version", return_value="13.0.1"),
+            patch.object(setup, "_run") as run,
+        ):
+            setup._remove_deprecated_pynvml()
+
+        run.assert_called_once_with(
+            "Removing deprecated pynvml package...",
+            [setup.sys.executable, "-m", "pip", "uninstall", "-y", "pynvml"],
+        )
+
+    def test_deprecated_pynvml_cleanup_is_skipped_when_not_installed(self):
+        missing = setup.metadata.PackageNotFoundError("pynvml")
+        with (
+            patch.object(setup.metadata, "version", side_effect=missing),
+            patch.object(setup, "_run") as run,
+        ):
+            setup._remove_deprecated_pynvml()
+
+        run.assert_not_called()
+
     def test_requirements_manifest_is_resolved_from_project_directory(self):
         self.assertEqual(
             setup.REQUIREMENTS_FILE,

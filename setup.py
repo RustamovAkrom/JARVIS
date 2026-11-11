@@ -3,6 +3,7 @@
 import platform
 import subprocess
 import sys
+from importlib import metadata
 from pathlib import Path
 
 OS = platform.system()  # "Windows" | "Darwin" | "Linux"
@@ -32,6 +33,25 @@ def _platform_name(system: str | None = None) -> str:
         raise RuntimeError(
             f"Unsupported operating system '{detected}'. Supported systems: {supported}."
         ) from exc
+
+
+def _remove_deprecated_pynvml() -> None:
+    """Remove the old shim that warns when the pynvml module is imported.
+
+    The supported nvidia-ml-py distribution provides the same ``pynvml``
+    import name. Existing environments can retain the separate deprecated
+    ``pynvml`` distribution after upgrading requirements, so remove it before
+    installing the replacement.
+    """
+    try:
+        metadata.version("pynvml")
+    except metadata.PackageNotFoundError:
+        return
+
+    _run(
+        "Removing deprecated pynvml package...",
+        [sys.executable, "-m", "pip", "uninstall", "-y", "pynvml"],
+    )
 
 
 def _check_python() -> None:
@@ -75,6 +95,7 @@ def main() -> None:
         raise FileNotFoundError(
             f"Dependency manifest not found: {REQUIREMENTS_FILE}")
 
+    _remove_deprecated_pynvml()
     _run(
         f"Installing Python dependencies for {os_name}...",
         [sys.executable, "-m", "pip", "install", "-r", str(REQUIREMENTS_FILE)],
