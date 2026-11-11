@@ -1,6 +1,7 @@
 import json
 import sys
 from pathlib import Path
+from pathlib import PurePosixPath, PureWindowsPath
 
 def get_base_dir() -> Path:
     if getattr(sys, "frozen", False):
@@ -140,8 +141,18 @@ def save_active_project_file(path: str) -> None:
     """Save a project-relative active file path without allowing absolute paths."""
     value = str(path or "").strip()
     if value:
-        candidate = Path(value)
-        if candidate.is_absolute() or ".." in candidate.parts:
+        # Config values may be moved between operating systems. Check both
+        # path syntaxes so a Windows absolute/traversal path cannot slip
+        # through validation performed on POSIX (or vice versa).
+        posix_path = PurePosixPath(value.replace("\\", "/"))
+        windows_path = PureWindowsPath(value)
+        if (
+            posix_path.is_absolute()
+            or windows_path.is_absolute()
+            or windows_path.drive
+            or ".." in posix_path.parts
+            or ".." in windows_path.parts
+        ):
             raise ValueError("Active project file must be a relative path inside the project.")
     _save_flag("active_project_file", value)
 

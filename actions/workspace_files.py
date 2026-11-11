@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from pathlib import PurePosixPath, PureWindowsPath
 
 _IGNORED_DIRS = {
     ".git", ".hg", ".svn", ".venv", "venv", "env", "node_modules",
@@ -21,7 +22,18 @@ def _workspace() -> Path | None:
 
 
 def _resolve_workspace_file(root: Path, relative_path: str) -> Path:
-    candidate = (root / relative_path).resolve(strict=True)
+    root = root.resolve(strict=True)
+    posix_path = PurePosixPath(relative_path.replace("\\", "/"))
+    windows_path = PureWindowsPath(relative_path)
+    if (
+        posix_path.is_absolute()
+        or windows_path.is_absolute()
+        or windows_path.drive
+        or ".." in posix_path.parts
+        or ".." in windows_path.parts
+    ):
+        raise ValueError("The requested path is outside the selected project.")
+    candidate = (root / Path(*posix_path.parts)).resolve(strict=True)
     if not candidate.is_relative_to(root):
         raise ValueError("The requested path is outside the selected project.")
     if not candidate.is_file():
