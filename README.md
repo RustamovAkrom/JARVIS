@@ -1,8 +1,12 @@
 # JARVIS
 
+![JARVIS](assets/images/banner.png)
+
+[![Tests](https://github.com/RustamovAkrom/JARVIS/actions/workflows/tests.yml/badge.svg?branch=v2)](https://github.com/RustamovAkrom/JARVIS/actions/workflows/tests.yml?query=branch%3Av2)
+
 JARVIS is a desktop AI assistant built around voice, a customizable HUD, and practical tools for everyday computer work. It combines Gemini Live with an optional, configurable speech and model pipeline, local memory, project-aware file access, and extensions that can be enabled when needed.
 
-The interface is designed as a working assistant, not a chat window alone: it includes an animated orbital display, system telemetry, conversation and task panels, a project browser and editor, a terminal, and optional cursor and screen tools. The HUD uses the orbital core; a face-based HUD is not part of the current interface.
+The interface includes an animated orbital display, system telemetry, conversation and task panels, a project browser and editor, a terminal, and optional cursor and screen tools.
 
 ## At a glance
 
@@ -20,7 +24,7 @@ The interface is designed as a working assistant, not a chat window alone: it in
 - Gemini Live supports spoken conversation, streamed audio, and tool use in one session. Typed input and file attachments are also available.
 - Push-to-talk and the local wake-word feature are optional.
 - The alternate provider pipeline can combine a speech recognizer, a language model, and a speech synthesizer. Providers can be local or hosted; the three stages are configured independently.
-- A separate provider can be configured for eligible background requests. Model selection is user-configured; JARVIS does not claim an automatic model ladder.
+- Eligible background requests can use a separately selected provider and model.
 - Assistant memory stores selected facts and session summaries locally and can retrieve relevant entries when asked.
 
 ### Computer, browser, and project tools
@@ -161,155 +165,48 @@ Local Whisper and Piper backends are optional downloads and can be installed fro
 
 More details: [Gemini configuration](docs/gemini.md) · [Local and compatible models](docs/local-llm.md) · [Plugin guide](docs/plugins.md)
 
+Russian guides: [Gemini](docs/gemini-ru.md) | [local and third-party models](docs/local-llm-ru.md) | [plugins](docs/plugins-ru.md).
+
 ## Project structure
 
-### Application
+The repository is organized by responsibility. These are the main entry points and modules; runtime state and generated settings are created locally and are not part of the source tree.
 
-| Path | Purpose |
-|---|---|
-| `main.py` | Application entry point, assistant session, audio lifecycle, tool registration, and background integrations |
-| `ui.py` | PyQt desktop window, orbital HUD, panels, controls, editor, terminal, and overlays |
-| `setup.py` | Platform-aware dependency and browser-runtime installer |
-| `requirements.txt` | Python dependency list with platform markers |
-| `pyproject.toml` | Python project metadata and environment requirements |
-| `uv.lock` | Locked environment resolution for uv |
-| `.python-version` | Preferred Python interpreter version |
-| `.gitignore` | Excludes local environments, credentials, and generated state |
-| `dev.py` | Development launcher entry point |
-| `LICENSE` | Project license |
-| `config/` | Local settings, credentials, UI history, tasks, and reminders |
+```text
+JARVIS/
+|-- .github/workflows/tests.yml    Cross-platform GitHub Actions test job
+|-- actions/                       Tools exposed to the assistant
+|   |-- background_tasks.py        Background research task commands
+|   |-- browser_control.py         Browser sessions and page interaction
+|   |-- computer_control.py        Permission-gated screen and input tools
+|   |-- file_controller.py         File and folder operations
+|   |-- reminder.py                Reminder scheduling and delivery
+|   |-- web_search.py              Search and research tools
+|   `-- workspace_files.py         Read-only access to the selected project
+|-- assets/                        Fonts, icons, images, and bundled terminal UI
+|-- config/                        App identity and local, ignored user settings
+|-- core/                          Runtime services and tool/plugin loading
+|   |-- background_tasks.py        Persistent background task manager
+|   |-- gemini.py                  Gemini Live session handling
+|   |-- confirm.py                 Confirmation for consequential actions
+|   |-- outcome.py                 Structured tool results and trust boundaries
+|   `-- platform_support.py        OS capability checks
+|-- dashboard/                     Local web dashboard and paired-device API
+|-- docs/                           Setup guides and plugin documentation
+|-- memory/                         Settings, translations, and assistant memory
+|   |-- config_manager.py           Settings validation and persistence
+|   |-- memory_manager.py           Long-term memory storage and retrieval
+|   `-- translations.py             English, Russian, and Uzbek UI strings
+|-- plugins/                        Optional integrations and dashboards
+|-- providers/                      Optional STT -> LLM -> TTS pipeline
+|-- tests/                          Unit tests for app behavior and UI
+|-- main.py                         Application startup and assistant session
+|-- ui.py                           PyQt desktop UI, HUD, editor, and terminal
+|-- setup.py                        Dependency and browser-runtime installer
+|-- requirements.txt                Install requirements and platform markers
+`-- pyproject.toml                  Python project metadata
+```
 
-### `actions/` — assistant tools
-
-| File | Purpose |
-|---|---|
-| `background_monitor.py` | User-configured topic monitoring |
-| `background_tasks.py` | Tool interface for background research tasks |
-| `browser_control.py` | Browser navigation and page interaction |
-| `code_helper.py` | Coding and debugging assistance |
-| `computer_control.py` | Permission-gated screen, mouse, and keyboard actions |
-| `computer_settings.py` | Supported operating-system settings |
-| `desktop.py` | Desktop and window operations |
-| `dev_agent.py` | Project-oriented development tasks |
-| `file_controller.py` | File and folder operations |
-| `file_processor.py` | Read and process supported document and media formats |
-| `flight_finder.py` | Flight search |
-| `open_app.py` | Launch desktop applications |
-| `proactive.py` | Context-aware check-in scheduling logic |
-| `reminder.py` | Reminder creation and delivery |
-| `screen_processor.py` | Analyze user-provided screen images and selected regions |
-| `send_message.py` | Supported message-sending integrations |
-| `system_monitor.py` | System status and threshold alerts |
-| `video_player.py` | HUD media playback controls |
-| `weather_report.py` | Weather lookup |
-| `web_search.py` | Web search and research lookup |
-| `workspace_files.py` | Read-only access to the selected project workspace |
-
-### `core/` — runtime services
-
-| File | Purpose |
-|---|---|
-| `action_loader.py` | Discover and validate action tools |
-| `appidentity.py` | Cross-platform application identification and activation helpers |
-| `audio_devices.py` | Audio device discovery and selection |
-| `avatar.py` | Legacy animated-figure renderer; not connected to the active HUD |
-| `avatar_mesh.py` | Legacy mesh loader; the active HUD uses the orbital display instead |
-| `background_tasks.py` | Persistent background research task manager |
-| `confirm.py` | Confirmation flow for consequential actions |
-| `echo.py` | Audio echo handling |
-| `gemini.py` | Gemini Live client and event handling |
-| `hotkey.py` | Shortcut registration and platform handling |
-| `installer.py` | In-app optional dependency installation |
-| `lazyimport.py` | Deferred optional imports |
-| `llm_client.py` | Language-model client helpers |
-| `outcome.py` | Structured tool outcomes and content-trust boundaries |
-| `platform_support.py` | Operating-system and desktop capability checks |
-| `plugin_loader.py` | Discover and manage optional plugins |
-| `promt.txt` | Assistant system-prompt template |
-| `stt.py` | Speech recognition interface |
-| `tts.py` | Speech synthesis interface |
-| `undo.py` | Reversal support for selected operations |
-| `viseme.py` | Speech-synchronized visual timing |
-| `wake_word.py` | Optional local wake-word support |
-
-### `providers/` — alternate speech and model pipeline
-
-| File | Purpose |
-|---|---|
-| `audio.py` | Audio conversion, resampling, and chunking |
-| `base.py` | Provider interface and capability declarations |
-| `engine_pipeline.py` | Connect configured speech, model, and voice stages |
-| `llm_openai.py` | OpenAI-compatible language-model provider |
-| `registry.py` | Provider discovery and registration |
-| `schema.py` | Shared provider configuration schema |
-| `stt_whisper.py` | Local Whisper speech recognition |
-| `tts_elevenlabs.py` | Hosted ElevenLabs speech synthesis |
-| `tts_piper.py` | Local Piper speech synthesis |
-| `tts_system.py` | Operating-system speech voices |
-| `_tests.py` | Provider and audio-pipeline tests |
-
-### `memory/` — settings and local state
-
-| File | Purpose |
-|---|---|
-| `__init__.py` | Package marker |
-| `config_manager.py` | Read and validate assistant settings |
-| `memory_manager.py` | Store, retrieve, and format long-term memory |
-| `translations.py` | English, Russian, and Uzbek interface strings |
-| `long_term.json` | Local long-term memory data |
-| `pomodoro_state.json` | Local focus-session state |
-| `water_state.json` | Local water-reminder state |
-
-### `plugins/` — optional integrations
-
-| File | Purpose |
-|---|---|
-| `_live_panels_core.py` | Shared components for live dashboard panels |
-| `_telegram_ops.py` | Shared operations for the remote-control integration |
-| `_template.py` | Example plugin structure |
-| `battery_dashboard.py` | Battery status dashboard |
-| `calorie_counter.py` | Image-based food estimate |
-| `chat_takeover.py` | Optional open-chat assistance |
-| `disk_dashboard.py` | Disk usage and cache tools |
-| `document_review.py` | Document review panel |
-| `excel_writer.py` | Spreadsheet creation and editing |
-| `game_updater.py` | Game client and library operations |
-| `gods_eye_plugin.py` | Visual assistance tools |
-| `gods_eye_view.html` | Interface template for visual assistance |
-| `network_dashboard.py` | Network diagnostics panel |
-| `obsidian_vault.py` | Obsidian vault integration |
-| `osint_toolkit.py` | Public-source research tools |
-| `pomodoro.py` | Focus timer |
-| `quiz.py` | Interactive quiz panel |
-| `spotify_control.py` | Spotify integration |
-| `system_dashboard.py` | System diagnostics panel |
-| `telegram_remote.py` | Paired remote-control integration |
-| `trading_agent.py` | Market information tools |
-| `water_reminder.py` | Water tracking and reminders |
-| `weather_dashboard.py` | Weather dashboard |
-
-### `dashboard/`, `docs/`, and `tests/`
-
-| Path | Purpose |
-|---|---|
-| `dashboard/server.py` | Local web dashboard and paired-device API |
-| `dashboard/__init__.py` | Dashboard package marker |
-| `providers/__init__.py` | Provider package marker |
-| `plugins/__init__.py` | Plugin package marker |
-| `tests/__init__.py` | Test package marker |
-| `docs/gemini.md` | Gemini setup notes |
-| `docs/gemini-ru.md` | Russian Gemini setup notes |
-| `docs/local-llm.md` | Local and compatible model setup |
-| `docs/local-llm-ru.md` | Russian local-model setup notes |
-| `docs/plugins.md` | Plugin catalogue and development contract |
-| `docs/plugins-ru.md` | Russian plugin guide |
-| `tests/test_background_tasks.py` | Background research task tests |
-| `tests/test_computer_control_permissions.py` | Computer permission tests |
-| `tests/test_cursor_assistant_settings.py` | Cursor and settings tests |
-| `tests/test_cursor_assistant_ui.py` | UI, editor, terminal, and interaction tests |
-| `tests/test_screen_region_selector.py` | Screen selection tests |
-| `tests/test_setup.py` | Platform detection and installer behavior tests |
-| `tests/test_workspace_files.py` | Workspace boundary and file-reading tests |
+`actions/` modules provide tools to the assistant. `plugins/` contains optional extensions managed in the UI. The `providers/` pipeline is an alternative to Gemini Live and is configured separately. Local credentials, history, and generated state belong to the running installation; do not add them to commits.
 
 ## Your data
 

@@ -1,8 +1,8 @@
 # Local and third-party models
 
-[??????? ??????](local-llm-ru.md) ? [Main documentation](../README.md)
+[Русская версия](local-llm-ru.md) · [Main documentation](../README.md)
 
-Configure providers in **SETUP ? ENGINE & PROVIDERS**, then press **SAVE & APPLY**. Gemini Live remains the default mode.
+Configure providers in **SETUP -> ENGINE & PROVIDERS**, then press **SAVE & APPLY**. Gemini Live remains the default mode.
 
 ## Local LLM
 
@@ -18,7 +18,7 @@ The server must support OpenAI Chat Completions. Tool calling depends on the spe
 
 The catalogue includes OpenAI, Groq, DeepSeek, Mistral, xAI, OpenRouter, Together, and Cerebras. Enter the endpoint, model ID, and key if required. A custom endpoint must be compatible with OpenAI Chat Completions; an incompatible proprietary API needs a dedicated adapter. Check provider pricing and data policies.
 
-## STT ? LLM ? TTS pipeline
+## STT -> LLM -> TTS pipeline
 
 The three slots are configured independently and can mix local and cloud services:
 
