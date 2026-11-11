@@ -63,6 +63,7 @@ from memory.memory_manager import (
 # (screen_process, close_camera, save_memory, manage_monitor, shutdown_jarvis,
 # system_status).
 from core import outcome
+from core.live_session_errors import policy_close_reason as _live_policy_close_reason
 from core.action_loader import strip_meta
 from actions.screen_processor  import _capture_camera, _capture_screen
 from actions.system_monitor    import SystemMonitor, get_system_status
@@ -2545,14 +2546,20 @@ class JarvisLive:
                     self._conn_backoff = 0
                     continue
 
-                # Gemini Live sometimes closes a receive stream with policy
-                # code 1008 and the generic "operation was aborted" reason.
-                # This is a server-side session abort, not a local Python
-                # failure; discard its resume token and reconnect cleanly.
-                # Keep it out of the traceback path, which made a recoverable
-                # reconnect look like a fatal crash in the terminal.
-                _err_lower = str(e).lower()
-                if "1008" in _err_lower and "aborted" in _err_lower:
+                # Gemini Live closes sessions at its inactivity/lifetime limits.
+                # Receive tasks sit inside TaskGroup, so inspect nested errors
+                # rather than the group's uninformative top-level message.
+                # Inactivity is recoverable with the latest resumption handle;
+                # the generic aborted close starts a clean session instead.
+                _policy_close = _live_policy_close_reason(e)
+                if _policy_close == "inactivity":
+                    print("[JARVIS] Gemini Live session ended after inactivity; reconnecting.")
+                    self.ui.write_log(
+                        "NET: Gemini Live session expired after inactivity — reconnecting."
+                    )
+                    self._conn_backoff = 3
+                    continue
+                if _policy_close == "aborted":
                     print("[JARVIS] Gemini Live aborted this session (1008); reconnecting fresh.")
                     self.ui.write_log(
                         "NET: Gemini Live ended the session (1008) — reconnecting."
