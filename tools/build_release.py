@@ -48,6 +48,7 @@ def main() -> int:
         "vpk", "pack", "--packId", "JARVIS", "--packVersion", version,
         "--packDir", str(dist), "--mainExe", "JARVIS.exe",
         "--packTitle", "JARVIS", "--channel", args.channel,
+        "--icon", str(ROOT / "config" / "jarvis.ico"),
         "--outputDir", str(output), "--packAuthors", "JARVIS",
     ])
     return 0

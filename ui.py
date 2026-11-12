@@ -574,6 +574,7 @@ class _SysMetrics:
         self.net = 0.0
         self.gpu = -1.0
         self.tmp = -1.0
+        self.process_count = 0
         self._lock = threading.Lock()
         self._last_net = psutil.net_io_counters()
         self._last_net_t = time.time()
@@ -581,6 +582,7 @@ class _SysMetrics:
         # Probe caches — GPU and temperature are refreshed less often than
         # CPU/memory/network metrics to keep the monitor lightweight.
         self._slow_tick = 0  # gpu/temp refreshed every 3rd cycle
+        self._process_tick = 0
         self._pynvml = None  # cached pynvml module + device handle
         self._pynvml_h = None
         self._pynvml_ok = None  # None=untested, False=unavailable here
@@ -612,6 +614,17 @@ class _SysMetrics:
         self._last_net = nc
         self._last_net_t = now
 
+        # Process enumeration can briefly block on Windows. Keep it off the UI
+        # thread and refresh it every 10 seconds; the dashboard does not need a
+        # fresh count on every telemetry frame.
+        self._process_tick = (self._process_tick + 1) % 5
+        process_count = self.process_count
+        if self._process_tick == 1:
+            try:
+                process_count = len(psutil.pids())
+            except Exception:
+                pass
+
         # GPU and temperature change slowly and are the most expensive probes
         # (NVML / WMI) — refresh them every 3rd cycle (~6 s) instead of every
         # cycle, reusing the previous reading in between.
@@ -629,6 +642,7 @@ class _SysMetrics:
             self.net = net
             self.gpu = gpu
             self.tmp = tmp
+            self.process_count = process_count
 
     def _get_gpu(self) -> float:
         if _OS == "Windows":
@@ -712,6 +726,7 @@ class _SysMetrics:
                 "net": self.net,
                 "gpu": self.gpu,
                 "tmp": self.tmp,
+                "process_count": self.process_count,
             }
 
 
@@ -719,6 +734,8 @@ _metrics = _SysMetrics()
 
 
 class HudCanvas(QWidget):
+    muteToggleRequested = pyqtSignal()
+
     def __init__(
         self, face_path: str, assistant_name: str = "J.A.R.V.I.S", parent=None
     ):
@@ -739,10 +756,21 @@ class HudCanvas(QWidget):
         self._orb_pts, self._orb_edges = self._make_orb_points(320)
         self._orb_ph = [random.uniform(0.0, 6.2832) for _ in self._orb_pts]
         self._orb_rot = 0.0
+        # Small, fixed particle budget for the Matrix backdrop. Each stream is
+        # just a few numbers and glyphs; it reuses the HUD timer and painter.
+        self._matrix_streams = [
+            self._new_matrix_stream(random.uniform(-0.25, 1.0))
+            for _ in range(28)
+        ]
         self._pointer_target_x = 0.0
         self._pointer_target_y = 0.0
         self._pointer_tilt_x = 0.0
         self._pointer_tilt_y = 0.0
+        self._orb_pointer_pos = None
+        self._orb_hit_center = None
+        self._orb_hit_radius = 0.0
+        self._orb_target_strength = 0.0
+        self._orb_interaction = 0.0
         self.setMouseTracking(True)
         self._sats = [
             (1.35, 0.5, 0.9, 0.0),
@@ -859,6 +887,12 @@ class HudCanvas(QWidget):
 
     def mouseMoveEvent(self, event):
         pos = event.position()
+        self._orb_pointer_pos = (pos.x(), pos.y())
+        if self._orb_hit_center is not None:
+            hx, hy = self._orb_hit_center
+            self._orb_target_strength = float(
+                math.hypot(pos.x() - hx, pos.y() - hy) <= self._orb_hit_radius
+            )
         nx = max(-1.0, min(1.0, (pos.x() / max(1, self.width()) - 0.5) * 2))
         ny = max(-1.0, min(1.0, (pos.y() / max(1, self.height()) - 0.5) * 2))
         self._pointer_target_x = nx * 0.28
@@ -868,9 +902,38 @@ class HudCanvas(QWidget):
     def leaveEvent(self, event):
         self._pointer_target_x = 0.0
         self._pointer_target_y = 0.0
+        self._orb_target_strength = 0.0
         super().leaveEvent(event)
 
+    def mouseDoubleClickEvent(self, event):
+        pos = event.position()
+        if self._orb_hit_center is not None:
+            hx, hy = self._orb_hit_center
+            if math.hypot(pos.x() - hx, pos.y() - hy) <= self._orb_hit_radius:
+                self.muteToggleRequested.emit()
+                event.accept()
+                return
+        super().mouseDoubleClickEvent(event)
+
     def _step(self):
+        # Keep the widget responsive when it returns, but avoid running all
+        # avatar/orbit/matrix calculations at 60 Hz while the window is hidden
+        # or minimized.
+        visible = self._on_screen()
+        target_interval = 16 if visible else 250
+        if self._tmr.interval() != target_interval:
+            self._tmr.setInterval(target_interval)
+        pointer_animating = (
+            abs(self._pointer_target_x) > 0.001
+            or abs(self._pointer_target_y) > 0.001
+            or abs(self._pointer_tilt_x) > 0.001
+            or abs(self._pointer_tilt_y) > 0.001
+            or self._orb_target_strength > 0.001
+            or self._orb_interaction > 0.001
+        )
+        if not visible and not pointer_animating:
+            return
+
         self._tick += 1
         now = time.time()
 
@@ -913,6 +976,11 @@ class HudCanvas(QWidget):
         # uses — one audio source, so the mouth can never drift out of sync.
         dt = now - self._step_t
         self._step_t = now
+        self._advance_matrix(dt)
+        interaction_lerp = 1.0 - math.exp(-min(0.1, max(0.0, dt)) * 8.0)
+        self._orb_interaction += (
+            self._orb_target_strength - self._orb_interaction
+        ) * interaction_lerp
         pointer_lerp = 1.0 - math.exp(-min(0.1, max(0.0, dt)) * 7.0)
         self._pointer_tilt_x += (
             self._pointer_target_x - self._pointer_tilt_x
@@ -993,6 +1061,8 @@ class HudCanvas(QWidget):
             self.speaking
             or amp > 0.02
             or pointer_active
+            or self._orb_interaction > 0.008
+            or self._orb_target_strength > 0.0
             or self.state in ("THINKING", "PROCESSING")
         )
         if _blinked or (
@@ -1014,6 +1084,56 @@ class HudCanvas(QWidget):
             return not (win.isMinimized() or win.isHidden())
         except Exception:
             return True  # never let a visibility check stop the HUD drawing
+
+    @staticmethod
+    def _new_matrix_stream(y: float) -> dict:
+        alphabet = "0123456789ABCDEF" if random.random() < 0.72 else "01"
+        length = random.randint(4, 8)
+        return {
+            "x": random.random(),
+            "y": y,
+            "speed": random.uniform(0.16, 0.34),
+            "length": length,
+            "chars": [random.choice(alphabet) for _ in range(length)],
+            "alphabet": alphabet,
+        }
+
+    def _advance_matrix(self, dt: float) -> None:
+        height = max(1, self.height())
+        step = min(0.1, max(0.0, dt))
+        for stream in self._matrix_streams:
+            stream["y"] += stream["speed"] * step
+            if stream["y"] - stream["length"] * 14 / height > 1.0:
+                stream.update(self._new_matrix_stream(-random.uniform(0.04, 0.3)))
+            elif self._tick % 9 == 0:
+                chars = stream["chars"]
+                chars[random.randrange(len(chars))] = random.choice(stream["alphabet"])
+
+    def _paint_matrix(self, painter: QPainter, width: int, height: int) -> None:
+        if width < 1 or height < 1:
+            return
+        painter.save()
+        painter.setFont(QFont(FONT_MONO, 9))
+        color = QColor(C.GREEN)
+        line_height = 14
+        for stream in self._matrix_streams:
+            x = int(stream["x"] * max(1, width - 12))
+            head_y = int(stream["y"] * height)
+            chars = stream["chars"]
+            for index, char in enumerate(chars):
+                y = head_y - (len(chars) - index - 1) * line_height
+                if y < 8 or y > height:
+                    continue
+                # Keep the code rain atmospheric behind the reactor and text.
+                alpha = (
+                    145
+                    if index == len(chars) - 1
+                    else 28 + 58 * index // len(chars)
+                )
+                color.setAlpha(alpha)
+                painter.setPen(color)
+                painter.drawText(x, y, char)
+        painter.restore()
 
     # ── reactor core ─────────────────────────────────────────────────────────
     # The centrepiece for anyone who did not want a face looking back at them.
@@ -1243,6 +1363,8 @@ class HudCanvas(QWidget):
         t = self._core_phase
         live = (self.speaking or amp > 0.04) and not self.muted
         R = r * 0.60
+        self._orb_hit_center = (cx, cy)
+        self._orb_hit_radius = R * 1.48
         glow_x = cx + self._pointer_tilt_x * r * 0.55
         glow_y = cy + self._pointer_tilt_y * r * 0.55
 
@@ -1273,7 +1395,24 @@ class HudCanvas(QWidget):
             x1, z1 = x * cyw + z * syw, -x * syw + z * cyw
             y1, z2 = y * cxw - z1 * sxw, y * sxw + z1 * cxw
             scale = 3.2 / (3.2 - z2)
-            proj.append((cx + x1 * R * scale, cy + y1 * R * scale, z2))
+            px, py = cx + x1 * R * scale, cy + y1 * R * scale
+            if self._orb_pointer_pos is not None and self._orb_interaction > 0.001:
+                mx, my = self._orb_pointer_pos
+                dx, dy = px - mx, py - my
+                distance = math.hypot(dx, dy)
+                reach = R * 0.56
+                if distance < reach:
+                    proximity = 1.0 - distance / reach
+                    falloff = proximity * proximity * (3.0 - 2.0 * proximity)
+                    wave = 0.72 + 0.28 * math.sin(t * 4.2 + ph * 2.4)
+                    force = R * 0.34 * falloff * wave * self._orb_interaction
+                    inv_distance = 1.0 / max(1.0, distance)
+                    angle = ph * 1.7 + t * 1.5
+                    chaos_x, chaos_y = math.cos(angle), math.sin(angle)
+                    px += (dx * inv_distance * 0.76 + chaos_x * 0.58) * force
+                    py += (dy * inv_distance * 0.76 + chaos_y * 0.58) * force
+                    z2 += math.sin(angle * 1.3) * falloff * 0.12 * self._orb_interaction
+            proj.append((px, py, z2))
         layers = ([], [], [])
         for i, j in self._orb_edges:
             a, b = proj[i], proj[j]
@@ -1337,6 +1476,7 @@ class HudCanvas(QWidget):
         p.fillRect(self.rect(), qcol(C.PANEL))
 
         W, H = self.width(), self.height()
+        self._paint_matrix(p, W, H)
         cx, cy = W / 2, H / 2
         fw = min(W, H)
 
@@ -3551,7 +3691,7 @@ class MemoryOverlay(_HudOverlay):
     the other half of that change — a memory you cannot inspect is a memory you
     cannot trust, and 'delete' has to be something the person can do."""
 
-    _OW = 520
+    _OW = 560
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -3670,51 +3810,75 @@ class MemoryOverlay(_HudOverlay):
         else:
             scroll = QScrollArea()
             scroll.setWidgetResizable(True)
-            scroll.setFixedHeight(min(420, 34 * len(rows) + 10))
+            scroll.setFixedHeight(min(440, 82 * len(rows) + 10))
             scroll.setStyleSheet(
-                f"QScrollArea {{ border: 1px solid {C.BORDER}; border-radius: 3px; "
-                f"background: transparent; }}"
+                f"QScrollArea {{ border: 1px solid {C.BORDER}; border-radius: 7px; "
+                f"background: {C.DARK}; }}"
             )
             inner = QWidget()
             ilay = QVBoxLayout(inner)
-            ilay.setContentsMargins(6, 6, 6, 6)
-            ilay.setSpacing(3)
+            ilay.setContentsMargins(8, 8, 8, 8)
+            ilay.setSpacing(8)
 
             for r in rows:
-                line = QHBoxLayout()
-                line.setSpacing(6)
-                txt = QLabel(
-                    f"<b>{r['key'].replace('_', ' ')}</b> "
-                    f"<span style='color:{C.TEXT_MED}'>— {r['value']}</span>"
+                card = QFrame()
+                card.setObjectName("MemoryCard")
+                card.setStyleSheet(
+                    f"QFrame#MemoryCard {{ background:{C.PANEL}; "
+                    f"border:1px solid {C.BORDER}; border-radius:7px; }}"
                 )
-                txt.setWordWrap(True)
-                txt.setFont(QFont(FONT_MONO, 8))
-                txt.setStyleSheet(f"color: {C.TEXT}; background: transparent;")
-                line.addWidget(txt, 1)
-
-                meta = QLabel(f"{r['category'][:4]} · {r['updated'] or '—'}")
+                card_lay = QVBoxLayout(card)
+                card_lay.setContentsMargins(11, 9, 9, 9)
+                card_lay.setSpacing(5)
+                top = QHBoxLayout()
+                top.setSpacing(6)
+                key = QLabel(_html.escape(str(r["key"]).replace("_", " ")).title())
+                key.setFont(QFont(FONT_UI, 9, QFont.Weight.DemiBold))
+                key.setStyleSheet(f"color:{C.PRI}; background:transparent;")
+                top.addWidget(key, 1)
+                meta_text = (
+                    f"{_html.escape(str(r['category'][:4]).upper())}  ·  "
+                    f"{_html.escape(str(r['updated'] or '—'))}"
+                )
+                meta = QLabel(meta_text)
                 meta.setFont(QFont(FONT_MONO, 7))
-                meta.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
-                line.addWidget(meta)
-
-                rm = QPushButton("✕")
-                rm.setFixedSize(20, 20)
-                rm.setFont(QFont(FONT_MONO, 8, QFont.Weight.Bold))
+                meta.setStyleSheet(f"color:{C.TEXT_DIM}; background:transparent;")
+                top.addWidget(meta)
+                copy_btn = QPushButton("Copy")
+                copy_btn.setFixedHeight(22)
+                copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+                copy_btn.setToolTip("Copy this memory")
+                copy_btn.setStyleSheet(f"""
+                    QPushButton {{ color:{C.TEXT_MED}; background:{C.PANEL2};
+                        border:1px solid {C.BORDER}; border-radius:4px; padding:0 7px; }}
+                    QPushButton:hover {{ color:{C.PRI}; border-color:{C.PRI_DIM}; }}
+                """)
+                memory_text = f"{r['key'].replace('_', ' ')}: {r['value']}"
+                copy_btn.clicked.connect(
+                    lambda _=False, value=memory_text: QApplication.clipboard().setText(value)
+                )
+                top.addWidget(copy_btn)
+                rm = QPushButton("×")
+                rm.setFixedSize(22, 22)
+                rm.setFont(QFont(FONT_UI, 11))
                 rm.setCursor(Qt.CursorShape.PointingHandCursor)
-                rm.setToolTip("Forget this")
+                rm.setToolTip("Forget this memory")
                 rm.setStyleSheet(f"""
-                    QPushButton {{ background: transparent; color: {C.TEXT_DIM};
-                        border: 1px solid {C.BORDER}; border-radius: 3px; }}
-                    QPushButton:hover {{ color: {C.RED}; border-color: {C.RED}; }}
+                    QPushButton {{ color:{C.TEXT_DIM}; background:transparent;
+                        border:1px solid {C.BORDER}; border-radius:4px; }}
+                    QPushButton:hover {{ color:{C.RED}; border-color:{C.RED}; }}
                 """)
                 rm.clicked.connect(
                     lambda _=False, c=r["category"], k=r["key"]: self._forget(c, k)
                 )
-                line.addWidget(rm)
-
-                holder = QWidget()
-                holder.setLayout(line)
-                ilay.addWidget(holder)
+                top.addWidget(rm)
+                card_lay.addLayout(top)
+                txt = QLabel(_html.escape(str(r["value"])))
+                txt.setWordWrap(True)
+                txt.setFont(QFont(FONT_UI, 9))
+                txt.setStyleSheet(f"color:{C.TEXT}; background:transparent; line-height:145%;")
+                card_lay.addWidget(txt)
+                ilay.addWidget(card)
 
             ilay.addStretch()
             scroll.setWidget(inner)
@@ -7386,7 +7550,9 @@ class MainWindow(QMainWindow):
         self._terminal_active_id = ""
         self._terminal_sequence = 0
         self._terminal_poll_timer = QTimer(self)
-        self._terminal_poll_timer.setInterval(50)
+        # Drain terminal output frequently enough that large listings do not
+        # appear in visibly delayed 8 KB increments.
+        self._terminal_poll_timer.setInterval(25)
         self._terminal_poll_timer.timeout.connect(self._poll_terminal_output)
 
         # Apply the saved UI colour BEFORE panels/stylesheets are built
@@ -7471,6 +7637,7 @@ class MainWindow(QMainWindow):
 
         # Center column: HUD + resizable content panel via QSplitter
         self.hud = HudCanvas(face_path, _display)
+        self.hud.muteToggleRequested.connect(self._toggle_mute)
         self.hud.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
@@ -9030,11 +9197,9 @@ class MainWindow(QMainWindow):
         except Exception:
             self._uptime_lbl.setText(f"{self._tr('UPTIME')}  --:--:--")
 
-        try:
-            proc_count = len(psutil.pids())
-            self._proc_lbl.setText(f"{self._tr('PROCESSES')}  {proc_count}")
-        except Exception:
-            self._proc_lbl.setText(f"{self._tr('PROCESSES')}  --")
+        proc_count = snap.get("process_count", 0)
+        value = str(proc_count) if proc_count else "--"
+        self._proc_lbl.setText(f"{self._tr('PROCESSES')}  {value}")
 
     def _build_header(self) -> QWidget:
         w = _WindowHeader(self)
@@ -10565,9 +10730,10 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
 
     def _new_terminal(self):
         session = self._add_terminal_session()
-        self._start_terminal_process(session.session_id)
         self._terminal_panel.show()
         self._terminal_toggle_btn.setChecked(True)
+        if session.client_is_ready:
+            self._start_terminal_process(session.session_id)
         self._terminal_tabs.currentWidget().setFocus()
 
     def _close_terminal_session(self, index: int):
@@ -10837,7 +11003,11 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         )
         self._terminal_toggle_btn.setChecked(True)
         session = self._active_terminal_session()
-        if session is not None and session.pty is None:
+        if (
+            session is not None
+            and session.client_is_ready
+            and session.pty is None
+        ):
             self._start_terminal_process(session.session_id)
         if session is not None:
             session.view.setFocus()
@@ -10943,29 +11113,48 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             return
         pty = session.pty
         try:
-            if isinstance(pty, dict):
-                try:
-                    # Small reads keep the UI event loop responsive during very
-                    # chatty commands such as `tree`, so Ctrl+C can be handled.
-                    raw = os.read(pty["fd"], 8192)
-                except BlockingIOError:
-                    raw = b""
-                output = raw.decode("utf-8", errors="replace")
-                ended = pty["process"].poll() is not None
-            else:
-                # pywinpty's PTY.read accepts only `blocking`; chunk the result
-                # below so large commands do not flood the GUI event loop.
-                output = pty.read(blocking=False)
-                ended = not pty.isalive()
+            output_parts = []
+            output_size = 0
+            # Drain multiple small PTY reads per event-loop turn, then send one
+            # combined update to xterm.js. The cap keeps a very chatty command
+            # from monopolizing the UI thread while removing the old 8 KB / 50 ms
+            # bottleneck (about 160 KB/s) for ordinary command output.
+            while output_size < 65_536:
+                if isinstance(pty, dict):
+                    try:
+                        raw = os.read(pty["fd"], min(8192, 65_536 - output_size))
+                    except BlockingIOError:
+                        raw = b""
+                    except OSError as exc:
+                        if getattr(exc, "errno", None) in (5, 9):
+                            raw = b""
+                        else:
+                            raise
+                    piece = raw.decode("utf-8", errors="replace")
+                else:
+                    # winpty reports no available data as an empty string when
+                    # called in nonblocking mode.
+                    piece = pty.read(blocking=False) or ""
+                if not piece:
+                    break
+                piece = str(piece)
+                output_parts.append(piece)
+                output_size += len(piece)
+            output = "".join(output_parts)
+            ended = (
+                pty["process"].poll() is not None
+                if isinstance(pty, dict)
+                else not pty.isalive()
+            )
             if output:
                 session.pending_output += str(output)
-                # Bound memory if a command produces output faster than the UI
+                # Bound memory if a command produces output faster than xterm.js
                 # can render it; the terminal view itself keeps a short scrollback.
                 if len(session.pending_output) > 1_000_000:
                     session.pending_output = session.pending_output[-1_000_000:]
             if session.pending_output:
-                chunk = session.pending_output[:8192]
-                session.pending_output = session.pending_output[8192:]
+                chunk = session.pending_output[:65_536]
+                session.pending_output = session.pending_output[65_536:]
                 self._append_terminal_output(chunk, session_id=session_id)
             if ended and not session.pending_output:
                 self._append_terminal_output(
@@ -11037,6 +11226,16 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         if session is None:
             return
         session.client_is_ready = True
+        # Wait for xterm.js and its WebChannel bridge before starting the shell.
+        # On Windows, creating the PTY while the embedded page is still loading
+        # can race WebEngine initialization when the terminal is opened.
+        if (
+            self._terminal_panel.isVisible()
+            and session_id == self._terminal_active_id
+            and session.pty is None
+            and not session.closing
+        ):
+            self._start_terminal_process(session_id)
         if session.output_buffer:
             session.bridge.output.emit(session.output_buffer)
             session.output_buffer = ""
@@ -13292,7 +13491,9 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                 f'border-right:2px solid {C.ACC};border-radius:10px;">'
                 f'<table width="100%" cellspacing="0" cellpadding="0"><tr>'
                 f'<td style="color:{C.TEXT_DIM};font-size:8pt;">You</td>'
-                f'<td align="right"><a href="delete-turn:{turn_id}" title="Delete this turn" '
+                f'<td align="right"><a href="copy-user:{turn_id}" title="Copy message" '
+                f'style="color:{C.TEXT_MED};text-decoration:none;font-size:8pt;">Copy</a>'
+                f'&nbsp;&nbsp;<a href="delete-turn:{turn_id}" title="Delete this turn" '
                 f'style="color:{C.TEXT_DIM};text-decoration:none;font-size:8pt;">×</a></td>'
                 f'</tr></table><div style="color:{C.TEXT};margin-top:2px;">{request}</div>'
                 f'</td></tr></table></td></tr><tr><td height="3"></td></tr>'
@@ -13301,7 +13502,11 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                 f'border-left:2px solid {C.PRI};border-radius:2px 9px 9px 2px;">'
                 f'<div style="color:{C.PRI_DIM};font-size:8pt;font-weight:bold;">JARVIS'
                 f'{(" · " + status_label) if status_label else ""}</div>'
-                f'<div style="color:{answer_color};margin-top:2px;">{answer}</div>'
+                f'<table width="100%" cellspacing="0" cellpadding="0"><tr>'
+                f'<td style="color:{answer_color};margin-top:2px;">{answer}</td>'
+                f'<td align="right" valign="top"><a href="copy-answer:{turn_id}" title="Copy response" '
+                f'style="color:{C.TEXT_MED};text-decoration:none;font-size:8pt;">Copy</a></td>'
+                f'</tr></table>'
                 f'</td></tr></table></td></tr><tr><td height="6"></td></tr></table>'
             )
         if not cards:
@@ -13321,6 +13526,19 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         link = url.toString()
         if link.startswith("delete-turn:"):
             self._delete_chat_turn(link.split(":", 1)[1])
+        elif link.startswith(("copy-user:", "copy-answer:")):
+            kind, turn_id = link.split(":", 1)
+            row = next(
+                (r for r in _chat_turns() if str(r.get("id", "")) == turn_id),
+                None,
+            )
+            if row is not None:
+                text = (
+                    row.get("request", "")
+                    if kind == "copy-user"
+                    else row.get("result", "")
+                )
+                QApplication.clipboard().setText(str(text))
 
     def _delete_chat_turn(self, turn_id: str):
         if not turn_id:

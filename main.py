@@ -1,20 +1,4 @@
 import platform as _platform
-import subprocess as _subprocess
-
-# ── Nuclear: force CREATE_NO_WINDOW on EVERY subprocess call on Windows ───────
-# This patches Popen itself, so no per-file flag is needed anywhere.
-if _platform.system() == "Windows":
-    _OrigPopen = _subprocess.Popen
-
-    class _Popen(_OrigPopen):
-        def __init__(self, args, **kw):
-            kw["creationflags"] = (
-                kw.get("creationflags", 0) | _subprocess.CREATE_NO_WINDOW
-            )
-            kw.pop("startupinfo", None)  # drop any stale/shared STARTUPINFO
-            super().__init__(args, **kw)
-
-    _subprocess.Popen = _Popen
 
 
 # ── Console must survive non-UTF-8 code pages ────────────────────────────────
@@ -74,10 +58,14 @@ from datetime import datetime
 from pathlib import Path
 from core.runtime_paths import PATHS, initialize_user_data
 
-import sounddevice as sd
 import numpy as np
-from google import genai
-from google.genai import types
+from core.lazyimport import LazyModule
+
+# These libraries are first needed after the window is visible: sounddevice
+# when audio capture starts, and google-genai when the live session connects.
+sd = LazyModule("sounddevice")
+genai = LazyModule("google.genai")
+types = LazyModule("google.genai.types")
 from ui import JarvisUI
 from memory.memory_manager import (
     load_memory,
@@ -2994,6 +2982,28 @@ class JarvisLive:
                 # the generic aborted close starts a clean session instead.
                 _policy_close = _live_policy_close_reason(e)
                 if _policy_close == "inactivity":
+                    input_paused = (
+                        self.ui.muted
+                        or (self._wake_enabled and not self._awake)
+                        or (self._ptt_enabled and not self._ptt_held)
+                    )
+                    if input_paused and not self._phone_active:
+                        print(
+                            "[JARVIS] Live session expired while input was paused; "
+                            "waiting for the microphone or phone to become active."
+                        )
+                        self.ui.write_log(
+                            "NET: Live session expired while input was paused. "
+                            "Reconnect will resume when the microphone or phone is active."
+                        )
+                        while (
+                            self.ui.muted
+                            or (self._wake_enabled and not self._awake)
+                            or (self._ptt_enabled and not self._ptt_held)
+                        ) and not self._phone_active:
+                            await asyncio.sleep(0.5)
+                        self._conn_backoff = 0
+                        continue
                     print(
                         "[JARVIS] Gemini Live session ended after inactivity; reconnecting."
                     )

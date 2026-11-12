@@ -193,7 +193,7 @@ JARVIS/
 |   |-- reminder.py                Reminder scheduling and delivery
 |   |-- web_search.py              Search and research tools
 |   `-- workspace_files.py         Read-only access to the selected project
-|-- assets/                        Fonts, icons, images, and bundled terminal UI
+|-- assets/                        Icons, images, and bundled terminal UI
 |-- config/                        App identity and local, ignored user settings
 |-- core/                          Runtime services and tool/plugin loading
 |   |-- background_tasks.py        Persistent background task manager
