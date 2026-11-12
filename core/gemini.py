@@ -72,13 +72,9 @@ import time
 import threading
 from pathlib import Path
 from typing import Optional
+from core.runtime_paths import PATHS
 
-if getattr(sys, "frozen", False):
-    _BASE = Path(sys.executable).parent
-else:
-    _BASE = Path(__file__).resolve().parent.parent
-
-_KEY_FILE = _BASE / "config" / "api_keys.json"
+_KEY_FILE = PATHS.api_config_file
 
 # Ladders, tried left to right. Change a model HERE and the whole app follows.
 FAST = "fast"  # short classification, extraction, one-line decisions

@@ -91,6 +91,7 @@ from datetime import datetime
 from pathlib import Path
 
 from config import is_windows, is_mac, is_linux
+from core.runtime_paths import PATHS
 
 _CNW: dict = (
     {"creationflags": subprocess.CREATE_NO_WINDOW}
@@ -1213,7 +1214,7 @@ def _install_dialog(items: list[dict]) -> dict | None:
 # without a network at all in the common case, and the model is only consulted
 # when it cannot.
 # ─────────────────────────────────────────────────────────────────────────────
-_ROLE_CACHE = BASE_DIR / "memory" / "steam_controls.json"
+_ROLE_CACHE = PATHS.memory_dir / "steam_controls.json"
 _role_lock = threading.Lock()
 _role_memo: dict[str, dict] = {}
 

@@ -34,6 +34,32 @@ for _stream in ("stdout", "stderr"):
     except Exception:
         pass  # pythonw / redirected pipes / anything exotic — never fatal
 
+# Velopack must run before Qt or the rest of the application is imported. It is
+# used only by its installed bundle; source and portable runs never self-replace.
+if __name__ == "__main__" and getattr(_sys, "frozen", False):
+    from core.runtime_paths import PATHS, initialize_user_data
+
+    if PATHS.mode == "installed":
+        initialize_user_data()
+        try:
+            import json as _bootstrap_json
+
+            _update_options = _bootstrap_json.loads(
+                PATHS.api_config_file.read_text(encoding="utf-8")
+            ).get("updates", {})
+            _auto_apply = bool(
+                isinstance(_update_options, dict)
+                and _update_options.get("auto_install", False)
+            )
+        except Exception:
+            _auto_apply = False
+        try:
+            import velopack as _velopack
+
+            _velopack.App().set_auto_apply_on_startup(_auto_apply).run()
+        except Exception as _exc:
+            print(f"[Updater] Velopack startup is unavailable: {_exc}")
+
 # ─────────────────────────────────────────────────────────────────────────────
 
 import asyncio
@@ -46,6 +72,7 @@ import traceback
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
+from core.runtime_paths import PATHS, initialize_user_data
 
 import sounddevice as sd
 import numpy as np
@@ -114,14 +141,12 @@ WAKE_SLEEP_TIMEOUT = 120.0  # seconds (2 minutes)
 
 
 def get_base_dir():
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent
+    return PATHS.resource_root
 
 
 BASE_DIR = get_base_dir()
-API_CONFIG_PATH = BASE_DIR / "config" / "api_keys.json"
-PROMPT_PATH = BASE_DIR / "core" / "prompt.txt"
+API_CONFIG_PATH = PATHS.api_config_file
+PROMPT_PATH = BASE_DIR / "core" / "promt.txt"
 # The conversation's model. A NAME, not a decision: the ladder lives in
 # core/gemini.py and this is only whichever rung is currently in use, kept here
 # as a module attribute because plugins read it (chat_takeover asks main for it
@@ -724,7 +749,7 @@ class JarvisLive:
         )
         self._tuned_live = True  # turn-taking / media / thinking knobs; same fallback
 
-        _base_dir = Path(__file__).resolve().parent
+        _base_dir = PATHS.resource_root
         _inline_names = {t["name"] for t in TOOL_DECLARATIONS}
 
         # File-backed tools: every actions/*.py with a TOOL dict, discovered the
@@ -740,6 +765,7 @@ class JarvisLive:
         _core_names = _inline_names | self._action_registry.names()
         self._plugin_registry = discover_plugins(
             plugins_dir=_base_dir / "plugins",
+            user_plugins_dir=PATHS.plugins_dir,
             core_tool_names=_core_names,
             # Console gets the full boot transcript; the activity log gets only
             # what the user has to know about. Every plugin loading correctly is
@@ -2971,6 +2997,19 @@ class JarvisLive:
 
 
 def main():
+    initialize_user_data()
+    if "--smoke-test" in _sys.argv:
+        required = (
+            PATHS.resource_root / "core" / "promt.txt",
+            PATHS.resource_root / "actions",
+            PATHS.resource_root / "plugins",
+            PATHS.resource_root / "assets",
+        )
+        missing = [str(path) for path in required if not path.exists()]
+        if missing:
+            raise SystemExit("Packaged resources missing: " + ", ".join(missing))
+        print(f"JARVIS smoke test passed ({PATHS.mode}, {PATHS.user_data_root}).")
+        return
     ui = JarvisUI("face.png")
 
     def runner():

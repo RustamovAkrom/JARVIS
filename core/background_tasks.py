@@ -10,8 +10,9 @@ import time
 import uuid
 from pathlib import Path
 from typing import Callable
+from core.runtime_paths import PATHS
 
-_TASKS_PATH = Path.home() / ".jarvis" / "background_tasks.json"
+_TASKS_PATH = PATHS.databases_dir / "background_tasks.json"
 _ACTIVE = {"queued", "running", "cancelling"}
 _MAX_ACTIVE = 2
 _MAX_STORED = 50

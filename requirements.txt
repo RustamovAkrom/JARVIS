@@ -8,6 +8,7 @@
 
 # ── Core: UI, audio, Gemini Live ──────────────────────────────────────────────
 PyQt6>=6.6,<7
+packaging>=24,<27
 PyQt6-WebEngine>=6.6,<7
 pywinpty>=3.1.2,<4; sys_platform == "win32"
 sounddevice>=0.4,<1
@@ -48,6 +49,7 @@ mss>=9,<11
 
 # ── System, files & documents ─────────────────────────────────────────────────
 psutil>=5.9,<8
+velopack==1.2.161
 send2trash                   # file_controller — recoverable deletes
 python-pptx                  # file_processor — presentation reading
 

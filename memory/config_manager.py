@@ -1,18 +1,17 @@
 import json
-import sys
 from pathlib import Path
 from pathlib import PurePosixPath, PureWindowsPath
+from core.runtime_paths import PATHS
+from core.user_data import update_json
 
 
 def get_base_dir() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent.parent
+    return PATHS.user_data_root
 
 
 BASE_DIR = get_base_dir()
-CONFIG_DIR = BASE_DIR / "config"
-CONFIG_FILE = CONFIG_DIR / "api_keys.json"
+CONFIG_DIR = PATHS.config_dir
+CONFIG_FILE = PATHS.api_config_file
 
 
 def ensure_config_dir() -> None:
@@ -24,18 +23,7 @@ def config_exists() -> bool:
 
 
 def save_api_keys(gemini_api_key: str) -> None:
-    ensure_config_dir()
-
-    data: dict = {}
-    if CONFIG_FILE.exists():
-        try:
-            data = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
-        except Exception:
-            data = {}
-
-    data["gemini_api_key"] = gemini_api_key.strip()
-
-    CONFIG_FILE.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    _patch_config(gemini_api_key=gemini_api_key.strip())
 
 
 def load_api_keys() -> dict:
@@ -168,16 +156,10 @@ def save_active_project_file(path: str) -> None:
 
 def save_assistant_config(assistant_name: str, user_name: str) -> None:
     """Persist assistant name and user name to config."""
-    ensure_config_dir()
-    data: dict = {}
-    if CONFIG_FILE.exists():
-        try:
-            data = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
-        except Exception:
-            data = {}
-    data["assistant_name"] = assistant_name.strip() or "JARVIS"
-    data["user_name"] = user_name.strip()
-    CONFIG_FILE.write_text(json.dumps(data, indent=4), encoding="utf-8")
+    _patch_config(
+        assistant_name=assistant_name.strip() or "JARVIS",
+        user_name=user_name.strip(),
+    )
 
 
 # ── Assistant voice ──────────────────────────────────────────────────────────
@@ -197,16 +179,8 @@ def get_voice() -> str:
 def save_voice(voice_name: str) -> None:
     """Persist the chosen Live voice. Unknown names collapse to the default so a
     bad value can never reach the API and break the session."""
-    ensure_config_dir()
-    data: dict = {}
-    if CONFIG_FILE.exists():
-        try:
-            data = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
-        except Exception:
-            data = {}
     v = (voice_name or "").strip()
-    data["voice_name"] = v if v in AVAILABLE_VOICES else DEFAULT_VOICE
-    CONFIG_FILE.write_text(json.dumps(data, indent=4), encoding="utf-8")
+    _patch_config(voice_name=v if v in AVAILABLE_VOICES else DEFAULT_VOICE)
 
 
 def get_wake_word_enabled() -> bool:
@@ -215,15 +189,7 @@ def get_wake_word_enabled() -> bool:
 
 
 def save_wake_word_enabled(enabled: bool) -> None:
-    ensure_config_dir()
-    data: dict = {}
-    if CONFIG_FILE.exists():
-        try:
-            data = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
-        except Exception:
-            data = {}
-    data["wake_word_enabled"] = bool(enabled)
-    CONFIG_FILE.write_text(json.dumps(data, indent=4), encoding="utf-8")
+    _patch_config(wake_word_enabled=bool(enabled))
 
 
 def get_push_to_talk_enabled() -> bool:
@@ -304,18 +270,13 @@ def get_turn_tuning() -> dict:
 
 
 def save_turn_tuning(values: dict) -> None:
-    ensure_config_dir()
-    data: dict = {}
-    if CONFIG_FILE.exists():
-        try:
-            data = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
-        except Exception:
-            data = {}
-    cur = data.get("turn_tuning")
-    cur = dict(cur) if isinstance(cur, dict) else {}
-    cur.update(values or {})
-    data["turn_tuning"] = cur
-    CONFIG_FILE.write_text(json.dumps(data, indent=4), encoding="utf-8")
+    def merge(data: dict) -> None:
+        cur = data.get("turn_tuning")
+        cur = dict(cur) if isinstance(cur, dict) else {}
+        cur.update(values or {})
+        data["turn_tuning"] = cur
+
+    _update_config(merge)
 
 
 def get_proactive_audio_enabled() -> bool:
@@ -354,15 +315,7 @@ def save_media_resolution(value: str) -> None:
 
 def _save_flag(key: str, value) -> None:
     """Read-modify-write one key without disturbing the rest of the config."""
-    ensure_config_dir()
-    data: dict = {}
-    if CONFIG_FILE.exists():
-        try:
-            data = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
-        except Exception:
-            data = {}
-    data[key] = bool(value) if isinstance(value, bool) else value
-    CONFIG_FILE.write_text(json.dumps(data, indent=4), encoding="utf-8")
+    _patch_config(**{key: bool(value) if isinstance(value, bool) else value})
 
 
 CURSOR_STYLES = ("halo", "orb", "reticle", "dot")
@@ -494,15 +447,7 @@ def get_brief_enabled() -> bool:
 
 
 def save_brief_enabled(enabled: bool) -> None:
-    ensure_config_dir()
-    data: dict = {}
-    if CONFIG_FILE.exists():
-        try:
-            data = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
-        except Exception:
-            data = {}
-    data["morning_brief_enabled"] = enabled
-    CONFIG_FILE.write_text(json.dumps(data, indent=4), encoding="utf-8")
+    _patch_config(morning_brief_enabled=bool(enabled))
 
 
 # ── Audio devices ────────────────────────────────────────────────────────────
@@ -519,15 +464,12 @@ def _patch_config(**fields) -> None:
     Every setter in this file open-coded this. Collapsing it here means a new
     setting is one line, and there is one place where a corrupt config file is
     handled instead of nine."""
+    _update_config(lambda data: data.update(fields))
+
+
+def _update_config(update) -> dict:
     ensure_config_dir()
-    data: dict = {}
-    if CONFIG_FILE.exists():
-        try:
-            data = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
-        except Exception:
-            data = {}
-    data.update(fields)
-    CONFIG_FILE.write_text(json.dumps(data, indent=4), encoding="utf-8")
+    return update_json(CONFIG_FILE, update)
 
 
 def get_input_device() -> str:
@@ -574,39 +516,26 @@ def get_plugin_setting(namespace: str, key: str, default=None):
 def save_plugin_config(namespace: str, values: dict) -> None:
     """Merge `values` into a namespace's stored config (read-modify-write, like
     every other helper here). Only the provided keys are touched."""
-    ensure_config_dir()
-    data: dict = {}
-    if CONFIG_FILE.exists():
-        try:
-            data = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
-        except Exception:
-            data = {}
-    pc = data.get("plugin_config")
-    if not isinstance(pc, dict):
-        pc = {}
-    cur = pc.get(namespace)
-    if not isinstance(cur, dict):
-        cur = {}
-    cur.update(values)
-    pc[namespace] = cur
-    data["plugin_config"] = pc
-    CONFIG_FILE.write_text(json.dumps(data, indent=4), encoding="utf-8")
+    def merge(data: dict) -> None:
+        pc = data.get("plugin_config")
+        pc = dict(pc) if isinstance(pc, dict) else {}
+        cur = pc.get(namespace)
+        cur = dict(cur) if isinstance(cur, dict) else {}
+        cur.update(values)
+        pc[namespace] = cur
+        data["plugin_config"] = pc
+
+    _update_config(merge)
 
 
 def save_plugin_enabled(plugin_name: str, enabled: bool) -> None:
-    ensure_config_dir()
-    data: dict = {}
-    if CONFIG_FILE.exists():
-        try:
-            data = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
-        except Exception:
-            data = {}
-    plugins_cfg = data.get("plugins_enabled")
-    if not isinstance(plugins_cfg, dict):
-        plugins_cfg = {}
-    plugins_cfg[plugin_name] = enabled
-    data["plugins_enabled"] = plugins_cfg
-    CONFIG_FILE.write_text(json.dumps(data, indent=4), encoding="utf-8")
+    def merge(data: dict) -> None:
+        plugins_cfg = data.get("plugins_enabled")
+        plugins_cfg = dict(plugins_cfg) if isinstance(plugins_cfg, dict) else {}
+        plugins_cfg[plugin_name] = bool(enabled)
+        data["plugins_enabled"] = plugins_cfg
+
+    _update_config(merge)
 
 
 # ── Providers: local STT/LLM/TTS and non-Gemini APIs ─────────────────────────
@@ -752,42 +681,71 @@ def save_providers(
     `None` leaves a section alone; `creds` is merged per provider so a panel
     that only edited one does not have to send the others.
     """
-    ensure_config_dir()
-    data: dict = {}
-    if CONFIG_FILE.exists():
-        try:
-            data = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
-        except Exception:
-            data = {}
+    def merge(data: dict) -> None:
+        block = data.get("providers")
+        block = dict(block) if isinstance(block, dict) else {}
 
-    block = data.get("providers")
-    block = dict(block) if isinstance(block, dict) else {}
+        if mode is not None:
+            m = str(mode).strip().lower()
+            block["mode"] = (
+                m
+                if m in (PROVIDER_MODE_GEMINI, PROVIDER_MODE_PIPELINE)
+                else PROVIDER_MODE_GEMINI
+            )
+        if pipeline is not None:
+            current = block.get("pipeline")
+            current = dict(current) if isinstance(current, dict) else {}
+            current.update({k: str(v or "").strip() for k, v in pipeline.items()})
+            block["pipeline"] = current
+        if creds is not None:
+            store = block.get("creds")
+            store = dict(store) if isinstance(store, dict) else {}
+            for pid, values in (creds or {}).items():
+                one = store.get(pid)
+                one = dict(one) if isinstance(one, dict) else {}
+                one.update(values or {})
+                store[pid] = one
+            block["creds"] = store
+        if sidecar is not None:
+            block["sidecar"] = str(sidecar or "").strip()
+        if sidecar_first is not None:
+            block["sidecar_first"] = bool(sidecar_first)
+        data["providers"] = block
 
-    if mode is not None:
-        m = str(mode).strip().lower()
-        block["mode"] = (
-            m
-            if m in (PROVIDER_MODE_GEMINI, PROVIDER_MODE_PIPELINE)
-            else PROVIDER_MODE_GEMINI
+    _update_config(merge)
+
+
+def get_update_settings() -> dict:
+    """Read safe update preferences; installation is opt-in."""
+    raw = load_api_keys().get("updates", {})
+    raw = raw if isinstance(raw, dict) else {}
+    return {
+        "auto_check": bool(raw.get("auto_check", True)),
+        "auto_download": bool(raw.get("auto_download", False)),
+        "auto_install": bool(raw.get("auto_install", False)),
+    }
+
+
+def save_update_settings(
+    *, auto_check: bool | None = None,
+    auto_download: bool | None = None,
+    auto_install: bool | None = None,
+) -> None:
+    """Update only supplied options while preserving all other settings."""
+    fields = {
+        key: bool(value)
+        for key, value in (
+            ("auto_check", auto_check),
+            ("auto_download", auto_download),
+            ("auto_install", auto_install),
         )
-    if pipeline is not None:
-        current = block.get("pipeline")
-        current = dict(current) if isinstance(current, dict) else {}
-        current.update({k: str(v or "").strip() for k, v in pipeline.items()})
-        block["pipeline"] = current
-    if creds is not None:
-        store = block.get("creds")
-        store = dict(store) if isinstance(store, dict) else {}
-        for pid, values in (creds or {}).items():
-            one = store.get(pid)
-            one = dict(one) if isinstance(one, dict) else {}
-            one.update(values or {})
-            store[pid] = one
-        block["creds"] = store
-    if sidecar is not None:
-        block["sidecar"] = str(sidecar or "").strip()
-    if sidecar_first is not None:
-        block["sidecar_first"] = bool(sidecar_first)
+        if value is not None
+    }
 
-    data["providers"] = block
-    CONFIG_FILE.write_text(json.dumps(data, indent=4), encoding="utf-8")
+    def merge(data: dict) -> None:
+        current = data.get("updates")
+        current = dict(current) if isinstance(current, dict) else {}
+        current.update(fields)
+        data["updates"] = current
+
+    _update_config(merge)

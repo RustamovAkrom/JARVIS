@@ -39,8 +39,9 @@ import sys
 import threading
 import time
 from pathlib import Path
+from core.runtime_paths import PATHS
 
-BASE_DIR = Path(__file__).resolve().parent.parent
+BASE_DIR = PATHS.resource_root
 
 PLUGIN = {
     "name": "chat_takeover",
@@ -158,7 +159,7 @@ _LIVE_SYSTEM = (
 def _config() -> dict:
     try:
         return json.loads(
-            (BASE_DIR / "config" / "api_keys.json").read_text(encoding="utf-8")
+            PATHS.api_config_file.read_text(encoding="utf-8")
         )
     except Exception:
         return {}

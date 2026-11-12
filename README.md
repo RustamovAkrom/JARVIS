@@ -2,7 +2,7 @@
 
 ![JARVIS](assets/images/banner.png)
 
-[![Tests](https://github.com/RustamovAkrom/JARVIS/actions/workflows/tests.yml/badge.svg?branch=v2)](https://github.com/RustamovAkrom/JARVIS/actions/workflows/tests.yml?query=branch%3Av2)
+[![Tests](https://github.com/RustamovAkrom/JARVIS/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/RustamovAkrom/JARVIS/actions/workflows/tests.yml?query=branch%3Amain)
 
 JARVIS is a desktop AI assistant built around voice, a customizable HUD, and practical tools for everyday computer work. It combines Gemini Live with an optional, configurable speech and model pipeline, local memory, project-aware file access, and extensions that can be enabled when needed.
 
@@ -219,17 +219,27 @@ JARVIS/
 
 `actions/` modules provide tools to the assistant. `plugins/` contains optional extensions managed in the UI. The `providers/` pipeline is an alternative to Gemini Live and is configured separately. Local credentials, history, and generated state belong to the running installation; do not add them to commits.
 
-## Your data
+## Your data and runtime modes
 
-- **`config/api_keys.json`:** the Gemini key, provider credentials, language, appearance, permissions, and other settings.
-- **`config/ui_chat.json` and `config/ui_history.json`:** recent conversation and archived turns.
-- **`config/ui_tasks.json` and `config/ui_reminders.json`:** tasks and reminders created in the interface.
-- **`memory/long_term.json`:** facts and summaries retained by JARVIS.
-- **`~/.jarvis/background_tasks.json`:** background research task status and reports.
-- **`~/.jarvis/reminders/`:** operating-system reminder state and scheduling files.
-- **`~/.jarvis_profiles/`:** browser profiles created for JARVIS-controlled sessions.
+Mutable data is kept outside replaceable application files. On Windows the installed application stores it under `%LOCALAPPDATA%\JARVIS\`; source runs use `%LOCALAPPDATA%\JARVIS\profiles\development\` to keep development state separate. The profile contains `config/`, `memory/`, `databases/`, `logs/`, `plugins/`, `cache/`, and `lectures/`. macOS and Linux use their standard per-user application-data locations.
 
-Most settings and memory are currently stored alongside the project, in `config/` and `memory/`; background-task and reminder files use the home directory. Back up these files before reinstalling or moving the project. Never commit API keys, bot tokens, private conversation history, or personal project data. Content sent to a hosted model or integration leaves the computer and is governed by that service's policies.
+On first launch, legacy `config/` and `memory/` files are copied into the selected profile only when a destination file does not already exist. Originals are retained. Back up the profile folder to preserve settings, API keys, lectures, plugins, and history. Never commit API keys, bot tokens, private conversation history, or personal project data. Content sent to a hosted model or integration leaves the computer and is governed by that service's policies.
+
+Set `JARVIS_PROFILE=shared` to make a source run use the installed profile. Set `JARVIS_PROFILE=<name>` to use a separate named profile, or `JARVIS_PROFILE_DIR` to select an explicit data directory. Portable builds receive their own profile by default and do not write user data beside the executable.
+
+## Windows installer and updates
+
+Stable Windows releases are built on GitHub Actions from tags matching the version in `pyproject.toml` (for example, `v0.1.0`). The workflow uses a PyInstaller `onedir` bundle and Velopack to produce a per-user `Setup.exe`, portable package, and update feed. Install the setup package to receive the **Updates** panel and in-app verified updates. Source and portable runs can check release notes but cannot replace their own files. Updates are only published from tags; pushes to `main` and `v2` run the test workflow.
+
+To create a release locally on Windows, install the project plus build extra, install the Velopack CLI, then run:
+
+```powershell
+python -m pip install -r requirements.txt ".[build]"
+dotnet tool install --global vpk --version 1.2.161
+python tools/build_release.py
+```
+
+To release, set the version in `pyproject.toml`, commit it, create the matching `vMAJOR.MINOR.PATCH` tag, and push the tag. The workflow validates the tag/version match before publishing assets. The installed app uses Velopack's GitHub release feed for package verification and update application.
 
 ## Development
 

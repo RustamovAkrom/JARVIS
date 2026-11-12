@@ -65,16 +65,18 @@ def _load() -> dict:
 
 
 def _save(monitors: dict) -> None:
-    from memory.memory_manager import load_memory, MEMORY_PATH, _lock
+    from memory.memory_manager import (
+        load_memory,
+        MEMORY_PATH,
+        _lock,
+        _write_memory_unlocked,
+    )
+    from core.user_data import file_lock
 
-    memory = load_memory()
-    memory["monitors"] = monitors
-    with _lock:
-        MEMORY_PATH.parent.mkdir(parents=True, exist_ok=True)
-        MEMORY_PATH.write_text(
-            json.dumps(memory, indent=2, ensure_ascii=False),
-            encoding="utf-8",
-        )
+    with _lock, file_lock(MEMORY_PATH):
+        memory = load_memory()
+        memory["monitors"] = monitors
+        _write_memory_unlocked(memory)
 
 
 # ── Public API ─────────────────────────────────────────────────────────────────

@@ -4,6 +4,7 @@ import json
 import re
 import time
 from pathlib import Path
+from core.runtime_paths import PATHS
 
 
 def get_base_dir():
@@ -13,7 +14,7 @@ def get_base_dir():
 
 
 BASE_DIR = get_base_dir()
-API_CONFIG_PATH = BASE_DIR / "config" / "api_keys.json"
+API_CONFIG_PATH = PATHS.api_config_file
 PROJECTS_DIR = Path.home() / "Desktop" / "JarvisProjects"
 MAX_FIX_ATTEMPTS = 5
 # Model choice, timeout and fallback ladder all live in core/gemini.py.

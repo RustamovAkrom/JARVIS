@@ -18,8 +18,9 @@ import threading
 import time
 from datetime import date
 from pathlib import Path
+from core.runtime_paths import PATHS
 
-STATE_FILE = Path(__file__).resolve().parent.parent / "memory" / "water_state.json"
+STATE_FILE = PATHS.memory_dir / "water_state.json"
 
 PLUGIN = {
     "name": "water_reminder",

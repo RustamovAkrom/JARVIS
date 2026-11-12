@@ -4,6 +4,7 @@ import sys
 import threading
 import time
 from pathlib import Path
+from core.runtime_paths import PATHS
 
 # ── Gemini grounding quota circuit breaker ────────────────────────────────────
 # The google_search grounding tool has its own small quota, separate from plain
@@ -71,7 +72,7 @@ def _get_base_dir() -> Path:
 
 
 BASE_DIR = _get_base_dir()
-API_CONFIG_PATH = BASE_DIR / "config" / "api_keys.json"
+API_CONFIG_PATH = PATHS.api_config_file
 
 
 def _get_api_key() -> str:

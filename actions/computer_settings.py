@@ -8,6 +8,7 @@ import platform
 from pathlib import Path
 
 from core.lazyimport import LazyModule, installed
+from core.runtime_paths import PATHS
 
 # Imported on first USE, not at launch. This file has eighty-six `pyautogui.`
 # call sites; not one of them changes — see core/lazyimport.py.
@@ -41,7 +42,7 @@ def _get_base_dir() -> Path:
 
 
 def _get_api_key() -> str:
-    path = _get_base_dir() / "config" / "api_keys.json"
+    path = PATHS.api_config_file
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)["gemini_api_key"]
 

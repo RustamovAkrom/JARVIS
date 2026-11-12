@@ -1,8 +1,9 @@
 # config/__init__.py
 import json, os, platform
 from pathlib import Path
+from core.runtime_paths import PATHS
 
-_CONFIG_PATH = Path(__file__).parent / "api_keys.json"
+_CONFIG_PATH = PATHS.api_config_file
 
 
 def _platform_os() -> str:

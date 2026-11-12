@@ -7,6 +7,7 @@ from pathlib import Path
 
 from core import outcome
 from core.lazyimport import LazyModule, installed
+from core.runtime_paths import PATHS
 
 # Imported on first USE, not at launch — see core/lazyimport.py. PAUSE is 0.06
 # here rather than computer_control's 0.05, as it always was: typing into
@@ -33,7 +34,7 @@ def _base_dir() -> Path:
 def _get_os() -> str:
     try:
         cfg = json.loads(
-            (_base_dir() / "config" / "api_keys.json").read_text(encoding="utf-8")
+            PATHS.api_config_file.read_text(encoding="utf-8")
         )
         return cfg.get("os_system", "windows").lower()
     except Exception:
