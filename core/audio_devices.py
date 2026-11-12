@@ -388,9 +388,10 @@ def list_devices(kind: str, refresh: bool = False) -> list[str]:
 def resolve(name: str, kind: str):
     """Turn a saved device name into something sounddevice accepts.
 
-    Returns None for "system default" — which is also what we return when the
-    saved device is gone, because a missing headset must degrade to the built-in
-    speakers, not to a crash on startup.
+    For "system default", use the OS default endpoint under the host API chosen
+    by the device probe when it can be matched; otherwise let PortAudio choose.
+    A saved device that is gone also falls back to the system default so a
+    missing headset does not crash startup.
 
     Candidates are walked in the same host-API order the picker used, so a name
     the user chose from the WASAPI list resolves to the WASAPI endpoint. Without
@@ -398,8 +399,6 @@ def resolve(name: str, kind: str):
     same device — which happens to work, but means the setting quietly refers to
     a different endpoint than the one on screen."""
     wanted = (name or "").strip()
-    if not wanted or wanted == DEFAULT_LABEL:
-        return None
 
     try:
         import platform
@@ -434,6 +433,31 @@ def resolve(name: str, kind: str):
         # populates it; calling it here is a no-op once the cache is warm.
         list_devices(kind)
         chosen = _chosen_api.get(kind)
+
+        # ``device=None`` means PortAudio's own default, which may belong to a
+        # different host API than the one selected above. On Windows that can
+        # silently route capture through MME while the picker and input probe
+        # selected DirectSound (or vice versa). Resolve the OS default endpoint
+        # by its name inside the selected API so the live stream and test use
+        # the same physical microphone. Keep the native default on platforms
+        # where there is no selected host API, or when no equivalent endpoint
+        # can be found.
+        if not wanted or wanted == DEFAULT_LABEL:
+            default_pair = sd.default.device
+            default_idx = default_pair[0 if want_in else 1]
+            if chosen is not None and default_idx is not None and default_idx >= 0:
+                default_name = (devices[default_idx].get("name") or "").strip()
+                for idx, dev_name in _candidates(chosen):
+                    if not dev_name or not default_name:
+                        continue
+                    if (
+                        dev_name == default_name
+                        or dev_name.startswith(default_name[:24])
+                        or default_name.startswith(dev_name[:24])
+                    ) and _usable(idx, kind):
+                        return idx
+            return None
+
         orders = (
             ([chosen] if chosen is not None else [])
             + [a for a in _PREFERRED_APIS.get(platform.system(), ()) if a != chosen]
@@ -522,6 +546,15 @@ def measure_input(name: str, seconds: float = 3.0, on_level=None) -> dict:
         import numpy as np
         import sounddevice as sd
 
+        actual_idx = idx
+        if actual_idx is None:
+            actual_idx = sd.default.device[0]
+        route = "PortAudio default"
+        if actual_idx is not None and actual_idx >= 0:
+            device = sd.query_devices(actual_idx)
+            hostapis = sd.query_hostapis()
+            route = f"{device['name']} ({hostapis[device['hostapi']]['name']})"
+
         rate = _RATES.get("input", 16000)
 
         def _cb(indata, _frames, _t, _status):
@@ -555,6 +588,7 @@ def measure_input(name: str, seconds: float = 3.0, on_level=None) -> dict:
             "peak": 0,
             "level": 0.0,
             "verdict": f"This microphone could not be opened: {e}",
+            "device": "unknown",
         }
 
     if peak < _SILENT_PEAK:
@@ -575,6 +609,7 @@ def measure_input(name: str, seconds: float = 3.0, on_level=None) -> dict:
         "peak": peak,
         "level": min(1.0, peak / 12000.0),
         "verdict": verdict,
+        "device": route,
     }
 
 

@@ -953,6 +953,11 @@ class JarvisLive:
                 continue
             self._clear_stall()
             print(
+                f"[LiveDiag][NO_RESPONSE][WARNING] No server reply for "
+                f"{_STALL_LIMIT:.0f}s after a user turn; model/session may be "
+                "stalled or rate-limited. Rebuilding session."
+            )
+            print(
                 f"[JARVIS] ⚠️  No response for {_STALL_LIMIT:.0f}s — "
                 f"the live session is not answering. Rebuilding it."
             )
@@ -1678,6 +1683,10 @@ class JarvisLive:
         )
 
     async def _send_realtime(self):
+        sent_first_frame = False
+        sent_bytes = 0
+        slow_sends = 0
+        last_slow_send_report = 0.0
         while True:
             msg = await self.out_queue.get()
             # Gemini 3.x Live rejects the old realtime_input.media_chunks field
@@ -1685,18 +1694,93 @@ class JarvisLive:
             # mic / phone PCM through the new `audio` field instead. Queue items
             # are {"data": <bytes>, "mime_type": <str>} from _listen_audio and
             # the phone relay.
-            await self.session.send_realtime_input(
-                audio=types.Blob(
-                    data=msg["data"],
-                    mime_type=msg.get("mime_type", "audio/pcm"),
+            send_started = time.monotonic()
+            try:
+                await self.session.send_realtime_input(
+                    audio=types.Blob(
+                        data=msg["data"],
+                        mime_type=msg.get(
+                            "mime_type", f"audio/pcm;rate={SEND_SAMPLE_RATE}"
+                        ),
+                    )
                 )
-            )
+            except Exception as exc:
+                print(
+                    f"[LiveDiag][AUDIO_SEND_ERROR] model={LIVE_MODEL} "
+                    f"sent_bytes={sent_bytes} type={type(exc).__name__}: {exc}"
+                )
+                raise
+            send_elapsed = time.monotonic() - send_started
+            frame_bytes = len(msg["data"])
+            sent_bytes += frame_bytes
+            if not sent_first_frame:
+                sent_first_frame = True
+                print(
+                    f"[LiveDiag][AUDIO_TX] first PCM frame accepted by session "
+                    f"({frame_bytes} bytes, {msg.get('mime_type', 'audio/pcm')}); "
+                    "this confirms local send only, not a model response"
+                )
+            if send_elapsed >= 0.25:
+                slow_sends += 1
+                now = time.monotonic()
+                if slow_sends == 1 or now - last_slow_send_report >= 5.0:
+                    last_slow_send_report = now
+                    print(
+                        f"[LiveDiag][AUDIO_SEND_SLOW][WARNING] send took "
+                        f"{send_elapsed:.2f}s; slow_sends={slow_sends}, "
+                        f"queued_frames={self.out_queue.qsize()}. "
+                        "Network/API backpressure may be building up."
+                    )
 
     async def _listen_audio(self):
         print("[JARVIS] 🎤 Mic started")
         loop = asyncio.get_event_loop()
+        queue_drop_stats = {"count": 0, "last_report": 0.0}
+
+        def _enqueue_live_audio(message):
+            """Keep the live queue current without leaking QueueFull callbacks."""
+            try:
+                self.out_queue.put_nowait(message)
+                return
+            except asyncio.QueueFull:
+                # Realtime speech is useful only while it is fresh. Discard the
+                # oldest queued frame, then keep the newest mic frame; never let
+                # a slow websocket crash the asyncio event loop.
+                try:
+                    self.out_queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    pass
+                try:
+                    self.out_queue.put_nowait(message)
+                except asyncio.QueueFull:
+                    pass
+
+                queue_drop_stats["count"] += 1
+                now = time.monotonic()
+                if (
+                    queue_drop_stats["count"] == 1
+                    or now - queue_drop_stats["last_report"] >= 5.0
+                ):
+                    queue_drop_stats["last_report"] = now
+                    print(
+                        f"[LiveDiag][AUDIO_QUEUE_FULL][WARNING] dropped oldest "
+                        f"microphone frame(s); total_dropped="
+                        f"{queue_drop_stats['count']}, "
+                        f"queue={self.out_queue.qsize()}/"
+                        f"{self.out_queue.maxsize}. Sender is slower than capture."
+                    )
 
         def callback(indata, frames, time_info, status):
+            # Keep the HUD's microphone meter tied to the actual input even
+            # when speech is being gated from Gemini (wake-word sleep, JARVIS
+            # playback, echo tail, or push-to-talk). This is local metering only;
+            # muted mode still suppresses it.
+            if not self.ui.muted:
+                try:
+                    self.ui.set_audio_level(_pcm_level(indata))
+                except Exception:
+                    pass
+
             # ── Wake-word gate ───────────────────────────────────────────────
             # While asleep, the mic audio NEVER goes to Gemini (nothing is
             # streamed, so JARVIS can't respond to speech not addressed to it and
@@ -1760,15 +1844,12 @@ class JarvisLive:
             if not self.ui.muted and not self._phone_active:
                 data = indata.tobytes()
                 loop.call_soon_threadsafe(
-                    self.out_queue.put_nowait, {"data": data, "mime_type": "audio/pcm"}
+                    _enqueue_live_audio,
+                    {
+                        "data": data,
+                        "mime_type": f"audio/pcm;rate={SEND_SAMPLE_RATE}",
+                    },
                 )
-                # Feed the live mic level to the HUD so the waveform reacts to
-                # the user's actual voice while listening. Purely cosmetic — any
-                # failure here must never disturb the mic.
-                try:
-                    self.ui.set_audio_level(_pcm_level(indata))
-                except Exception:
-                    pass
 
         try:
 
@@ -1866,6 +1947,8 @@ class JarvisLive:
     async def _receive_audio(self):
         print("[JARVIS] 👂 Recv started")
         out_buf, in_buf = [], []
+        turn_audio_bytes = 0
+        turn_tool_names = []
 
         try:
             while True:
@@ -1895,6 +1978,12 @@ class JarvisLive:
                         if self._interrupted:
                             pass  # discard: interrupted
                         else:
+                            turn_audio_bytes += len(response.data)
+                            if turn_audio_bytes == len(response.data):
+                                print(
+                                    f"[LiveDiag][AUDIO_RX] first model audio chunk "
+                                    f"received ({len(response.data)} bytes)"
+                                )
                             if self._turn_done_event and self._turn_done_event.is_set():
                                 self._turn_done_event.clear()
                             # Split into ~50 ms chunks so interrupt() stops audio within 50 ms
@@ -1931,8 +2020,16 @@ class JarvisLive:
                             if txt:
                                 in_buf.append(txt)
                                 self._last_user_speech = time.monotonic()
+                                # Audio turns do not pass through
+                                # send_client_content(), so arm the same no-reply
+                                # watchdog when Gemini confirms it heard speech.
+                                self._arm_stall()
 
                         if sc.turn_complete:
+                            # A completed, possibly silent turn is not a stuck
+                            # socket. The warning below records the empty reply;
+                            # cancel the timeout armed by its input transcript.
+                            self._clear_stall()
                             if self._turn_done_event:
                                 self._turn_done_event.set()
 
@@ -1947,6 +2044,7 @@ class JarvisLive:
 
                             full_in = " ".join(in_buf).strip()
                             if full_in:
+                                print(f"[LiveDiag][USER_TRANSCRIPT] {full_in}")
                                 self._last_out_logged = ""  # new exchange
                                 self.ui.write_log(f"You: {full_in}")
                                 self._session_log.append(f"User: {full_in}")
@@ -1975,6 +2073,7 @@ class JarvisLive:
                                 if full_out in self._last_out_logged:
                                     full_out = ""
                             if full_out:
+                                print(f"[LiveDiag][MODEL_TRANSCRIPT] {full_out}")
                                 self._last_out_logged = full_out
                                 self.ui.write_log(f"{self._asst_name}: {full_out}")
                                 self._session_log.append(
@@ -1991,6 +2090,32 @@ class JarvisLive:
                                             }
                                         )
                                     )
+                            if full_in:
+                                disposition = []
+                                if full_out:
+                                    disposition.append("text transcript")
+                                if turn_audio_bytes:
+                                    disposition.append(
+                                        f"{turn_audio_bytes} audio bytes"
+                                    )
+                                if turn_tool_names:
+                                    disposition.append(
+                                        "tool call(s): " + ", ".join(turn_tool_names)
+                                    )
+                                if disposition:
+                                    print(
+                                        "[LiveDiag][TURN_RESULT] model response: "
+                                        + "; ".join(disposition)
+                                    )
+                                else:
+                                    print(
+                                        "[LiveDiag][TURN_RESULT][WARNING] Gemini "
+                                        "completed the turn without reply text, audio, "
+                                        "or a tool call; this is not evidence of a quota "
+                                        "error. Check model/API error events above."
+                                    )
+                            turn_audio_bytes = 0
+                            turn_tool_names = []
                             out_buf = []
 
                             if self._vision_close_pending:
@@ -2005,6 +2130,11 @@ class JarvisLive:
                                 asyncio.create_task(_cam_close())
 
                     if response.tool_call:
+                        names = [fc.name for fc in response.tool_call.function_calls]
+                        turn_tool_names.extend(names)
+                        print(
+                            "[LiveDiag][TOOL_CALL] " + ", ".join(names)
+                        )
                         fn_responses = []
                         for fc in response.tool_call.function_calls:
                             print(f"[JARVIS] 📞 {fc.name}")
@@ -2720,7 +2850,14 @@ class JarvisLive:
                     _orig_send = session.send_client_content
 
                     async def _send_and_arm(*a, **kw):
-                        result = await _orig_send(*a, **kw)
+                        try:
+                            result = await _orig_send(*a, **kw)
+                        except Exception as exc:
+                            print(
+                                f"[LiveDiag][CLIENT_SEND_ERROR] model={live_model} "
+                                f"type={type(exc).__name__}: {exc}"
+                            )
+                            raise
                         self._arm_stall()
                         return result
 
@@ -2760,6 +2897,12 @@ class JarvisLive:
                         self._awake = True
                         self.ui.set_state("LISTENING")
                         self.ui.write_log("SYS: JARVIS online.")
+                    print(
+                        "[LiveDiag][GATES] "
+                        f"muted={self.ui.muted} wake_enabled={self._wake_enabled} "
+                        f"awake={self._awake} ptt_enabled={self._ptt_enabled} "
+                        f"ptt_held={self._ptt_held} phone_active={self._phone_active}"
+                    )
 
                     try:
                         from core.background_tasks import get_background_task_manager
@@ -2893,6 +3036,10 @@ class JarvisLive:
                     continue
 
                 err_str = str(e)
+                print(
+                    f"[LiveDiag][SESSION_ERROR] model={live_model} "
+                    f"type={type(e).__name__}: {err_str}"
+                )
                 print(f"[JARVIS] Error ({type(e).__name__}): {e}")
                 traceback.print_exc()
 
@@ -2903,6 +3050,10 @@ class JarvisLive:
                 # limit always arrives mid-conversation.
                 if _gemini.note_live_failure(live_model, err_str):
                     nxt = _gemini.live_model()
+                    print(
+                        f"[LiveDiag][LIMIT][WARNING] quota/rate-limit confirmed "
+                        f"for {live_model}; next_model={nxt}"
+                    )
                     self.ui.write_log(
                         f"SYS: Switching to {nxt.split('/')[-1]} — the previous "
                         f"model is out of quota."

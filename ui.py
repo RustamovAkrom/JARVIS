@@ -3493,7 +3493,10 @@ class AudioDeviceOverlay(_HudOverlay):
                     res = audio_devices.measure_input(
                         name, on_level=lambda f: self._level_seen.emit(int(f * 100))
                     )
-                    text = f"peak {res['peak']}  —  {res['verdict']}"
+                    text = (
+                        f"peak {res['peak']}  —  {res['verdict']}  "
+                        f"[device: {res.get('device', 'unknown')}]"
+                    )
                 else:
                     res = audio_devices.play_tone(name)
                     text = res["verdict"]
@@ -3525,22 +3528,19 @@ class AudioDeviceOverlay(_HudOverlay):
 
     def _apply(self):
         from memory.config_manager import (
-            get_input_device,
-            get_output_device,
             save_input_device,
             save_output_device,
         )
 
         new_in = self._in_box.currentData() or ""
         new_out = self._out_box.currentData() or ""
-        changed = (new_in != get_input_device()) or (new_out != get_output_device())
         save_input_device(new_in)
         save_output_device(new_out)
         self.hide()
-        # Only rebuild the session if something actually moved — a no-op Apply
-        # should not cost a reconnect.
-        if changed:
-            self.picked.emit()
+        # Applying also reopens the audio streams. That matters when the OS
+        # default endpoint changed after a headset was unplugged, even though
+        # the saved choice remains "System default".
+        self.picked.emit()
 
 
 class MemoryOverlay(_HudOverlay):

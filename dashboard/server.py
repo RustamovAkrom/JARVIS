@@ -1148,7 +1148,7 @@ class DashboardServer:
                     data = await websocket.receive_bytes()
                     try:
                         self._phone_audio_queue.put_nowait(
-                            {"data": data, "mime_type": "audio/pcm"}
+                            {"data": data, "mime_type": "audio/pcm;rate=16000"}
                         )
                     except asyncio.QueueFull:
                         pass  # drop frame rather than block
