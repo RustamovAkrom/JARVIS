@@ -8,7 +8,7 @@ from core.runtime_paths import _resolve_paths, migrate_legacy_user_data
 class RuntimePathTests(unittest.TestCase):
     def test_source_mode_uses_isolated_local_profile(self):
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
+            root = Path(temporary).resolve()
             paths = _resolve_paths(
                 source_root=root / "checkout",
                 frozen=False,
@@ -22,7 +22,7 @@ class RuntimePathTests(unittest.TestCase):
 
     def test_shared_profile_can_be_selected_in_every_mode(self):
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
+            root = Path(temporary).resolve()
             for frozen in (False, True):
                 paths = _resolve_paths(
                     source_root=root / "source",
@@ -35,7 +35,7 @@ class RuntimePathTests(unittest.TestCase):
 
     def test_explicit_data_directory_wins(self):
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
+            root = Path(temporary).resolve()
             paths = _resolve_paths(
                 source_root=root,
                 frozen=False,
@@ -46,7 +46,7 @@ class RuntimePathTests(unittest.TestCase):
 
     def test_installed_and_portable_profiles_stay_outside_replaceable_app(self):
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
+            root = Path(temporary).resolve()
             install = root / "local" / "JARVIS" / "current"
             install.mkdir(parents=True)
             (install.parent / "Update.exe").touch()
@@ -72,7 +72,7 @@ class RuntimePathTests(unittest.TestCase):
 
     def test_legacy_migration_copies_without_overwriting_or_deleting(self):
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
+            root = Path(temporary).resolve()
             source = root / "source"
             destination = root / "profile"
             (source / "config").mkdir(parents=True)
