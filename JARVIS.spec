@@ -13,6 +13,10 @@ for folder in ("assets/icons", "assets/vendor", "dashboard", "actions"):
     if candidate.exists():
         datas.append((str(candidate), folder))
 
+brand_logo = root / "assets" / "desktop" / "interfays_icon.png"
+if brand_logo.exists():
+    datas.append((str(brand_logo), "assets/desktop"))
+
 # These packages are discovered from source at runtime. Stage their files one
 # by one so development-only modules are not shipped with the desktop app.
 for folder in ("providers", "plugins"):

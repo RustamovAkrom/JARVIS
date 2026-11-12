@@ -9300,17 +9300,35 @@ class MainWindow(QMainWindow):
         nav.addWidget(self._terminal_toggle_btn)
 
         brand = QVBoxLayout()
-        brand.setSpacing(1)
+        brand.setSpacing(0)
         _disp = self._assistant_name.upper()
-        self._title_lbl = QLabel(_disp)
+        self._title_lbl = QLabel()
         self._title_lbl.setAttribute(
             Qt.WidgetAttribute.WA_TransparentForMouseEvents, True
         )
         self._title_lbl.setAlignment(
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
         )
-        self._title_lbl.setFont(QFont(FONT_MONO, 17, QFont.Weight.Bold))
-        self._title_lbl.setStyleSheet(f"color: {C.PRI}; background: transparent;")
+        logo_path = BASE_DIR / "assets" / "desktop" / "interfays_icon.png"
+        logo = QPixmap(str(logo_path))
+        if not logo.isNull():
+            self._title_lbl.setPixmap(
+                logo.scaled(
+                    QSize(150, 50),
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
+            )
+            self._title_lbl.setToolTip(_disp)
+            self._title_lbl.setStyleSheet("background: transparent;")
+        else:
+            # Keep a readable fallback for development copies that do not yet
+            # have the bundled brand artwork.
+            self._title_lbl.setText(_disp)
+            self._title_lbl.setFont(QFont(FONT_MONO, 17, QFont.Weight.Bold))
+            self._title_lbl.setStyleSheet(
+                f"color: {C.PRI}; background: transparent;"
+            )
         brand.addWidget(self._title_lbl)
         _sub_text = (
             "Just A Rather Very Intelligent System · V2"
@@ -9326,7 +9344,12 @@ class MainWindow(QMainWindow):
         )
         self._sub_lbl.setFont(QFont(FONT_MONO, 7))
         self._sub_lbl.setStyleSheet(f"color: {C.PRI_DIM}; background: transparent;")
-        brand.addWidget(self._sub_lbl)
+        # The supplied wordmark already contains the product descriptor.
+        # Retain this label for custom assistant-name updates when falling
+        # back to plain text, but do not duplicate the branding under the logo.
+        self._sub_lbl.setVisible(logo.isNull())
+        if logo.isNull():
+            brand.addWidget(self._sub_lbl)
 
         right_col = QVBoxLayout()
         right_col.setSpacing(2)
@@ -12767,11 +12790,14 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         self._assistant_name = name.strip() or "JARVIS"
         display = self._assistant_name.upper()
         self.setWindowTitle(f"{display} — {APP_VERSION}")
-        self._title_lbl.setText(display)
-        if display in ("JARVIS", "J.A.R.V.I.S"):
-            self._sub_lbl.setText("Just A Rather Very Intelligent System · V2")
+        if self._title_lbl.pixmap() is not None and not self._title_lbl.pixmap().isNull():
+            self._title_lbl.setToolTip(display)
         else:
-            self._sub_lbl.setText("Personal AI Assistant · V2")
+            self._title_lbl.setText(display)
+            if display in ("JARVIS", "J.A.R.V.I.S"):
+                self._sub_lbl.setText("Just A Rather Very Intelligent System · V2")
+            else:
+                self._sub_lbl.setText("Personal AI Assistant · V2")
         self._log._ai_name_lc = self._assistant_name.lower()
         self.hud._assistant_name = display
         ui_opacity = max(60, min(100, int(ui_opacity)))
