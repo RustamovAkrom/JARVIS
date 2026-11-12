@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from config import is_windows, is_mac, is_linux
+from core.runtime_paths import PATHS
 
 
 def _get_base_dir() -> Path:
@@ -16,7 +17,7 @@ def _get_base_dir() -> Path:
 
 
 BASE_DIR = _get_base_dir()
-API_CONFIG_PATH = BASE_DIR / "config" / "api_keys.json"
+API_CONFIG_PATH = PATHS.api_config_file
 
 
 def _get_api_key() -> str:

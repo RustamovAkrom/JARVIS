@@ -86,6 +86,8 @@ def install_and_download(
     _tell = notify or (lambda _msg: None)
     try:
         if not is_installed():
+            if getattr(sys, "frozen", False):
+                return False, "Wake word support is not included in this build. Install an updated JARVIS release."
             logger("Wake word: installing openwakeword (one-time)…")
             _tell("Wake word: installing openwakeword (one-time)…")
             r = subprocess.run(

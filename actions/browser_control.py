@@ -10,6 +10,7 @@ import subprocess
 import threading
 import webbrowser
 from pathlib import Path
+from core.runtime_paths import PATHS
 from typing import TYPE_CHECKING, Optional
 
 from core import appidentity, outcome
@@ -175,7 +176,7 @@ def _real_profile_dir(browser: str) -> str:
             print(f"[Browser] ✅ Real profile found for {browser}: {p}")
             return str(p)
 
-    fallback = home / ".jarvis_profiles" / browser
+    fallback = PATHS.cache_dir / "browser_profiles" / browser
     fallback.mkdir(parents=True, exist_ok=True)
     print(f"[Browser] ⚠️  Real profile not found for {browser}, using: {fallback}")
     return str(fallback)
@@ -701,7 +702,7 @@ class _BrowserSession:
 
         if engine_name == "firefox":
             profile = _firefox_profile_dir() or str(
-                Path.home() / ".jarvis_profiles" / "firefox"
+                PATHS.cache_dir / "browser_profiles" / "firefox"
             )
             kwargs: dict = {
                 "headless": False,
@@ -720,7 +721,7 @@ class _BrowserSession:
                 print(
                     f"[Browser] Firefox real profile failed ({e}), using JARVIS profile"
                 )
-                jarvis = str(Path.home() / ".jarvis_profiles" / "firefox_jarvis")
+                jarvis = str(PATHS.cache_dir / "browser_profiles" / "firefox_jarvis")
                 Path(jarvis).mkdir(parents=True, exist_ok=True)
                 self._context = await engine_obj.launch_persistent_context(
                     jarvis, **kwargs
@@ -731,7 +732,7 @@ class _BrowserSession:
             return
 
         if engine_name == "webkit":
-            safari_profile = str(Path.home() / ".jarvis_profiles" / "safari")
+            safari_profile = str(PATHS.cache_dir / "browser_profiles" / "safari")
             Path(safari_profile).mkdir(parents=True, exist_ok=True)
             kwargs = {
                 "headless": False,
@@ -812,7 +813,7 @@ class _BrowserSession:
         # profile / newer Chrome versions block the real profile under
         # automation). Fall back to a persistent JARVIS automation profile —
         # accounts logged in here once stay logged in on later sessions too.
-        jarvis_profile = str(Path.home() / ".jarvis_profiles" / self.browser_name)
+        jarvis_profile = str(PATHS.cache_dir / "browser_profiles" / self.browser_name)
         Path(jarvis_profile).mkdir(parents=True, exist_ok=True)
         print(f"[Browser] Retrying with JARVIS profile: {jarvis_profile}")
 

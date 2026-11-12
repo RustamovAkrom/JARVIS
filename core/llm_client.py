@@ -24,6 +24,7 @@ import sys
 import time
 from pathlib import Path
 from typing import Callable, Generator
+from core.runtime_paths import PATHS
 
 import requests
 
@@ -33,13 +34,11 @@ _SENT_END = re.compile(r"(?<=[.!?])\s+|(?<=\n)\s*\n")
 
 
 def get_base_dir() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent.parent
+    return PATHS.user_data_root
 
 
 BASE_DIR = get_base_dir()
-CONFIG_PATH = BASE_DIR / "config" / "api_keys.json"
+CONFIG_PATH = PATHS.api_config_file
 
 _DEFAULTS = {
     "llm_url": "http://localhost:11434",

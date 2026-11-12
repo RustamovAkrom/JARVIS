@@ -133,6 +133,8 @@ from PyQt6.QtWidgets import (
     QSlider,
 )
 from memory.translations import LANGUAGES, translate as _translate
+from core.runtime_paths import PATHS
+from core.user_data import update_json
 
 
 def _base_dir() -> Path:
@@ -141,9 +143,9 @@ def _base_dir() -> Path:
     return Path(__file__).resolve().parent
 
 
-BASE_DIR = _base_dir()
-CONFIG_DIR = BASE_DIR / "config"
-API_FILE = CONFIG_DIR / "api_keys.json"
+BASE_DIR = PATHS.resource_root
+CONFIG_DIR = PATHS.config_dir
+API_FILE = PATHS.api_config_file
 _UI_TASKS_FILE = CONFIG_DIR / "ui_tasks.json"
 _UI_REMINDERS_FILE = CONFIG_DIR / "ui_reminders.json"
 _UI_HISTORY_FILE = CONFIG_DIR / "ui_history.json"
@@ -169,12 +171,9 @@ def _read_json_list(path: Path, key: str) -> list[dict]:
 
 def _write_json_list(path: Path, key: str, rows: list[dict]) -> None:
     try:
-        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(path.suffix + ".tmp")
-        tmp.write_text(json.dumps({key: rows}, indent=2), encoding="utf-8")
-        tmp.replace(path)
-    except Exception:
-        pass
+        update_json(path, lambda data: data.update({key: rows}))
+    except Exception as exc:
+        print(f"[Data] Could not save {path.name}: {exc}")
 
 
 def _history_turns() -> list[dict]:
@@ -202,17 +201,9 @@ def _chat_turns() -> list[dict]:
 def _save_config_value(key: str, value) -> None:
     """Persist a UI preference without overwriting an unreadable config file."""
     try:
-        if API_FILE.exists():
-            data = json.loads(API_FILE.read_text(encoding="utf-8"))
-            if not isinstance(data, dict):
-                return
-        else:
-            data = {}
-        data[key] = value
-        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-        API_FILE.write_text(json.dumps(data, indent=4), encoding="utf-8")
-    except Exception:
-        pass
+        update_json(API_FILE, lambda data: data.update({key: value}))
+    except Exception as exc:
+        print(f"[Config] Could not save {key}: {exc}")
 
 
 # Single source of truth for the release name — the window title, the header
@@ -7119,6 +7110,226 @@ class _TerminalSession:
     pending_output: str = ""
 
 
+class _UpdateSignals(QObject):
+    checked = pyqtSignal(object)
+    failed = pyqtSignal(str)
+    state = pyqtSignal(str)
+    progress = pyqtSignal(int)
+    downloaded = pyqtSignal()
+
+
+class UpdatePanel(QWidget):
+    """Non-blocking release status and opt-in update controls."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        from core.update_service import APP_RELEASE_VERSION, RELEASE_CHANNEL, UpdateService
+        from memory.config_manager import get_update_settings
+
+        self._service = UpdateService()
+        self._settings = get_update_settings()
+        self._signals = _UpdateSignals(self)
+        self._signals.checked.connect(self._on_checked)
+        self._signals.failed.connect(self._on_failed)
+        self._signals.downloaded.connect(self._on_downloaded)
+        self._busy = False
+        self._installable = self._service.install_supported
+        self._downloaded = False
+        self._update_info = None
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(8)
+        self._version = QLabel(f"JARVIS {APP_RELEASE_VERSION}  В·  {RELEASE_CHANNEL} channel")
+        self._version.setStyleSheet(f"color:{C.TEXT}; background:transparent; font-weight:600;")
+        layout.addWidget(self._version)
+        self._install_state = QLabel(
+            "Installed application" if self._installable else "Source / portable mode — install is disabled"
+        )
+        self._install_state.setStyleSheet(f"color:{C.TEXT_DIM}; background:transparent;")
+        layout.addWidget(self._install_state)
+        self._status = QLabel("Not checked yet")
+        self._status.setStyleSheet(f"color:{C.PRI}; background:transparent;")
+        layout.addWidget(self._status)
+        self._release = QLabel("")
+        self._release.setWordWrap(True)
+        self._release.setStyleSheet(f"color:{C.TEXT}; background:transparent;")
+        layout.addWidget(self._release)
+        self._notes = QTextBrowser()
+        self._notes.setOpenExternalLinks(False)
+        self._notes.setMinimumHeight(130)
+        self._notes.setStyleSheet(
+            f"QTextBrowser {{ background:{C.PANEL2}; color:{C.TEXT}; border:1px solid {C.BORDER}; border-radius:5px; }}"
+        )
+        layout.addWidget(self._notes, 1)
+        self._progress = QProgressBar()
+        self._progress.setRange(0, 100)
+        self._progress.setValue(0)
+        self._progress.hide()
+        layout.addWidget(self._progress)
+        self._signals.state.connect(self._status.setText)
+        self._signals.progress.connect(self._progress.setValue)
+
+        self._auto_check = QCheckBox("Check for stable updates on startup and every 6 hours")
+        self._auto_check.setChecked(self._settings["auto_check"])
+        self._auto_download = QCheckBox("Download available updates automatically")
+        self._auto_download.setChecked(self._settings["auto_download"])
+        self._auto_install = QCheckBox("Apply a downloaded update at the next launch")
+        self._auto_install.setChecked(self._settings["auto_install"])
+        self._auto_install.setEnabled(self._installable)
+        for checkbox in (self._auto_check, self._auto_download, self._auto_install):
+            checkbox.setStyleSheet(f"color:{C.TEXT_DIM}; background:transparent;")
+            layout.addWidget(checkbox)
+        self._auto_check.toggled.connect(self._save_settings)
+        self._auto_download.toggled.connect(self._save_settings)
+        self._auto_install.toggled.connect(self._save_settings)
+
+        actions = QHBoxLayout()
+        self._check_button = QPushButton("Check for updates")
+        self._check_button.clicked.connect(self.check_now)
+        self._download_button = QPushButton("Download update")
+        self._download_button.setEnabled(False)
+        self._download_button.clicked.connect(self.download_now)
+        self._install_button = QPushButton("Restart and update")
+        self._install_button.setEnabled(False)
+        self._install_button.clicked.connect(self.install_now)
+        for button in (self._check_button, self._download_button, self._install_button):
+            actions.addWidget(button)
+        layout.addLayout(actions)
+
+        self._auto_timer = QTimer(self)
+        self._auto_timer.setInterval(6 * 60 * 60 * 1000)
+        self._auto_timer.timeout.connect(self._auto_check_now)
+        if self._settings["auto_check"]:
+            QTimer.singleShot(1500, self._auto_check_now)
+            self._auto_timer.start()
+
+    def _save_settings(self, *_args):
+        from memory.config_manager import save_update_settings
+
+        self._settings = {
+            "auto_check": self._auto_check.isChecked(),
+            "auto_download": self._auto_download.isChecked(),
+            "auto_install": self._auto_install.isChecked(),
+        }
+        try:
+            save_update_settings(**self._settings)
+            if self._settings["auto_check"]:
+                if not self._auto_timer.isActive():
+                    QTimer.singleShot(1500, self._auto_check_now)
+                self._auto_timer.start()
+            else:
+                self._auto_timer.stop()
+            self._status.setText("Update preferences saved")
+        except Exception as exc:
+            self._status.setText(f"Could not save update preferences: {exc}")
+
+    def _auto_check_now(self):
+        if self._settings.get("auto_check"):
+            self.check_now(automatic=True)
+
+    def check_now(self, automatic=False):
+        if self._busy:
+            return
+        self._busy = True
+        self._check_button.setEnabled(False)
+        self._status.setText("Checking the latest stable GitHub release…")
+        threading.Thread(
+            target=self._check_worker, args=(automatic,), daemon=True, name="jarvis-update-check"
+        ).start()
+
+    def _check_worker(self, automatic):
+        try:
+            result = self._service.check_for_updates()
+            self._signals.checked.emit(result)
+            if result.update_available and result.install_supported and self._settings.get("auto_download"):
+                self._signals.state.emit("Update available — downloading in the background…")
+                self._service.download_update(self._signals.progress.emit)
+                self._signals.downloaded.emit()
+        except Exception as exc:
+            self._signals.failed.emit(str(exc))
+
+    def _on_checked(self, result):
+        auto_downloading = bool(
+            result.update_available
+            and result.install_supported
+            and self._settings.get("auto_download")
+        )
+        self._busy = auto_downloading
+        self._check_button.setEnabled(not auto_downloading)
+        self._update_info = result.update_info
+        self._downloaded = False
+        date = result.release.published_at or "date unavailable"
+        size = result.release.size_bytes
+        size_text = f"{size / (1024 * 1024):.1f} MB of release assets" if size else "size unavailable"
+        self._release.setText(
+            f"Latest stable: {result.release.version}  В·  Published: {date}  В·  {size_text}\n{result.release.url}"
+        )
+        self._notes.setPlainText(result.release.notes)
+        if result.update_available:
+            self._status.setText(f"Update available: {result.current_version} → {result.release.version}")
+            self._download_button.setEnabled(result.install_supported)
+        else:
+            self._status.setText(f"Up to date — latest stable is {result.release.version}")
+            self._download_button.setEnabled(False)
+        self._install_button.setEnabled(False)
+        if auto_downloading:
+            self._progress.setValue(0)
+            self._progress.show()
+
+    def _on_failed(self, message):
+        self._busy = False
+        self._check_button.setEnabled(True)
+        self._status.setText(f"Update check failed: {message}")
+
+    def download_now(self):
+        if self._busy or not self._installable or self._update_info is None:
+            return
+        self._busy = True
+        self._download_button.setEnabled(False)
+        self._progress.setValue(0)
+        self._progress.show()
+        self._status.setText("Downloading and verifying update package…")
+        threading.Thread(target=self._download_worker, daemon=True, name="jarvis-update-download").start()
+
+    def _download_worker(self):
+        try:
+            self._service.download_update(self._signals.progress.emit)
+            self._signals.downloaded.emit()
+        except Exception as exc:
+            self._signals.failed.emit(str(exc))
+
+    def _on_downloaded(self):
+        self._busy = False
+        self._downloaded = True
+        self._progress.setValue(100)
+        self._progress.show()
+        self._status.setText("Update downloaded and verified. Restart when you are ready.")
+        self._install_button.setEnabled(True)
+
+    def install_now(self):
+        if not self._downloaded or self._busy:
+            return
+        owner = self.window()
+        recorder = getattr(owner, "_lecture_recorder", None)
+        if recorder is not None and recorder.recording:
+            QMessageBox.information(
+                self, "Recording in progress", "Stop and save the lecture recording before updating JARVIS."
+            )
+            return
+        answer = QMessageBox.question(
+            self,
+            "Restart JARVIS",
+            "JARVIS will close, install the verified update, and restart. Continue?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        self._status.setText("Installing update and restarting…")
+        self._service.apply_and_restart()
+
+
 class MainWindow(QMainWindow):
     _log_sig = pyqtSignal(str)
     _state_sig = pyqtSignal(str)
@@ -8559,9 +8770,16 @@ class MainWindow(QMainWindow):
         desktop = self._get_desktop_dir()
 
         # Arc-reactor icon (.ico — also exported as .png for Linux/macOS)
-        ico_path = Path(__file__).resolve().parent / "config" / "jarvis.ico"
+        ico_path = PATHS.cache_dir / "jarvis.ico"
         if not ico_path.exists():
-            self._build_jarvis_icon(ico_path)
+            bundled_ico = PATHS.resource_root / "config" / "jarvis.ico"
+            try:
+                if bundled_ico.is_file():
+                    shutil.copy2(bundled_ico, ico_path)
+                else:
+                    self._build_jarvis_icon(ico_path)
+            except OSError:
+                self._build_jarvis_icon(ico_path)
 
         try:
             _os = platform.system()
@@ -9399,6 +9617,8 @@ class MainWindow(QMainWindow):
 
         self._log = LogWidget()
         self._work_tabs.addTab(self._log, self._tr("LOGS"))
+        self._update_panel = UpdatePanel(self)
+        self._work_tabs.addTab(self._update_panel, self._tr("UPDATES"))
         self._development_mode = bool(
             _read_full_config().get("development_mode", False)
         )
@@ -12384,7 +12604,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             data["ui_opacity"] = ui_opacity
             if ui_color:
                 data["ui_color"] = ui_color.strip().lower()
-            API_FILE.write_text(json.dumps(data, indent=4), encoding="utf-8")
+            update_json(API_FILE, lambda current: current.update(data))
             self._log.append_log(f"SYS: Identity updated — {display}")
             if color_changed:
                 self._log.append_log(f"SYS: UI colour applied — {ui_color}")
@@ -12731,8 +12951,15 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
 
         root = recordings_dir()
         root.mkdir(parents=True, exist_ok=True)
+        legacy_root = Path.home() / "Documents" / "JARVIS" / "Lectures"
+        roots = [root] + ([legacy_root] if legacy_root != root else [])
         sessions = sorted(
-            (folder for folder in root.glob("Lecture_*") if folder.is_dir()),
+            (
+                folder
+                for session_root in roots
+                for folder in session_root.glob("Lecture_*")
+                if folder.is_dir()
+            ),
             key=lambda folder: folder.stat().st_mtime,
             reverse=True,
         )
@@ -13369,7 +13596,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                 "ui_language": language if language in LANGUAGES else "en",
             }
         )
-        API_FILE.write_text(json.dumps(config, indent=4), encoding="utf-8")
+        update_json(API_FILE, lambda current: current.update(config))
         self._ui_language = config["ui_language"]
         self._language_missing = False
         self._ready = True

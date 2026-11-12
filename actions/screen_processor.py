@@ -17,6 +17,7 @@ from pathlib import Path
 import numpy as np
 
 from core.lazyimport import LazyModule, installed
+from core.runtime_paths import PATHS
 
 # OpenCV is 224 ms and is only ever touched by the webcam path — see
 # core/lazyimport.py. Screen capture, which is what this action does on almost
@@ -49,7 +50,7 @@ def _base_dir() -> Path:
 
 
 _BASE = _base_dir()
-_CONFIG_PATH = _BASE / "config" / "api_keys.json"
+_CONFIG_PATH = PATHS.api_config_file
 
 
 def _load_config() -> dict:

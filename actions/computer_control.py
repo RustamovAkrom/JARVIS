@@ -16,6 +16,7 @@ import random
 from pathlib import Path
 
 from core import appidentity, outcome
+from core.runtime_paths import PATHS
 from core.lazyimport import LazyModule, installed
 
 # pyautogui and pyperclip are imported on first USE, not at launch — see
@@ -42,8 +43,8 @@ def _base_dir() -> Path:
 
 
 _BASE = _base_dir()
-_CONFIG_PATH = _BASE / "config" / "api_keys.json"
-_MEMORY_PATH = _BASE / "memory" / "long_term.json"
+_CONFIG_PATH = PATHS.api_config_file
+_MEMORY_PATH = PATHS.long_term_memory_file
 
 
 def _load_config() -> dict:

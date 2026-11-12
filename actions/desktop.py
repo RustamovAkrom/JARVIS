@@ -10,6 +10,7 @@ from pathlib import Path
 from datetime import datetime
 
 from core import outcome
+from core.runtime_paths import PATHS
 
 # pyautogui is gone from this file along with the generated-code sandbox that
 # was the only thing using it — see the note below. Nothing here drives the
@@ -25,7 +26,7 @@ def _get_base_dir() -> Path:
 
 
 def _get_api_key() -> str:
-    path = _get_base_dir() / "config" / "api_keys.json"
+    path = PATHS.api_config_file
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)["gemini_api_key"]
 

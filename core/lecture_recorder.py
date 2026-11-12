@@ -15,20 +15,19 @@ from datetime import datetime
 from pathlib import Path
 
 import sounddevice as sd
+from core.runtime_paths import PATHS
 
 
 def recordings_dir() -> Path:
-    """A stable user-data location, independent of the app install/config."""
-    return Path.home() / "Documents" / "JARVIS" / "Lectures"
+    """A persistent location outside the source or replaceable app bundle."""
+    return PATHS.lectures_dir
 
 
 def latest_recording_file() -> Path | None:
     """Find the last saved audio part, including recordings from earlier runs."""
-    root = recordings_dir()
-    if not root.is_dir():
-        return None
+    roots = [recordings_dir(), Path.home() / "Documents" / "JARVIS" / "Lectures"]
     sessions = sorted(
-        (p for p in root.glob("Lecture_*") if p.is_dir()),
+        (p for root in roots if root.is_dir() for p in root.glob("Lecture_*") if p.is_dir()),
         key=lambda p: p.stat().st_mtime,
         reverse=True,
     )

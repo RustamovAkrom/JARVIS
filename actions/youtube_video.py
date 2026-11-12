@@ -6,6 +6,7 @@ import time
 import subprocess
 import shutil
 from pathlib import Path
+from core.runtime_paths import PATHS
 from datetime import datetime
 from urllib.parse import quote_plus
 
@@ -47,7 +48,7 @@ def _get_base_dir() -> Path:
 
 
 BASE_DIR = _get_base_dir()
-API_CONFIG_PATH = BASE_DIR / "config" / "api_keys.json"
+API_CONFIG_PATH = PATHS.api_config_file
 
 HEADERS = {
     "User-Agent": (

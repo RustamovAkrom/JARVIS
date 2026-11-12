@@ -330,6 +330,7 @@ def discover_plugins(
     core_tool_names: set[str],
     logger: Callable[[str], None] = print,
     notify: Callable[[str], None] | None = None,
+    user_plugins_dir: Path | None = None,
 ) -> PluginRegistry:
     """
     Scans plugins_dir for *.py files (skips files starting with '_', e.g. __init__.py,
@@ -339,12 +340,30 @@ def discover_plugins(
     of remaining files.
     """
     plugins_dir.mkdir(parents=True, exist_ok=True)
+    plugin_roots = [plugins_dir]
+    if user_plugins_dir is not None:
+        user_plugins_dir = Path(user_plugins_dir)
+        user_plugins_dir.mkdir(parents=True, exist_ok=True)
+        if user_plugins_dir.resolve() != plugins_dir.resolve():
+            plugin_roots.append(user_plugins_dir)
+        try:
+            import plugins as _plugins_package
+
+            package_path = list(getattr(_plugins_package, "__path__", []))
+            if str(user_plugins_dir) not in package_path:
+                _plugins_package.__path__.append(str(user_plugins_dir))
+        except Exception:
+            pass
     valid: dict[str, PluginRecord] = {}
     all_records: list[PluginRecord] = []
 
-    files = sorted(
-        plugins_dir.glob("*.py"), key=lambda p: p.name
-    )  # deterministic order
+    # Bundled plugins come first: an external plugin cannot silently replace a
+    # built-in with the same tool name. Remaining conflicts are reported below.
+    files = [
+        path
+        for root in plugin_roots
+        for path in sorted(root.glob("*.py"), key=lambda p: p.name)
+    ]
     for path in files:
         if path.name.startswith("_"):
             continue

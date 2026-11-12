@@ -3,17 +3,12 @@ import re
 from datetime import datetime
 from threading import Lock
 from pathlib import Path
-import sys
+from core.runtime_paths import PATHS
+from core.user_data import atomic_write_text, file_lock
 
 
-def get_base_dir() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent.parent
-
-
-BASE_DIR = get_base_dir()
-MEMORY_PATH = BASE_DIR / "memory" / "long_term.json"
+BASE_DIR = PATHS.user_data_root
+MEMORY_PATH = PATHS.long_term_memory_file
 _lock = Lock()
 MAX_VALUE_LENGTH = 380
 
@@ -123,12 +118,12 @@ def save_memory(memory: dict) -> None:
     if not isinstance(memory, dict):
         return
     memory = _trim_to_limit(memory)
-    MEMORY_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with _lock:
-        MEMORY_PATH.write_text(
-            json.dumps(memory, indent=2, ensure_ascii=False),
-            encoding="utf-8",
-        )
+    with _lock, file_lock(MEMORY_PATH):
+        _write_memory_unlocked(memory)
+
+
+def _write_memory_unlocked(memory: dict) -> None:
+    atomic_write_text(MEMORY_PATH, json.dumps(memory, indent=2, ensure_ascii=False))
 
 
 def _truncate_value(val: str) -> str:
@@ -165,9 +160,12 @@ def _recursive_update(target: dict, updates: dict) -> bool:
 def update_memory(memory_update: dict) -> dict:
     if not isinstance(memory_update, dict) or not memory_update:
         return load_memory()
-    memory = load_memory()
-    if _recursive_update(memory, memory_update):
-        save_memory(memory)
+    with _lock, file_lock(MEMORY_PATH):
+        memory = load_memory()
+        changed = _recursive_update(memory, memory_update)
+        if changed:
+            memory = _trim_to_limit(memory)
+            _write_memory_unlocked(memory)
         print(f"[Memory] 💾 Saved: {list(memory_update.keys())}")
     return memory
 
@@ -450,14 +448,15 @@ def remember(key: str, value: str, category: str = "notes") -> str:
 
 
 def forget(key: str, category: str = "notes") -> str:
-    memory = load_memory()
-    cat = memory.get(category, {})
-    if key in cat:
-        del cat[key]
-        memory[category] = cat
-        save_memory(memory)
-        return f"Forgotten: {category}/{key}"
-    return f"Not found: {category}/{key}"
+    with _lock, file_lock(MEMORY_PATH):
+        memory = load_memory()
+        cat = memory.get(category, {})
+        if key in cat:
+            del cat[key]
+            memory[category] = cat
+            _write_memory_unlocked(memory)
+            return f"Forgotten: {category}/{key}"
+        return f"Not found: {category}/{key}"
 
 
 forget_memory = forget
@@ -473,24 +472,20 @@ def save_session_summary(summary: str, language: str = "") -> None:
     summary = (summary or "").strip()
     if not summary:
         return
-    memory = load_memory()
-    sessions = memory.get("sessions", [])
-    if not isinstance(sessions, list):
-        sessions = []
-    entry: dict = {
-        "date": datetime.now().strftime("%Y-%m-%d"),
-        "summary": summary[:280],
-    }
-    if language:
-        entry["language"] = language
-    sessions.append(entry)
-    memory["sessions"] = sessions[-_SESSION_MAX:]
-    with _lock:
-        MEMORY_PATH.parent.mkdir(parents=True, exist_ok=True)
-        MEMORY_PATH.write_text(
-            json.dumps(memory, indent=2, ensure_ascii=False),
-            encoding="utf-8",
-        )
+    with _lock, file_lock(MEMORY_PATH):
+        memory = load_memory()
+        sessions = memory.get("sessions", [])
+        if not isinstance(sessions, list):
+            sessions = []
+        entry: dict = {
+            "date": datetime.now().strftime("%Y-%m-%d"),
+            "summary": summary[:280],
+        }
+        if language:
+            entry["language"] = language
+        sessions.append(entry)
+        memory["sessions"] = sessions[-_SESSION_MAX:]
+        _write_memory_unlocked(memory)
     print(f"[Memory] 📝 Session saved ({entry['date']}): {summary[:60]}…")
 
 
@@ -499,7 +494,7 @@ def pop_last_session() -> dict | None:
     Return AND remove the most recent session entry.
     Calling this consumes the entry so it is never repeated in future briefings.
     """
-    with _lock:
+    with _lock, file_lock(MEMORY_PATH):
         if not MEMORY_PATH.exists():
             return None
         try:
@@ -509,10 +504,7 @@ def pop_last_session() -> dict | None:
                 return None
             entry = sessions.pop()  # remove the last entry
             memory["sessions"] = sessions
-            MEMORY_PATH.write_text(
-                json.dumps(memory, indent=2, ensure_ascii=False),
-                encoding="utf-8",
-            )
+            _write_memory_unlocked(memory)
             return entry
         except Exception as e:
             print(f"[Memory] ⚠️ pop_last_session error: {e}")

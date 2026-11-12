@@ -6,6 +6,7 @@ import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
+from core.runtime_paths import PATHS
 
 _CNW: dict = (
     {"creationflags": subprocess.CREATE_NO_WINDOW}
@@ -30,7 +31,7 @@ def _get_os() -> str:
 
 
 def _scripts_dir() -> Path:
-    d = Path.home() / ".jarvis" / "reminders"
+    d = PATHS.databases_dir / "reminders"
     d.mkdir(parents=True, exist_ok=True)
     return d
 
@@ -353,7 +354,7 @@ def reminder(
     # scheduler remains authoritative; failure to update this convenience list
     # must never turn a successfully scheduled reminder into a failed action.
     try:
-        config_dir = _base_dir() / "config"
+        config_dir = PATHS.config_dir
         index = config_dir / "ui_reminders.json"
         data = json.loads(index.read_text(encoding="utf-8")) if index.exists() else {}
         reminders = data.get("reminders", []) if isinstance(data, dict) else []

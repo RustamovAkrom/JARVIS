@@ -19,6 +19,7 @@ import string
 import threading
 import time
 from pathlib import Path
+from core.runtime_paths import PATHS
 
 _DEPS_OK = False
 try:
@@ -39,8 +40,8 @@ try:
 except Exception:
     pass
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-STATIC_DIR = Path(__file__).parent / "static"
+BASE_DIR = PATHS.user_data_root
+STATIC_DIR = PATHS.resource_root / "dashboard" / "static"
 # The port people TYPE, and the port the app actually runs on.
 #
 # They are not the same, and that is the fix for the most confusing failure

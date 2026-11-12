@@ -66,6 +66,7 @@ from PyQt6.QtGui import (
     QRadialGradient,
 )
 from PyQt6.QtWidgets import QWidget
+from core.runtime_paths import PATHS
 
 W, H = 1600.0, 1000.0
 BG = (6, 10, 16)
@@ -75,7 +76,7 @@ WARN = (255, 196, 64)
 HOT = (255, 84, 96)
 SUN = (255, 206, 84)
 
-BASE_DIR = Path(__file__).resolve().parent.parent
+BASE_DIR = PATHS.resource_root
 
 _errors: set = set()
 
@@ -84,7 +85,7 @@ def accent() -> tuple[int, int, int]:
     """The accent the user picked for the HUD (⚙ → colour), cyan otherwise."""
     try:
         cfg = json.loads(
-            (BASE_DIR / "config" / "api_keys.json").read_text(encoding="utf-8")
+            PATHS.api_config_file.read_text(encoding="utf-8")
         )
         colour = str(cfg.get("ui_color") or "")
         if re.fullmatch(r"#[0-9a-fA-F]{6}", colour):

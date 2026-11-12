@@ -16,11 +16,12 @@ import json
 import threading
 import time
 from pathlib import Path
+from core.runtime_paths import PATHS
 
 import cv2
 import numpy as np
 
-BASE_DIR = Path(__file__).resolve().parent.parent
+BASE_DIR = PATHS.resource_root
 
 PLUGIN = {
     "name": "calorie_counter",
@@ -58,9 +59,7 @@ _SCAN_CORE = (255, 235, 130)  # bright core line (BGR)
 
 def _config() -> dict:
     try:
-        return json.loads(
-            (BASE_DIR / "config" / "api_keys.json").read_text(encoding="utf-8")
-        )
+        return json.loads(PATHS.api_config_file.read_text(encoding="utf-8"))
     except Exception:
         return {}
 

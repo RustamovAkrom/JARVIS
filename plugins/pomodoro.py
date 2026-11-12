@@ -21,8 +21,9 @@ import threading
 import time
 from datetime import date
 from pathlib import Path
+from core.runtime_paths import PATHS
 
-STATE_FILE = Path(__file__).resolve().parent.parent / "memory" / "pomodoro_state.json"
+STATE_FILE = PATHS.memory_dir / "pomodoro_state.json"
 
 PLUGIN = {
     "name": "pomodoro",
