@@ -12,13 +12,12 @@ class WorkspaceFilesTests(unittest.TestCase):
         self.root = Path(self.temp_dir.name) / "project"
         self.root.mkdir()
         (self.root / "src").mkdir()
-        (self.root / "src" / "main.py").write_text(
-            "print('hello')\n", encoding="utf-8")
+        (self.root / "src" / "main.py").write_text("print('hello')\n", encoding="utf-8")
         (self.root / ".venv").mkdir()
-        (self.root / ".venv" / "private.py").write_text(
-            "ignored", encoding="utf-8")
+        (self.root / ".venv" / "private.py").write_text("ignored", encoding="utf-8")
         self.workspace_patch = patch.object(
-            workspace_files, "_workspace", return_value=self.root)
+            workspace_files, "_workspace", return_value=self.root
+        )
         self.workspace_patch.start()
 
     def tearDown(self):
@@ -32,14 +31,16 @@ class WorkspaceFilesTests(unittest.TestCase):
 
     def test_reads_project_relative_file(self):
         result = workspace_files.workspace_files(
-            {"action": "read", "path": "src/main.py"})
+            {"action": "read", "path": "src/main.py"}
+        )
         self.assertIn("print('hello')", result)
 
     def test_rejects_paths_outside_the_selected_project(self):
         outside = Path(self.temp_dir.name) / "outside.txt"
         outside.write_text("secret", encoding="utf-8")
         result = workspace_files.workspace_files(
-            {"action": "read", "path": str(outside)})
+            {"action": "read", "path": str(outside)}
+        )
         self.assertIn("outside the selected project", result)
         self.assertNotIn("secret", result)
 
@@ -48,8 +49,7 @@ class WorkspaceFilesTests(unittest.TestCase):
             "memory.config_manager.get_active_project_file",
             return_value="src/main.py",
         ):
-            result = workspace_files.workspace_files(
-                {"action": "read_current"})
+            result = workspace_files.workspace_files({"action": "read_current"})
         self.assertIn("print('hello')", result)
 
     def test_reports_no_selected_project(self):

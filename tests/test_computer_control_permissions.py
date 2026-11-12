@@ -7,30 +7,42 @@ from memory.config_manager import DEFAULT_COMPUTER_PERMISSIONS
 
 class ComputerControlPermissionTests(unittest.TestCase):
     def test_click_is_denied_by_default_without_calling_mouse(self):
-        with patch("memory.config_manager.get_computer_permissions",
-                   return_value=dict(DEFAULT_COMPUTER_PERMISSIONS)), \
-                patch("actions.computer_control._click") as click:
+        with (
+            patch(
+                "memory.config_manager.get_computer_permissions",
+                return_value=dict(DEFAULT_COMPUTER_PERMISSIONS),
+            ),
+            patch("actions.computer_control._click") as click,
+        ):
             result = computer_control({"action": "click", "x": 20, "y": 30})
         self.assertIn("Permission denied", result)
         click.assert_not_called()
 
     def test_screen_click_requires_discovery_and_click_permissions(self):
         permissions = dict(DEFAULT_COMPUTER_PERMISSIONS, click=True)
-        with patch("memory.config_manager.get_computer_permissions",
-                   return_value=permissions), \
-                patch("actions.computer_control._screen_find") as find:
-            result = computer_control({"action": "screen_click",
-                                       "description": "Save button"})
+        with (
+            patch(
+                "memory.config_manager.get_computer_permissions",
+                return_value=permissions,
+            ),
+            patch("actions.computer_control._screen_find") as find,
+        ):
+            result = computer_control(
+                {"action": "screen_click", "description": "Save button"}
+            )
         self.assertIn("Permission denied", result)
         find.assert_not_called()
 
     def test_explicitly_enabled_click_executes(self):
         permissions = dict(DEFAULT_COMPUTER_PERMISSIONS, click=True)
-        with patch("memory.config_manager.get_computer_permissions",
-                   return_value=permissions), \
-                patch("actions.computer_control._click",
-                      return_value="clicked") as click, \
-                patch("builtins.print"):
+        with (
+            patch(
+                "memory.config_manager.get_computer_permissions",
+                return_value=permissions,
+            ),
+            patch("actions.computer_control._click", return_value="clicked") as click,
+            patch("builtins.print"),
+        ):
             result = computer_control({"action": "click", "x": 20, "y": 30})
         self.assertEqual(result, "clicked")
         click.assert_called_once_with(20, 30, "left", 1)

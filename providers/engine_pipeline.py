@@ -40,6 +40,7 @@ NO LANGUAGE LOGIC ANYWHERE IN THIS FILE
     it is on Gemini. The STT is asked to detect rather than told what to expect,
     and the transcript is passed through without being inspected.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -77,12 +78,12 @@ _DEFAULT_HISTORY_CHARS = 24_000
 # never triggers in a noisy room and never stops in a silent one — so the noise
 # floor is measured continuously from the quietest recent frames and speech is
 # whatever stands well above it.
-_VAD_SILENCE_MS = 700      # quiet for this long after speech = the turn ended
-_VAD_MIN_SPEECH_MS = 250   # shorter than this is a cough, a click, a door
-_VAD_MAX_TURN_S = 30.0     # a runaway stream is flushed rather than kept for ever
-_VAD_FLOOR_MARGIN = 3.5    # speech is this many times the measured noise floor
+_VAD_SILENCE_MS = 700  # quiet for this long after speech = the turn ended
+_VAD_MIN_SPEECH_MS = 250  # shorter than this is a cough, a click, a door
+_VAD_MAX_TURN_S = 30.0  # a runaway stream is flushed rather than kept for ever
+_VAD_FLOOR_MARGIN = 3.5  # speech is this many times the measured noise floor
 _VAD_ABSOLUTE_MIN = 0.006  # ...and never below this, so a silent room's own
-                           # floor of near-zero cannot make hiss into speech
+# floor of near-zero cannot make hiss into speech
 
 # ── Stopping a model that will not stop ──────────────────────────────────────
 # Gemini Live ends a turn itself. A chat API does not: every tool result is a
@@ -106,8 +107,16 @@ _MAX_TOOL_ROUNDS = 4
 class PipelineEngine:
     """STT -> LLM -> TTS, wearing the Live session's interface."""
 
-    def __init__(self, llm, stt=None, tts=None, *, config=None,
-                 log=None, history_chars: int = _DEFAULT_HISTORY_CHARS):
+    def __init__(
+        self,
+        llm,
+        stt=None,
+        tts=None,
+        *,
+        config=None,
+        log=None,
+        history_chars: int = _DEFAULT_HISTORY_CHARS,
+    ):
         self._llm = llm
         self._stt = stt
         self._tts = tts
@@ -116,20 +125,22 @@ class PipelineEngine:
 
         self.caps = dict(DEFAULT_CAPS)
         llm_caps = getattr(llm, "caps", {}) or {}
-        self.caps.update({
-            "tools": bool(llm_caps.get("tools")),
-            "tool_format": llm_caps.get("tool_format"),
-            "max_tools": llm_caps.get("max_tools"),
-            "max_tool_chars": llm_caps.get("max_tool_chars"),
-            "vision": bool(llm_caps.get("vision")),
-            "audio_out": tts is not None,
-            # A local pipeline has no server deciding when the user has started
-            # talking over it. Until an engine can do that, `interrupt()` stops
-            # playback and this stays false rather than claiming otherwise.
-            "barge_in": False,
-            "non_blocking": False,
-            "resumption": False,
-        })
+        self.caps.update(
+            {
+                "tools": bool(llm_caps.get("tools")),
+                "tool_format": llm_caps.get("tool_format"),
+                "max_tools": llm_caps.get("max_tools"),
+                "max_tool_chars": llm_caps.get("max_tool_chars"),
+                "vision": bool(llm_caps.get("vision")),
+                "audio_out": tts is not None,
+                # A local pipeline has no server deciding when the user has started
+                # talking over it. Until an engine can do that, `interrupt()` stops
+                # playback and this stays false rather than claiming otherwise.
+                "barge_in": False,
+                "non_blocking": False,
+                "resumption": False,
+            }
+        )
 
         # The system prompt and the tool declarations come from the config
         # main.py already built for the Live session — same prompt, same tools,
@@ -162,7 +173,7 @@ class PipelineEngine:
         # Turn detection state. `auto_turn` is off unless something switches it
         # on, so push-to-talk keeps behaving exactly as it does today.
         self.auto_turn = False
-        self._on_turn_end = None          # set by main.py: what to do on a flush
+        self._on_turn_end = None  # set by main.py: what to do on a flush
         self._vad_floor = _VAD_ABSOLUTE_MIN
         self._vad_speech_ms = 0.0
         self._vad_quiet_ms = 0.0
@@ -177,9 +188,12 @@ class PipelineEngine:
             self._system = si if isinstance(si, str) else str(si)
 
         decls: list = []
-        for group in (getattr(config, "tools", None) or []):
-            fd = (group.get("function_declarations") if isinstance(group, dict)
-                  else getattr(group, "function_declarations", None))
+        for group in getattr(config, "tools", None) or []:
+            fd = (
+                group.get("function_declarations")
+                if isinstance(group, dict)
+                else getattr(group, "function_declarations", None)
+            )
             if fd:
                 decls.extend(fd)
 
@@ -196,17 +210,20 @@ class PipelineEngine:
             # instructions and the reply is parsed. Less reliable than a real
             # tool API, and the engine says so through caps rather than
             # pretending the difference is not there.
-            self._system = (self._system + "\n\n"
-                            + schema.to_prompt(self._declarations)).strip()
+            self._system = (
+                self._system + "\n\n" + schema.to_prompt(self._declarations)
+            ).strip()
             self._tools = None
         else:
             self._tools = schema.convert(self._declarations, fmt)
 
         kept, total = len(self._declarations), len(decls)
         if kept < total:
-            self._log(f"SYS: {kept} of {total} tools declared "
-                      f"({schema.payload_size(self._declarations):,} chars) — "
-                      f"this model's budget.")
+            self._log(
+                f"SYS: {kept} of {total} tools declared "
+                f"({schema.payload_size(self._declarations):,} chars) — "
+                f"this model's budget."
+            )
 
     def tool_names(self) -> list[str]:
         """What the model was actually offered. main.py uses this to decide what
@@ -346,8 +363,9 @@ class PipelineEngine:
         started = self._timing.get("tool_at")
         if started:
             self._tick("tools", time.monotonic() - started)
-            self._timing["tool_names"] = ", ".join(
-                sorted(set(self._awaiting.values()))) or ""
+            self._timing["tool_names"] = (
+                ", ".join(sorted(set(self._awaiting.values()))) or ""
+            )
         for fr in function_responses or []:
             call_id = str(getattr(fr, "id", "") or "")
             name = str(getattr(fr, "name", "") or self._awaiting.get(call_id, ""))
@@ -357,12 +375,14 @@ class PipelineEngine:
             sig = getattr(self, "_pending_sigs", {}).pop(call_id, "")
             if sig:
                 self._done_calls[sig] = _stringify(payload)
-            self._history.append({
-                "role": "tool",
-                "tool_call_id": call_id or name,
-                "name": name,
-                "content": _stringify(payload),
-            })
+            self._history.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": call_id or name,
+                    "name": name,
+                    "content": _stringify(payload),
+                }
+            )
             self._awaiting.pop(call_id, None)
 
         # Only ask the model again once every call it made has an answer.
@@ -445,7 +465,7 @@ class PipelineEngine:
         t0 = time.monotonic()
         first_word = None
         thinking = _ReasoningFilter()
-        pending = ""            # visible text not yet a whole sentence
+        pending = ""  # visible text not yet a whole sentence
         try:
             async for ev in self._llm.chat(self._messages(), self._tools):
                 if ev.get("text"):
@@ -504,28 +524,53 @@ class PipelineEngine:
 
                 if repeats:
                     names = ", ".join(sorted({c.name for c in repeats}))
-                    self._log(f"SYS: {names} was already done this turn - "
-                              f"reusing the result instead of running it again.")
+                    self._log(
+                        f"SYS: {names} was already done this turn - "
+                        f"reusing the result instead of running it again."
+                    )
                     for c in repeats:
-                        self._history.append({
-                            "role": "assistant", "content": None,
-                            "tool_calls": [{"id": c.id, "type": "function",
-                                            "function": {"name": c.name,
-                                                         "arguments": json.dumps(c.args)}}]})
-                        self._history.append({
-                            "role": "tool", "tool_call_id": c.id, "name": c.name,
-                            "content": self._done_calls[_signature(c)]})
+                        self._history.append(
+                            {
+                                "role": "assistant",
+                                "content": None,
+                                "tool_calls": [
+                                    {
+                                        "id": c.id,
+                                        "type": "function",
+                                        "function": {
+                                            "name": c.name,
+                                            "arguments": json.dumps(c.args),
+                                        },
+                                    }
+                                ],
+                            }
+                        )
+                        self._history.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": c.id,
+                                "name": c.name,
+                                "content": self._done_calls[_signature(c)],
+                            }
+                        )
 
                 if self._rounds > _MAX_TOOL_ROUNDS:
                     # Wandering rather than converging. Stop asking for tools
                     # and make it answer with what it has.
-                    self._log(f"SYS: stopping after {_MAX_TOOL_ROUNDS} tool "
-                              f"rounds - answering with what it has.")
-                    self._history.append({
-                        "role": "user",
-                        "content": ("Do not call any more tools. Answer now, "
-                                    "briefly, using what the tools already "
-                                    "returned.")})
+                    self._log(
+                        f"SYS: stopping after {_MAX_TOOL_ROUNDS} tool "
+                        f"rounds - answering with what it has."
+                    )
+                    self._history.append(
+                        {
+                            "role": "user",
+                            "content": (
+                                "Do not call any more tools. Answer now, "
+                                "briefly, using what the tools already "
+                                "returned."
+                            ),
+                        }
+                    )
                     fresh = []
 
                 if not fresh:
@@ -539,12 +584,21 @@ class PipelineEngine:
                 for c in calls:
                     self._done_calls.setdefault(_signature(c), "")
 
-                entry: dict[str, Any] = {"role": "assistant", "content": text or None,
-                                         "tool_calls": [
-                                             {"id": c.id, "type": "function",
-                                              "function": {"name": c.name,
-                                                           "arguments": json.dumps(c.args)}}
-                                             for c in calls]}
+                entry: dict[str, Any] = {
+                    "role": "assistant",
+                    "content": text or None,
+                    "tool_calls": [
+                        {
+                            "id": c.id,
+                            "type": "function",
+                            "function": {
+                                "name": c.name,
+                                "arguments": json.dumps(c.args),
+                            },
+                        }
+                        for c in calls
+                    ],
+                }
                 self._history.append(entry)
                 self._awaiting = {c.id: c.name for c in calls}
                 self._pending_sigs = {c.id: _signature(c) for c in calls}
@@ -637,7 +691,8 @@ class PipelineEngine:
         # "1.5s to make 2.1s of speech" and "1.5s to make 0.2s" are opposite
         # situations that a duration on its own cannot tell apart.
         t["spoke_s"] = t.get("spoke_s", 0.0) + (
-            total / float(_a.SPEAKER_RATE * _a.SAMPLE_WIDTH))
+            total / float(_a.SPEAKER_RATE * _a.SAMPLE_WIDTH)
+        )
 
     # ── where the seconds went ───────────────────────────────────────────────
     # A local pipeline is three services in series, and when a turn takes
@@ -673,28 +728,43 @@ class PipelineEngine:
         total = 0.0
         if "stt" in t:
             total += t["stt"]
-            lines.append(row("hear", t["stt"],
-                             f"{t.get('heard_s', 0):.1f}s of speech"
-                             f"  |  {_name_of(self._stt)}"))
+            lines.append(
+                row(
+                    "hear",
+                    t["stt"],
+                    f"{t.get('heard_s', 0):.1f}s of speech"
+                    f"  |  {_name_of(self._stt)}",
+                )
+            )
         if "llm" in t:
             total += t["llm"]
             first = t.get("llm_first")
-            detail = (f"first word {first:.2f}s  |  " if first else "")
+            detail = f"first word {first:.2f}s  |  " if first else ""
             hidden = t.get("thought", 0)
-            lines.append(row("think", t["llm"],
-                             f"{detail}{t.get('chars', 0)} chars"
-                             + (f"  |  {hidden} thought (hidden)" if hidden else "")
-                             + f"  |  {_name_of(self._llm)}"))
+            lines.append(
+                row(
+                    "think",
+                    t["llm"],
+                    f"{detail}{t.get('chars', 0)} chars"
+                    + (f"  |  {hidden} thought (hidden)" if hidden else "")
+                    + f"  |  {_name_of(self._llm)}",
+                )
+            )
         if "tools" in t:
             total += t["tools"]
             lines.append(row("tools", t["tools"], t.get("tool_names", "")))
         if "tts" in t:
             total += t["tts"]
             first = t.get("tts_first")
-            detail = (f"first sound {first:.2f}s  |  " if first else "")
-            lines.append(row("speak", t["tts"],
-                             f"{detail}{t.get('spoke_s', 0):.1f}s of audio"
-                             f"  |  {_name_of(self._tts)}"))
+            detail = f"first sound {first:.2f}s  |  " if first else ""
+            lines.append(
+                row(
+                    "speak",
+                    t["tts"],
+                    f"{detail}{t.get('spoke_s', 0):.1f}s of audio"
+                    f"  |  {_name_of(self._tts)}",
+                )
+            )
         lines.append("[Pipeline]   " + "-" * 68)
         lines.append(f"[Pipeline]   {'total':<7}{total:>7.2f}s")
         _console("\n".join(lines))
@@ -721,11 +791,15 @@ class PipelineEngine:
 
         where = _target_of(provider)
         detail = " ".join(str(exc).split())[:160] or exc.__class__.__name__
-        self._log(f"SYS: {what} failed{f' ({where})' if where else ''} - "
-                  f"{type(exc).__name__}: {detail}")
-        _console(f"[Pipeline] {what} failed"
-                 f"{f' at {where}' if where else ''}: "
-                 f"{type(exc).__name__}: {detail}")
+        self._log(
+            f"SYS: {what} failed{f' ({where})' if where else ''} - "
+            f"{type(exc).__name__}: {detail}"
+        )
+        _console(
+            f"[Pipeline] {what} failed"
+            f"{f' at {where}' if where else ''}: "
+            f"{type(exc).__name__}: {detail}"
+        )
         traceback.print_exception(type(exc), exc, exc.__traceback__)
 
     async def _emit(self, msg: Msg) -> None:
@@ -735,6 +809,7 @@ class PipelineEngine:
     # ── conversion ───────────────────────────────────────────────────────────
     def _to_content(self, parts: list) -> Any:
         from .llm_openai import parts_to_openai
+
         content = parts_to_openai(parts)
         if isinstance(content, list) and not self.caps.get("vision"):
             # The model cannot see. Keep the words rather than sending an image
@@ -744,8 +819,10 @@ class PipelineEngine:
             kept = [p["text"] for p in content if p.get("type") == "text"]
             dropped = len(content) - len(kept)
             if dropped:
-                kept.append(f"[an image was attached; this model cannot see "
-                            f"images, so it was not included]")
+                kept.append(
+                    f"[an image was attached; this model cannot see "
+                    f"images, so it was not included]"
+                )
             return "\n".join(kept)
         return content
 
@@ -782,7 +859,8 @@ class PipelineEngine:
             # model taking its time never looks like a dead connection.
             await self._emit(Msg.heard(text))
             await self.send_client_content(
-                turns={"role": "user", "parts": [{"text": text}]})
+                turns={"role": "user", "parts": [{"text": text}]}
+            )
         return text
 
 
@@ -818,7 +896,7 @@ class _ReasoningFilter:
     def __init__(self) -> None:
         self._buf = ""
         self._inside = False
-        self.hid = 0            # characters removed, for the timing report
+        self.hid = 0  # characters removed, for the timing report
 
     def feed(self, chunk: str) -> str:
         """Whatever of `chunk` is safe to say out loud."""
@@ -830,14 +908,14 @@ class _ReasoningFilter:
                 if idx < 0:
                     break
                 self.hid += idx + len(tag)
-                self._buf = self._buf[idx + len(tag):]
+                self._buf = self._buf[idx + len(tag) :]
                 self._inside = False
                 continue
             idx, tag = _first_of(self._buf, self._OPEN)
             if idx < 0:
                 break
             out.append(self._buf[:idx])
-            self._buf = self._buf[idx + len(tag):]
+            self._buf = self._buf[idx + len(tag) :]
             self._inside = True
 
         # Hold back enough characters to recognise a tag that is still arriving,
@@ -918,14 +996,16 @@ _SENTENCE_END = re.compile(r"(?<=[.!?…])\s+|(?<=[。！？؟۔।])\s*")
 # one language quietly breaks in every other.
 _UNSPEAKABLE = re.compile(
     "["
-    "🀀-🫿"     # emoji, pictographs, flags, skin tones
-    "☀-➿"     # misc symbols and dingbats
-    "←-⇿"     # arrows
-    "⬀-⯿"     # shapes and more arrows
-    "︀-️"     # variation selectors
-    "‍"                 # zero-width joiner, which welds them together
-    "™ℹ⁉‼"   # tm, info, !?, !!
-    "]+", flags=re.UNICODE)
+    "🀀-🫿"  # emoji, pictographs, flags, skin tones
+    "☀-➿"  # misc symbols and dingbats
+    "←-⇿"  # arrows
+    "⬀-⯿"  # shapes and more arrows
+    "︀-️"  # variation selectors
+    "‍"  # zero-width joiner, which welds them together
+    "™ℹ⁉‼"  # tm, info, !?, !!
+    "]+",
+    flags=re.UNICODE,
+)
 
 
 def _signature(call) -> str:
@@ -961,10 +1041,10 @@ def _take_sentences(buf: str) -> tuple:
         m = _SENTENCE_END.search(buf)
         if not m:
             break
-        piece = buf[:m.end()].strip()
+        piece = buf[: m.end()].strip()
         if piece:
             out.append(piece)
-        buf = buf[m.end():]
+        buf = buf[m.end() :]
     if len(buf) > 320:
         cut = buf.rfind(" ", 0, 320)
         if cut > 0:
@@ -982,6 +1062,7 @@ def _accepts_language(tts) -> bool:
     told. Introspection keeps that a property of each provider rather than a
     list kept here that goes stale."""
     import inspect
+
     try:
         return "language" in inspect.signature(tts.speak).parameters
     except Exception:
@@ -1013,7 +1094,7 @@ def _console(text: str) -> None:
             enc = getattr(sys.stdout, "encoding", None) or "ascii"
             print(text.encode(enc, "replace").decode(enc, "replace"))
         except Exception:
-            pass                # a message is never worth an exception
+            pass  # a message is never worth an exception
 
 
 def _name_of(provider) -> str:
@@ -1060,8 +1141,10 @@ def _failure_line(what: str, exc: Exception) -> str:
     advice that cannot work and wastes the listener's time."""
     name = type(exc).__name__.lower()
     if "connect" in name or "timeout" in name:
-        return (f"I could not reach {what}. It looks like the server is not "
-                f"running or the address is wrong — the details are in the log.")
+        return (
+            f"I could not reach {what}. It looks like the server is not "
+            f"running or the address is wrong — the details are in the log."
+        )
     return f"Something went wrong with {what}. The details are in the log."
 
 
@@ -1090,12 +1173,13 @@ def _pcm_of(audio: Any) -> bytes:
         return bytes(audio)
     if isinstance(audio, dict):
         return bytes(audio.get("data") or b"")
-    data = getattr(audio, "data", None)          # types.Blob and anything like it
+    data = getattr(audio, "data", None)  # types.Blob and anything like it
     if isinstance(data, (bytes, bytearray, memoryview)):
         return bytes(data)
     if isinstance(data, str):
         # Some SDK paths carry base64 rather than raw bytes.
         import base64
+
         try:
             return base64.b64decode(data)
         except Exception:
@@ -1107,8 +1191,11 @@ def _text_of(content: Any) -> str:
     if isinstance(content, str):
         return content.strip()
     if isinstance(content, list):
-        return "\n".join(p.get("text", "") for p in content
-                         if isinstance(p, dict) and p.get("type") == "text").strip()
+        return "\n".join(
+            p.get("text", "")
+            for p in content
+            if isinstance(p, dict) and p.get("type") == "text"
+        ).strip()
     return ""
 
 
@@ -1134,7 +1221,7 @@ def _parse_prompt_call(text: str, known: set[str]) -> Optional[FunctionCall]:
     """
     if not text or "{" not in text:
         return None
-    chunk = text[text.find("{"):text.rfind("}") + 1]
+    chunk = text[text.find("{") : text.rfind("}") + 1]
     try:
         obj = json.loads(chunk)
     except Exception:
@@ -1160,8 +1247,9 @@ def _make(cfg: dict) -> PipelineEngine:
     llm = part("llm")
     if llm is None:
         raise RuntimeError("the pipeline engine needs a language model")
-    return PipelineEngine(llm, part("stt"), part("tts"),
-                          config=cfg.get("live_config"), log=cfg.get("log"))
+    return PipelineEngine(
+        llm, part("stt"), part("tts"), config=cfg.get("live_config"), log=cfg.get("log")
+    )
 
 
 PROVIDER = {
@@ -1170,7 +1258,7 @@ PROVIDER = {
     "label": "Local pipeline",
     "hint": "Speech recognition, a language model and speech synthesis, assembled",
     "requires": (),
-    "needs": (),        # its parts are chosen in the panel, not typed in
-    "caps": {},         # taken from whatever fills its slots
+    "needs": (),  # its parts are chosen in the panel, not typed in
+    "caps": {},  # taken from whatever fills its slots
     "factory": _make,
 }

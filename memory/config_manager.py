@@ -3,20 +3,25 @@ import sys
 from pathlib import Path
 from pathlib import PurePosixPath, PureWindowsPath
 
+
 def get_base_dir() -> Path:
     if getattr(sys, "frozen", False):
         return Path(sys.executable).parent
     return Path(__file__).resolve().parent.parent
 
-BASE_DIR    = get_base_dir()
-CONFIG_DIR  = BASE_DIR / "config"
+
+BASE_DIR = get_base_dir()
+CONFIG_DIR = BASE_DIR / "config"
 CONFIG_FILE = CONFIG_DIR / "api_keys.json"
+
 
 def ensure_config_dir() -> None:
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 
+
 def config_exists() -> bool:
     return CONFIG_FILE.exists()
+
 
 def save_api_keys(gemini_api_key: str) -> None:
     ensure_config_dir()
@@ -30,10 +35,8 @@ def save_api_keys(gemini_api_key: str) -> None:
 
     data["gemini_api_key"] = gemini_api_key.strip()
 
-    CONFIG_FILE.write_text(
-        json.dumps(data, indent=2),
-        encoding="utf-8"
-    )
+    CONFIG_FILE.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
 
 def load_api_keys() -> dict:
     if not CONFIG_FILE.exists():
@@ -44,8 +47,10 @@ def load_api_keys() -> dict:
         print(f"❌ Failed to load api_keys.json: {e}")
         return {}
 
+
 def get_gemini_key() -> str | None:
     return load_api_keys().get("gemini_api_key")
+
 
 def is_configured() -> bool:
     key = get_gemini_key()
@@ -69,7 +74,7 @@ def get_ui_opacity() -> int:
         return 100
     try:
         value = round(value)
-    except (OverflowError, ValueError):
+    except OverflowError, ValueError:
         return 100
     return max(60, min(100, value))
 
@@ -77,6 +82,7 @@ def get_ui_opacity() -> int:
 def get_ui_language() -> str:
     """Return a supported interface language, defaulting to English."""
     from memory.translations import LANGUAGES
+
     value = load_api_keys().get("ui_language", "en")
     return value if isinstance(value, str) and value in LANGUAGES else "en"
 
@@ -84,6 +90,7 @@ def get_ui_language() -> str:
 def save_ui_language(language: str) -> None:
     """Save a supported language without disturbing other settings."""
     from memory.translations import LANGUAGES
+
     value = str(language or "").strip().lower()
     if value not in LANGUAGES:
         raise ValueError(f"Unsupported UI language: {language}")
@@ -97,7 +104,7 @@ def get_workspace_path() -> str:
         return ""
     try:
         path = Path(value).expanduser().resolve()
-    except (OSError, RuntimeError):
+    except OSError, RuntimeError:
         return ""
     return str(path) if path.is_dir() else ""
 
@@ -153,7 +160,9 @@ def save_active_project_file(path: str) -> None:
             or ".." in posix_path.parts
             or ".." in windows_path.parts
         ):
-            raise ValueError("Active project file must be a relative path inside the project.")
+            raise ValueError(
+                "Active project file must be a relative path inside the project."
+            )
     _save_flag("active_project_file", value)
 
 
@@ -175,7 +184,7 @@ def save_assistant_config(assistant_name: str, user_name: str) -> None:
 # Gemini Live prebuilt voices. Names are proper nouns — identical in every
 # language, so this list is safe to show verbatim in any locale.
 AVAILABLE_VOICES = ["Charon", "Puck", "Kore", "Fenrir", "Aoede"]
-DEFAULT_VOICE    = "Charon"
+DEFAULT_VOICE = "Charon"
 
 
 def get_voice() -> str:
@@ -245,6 +254,7 @@ def save_hud_style(style: str) -> None:
 # config behaves exactly like a configured one. Each value is also a way out:
 # if a future model dislikes one of these, set it back and nothing else changes.
 
+
 def get_thinking_enabled() -> bool:
     """Whether the Live model may spend tokens thinking before it answers.
 
@@ -280,15 +290,15 @@ def get_turn_tuning() -> dict:
     def _int(key, default, lo, hi):
         try:
             return max(lo, min(hi, int(cfg.get(key, default))))
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return default
 
     return {
-        "enabled":    bool(cfg.get("enabled", False)),
+        "enabled": bool(cfg.get("enabled", False)),
         "silence_ms": _int("silence_ms", 550, 200, 3000),
-        "prefix_ms":  _int("prefix_ms", 150, 0, 1000),
+        "prefix_ms": _int("prefix_ms", 150, 0, 1000),
         # "high" = quicker to decide speech has ended.
-        "end_sensitivity":   str(cfg.get("end_sensitivity", "high")).lower(),
+        "end_sensitivity": str(cfg.get("end_sensitivity", "high")).lower(),
         "start_sensitivity": str(cfg.get("start_sensitivity", "default")).lower(),
     }
 
@@ -360,12 +370,28 @@ CURSOR_SIZES = (18, 24, 32, 40)
 CURSOR_HOTKEYS = ("Ctrl+Shift+Space", "Ctrl+Alt+J", "Ctrl+Shift+J")
 REGION_HOTKEYS = ("Ctrl+Alt+R", "Ctrl+Shift+R", "Ctrl+Shift+X")
 CURSOR_MENU_ACTIONS = (
-    "microphone", "ask", "attach", "summarize", "explain", "translate",
-    "fix", "screen", "interrupt", "settings",
+    "microphone",
+    "ask",
+    "attach",
+    "summarize",
+    "explain",
+    "translate",
+    "fix",
+    "screen",
+    "interrupt",
+    "settings",
 )
 DEFAULT_CURSOR_MENU_ACTIONS = (
-    "microphone", "ask", "attach", "summarize", "explain", "translate",
-    "fix", "screen", "interrupt", "settings",
+    "microphone",
+    "ask",
+    "attach",
+    "summarize",
+    "explain",
+    "translate",
+    "fix",
+    "screen",
+    "interrupt",
+    "settings",
 )
 DEFAULT_COMPUTER_PERMISSIONS = {
     "observe_screen": True,
@@ -382,25 +408,29 @@ def get_cursor_assistant_settings() -> dict:
     style = str(cfg.get("style", "halo")).lower()
     try:
         size = int(cfg.get("size", 24))
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         size = 24
     actions = cfg.get("menu_actions", DEFAULT_CURSOR_MENU_ACTIONS)
     if not isinstance(actions, list):
         actions = list(DEFAULT_CURSOR_MENU_ACTIONS)
-    actions = list(dict.fromkeys(
-        action for action in actions if action in CURSOR_MENU_ACTIONS
-    ))
+    actions = list(
+        dict.fromkeys(action for action in actions if action in CURSOR_MENU_ACTIONS)
+    )
     return {
         "enabled": bool(cfg.get("enabled", True)),
         "cursor_visible": bool(cfg.get("cursor_visible", True)),
         "style": style if style in CURSOR_STYLES else "halo",
         "size": size if size in CURSOR_SIZES else 24,
-        "hotkey": cfg.get("hotkey", CURSOR_HOTKEYS[0])
-        if cfg.get("hotkey", CURSOR_HOTKEYS[0]) in CURSOR_HOTKEYS
-        else CURSOR_HOTKEYS[0],
-        "region_hotkey": cfg.get("region_hotkey", REGION_HOTKEYS[0])
-        if cfg.get("region_hotkey", REGION_HOTKEYS[0]) in REGION_HOTKEYS
-        else REGION_HOTKEYS[0],
+        "hotkey": (
+            cfg.get("hotkey", CURSOR_HOTKEYS[0])
+            if cfg.get("hotkey", CURSOR_HOTKEYS[0]) in CURSOR_HOTKEYS
+            else CURSOR_HOTKEYS[0]
+        ),
+        "region_hotkey": (
+            cfg.get("region_hotkey", REGION_HOTKEYS[0])
+            if cfg.get("region_hotkey", REGION_HOTKEYS[0]) in REGION_HOTKEYS
+            else REGION_HOTKEYS[0]
+        ),
         "menu_actions": actions,
     }
 
@@ -419,7 +449,7 @@ def save_cursor_assistant_settings(values: dict) -> None:
     if "size" in values:
         try:
             size = int(values["size"])
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             size = 24
         current["size"] = size if size in CURSOR_SIZES else 24
     if "hotkey" in values:
@@ -428,14 +458,15 @@ def save_cursor_assistant_settings(values: dict) -> None:
     if "region_hotkey" in values:
         hotkey = str(values["region_hotkey"])
         current["region_hotkey"] = (
-            hotkey if hotkey in REGION_HOTKEYS else REGION_HOTKEYS[0])
+            hotkey if hotkey in REGION_HOTKEYS else REGION_HOTKEYS[0]
+        )
     if "menu_actions" in values:
         actions = values["menu_actions"]
         if not isinstance(actions, (list, tuple, set)):
             actions = DEFAULT_CURSOR_MENU_ACTIONS
-        current["menu_actions"] = list(dict.fromkeys(
-            action for action in actions if action in CURSOR_MENU_ACTIONS
-        ))
+        current["menu_actions"] = list(
+            dict.fromkeys(action for action in actions if action in CURSOR_MENU_ACTIONS)
+        )
     _patch_config(cursor_assistant=current)
 
 
@@ -480,6 +511,7 @@ def save_brief_enabled(enabled: bool) -> None:
 # at a different microphone. The empty string means "system default", which is
 # both the factory setting and what an unresolvable saved device falls back to —
 # so unplugging a headset degrades to the built-in speakers instead of crashing.
+
 
 def _patch_config(**fields) -> None:
     """Read-modify-write one or more keys in api_keys.json.
@@ -576,6 +608,7 @@ def save_plugin_enabled(plugin_name: str, enabled: bool) -> None:
     data["plugins_enabled"] = plugins_cfg
     CONFIG_FILE.write_text(json.dumps(data, indent=4), encoding="utf-8")
 
+
 # ── Providers: local STT/LLM/TTS and non-Gemini APIs ─────────────────────────
 # Stored here rather than in a file of their own, for the same reason plugin
 # settings are: one config to back up, one already in .gitignore, one place a
@@ -586,7 +619,7 @@ def save_plugin_enabled(plugin_name: str, enabled: bool) -> None:
 # providers, and every caller checks that BEFORE importing the providers
 # package — so an ordinary install never executes a line of it. This is the
 # whole basis of the claim that the folder costs nothing when unused.
-PROVIDER_MODE_GEMINI = "gemini"      # the conversation runs on the Live API
+PROVIDER_MODE_GEMINI = "gemini"  # the conversation runs on the Live API
 PROVIDER_MODE_PIPELINE = "pipeline"  # STT -> LLM -> TTS, assembled from providers
 
 
@@ -599,8 +632,11 @@ def get_providers() -> dict:
 def get_provider_mode() -> str:
     """Which engine holds the conversation. Defaults to Gemini Live."""
     mode = str(get_providers().get("mode", "") or "").strip().lower()
-    return mode if mode in (PROVIDER_MODE_GEMINI, PROVIDER_MODE_PIPELINE) \
+    return (
+        mode
+        if mode in (PROVIDER_MODE_GEMINI, PROVIDER_MODE_PIPELINE)
         else PROVIDER_MODE_GEMINI
+    )
 
 
 def get_provider_config(provider_id: str) -> dict:
@@ -639,9 +675,13 @@ def _patch_providers(**fields) -> None:
 
 def save_provider_mode(mode: str) -> None:
     mode = (mode or "").strip().lower()
-    _patch_providers(mode=mode if mode in (PROVIDER_MODE_GEMINI,
-                                           PROVIDER_MODE_PIPELINE)
-                     else PROVIDER_MODE_GEMINI)
+    _patch_providers(
+        mode=(
+            mode
+            if mode in (PROVIDER_MODE_GEMINI, PROVIDER_MODE_PIPELINE)
+            else PROVIDER_MODE_GEMINI
+        )
+    )
 
 
 def save_provider_config(provider_id: str, values: dict) -> None:
@@ -691,8 +731,13 @@ def save_sidecar_first(enabled: bool) -> None:
     _patch_providers(sidecar_first=bool(enabled))
 
 
-def save_providers(mode: str = None, pipeline: dict = None, creds: dict = None,
-                   sidecar: str = None, sidecar_first: bool = None) -> None:
+def save_providers(
+    mode: str = None,
+    pipeline: dict = None,
+    creds: dict = None,
+    sidecar: str = None,
+    sidecar_first: bool = None,
+) -> None:
     """Write the whole providers block in ONE file write.
 
     The settings panel used to call five setters in a row — one per provider's
@@ -720,8 +765,11 @@ def save_providers(mode: str = None, pipeline: dict = None, creds: dict = None,
 
     if mode is not None:
         m = str(mode).strip().lower()
-        block["mode"] = m if m in (PROVIDER_MODE_GEMINI,
-                                   PROVIDER_MODE_PIPELINE) else PROVIDER_MODE_GEMINI
+        block["mode"] = (
+            m
+            if m in (PROVIDER_MODE_GEMINI, PROVIDER_MODE_PIPELINE)
+            else PROVIDER_MODE_GEMINI
+        )
     if pipeline is not None:
         current = block.get("pipeline")
         current = dict(current) if isinstance(current, dict) else {}

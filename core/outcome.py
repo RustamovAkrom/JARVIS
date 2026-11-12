@@ -61,6 +61,7 @@ WHY FACTS AND NOT SENTENCES
     truncated and pasted into a transcript, and small local models parse it
     more reliably than they parse braces.
 """
+
 from __future__ import annotations
 
 import re
@@ -229,8 +230,9 @@ def untrusted(source: str, content: str) -> str:
     return f"{_OPEN.format(source=label or 'external')}\n{text}\n{_CLOSE}"
 
 
-_WRAP_RE = re.compile(r"<<<UNTRUSTED source=[^>]*>>>\n?(.*?)\n?<<<END UNTRUSTED>>>",
-                      re.S)
+_WRAP_RE = re.compile(
+    r"<<<UNTRUSTED source=[^>]*>>>\n?(.*?)\n?<<<END UNTRUSTED>>>", re.S
+)
 
 
 def unwrap(text: str) -> str:
@@ -253,9 +255,11 @@ def unwrap(text: str) -> str:
         return text
     # Un-escape the defanged markers too: they were mangled so the model could
     # not be tricked, and a person should not have to read the scar tissue.
-    return "\n\n".join(inner).replace("<<<END-UNTRUSTED-ESCAPED>>>",
-                                      "<<<END UNTRUSTED>>>") \
-                             .replace("<<<UNTRUSTED-ESCAPED", "<<<UNTRUSTED")
+    return (
+        "\n\n".join(inner)
+        .replace("<<<END-UNTRUSTED-ESCAPED>>>", "<<<END UNTRUSTED>>>")
+        .replace("<<<UNTRUSTED-ESCAPED", "<<<UNTRUSTED")
+    )
 
 
 def is_problem(result: str) -> bool:
@@ -270,5 +274,6 @@ def is_problem(result: str) -> bool:
     So tools print their full result and log only what this returns True for.
     """
     text = str(result or "")
-    return text.startswith((f"status={FAILED} ", f"status={UNVERIFIED} ",
-                            f"status={ASK} "))
+    return text.startswith(
+        (f"status={FAILED} ", f"status={UNVERIFIED} ", f"status={ASK} ")
+    )

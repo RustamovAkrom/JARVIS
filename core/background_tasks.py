@@ -1,4 +1,5 @@
 """Persistent, read-only background research for JARVIS."""
+
 from __future__ import annotations
 
 import json
@@ -9,7 +10,6 @@ import time
 import uuid
 from pathlib import Path
 from typing import Callable
-
 
 _TASKS_PATH = Path.home() / ".jarvis" / "background_tasks.json"
 _ACTIVE = {"queued", "running", "cancelling"}
@@ -64,7 +64,9 @@ class BackgroundTaskManager:
         try:
             data = json.loads(self._path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
-            raise RuntimeError(f"Could not read background task history: {exc}") from exc
+            raise RuntimeError(
+                f"Could not read background task history: {exc}"
+            ) from exc
         if not isinstance(data, dict) or not isinstance(data.get("tasks"), list):
             raise RuntimeError("Background task history has an invalid format.")
         return [row for row in data["tasks"] if isinstance(row, dict)]
@@ -74,12 +76,21 @@ class BackgroundTaskManager:
         temp_path = None
         try:
             with tempfile.NamedTemporaryFile(
-                mode="w", encoding="utf-8", newline="\n",
-                dir=self._path.parent, prefix=self._path.name + ".",
-                suffix=".tmp", delete=False,
+                mode="w",
+                encoding="utf-8",
+                newline="\n",
+                dir=self._path.parent,
+                prefix=self._path.name + ".",
+                suffix=".tmp",
+                delete=False,
             ) as stream:
                 temp_path = Path(stream.name)
-                json.dump({"version": 1, "tasks": self._tasks}, stream, ensure_ascii=False, indent=2)
+                json.dump(
+                    {"version": 1, "tasks": self._tasks},
+                    stream,
+                    ensure_ascii=False,
+                    indent=2,
+                )
                 stream.flush()
                 os.fsync(stream.fileno())
             temp_path.replace(self._path)
@@ -89,7 +100,9 @@ class BackgroundTaskManager:
                     temp_path.unlink()
                 except OSError:
                     pass
-            raise RuntimeError(f"Could not save background task history: {exc}") from exc
+            raise RuntimeError(
+                f"Could not save background task history: {exc}"
+            ) from exc
 
     def bind_player(self, player) -> None:
         self._player = player
@@ -97,7 +110,9 @@ class BackgroundTaskManager:
             if self._recovered:
                 return
             self._recovered = True
-            queued = [task["id"] for task in self._tasks if task.get("status") == "queued"]
+            queued = [
+                task["id"] for task in self._tasks if task.get("status") == "queued"
+            ]
         for task_id in queued:
             self._launch(task_id)
 
@@ -120,11 +135,17 @@ class BackgroundTaskManager:
         with self._lock:
             active = sum(row.get("status") in _ACTIVE for row in self._tasks)
             if active >= self._max_active:
-                raise ValueError("The background research limit is reached; wait for a task to finish.")
+                raise ValueError(
+                    "The background research limit is reached; wait for a task to finish."
+                )
             self._tasks.append(task)
             while len(self._tasks) > _MAX_STORED:
                 old_index = next(
-                    (i for i, row in enumerate(self._tasks) if row.get("status") not in _ACTIVE),
+                    (
+                        i
+                        for i, row in enumerate(self._tasks)
+                        if row.get("status") not in _ACTIVE
+                    ),
                     None,
                 )
                 if old_index is None:
@@ -147,7 +168,9 @@ class BackgroundTaskManager:
             if thread and thread.is_alive():
                 return
             thread = threading.Thread(
-                target=self._run, args=(task_id,), daemon=True,
+                target=self._run,
+                args=(task_id,),
+                daemon=True,
                 name=f"jarvis-research-{task_id}",
             )
             self._threads[task_id] = thread
@@ -231,7 +254,9 @@ class BackgroundTaskManager:
                 self._save_locked()
             except RuntimeError as exc:
                 task["status"] = "failed"
-                task["error"] = f"{error[:700]} (could not save task status: {exc})"[:1000]
+                task["error"] = f"{error[:700]} (could not save task status: {exc})"[
+                    :1000
+                ]
                 print(f"[BackgroundTasks] {task['error']}")
             return task["status"]
 
@@ -248,7 +273,9 @@ class BackgroundTaskManager:
             player.write_log(f"SYS: Background research {task['id']} completed.")
             say = getattr(player, "request_say", None)
             if callable(say):
-                say("A background research task is complete. The report is available in the content panel.")
+                say(
+                    "A background research task is complete. The report is available in the content panel."
+                )
         except Exception as exc:
             print(f"[BackgroundTasks] Could not notify the UI for {task['id']}: {exc}")
 
@@ -257,16 +284,20 @@ class BackgroundTaskManager:
         if not player:
             return
         try:
-            player.write_log(f"ERR: Background research {task_id} failed: {error[:240]}")
+            player.write_log(
+                f"ERR: Background research {task_id} failed: {error[:240]}"
+            )
             say = getattr(player, "request_say", None)
             if callable(say):
-                say("A background research task failed. The reason is in the JARVIS activity log.")
+                say(
+                    "A background research task failed. The reason is in the JARVIS activity log."
+                )
         except Exception as exc:
             print(f"[BackgroundTasks] Could not report failure for {task_id}: {exc}")
 
     def list(self, limit: int = 10) -> list[dict]:
         with self._lock:
-            return [dict(row) for row in reversed(self._tasks[-max(1, limit):])]
+            return [dict(row) for row in reversed(self._tasks[-max(1, limit) :])]
 
     def get(self, task_id: str) -> dict | None:
         with self._lock:

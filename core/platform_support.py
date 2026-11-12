@@ -38,6 +38,7 @@ WHAT THIS MODULE DOES ABOUT IT
     outcome that was not observed. A platform that forbids the action is just
     another thing that was not observed.
 """
+
 from __future__ import annotations
 
 import os
@@ -51,15 +52,18 @@ class Support:
     """What is possible here. Every field is a fact about THIS machine."""
 
     os_name: str
-    can_control_input: bool = True      # type, click, hotkeys
-    can_capture_screen: bool = True     # screenshots, vision
-    can_focus_windows: bool = True      # raise another app's window
+    can_control_input: bool = True  # type, click, hotkeys
+    can_capture_screen: bool = True  # screenshots, vision
+    can_focus_windows: bool = True  # raise another app's window
     notes: list[str] = field(default_factory=list)
 
     @property
     def fully_capable(self) -> bool:
-        return (self.can_control_input and self.can_capture_screen
-                and self.can_focus_windows)
+        return (
+            self.can_control_input
+            and self.can_capture_screen
+            and self.can_focus_windows
+        )
 
 
 def _linux_session() -> str:
@@ -158,15 +162,18 @@ def describe_for_model(support: Support) -> list[str]:
             "- You CANNOT type, click, press keys or move the mouse in this "
             "session: this operating system does not permit one program to "
             "drive another. Do not attempt it and do not report having done "
-            "it — say plainly that this machine does not allow it.")
+            "it — say plainly that this machine does not allow it."
+        )
     if not support.can_capture_screen:
         lines.append(
             "- You CANNOT see the screen in this session, for the same reason. "
-            "Say so rather than describing anything.")
+            "Say so rather than describing anything."
+        )
     if not support.can_focus_windows and support.can_control_input:
         lines.append(
             "- You cannot bring an already-running application to the front "
-            "here; opening it starts another window instead.")
+            "here; opening it starts another window instead."
+        )
     return lines
 
 

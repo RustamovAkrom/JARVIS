@@ -47,11 +47,11 @@ WHAT main.py ACTUALLY TOUCHES
     one of them is one of four operations, and the receive loop reads five
     fields. That whole surface is written out in `Engine` and `Msg` below.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any, AsyncIterator, Optional, Protocol, Sequence
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  Capabilities
@@ -72,18 +72,15 @@ DEFAULT_CAPS: dict[str, Any] = {
     # Can the model be handed an image? Decides whether `screen_process` and the
     # camera are declared at all.
     "vision": False,
-
     # Can it call functions? Everything this assistant does that is not talking
     # happens through a tool call, so an engine with this off is a chat box.
     "tools": False,
-
     # How its tool declarations are shaped. providers/schema.py converts.
     #   "gemini"    — the app's native form, no conversion
     #   "openai"    — {"type":"function","function":{...}}, lowercase JSON Schema
     #   "anthropic" — {"name","description","input_schema":{...}}
     #   "prompt"    — no native tool calling; ask for JSON in the reply, parse it
     "tool_format": None,
-
     # How many declarations this model can be given before it starts choosing
     # badly. None means no limit, which is the honest answer for Gemini.
     #
@@ -94,21 +91,17 @@ DEFAULT_CAPS: dict[str, Any] = {
     # handed forty tools picks the wrong one, or emits JSON that does not parse.
     # So a small engine states a budget and schema.budget() fills it core-first.
     "max_tools": None,
-
     # Does the engine produce speech itself? An LLM-only provider does not; the
     # pipeline engine is what gives it a voice.
     "audio_out": False,
-
     # Can the user talk over it and have it stop? Live does this server-side. A
     # local pipeline has to detect it, and until it does, `interrupt()` can only
     # stop playback rather than the generation behind it.
     "barge_in": False,
-
     # Does it honour NON_BLOCKING tool behaviour + scheduling (see
     # core/action_loader.py)? Only Live. Everywhere else those tools still run —
     # they just hold the turn, which is a slower assistant, not a broken one.
     "non_blocking": False,
-
     # Server-side session-resumption handles. Only Live. A pipeline engine owns
     # its own history, so it has nothing to resume from a server.
     "resumption": False,
@@ -126,11 +119,11 @@ DEFAULT_CAPS: dict[str, Any] = {
 class Field:
     key: str
     label: str
-    kind: str = "text"            # text | secret | choice | path | bool | number
+    kind: str = "text"  # text | secret | choice | path | bool | number
     default: Any = ""
     choices: Sequence[str] = ()
     required: bool = True
-    hint: str = ""                # one dim line under the input
+    hint: str = ""  # one dim line under the input
     # Hidden behind the panel's MORE toggle. A setting almost nobody changes
     # costs more in the confusion it adds to the five that matter than it saves
     # for the one person who wants it, so it is present and out of the way.
@@ -181,6 +174,7 @@ class ServerContent:
 @dataclass
 class Msg:
     """One event out of `Engine.receive()`, shaped like the SDK's own."""
+
     data: Optional[bytes] = None
     server_content: Optional[ServerContent] = None
     tool_call: Optional[ToolCall] = None
@@ -194,14 +188,16 @@ class Msg:
     @staticmethod
     def said(text: str) -> "Msg":
         """What the assistant is saying — feeds the log AND the avatar's mouth."""
-        return Msg(server_content=ServerContent(
-            output_transcription=Transcription(text)))
+        return Msg(
+            server_content=ServerContent(output_transcription=Transcription(text))
+        )
 
     @staticmethod
     def heard(text: str) -> "Msg":
         """What the user said — feeds the log and the self-echo guard's clock."""
-        return Msg(server_content=ServerContent(
-            input_transcription=Transcription(text)))
+        return Msg(
+            server_content=ServerContent(input_transcription=Transcription(text))
+        )
 
     @staticmethod
     def turn_end() -> "Msg":
@@ -254,8 +250,13 @@ class LLM(Protocol):
 
     caps: dict
 
-    async def chat(self, messages: list[dict], tools: list[dict] | None = None,
-                   *, stream: bool = True) -> AsyncIterator[dict]:
+    async def chat(
+        self,
+        messages: list[dict],
+        tools: list[dict] | None = None,
+        *,
+        stream: bool = True,
+    ) -> AsyncIterator[dict]:
         """Yields {"text": str} and/or {"tool_calls": [FunctionCall, ...]}."""
 
 
@@ -269,8 +270,9 @@ class STT(Protocol):
 
     caps: dict
 
-    async def transcribe(self, pcm: bytes, sample_rate: int = 16000,
-                         language: str = "") -> str: ...
+    async def transcribe(
+        self, pcm: bytes, sample_rate: int = 16000, language: str = ""
+    ) -> str: ...
 
 
 class TTS(Protocol):

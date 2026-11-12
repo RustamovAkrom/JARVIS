@@ -7,8 +7,8 @@ def weather_action(
     player=None,
     session_memory=None,
 ) -> str:
-    city     = parameters.get("city")
-    when     = parameters.get("time", "today")
+    city = parameters.get("city")
+    when = parameters.get("time", "today")
 
     if not city or not isinstance(city, str) or not city.strip():
         msg = "Sir, the city is missing for the weather report."
@@ -18,8 +18,8 @@ def weather_action(
     city = city.strip()
     when = (when or "today").strip()
 
-    search_query  = f"weather in {city} {when}"
-    url           = f"https://www.google.com/search?q={quote_plus(search_query)}"
+    search_query = f"weather in {city} {when}"
+    url = f"https://www.google.com/search?q={quote_plus(search_query)}"
 
     try:
         opened = webbrowser.open(url)
@@ -57,15 +57,8 @@ TOOL = {
     "description": "Gives the weather report to user",
     "parameters": {
         "type": "OBJECT",
-        "properties": {
-            "city": {
-                "type": "STRING",
-                "description": "City name"
-            }
-        },
-        "required": [
-            "city"
-        ]
+        "properties": {"city": {"type": "STRING", "description": "City name"}},
+        "required": ["city"],
     },
     "handler": weather_action,
 }

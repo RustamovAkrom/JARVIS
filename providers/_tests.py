@@ -29,6 +29,7 @@ WHAT IT IS FOR
 
     It needs no network and no API key — every service is a local mock.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -87,10 +88,10 @@ class _MockServer(BaseHTTPRequestHandler):
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         content = body["messages"][-1].get("content")
         has_image = isinstance(content, list) and any(
-            p.get("type") == "image_url" for p in content)
+            p.get("type") == "image_url" for p in content
+        )
         if has_image and not type(self).vision:
-            return self._json({"error": {"message": "images are not supported"}},
-                              400)
+            return self._json({"error": {"message": "images are not supported"}}, 400)
         if not body.get("stream"):
             return self._json({"choices": [{"message": {"content": "ok"}}]})
 
@@ -101,19 +102,57 @@ class _MockServer(BaseHTTPRequestHandler):
         if type(self).turn[0] == 1:
             frames = [
                 {"choices": [{"delta": {"content": "One moment."}}]},
-                {"choices": [{"delta": {"tool_calls": [
-                    {"index": 0, "id": "c1",
-                     "function": {"name": "open_", "arguments": '{"app_'}},
-                    {"index": 1, "id": "c2",
-                     "function": {"name": "web_", "arguments": '{"que'}},
-                ]}}]},
-                {"choices": [{"delta": {"tool_calls": [
-                    {"index": 0,
-                     "function": {"name": "app", "arguments": 'name":"chrome"}'}},
-                    {"index": 1,
-                     "function": {"name": "search", "arguments": 'ry":"x"}'}},
-                ]}}]},
-                ": keepalive",                      # not JSON — must not stop us
+                {
+                    "choices": [
+                        {
+                            "delta": {
+                                "tool_calls": [
+                                    {
+                                        "index": 0,
+                                        "id": "c1",
+                                        "function": {
+                                            "name": "open_",
+                                            "arguments": '{"app_',
+                                        },
+                                    },
+                                    {
+                                        "index": 1,
+                                        "id": "c2",
+                                        "function": {
+                                            "name": "web_",
+                                            "arguments": '{"que',
+                                        },
+                                    },
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "choices": [
+                        {
+                            "delta": {
+                                "tool_calls": [
+                                    {
+                                        "index": 0,
+                                        "function": {
+                                            "name": "app",
+                                            "arguments": 'name":"chrome"}',
+                                        },
+                                    },
+                                    {
+                                        "index": 1,
+                                        "function": {
+                                            "name": "search",
+                                            "arguments": 'ry":"x"}',
+                                        },
+                                    },
+                                ]
+                            }
+                        }
+                    ]
+                },
+                ": keepalive",  # not JSON — must not stop us
             ]
         else:
             frames = [{"choices": [{"delta": {"content": "Done."}}]}]
@@ -170,16 +209,31 @@ class FakeTTS:
 
 class Cfg:
     """Stands in for the LiveConnectConfig main.py builds."""
+
     system_instruction = "You are JARVIS."
-    tools = [{"function_declarations": [
-        {"name": "open_app", "description": "Opens an application.",
-         "parameters": {"type": "OBJECT",
+    tools = [
+        {
+            "function_declarations": [
+                {
+                    "name": "open_app",
+                    "description": "Opens an application.",
+                    "parameters": {
+                        "type": "OBJECT",
                         "properties": {"app_name": {"type": "STRING"}},
-                        "required": ["app_name"]}},
-        {"name": "web_search", "description": "Searches the web.",
-         "parameters": {"type": "OBJECT",
-                        "properties": {"query": {"type": "STRING"}}}},
-    ]}]
+                        "required": ["app_name"],
+                    },
+                },
+                {
+                    "name": "web_search",
+                    "description": "Searches the web.",
+                    "parameters": {
+                        "type": "OBJECT",
+                        "properties": {"query": {"type": "STRING"}},
+                    },
+                },
+            ]
+        }
+    ]
 
 
 class FR:
@@ -205,18 +259,21 @@ async def test_real_caller_shapes():
     # main.py:_send_realtime
     try:
         await eng.send_realtime_input(
-            audio=types.Blob(data=b"\x11\x22" * 160, mime_type="audio/pcm"))
+            audio=types.Blob(data=b"\x11\x22" * 160, mime_type="audio/pcm")
+        )
         check("send_realtime_input accepts types.Blob", True)
     except Exception as e:
-        check("send_realtime_input accepts types.Blob", False,
-              f"{type(e).__name__}: {e}")
+        check(
+            "send_realtime_input accepts types.Blob", False, f"{type(e).__name__}: {e}"
+        )
     check("Blob bytes counted", eng._mic_bytes == 320, str(eng._mic_bytes))
 
     await eng.send_realtime_input(audio={"data": b"\x00" * 100})
     await eng.send_realtime_input(audio=b"\x00" * 100)
     await eng.send_realtime_input(audio=None)
-    check("dict / bytes / None also accepted", eng._mic_bytes == 520,
-          str(eng._mic_bytes))
+    check(
+        "dict / bytes / None also accepted", eng._mic_bytes == 520, str(eng._mic_bytes)
+    )
 
 
 async def test_taskgroup_and_tool_loop():
@@ -229,12 +286,21 @@ async def test_taskgroup_and_tool_loop():
 
     section("[2] A whole turn, run the way main.py's TaskGroup runs it")
     stt, tts = FakeSTT(), FakeTTS()
-    llm = FakeLLM([
-        [{"text": "One moment."},
-         {"tool_calls": [__import__("providers.base", fromlist=["FunctionCall"])
-                         .FunctionCall("c1", "open_app", {"app_name": "chrome"})]}],
-        [{"text": "Chrome is open."}],
-    ])
+    llm = FakeLLM(
+        [
+            [
+                {"text": "One moment."},
+                {
+                    "tool_calls": [
+                        __import__(
+                            "providers.base", fromlist=["FunctionCall"]
+                        ).FunctionCall("c1", "open_app", {"app_name": "chrome"})
+                    ]
+                },
+            ],
+            [{"text": "Chrome is open."}],
+        ]
+    )
     eng = PipelineEngine(llm, stt=stt, tts=tts, config=Cfg())
     eng.auto_turn = False
 
@@ -246,8 +312,10 @@ async def test_taskgroup_and_tool_loop():
         while True:
             msg = await out_queue.get()
             await eng.send_realtime_input(
-                audio=types.Blob(data=msg["data"],
-                                 mime_type=msg.get("mime_type", "audio/pcm")))
+                audio=types.Blob(
+                    data=msg["data"], mime_type=msg.get("mime_type", "audio/pcm")
+                )
+            )
 
     async def receive():
         async for response in eng.receive():
@@ -269,8 +337,7 @@ async def test_taskgroup_and_tool_loop():
 
     async def feed():
         for _ in range(10):
-            out_queue.put_nowait({"data": b"\x05\x06" * 160,
-                                  "mime_type": "audio/pcm"})
+            out_queue.put_nowait({"data": b"\x05\x06" * 160, "mime_type": "audio/pcm"})
         await asyncio.sleep(0.05)
         await eng.flush_microphone(16000)
 
@@ -284,17 +351,26 @@ async def test_taskgroup_and_tool_loop():
             t1.cancel()
             t2.cancel()
     except* Exception as eg:
-        crashed = [f"{type(e).__name__}: {e}" for e in eg.exceptions
-                   if not isinstance(e, asyncio.CancelledError)]
+        crashed = [
+            f"{type(e).__name__}: {e}"
+            for e in eg.exceptions
+            if not isinstance(e, asyncio.CancelledError)
+        ]
 
     check("TaskGroup survived the turn", not crashed, str(crashed))
     check("microphone reached the recogniser", stt.got == 3200, f"{stt.got} bytes")
     check("the tool ran", ran == ["open_app"], str(ran))
-    check("both halves of the reply arrived",
-          "".join(said) == "One moment.Chrome is open.", repr("".join(said)))
+    check(
+        "both halves of the reply arrived",
+        "".join(said) == "One moment.Chrome is open.",
+        repr("".join(said)),
+    )
     check("audio reached the speaker", pcm_out[0] > 0, str(pcm_out[0]))
-    check("the acknowledgement was SPOKEN, not just logged",
-          tts.said == ["One moment.", "Chrome is open."], str(tts.said))
+    check(
+        "the acknowledgement was SPOKEN, not just logged",
+        tts.said == ["One moment.", "Chrome is open."],
+        str(tts.said),
+    )
 
 
 async def test_full_stack_over_http():
@@ -306,8 +382,9 @@ async def test_full_stack_over_http():
     _MockServer.turn[0] = 0
     srv = start_server()
     try:
-        llm = OpenAICompatLLM({"base_url": f"http://127.0.0.1:{srv.server_port}",
-                               "model": "qwen3:8b"})
+        llm = OpenAICompatLLM(
+            {"base_url": f"http://127.0.0.1:{srv.server_port}", "model": "qwen3:8b"}
+        )
         eng = PipelineEngine(llm, config=Cfg())
         said, ran = [], []
 
@@ -328,18 +405,25 @@ async def test_full_stack_over_http():
 
         task = asyncio.create_task(like_main_py())
         await eng.send_client_content(
-            turns={"role": "user", "parts": [{"text": "open chrome"}]})
+            turns={"role": "user", "parts": [{"text": "open chrome"}]}
+        )
         try:
             await asyncio.wait_for(task, 15)
             check("turn completed end to end", True)
         except asyncio.TimeoutError:
             check("turn completed end to end", False, "timed out")
 
-        check("fragmented, interleaved tool calls reassembled",
-              ran == [("open_app", {"app_name": "chrome"}),
-                      ("web_search", {"query": "x"})], str(ran))
-        check("both turns' text arrived", "".join(said) == "One moment.Done.",
-              repr("".join(said)))
+        check(
+            "fragmented, interleaved tool calls reassembled",
+            ran
+            == [("open_app", {"app_name": "chrome"}), ("web_search", {"query": "x"})],
+            str(ran),
+        )
+        check(
+            "both turns' text arrived",
+            "".join(said) == "One moment.Done.",
+            repr("".join(said)),
+        )
     finally:
         srv.shutdown()
 
@@ -356,29 +440,47 @@ def test_vision_is_asked_not_guessed():
     srv = start_server()
     try:
         saved = {}
-        llm = OpenAICompatLLM({"base_url": f"http://127.0.0.1:{srv.server_port}",
-                               "model": "llava:7b"})
-        check("a fresh model is measured without TEST being pressed",
-              llm.ensure_vision_known(save=saved.update) is True)
-        check("the answer is stored with the model it was measured on",
-              saved.get("vision") == "1" and saved.get("vision_model") == "llava:7b",
-              str(saved))
+        llm = OpenAICompatLLM(
+            {"base_url": f"http://127.0.0.1:{srv.server_port}", "model": "llava:7b"}
+        )
+        check(
+            "a fresh model is measured without TEST being pressed",
+            llm.ensure_vision_known(save=saved.update) is True,
+        )
+        check(
+            "the answer is stored with the model it was measured on",
+            saved.get("vision") == "1" and saved.get("vision_model") == "llava:7b",
+            str(saved),
+        )
 
         import time
-        again = OpenAICompatLLM({"base_url": f"http://127.0.0.1:{srv.server_port}",
-                                 "model": "llava:7b", "vision": "1",
-                                 "vision_model": "llava:7b"})
+
+        again = OpenAICompatLLM(
+            {
+                "base_url": f"http://127.0.0.1:{srv.server_port}",
+                "model": "llava:7b",
+                "vision": "1",
+                "vision_model": "llava:7b",
+            }
+        )
         again.caps["vision"] = True
         t0 = time.monotonic()
         again.ensure_vision_known()
-        check("a stored answer is not measured again",
-              (time.monotonic() - t0) < 0.05)
+        check("a stored answer is not measured again", (time.monotonic() - t0) < 0.05)
 
-        changed = OpenAICompatLLM({"base_url": f"http://127.0.0.1:{srv.server_port}",
-                                   "model": "qwen3:8b", "vision": "1",
-                                   "vision_model": "llava:7b"})
-        check("changing the model re-measures it",
-              changed._vision_known == "", changed._vision_known)
+        changed = OpenAICompatLLM(
+            {
+                "base_url": f"http://127.0.0.1:{srv.server_port}",
+                "model": "qwen3:8b",
+                "vision": "1",
+                "vision_model": "llava:7b",
+            }
+        )
+        check(
+            "changing the model re-measures it",
+            changed._vision_known == "",
+            changed._vision_known,
+        )
     finally:
         srv.shutdown()
 
@@ -386,11 +488,15 @@ def test_vision_is_asked_not_guessed():
         _MockServer.vision = can_see
         srv = start_server()
         try:
-            llm = OpenAICompatLLM({"base_url": f"http://127.0.0.1:{srv.server_port}",
-                                   "model": "m"})
+            llm = OpenAICompatLLM(
+                {"base_url": f"http://127.0.0.1:{srv.server_port}", "model": "m"}
+            )
             ok, msg = llm.probe()
-            check(f"server vision={can_see} -> detected {llm.caps['vision']}",
-                  ok and llm.caps["vision"] is can_see, msg)
+            check(
+                f"server vision={can_see} -> detected {llm.caps['vision']}",
+                ok and llm.caps["vision"] is can_see,
+                msg,
+            )
         finally:
             srv.shutdown()
     _MockServer.vision = True
@@ -402,26 +508,35 @@ def test_schema():
     section("[5] Tool declarations, translated and budgeted")
     decls = Cfg.tools[0]["function_declarations"]
     openai = schema.to_openai(decls)
-    check("wrapped as OpenAI functions",
-          openai[0]["type"] == "function"
-          and openai[0]["function"]["name"] == "open_app")
+    check(
+        "wrapped as OpenAI functions",
+        openai[0]["type"] == "function" and openai[0]["function"]["name"] == "open_app",
+    )
     blob = json.dumps(openai) + json.dumps(schema.to_anthropic(decls))
     import re
-    check("no upper-case types survive at any depth",
-          not re.findall(r'"type":\s*"[A-Z_]+"', blob))
-    check("names and order preserved",
-          [d["name"] for d in decls] == [t["function"]["name"] for t in openai])
-    check("no budget returns the input unchanged",
-          schema.budget(decls) == list(decls))
+
+    check(
+        "no upper-case types survive at any depth",
+        not re.findall(r'"type":\s*"[A-Z_]+"', blob),
+    )
+    check(
+        "names and order preserved",
+        [d["name"] for d in decls] == [t["function"]["name"] for t in openai],
+    )
+    check("no budget returns the input unchanged", schema.budget(decls) == list(decls))
     check("a count budget bites", len(schema.budget(decls, max_tools=1)) == 1)
-    check("a size budget bites",
-          schema.payload_size(schema.budget(decls, max_chars=200)) <= 400)
-    check("prompt mode lists the tools",
-          "open_app(" in schema.to_prompt(decls))
-    check("an invented tool name is not a call",
-          __import__("providers.engine_pipeline", fromlist=["_parse_prompt_call"])
-          ._parse_prompt_call('{"tool":"launch_nukes","args":{}}',
-                              {"open_app"}) is None)
+    check(
+        "a size budget bites",
+        schema.payload_size(schema.budget(decls, max_chars=200)) <= 400,
+    )
+    check("prompt mode lists the tools", "open_app(" in schema.to_prompt(decls))
+    check(
+        "an invented tool name is not a call",
+        __import__(
+            "providers.engine_pipeline", fromlist=["_parse_prompt_call"]
+        )._parse_prompt_call('{"tool":"launch_nukes","args":{}}', {"open_app"})
+        is None,
+    )
 
 
 def test_audio():
@@ -430,20 +545,26 @@ def test_audio():
     from providers import audio
 
     section("[6] Sample rates and formats")
-    sine = (np.sin(np.arange(16000) * 2 * np.pi * 440 / 16000) * 0.5
-            ).astype(np.float32)
+    sine = (np.sin(np.arange(16000) * 2 * np.pi * 440 / 16000) * 0.5).astype(np.float32)
     pcm = audio.to_pcm16(sine)
-    check("16k -> 24k has the right length",
-          abs(len(audio.resample(pcm, 16000, 24000)) - len(pcm) * 1.5) < 4)
+    check(
+        "16k -> 24k has the right length",
+        abs(len(audio.resample(pcm, 16000, 24000)) - len(pcm) * 1.5) < 4,
+    )
     check("same rate is not copied", audio.resample(pcm, 16000, 16000) is pcm)
     round_trip = audio.to_float32(
-        audio.resample(audio.resample(pcm, 16000, 24000), 24000, 16000))
-    check("a round trip preserves the signal",
-          np.abs(round_trip[:15000] - sine[:15000]).max() < 0.05)
+        audio.resample(audio.resample(pcm, 16000, 24000), 24000, 16000)
+    )
+    check(
+        "a round trip preserves the signal",
+        np.abs(round_trip[:15000] - sine[:15000]).max() < 0.05,
+    )
     wav = audio.to_wav(pcm, 16000)
     check("WAV in, 24k PCM out", len(audio.wav_to_pcm(wav)) == int(len(pcm) * 1.5))
-    check("an odd trailing byte does not raise",
-          audio.to_float32(b"\x00\x01\x02").size == 1)
+    check(
+        "an odd trailing byte does not raise",
+        audio.to_float32(b"\x00\x01\x02").size == 1,
+    )
 
 
 async def test_failures_name_the_part():
@@ -458,6 +579,7 @@ async def test_failures_name_the_part():
 
         async def speak(self, text, voice=""):
             import httpx
+
             raise httpx.ConnectError("All connection attempts failed")
             yield b""
 
@@ -481,29 +603,45 @@ async def test_failures_name_the_part():
 
         task = asyncio.create_task(drain())
         await engine.send_client_content(
-            turns={"role": "user", "parts": [{"text": "hi"}]})
+            turns={"role": "user", "parts": [{"text": "hi"}]}
+        )
         await asyncio.wait_for(task, 15)
         return "".join(said)
 
     logs: list[str] = []
-    said = await run(PipelineEngine(LiveLLM(), tts=DeadTTS(), config=Cfg(),
-                                    log=logs.append))
-    check("a broken voice is reported as the VOICE",
-          any("the voice failed" in l for l in logs), str(logs))
-    check("the voice's address is named",
-          any("elevenlabs" in l for l in logs), str(logs))
+    said = await run(
+        PipelineEngine(LiveLLM(), tts=DeadTTS(), config=Cfg(), log=logs.append)
+    )
+    check(
+        "a broken voice is reported as the VOICE",
+        any("the voice failed" in l for l in logs),
+        str(logs),
+    )
+    check(
+        "the voice's address is named", any("elevenlabs" in l for l in logs), str(logs)
+    )
     check("a broken voice does not stop the answer", said == "Hello.", repr(said))
 
     logs2: list[str] = []
     from providers.llm_openai import OpenAICompatLLM
+
     dead = OpenAICompatLLM({"base_url": "http://127.0.0.1:9", "model": "m"})
     said2 = await run(PipelineEngine(dead, config=Cfg(), log=logs2.append))
-    check("an unreachable model is reported as the MODEL",
-          any("the language model failed" in l for l in logs2), str(logs2))
-    check("the model's address is named",
-          any("127.0.0.1:9" in l for l in logs2), str(logs2))
-    check("what it says out loud names the part too",
-          "language model" in said2, repr(said2))
+    check(
+        "an unreachable model is reported as the MODEL",
+        any("the language model failed" in l for l in logs2),
+        str(logs2),
+    )
+    check(
+        "the model's address is named",
+        any("127.0.0.1:9" in l for l in logs2),
+        str(logs2),
+    )
+    check(
+        "what it says out loud names the part too",
+        "language model" in said2,
+        repr(said2),
+    )
 
 
 def test_addresses():
@@ -524,6 +662,7 @@ def test_addresses():
 def test_costs_nothing_when_unused():
     section("[9] A default install pays nothing")
     import subprocess
+
     code = (
         "import sys, json, time;"
         "sys.path.insert(0, r'" + str(Path(__file__).resolve().parent.parent) + "');"
@@ -538,17 +677,23 @@ def test_costs_nothing_when_unused():
         "mods=[m for m in sys.modules if m.startswith('providers')];"
         "print(json.dumps({'us': dt, 'mods': mods}))"
     )
-    r = subprocess.run([sys.executable, "-c", code],
-                       capture_output=True, text=True,
-                       cwd=str(Path(__file__).resolve().parent.parent))
+    r = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        cwd=str(Path(__file__).resolve().parent.parent),
+    )
     try:
         data = json.loads(r.stdout.strip().splitlines()[-1])
     except Exception:
         check("measured the unconfigured path", False, r.stdout + r.stderr)
         return
     check("providers is never imported", not data["mods"], str(data["mods"]))
-    check(f"the ladder decision costs {data['us']:.0f} us", data["us"] < 500,
-          f"{data['us']:.0f} us")
+    check(
+        f"the ladder decision costs {data['us']:.0f} us",
+        data["us"] < 500,
+        f"{data['us']:.0f} us",
+    )
 
 
 def test_a_chosen_voice_downloads_itself():
@@ -562,25 +707,32 @@ def test_a_chosen_voice_downloads_itself():
     from providers import tts_piper
 
     check("the panel has something to call", hasattr(tts_piper, "prepare"))
-    check("the engine warms the voice before anyone speaks",
-          hasattr(tts_piper.PiperTTS({"voice": ""}), "warmup"))
+    check(
+        "the engine warms the voice before anyone speaks",
+        hasattr(tts_piper.PiperTTS({"voice": ""}), "warmup"),
+    )
 
     here = tts_piper.installed()
     if here:
         seen = []
-        tts_piper.prepare({"voice": here[0]},
-                          lambda ok, msg: seen.append((ok, msg)))
-        check("an already-downloaded voice reports ready without fetching",
-              seen and seen[-1][0] is True, str(seen))
+        tts_piper.prepare({"voice": here[0]}, lambda ok, msg: seen.append((ok, msg)))
+        check(
+            "an already-downloaded voice reports ready without fetching",
+            seen and seen[-1][0] is True,
+            str(seen),
+        )
     else:
         check("a voice is downloaded to test with (skipped)", True, "none yet")
 
     # The failure this replaced: a missing voice used to raise and tell the
     # user to press a button, leaving the assistant mute.
     import inspect
+
     src = inspect.getsource(tts_piper.PiperTTS._load)
-    check("a missing voice is fetched, not refused",
-          "download(" in src and "press TEST" not in src)
+    check(
+        "a missing voice is fetched, not refused",
+        "download(" in src and "press TEST" not in src,
+    )
 
 
 def test_voice_folder_is_writable():
@@ -598,8 +750,10 @@ def test_voice_folder_is_writable():
     except Exception as e:
         ok = False
     check(f"the voice folder can be written to ({d})", ok)
-    check("a read-only install falls back to a per-user folder",
-          "_voice_dir" in dir(tts_piper))
+    check(
+        "a read-only install falls back to a per-user folder",
+        "_voice_dir" in dir(tts_piper),
+    )
 
 
 async def test_it_speaks_before_the_tool_runs():
@@ -622,8 +776,11 @@ async def test_it_speaks_before_the_tool_runs():
             self.n += 1
             if self.n == 1:
                 yield {"text": "One moment, opening it."}
-                yield {"tool_calls": [FunctionCall("c1", "open_app",
-                                                   {"app_name": "WhatsApp"})]}
+                yield {
+                    "tool_calls": [
+                        FunctionCall("c1", "open_app", {"app_name": "WhatsApp"})
+                    ]
+                }
             else:
                 yield {"text": "WhatsApp is open."}
 
@@ -647,27 +804,36 @@ async def test_it_speaks_before_the_tool_runs():
         async for m in eng.receive():
             if m.tool_call:
                 tool_started[0] = _t.monotonic()
-                await asyncio.sleep(0.6)          # a tool that takes a moment
-                await eng.send_tool_response(function_responses=[
-                    FR(c.id, c.name, "Opened WhatsApp.")
-                    for c in m.tool_call.function_calls])
+                await asyncio.sleep(0.6)  # a tool that takes a moment
+                await eng.send_tool_response(
+                    function_responses=[
+                        FR(c.id, c.name, "Opened WhatsApp.")
+                        for c in m.tool_call.function_calls
+                    ]
+                )
             if m.server_content and m.server_content.turn_complete:
                 return
 
     task = asyncio.create_task(drain())
     await eng.send_client_content(
-        turns={"role": "user", "parts": [{"text": "open whatsapp"}]})
+        turns={"role": "user", "parts": [{"text": "open whatsapp"}]}
+    )
     await asyncio.wait_for(task, 20)
 
-    check("it said something before the tool started",
-          tts.at and tool_started[0] and tts.at[0] <= tool_started[0] + 0.05,
-          f"first speech {tts.at[0] - t0:.2f}s, tool {tool_started[0] - t0:.2f}s")
-    check("it also spoke the result afterwards",
-          len(tts.said) == 2 and "open" in tts.said[-1].lower(), str(tts.said))
+    check(
+        "it said something before the tool started",
+        tts.at and tool_started[0] and tts.at[0] <= tool_started[0] + 0.05,
+        f"first speech {tts.at[0] - t0:.2f}s, tool {tool_started[0] - t0:.2f}s",
+    )
+    check(
+        "it also spoke the result afterwards",
+        len(tts.said) == 2 and "open" in tts.said[-1].lower(),
+        str(tts.said),
+    )
 
 
 async def test_a_tool_is_not_run_twice():
-    """"open whatsapp" opened WhatsApp four times on the first real attempt."""
+    """ "open whatsapp" opened WhatsApp four times on the first real attempt."""
     from providers.base import FunctionCall
     from providers.engine_pipeline import PipelineEngine, _signature
 
@@ -686,8 +852,13 @@ async def test_a_tool_is_not_run_twice():
             if self.rounds > 8:
                 yield {"text": "Done."}
                 return
-            yield {"tool_calls": [FunctionCall(f"id{self.rounds}", "open_app",
-                                               {"app_name": "WhatsApp"})]}
+            yield {
+                "tool_calls": [
+                    FunctionCall(
+                        f"id{self.rounds}", "open_app", {"app_name": "WhatsApp"}
+                    )
+                ]
+            }
 
     llm = Stubborn()
     eng = PipelineEngine(llm, config=Cfg(), log=lambda m: None)
@@ -708,26 +879,36 @@ async def test_a_tool_is_not_run_twice():
 
     task = asyncio.create_task(like_main_py())
     await eng.send_client_content(
-        turns={"role": "user", "parts": [{"text": "open whatsapp"}]})
+        turns={"role": "user", "parts": [{"text": "open whatsapp"}]}
+    )
     try:
         await asyncio.wait_for(finished.wait(), 20)
     except asyncio.TimeoutError:
         pass
     task.cancel()
 
-    check(f"the app was launched ONCE, not {len(executed)} times",
-          len(executed) == 1, str(executed))
+    check(
+        f"the app was launched ONCE, not {len(executed)} times",
+        len(executed) == 1,
+        str(executed),
+    )
     check("the turn still ended", finished.is_set())
 
-    check("two identical calls share a signature",
-          _signature(FunctionCall("a", "open_app", {"app_name": "X"}))
-          == _signature(FunctionCall("b", "open_app", {"app_name": "X"})))
-    check("different arguments do not",
-          _signature(FunctionCall("a", "open_app", {"app_name": "X"}))
-          != _signature(FunctionCall("a", "open_app", {"app_name": "Y"})))
-    check("key order does not make a call look new",
-          _signature(FunctionCall("a", "t", {"x": 1, "y": 2}))
-          == _signature(FunctionCall("a", "t", {"y": 2, "x": 1})))
+    check(
+        "two identical calls share a signature",
+        _signature(FunctionCall("a", "open_app", {"app_name": "X"}))
+        == _signature(FunctionCall("b", "open_app", {"app_name": "X"})),
+    )
+    check(
+        "different arguments do not",
+        _signature(FunctionCall("a", "open_app", {"app_name": "X"}))
+        != _signature(FunctionCall("a", "open_app", {"app_name": "Y"})),
+    )
+    check(
+        "key order does not make a call look new",
+        _signature(FunctionCall("a", "t", {"x": 1, "y": 2}))
+        == _signature(FunctionCall("a", "t", {"y": 2, "x": 1})),
+    )
 
 
 async def test_injections_are_not_the_user():
@@ -777,20 +958,31 @@ async def test_injections_are_not_the_user():
 
     task = asyncio.create_task(drain())
     await eng.flush_microphone(16000)
-    await asyncio.sleep(0.2)          # the alert lands MID-ANSWER
-    await eng.send_client_content(turns={"role": "user", "parts": [
-        {"text": "[SYSTEM_ALERT] GPU load is at 96%."}]})
+    await asyncio.sleep(0.2)  # the alert lands MID-ANSWER
+    await eng.send_client_content(
+        turns={
+            "role": "user",
+            "parts": [{"text": "[SYSTEM_ALERT] GPU load is at 96%."}],
+        }
+    )
     try:
         await asyncio.wait_for(task, 20)
     except asyncio.TimeoutError:
         task.cancel()
 
-    check("only recognised speech becomes 'You:'", heard == ["open whatsapp"],
-          str(heard))
-    check("the answer in progress was not cancelled",
-          any("open." in t for t in said), str(said))
-    check("the injection was answered afterwards, not instead",
-          llm.calls == 2, str(llm.calls))
+    check(
+        "only recognised speech becomes 'You:'", heard == ["open whatsapp"], str(heard)
+    )
+    check(
+        "the answer in progress was not cancelled",
+        any("open." in t for t in said),
+        str(said),
+    )
+    check(
+        "the injection was answered afterwards, not instead",
+        llm.calls == 2,
+        str(llm.calls),
+    )
 
 
 def test_what_reaches_the_voice():
@@ -801,8 +993,21 @@ def test_what_reaches_the_voice():
 
     # main.py joins transcript pieces with a space, because Gemini Live sends
     # phrases. Token-level pieces produced "Hel lo ! How c an I assis t y ou".
-    tokens = ["Hel", "lo", "!", " How", " c", "an", " I", " help", " y", "ou?",
-              " Bir", " de", " Türkçe."]
+    tokens = [
+        "Hel",
+        "lo",
+        "!",
+        " How",
+        " c",
+        "an",
+        " I",
+        " help",
+        " y",
+        "ou?",
+        " Bir",
+        " de",
+        " Türkçe.",
+    ]
     buf, out = "", []
     for t in tokens:
         buf += t
@@ -811,26 +1016,38 @@ def test_what_reaches_the_voice():
     if buf.strip():
         out.append(buf.strip())
     joined = " ".join(out)
-    check("sentences survive main.py's space-join",
-          joined == "Hello! How can I help you? Bir de Türkçe.", repr(joined))
+    check(
+        "sentences survive main.py's space-join",
+        joined == "Hello! How can I help you? Bir de Türkçe.",
+        repr(joined),
+    )
 
-    check("an emoji is not sent to the voice",
-          _speakable("How can I help? 😊") == "How can I help?")
-    check("several are removed cleanly",
-          _speakable("Tamam ✅ hazırım 🚀") == "Tamam hazırım")
+    check(
+        "an emoji is not sent to the voice",
+        _speakable("How can I help? 😊") == "How can I help?",
+    )
+    check(
+        "several are removed cleanly",
+        _speakable("Tamam ✅ hazırım 🚀") == "Tamam hazırım",
+    )
 
     # The range that removed a whole language.
-    for name, text in (("Japanese", "日本語も大丈夫です。"),
-                       ("Chinese", "中文也没问题。"),
-                       ("Korean", "한국어도 괜찮습니다."),
-                       ("Russian", "Всё работает нормально."),
-                       ("Arabic", "كل شيء يعمل بشكل جيد."),
-                       ("Hindi", "सब कुछ ठीक काम कर रहा है।"),
-                       ("Greek", "Όλα λειτουργούν κανονικά."),
-                       ("Hebrew", "הכל עובד כמו שצריך."),
-                       ("Turkish", "Sıcaklık 23°C, her şey yolunda.")):
-        check(f"{name} survives the emoji filter", _speakable(text) == text,
-              repr(_speakable(text)))
+    for name, text in (
+        ("Japanese", "日本語も大丈夫です。"),
+        ("Chinese", "中文也没问题。"),
+        ("Korean", "한국어도 괜찮습니다."),
+        ("Russian", "Всё работает нормально."),
+        ("Arabic", "كل شيء يعمل بشكل جيد."),
+        ("Hindi", "सब कुछ ठीक काम कर रहा है।"),
+        ("Greek", "Όλα λειτουργούν κανονικά."),
+        ("Hebrew", "הכל עובד כמו שצריך."),
+        ("Turkish", "Sıcaklık 23°C, her şey yolunda."),
+    ):
+        check(
+            f"{name} survives the emoji filter",
+            _speakable(text) == text,
+            repr(_speakable(text)),
+        )
 
 
 def test_reasoning_is_not_read_aloud():
@@ -846,23 +1063,34 @@ def test_reasoning_is_not_read_aloud():
         f = _ReasoningFilter()
         return "".join(f.feed(c) for c in chunks) + f.flush()
 
-    check("a whole block is removed",
-          run(["<think>the user said hello</think>Hello, sir."]) == "Hello, sir.")
-    check("text on both sides survives",
-          run(["Before <think>hidden</think> after."]) == "Before  after.")
-    check("other tag spellings too",
-          run(["<reasoning>a</reasoning>B<thinking>c</thinking>D"]) == "BD")
-    check("a reply with no thinking is untouched",
-          run(["Just an answer."]) == "Just an answer.")
-    check("an unterminated block is dropped, not spoken",
-          run(["<think>never finished..."]) == "")
+    check(
+        "a whole block is removed",
+        run(["<think>the user said hello</think>Hello, sir."]) == "Hello, sir.",
+    )
+    check(
+        "text on both sides survives",
+        run(["Before <think>hidden</think> after."]) == "Before  after.",
+    )
+    check(
+        "other tag spellings too",
+        run(["<reasoning>a</reasoning>B<thinking>c</thinking>D"]) == "BD",
+    )
+    check(
+        "a reply with no thinking is untouched",
+        run(["Just an answer."]) == "Just an answer.",
+    )
+    check(
+        "an unterminated block is dropped, not spoken",
+        run(["<think>never finished..."]) == "",
+    )
 
     # The part that actually broke: tags split across stream chunks.
     text = "<think>hidden reasoning, at some length</think>Only this is spoken."
-    check("a tag split across chunks is still caught",
-          run(["<thi", "nk>x", "</thi", "nk>", "Visible."]) == "Visible.")
-    check("character-by-character streaming",
-          run(list(text)) == "Only this is spoken.")
+    check(
+        "a tag split across chunks is still caught",
+        run(["<thi", "nk>x", "</thi", "nk>", "Visible."]) == "Visible.",
+    )
+    check("character-by-character streaming", run(list(text)) == "Only this is spoken.")
 
     bad = 0
     for _ in range(200):
@@ -883,36 +1111,53 @@ def test_local_models_get_a_smaller_prompt():
     # people who picked a service AFTER it was added and nobody else. Measured
     # on an install configured before that: 20 tools and 18,039 characters on
     # every turn instead of 14 and 11,871 — most of a fourteen-second wait.
-    older = registry.build("openai_compat",
-                           {"base_url": "http://127.0.0.1:11434/v1", "model": "m"})
-    check("a config saved before the budget existed still gets it",
-          older.caps["max_tools"] == 14, str(older.caps["max_tools"]))
+    older = registry.build(
+        "openai_compat", {"base_url": "http://127.0.0.1:11434/v1", "model": "m"}
+    )
+    check(
+        "a config saved before the budget existed still gets it",
+        older.caps["max_tools"] == 14,
+        str(older.caps["max_tools"]),
+    )
 
-    hosted = registry.build("openai_compat",
-                            {"base_url": "https://api.groq.com/openai/v1",
-                             "model": "m"})
-    check("a hosted endpoint is not limited",
-          hosted.caps["max_tools"] is None, str(hosted.caps["max_tools"]))
+    hosted = registry.build(
+        "openai_compat", {"base_url": "https://api.groq.com/openai/v1", "model": "m"}
+    )
+    check(
+        "a hosted endpoint is not limited",
+        hosted.caps["max_tools"] is None,
+        str(hosted.caps["max_tools"]),
+    )
 
-    chosen = registry.build("openai_compat",
-                            {"base_url": "http://127.0.0.1:11434/v1",
-                             "model": "m", "max_tools": "40"})
+    chosen = registry.build(
+        "openai_compat",
+        {"base_url": "http://127.0.0.1:11434/v1", "model": "m", "max_tools": "40"},
+    )
     check("an explicit choice wins", chosen.caps["max_tools"] == 40)
 
-    check("a machine on the home network counts as local",
-          _is_own_hardware("http://192.168.1.50:11434/v1")
-          and _is_own_hardware("http://10.0.0.5:8080/v1")
-          and not _is_own_hardware("https://api.openai.com/v1"))
-    check("an empty or zero field means 'decide for me'",
-          _int_or("", None) is None and _int_or("0", None) is None
-          and _int_or("12", None) == 12)
+    check(
+        "a machine on the home network counts as local",
+        _is_own_hardware("http://192.168.1.50:11434/v1")
+        and _is_own_hardware("http://10.0.0.5:8080/v1")
+        and not _is_own_hardware("https://api.openai.com/v1"),
+    )
+    check(
+        "an empty or zero field means 'decide for me'",
+        _int_or("", None) is None
+        and _int_or("0", None) is None
+        and _int_or("12", None) == 12,
+    )
 
     local = [e for e in CATALOG if e.get("local") is True]
     cloud = [e for e in CATALOG if e.get("local") is False]
-    check("every local preset carries a budget",
-          local and all(e["values"].get("max_tools") for e in local))
-    check("no cloud preset is limited",
-          cloud and not any(e["values"].get("max_tools") for e in cloud))
+    check(
+        "every local preset carries a budget",
+        local and all(e["values"].get("max_tools") for e in local),
+    )
+    check(
+        "no cloud preset is limited",
+        cloud and not any(e["values"].get("max_tools") for e in cloud),
+    )
 
     decls = Cfg.tools[0]["function_declarations"] * 12
     full = schema.payload_size(decls)
@@ -932,27 +1177,39 @@ def test_voices_follow_the_language():
     from providers import tts_piper
     from providers.engine_pipeline import _accepts_language
 
-    voice = tts_piper.PiperTTS({"voice": "en_US-lessac-medium",
-                                "follow_language": "1"})
+    voice = tts_piper.PiperTTS({"voice": "en_US-lessac-medium", "follow_language": "1"})
     check("Piper accepts a language argument", _accepts_language(voice))
-    check("a language code is read off a voice name",
-          tts_piper.language_of("tr_TR-dfki-medium") == "tr")
+    check(
+        "a language code is read off a voice name",
+        tts_piper.language_of("tr_TR-dfki-medium") == "tr",
+    )
 
     here = set(tts_piper.installed())
     if {"tr_TR-dfki-medium", "en_US-lessac-medium"} <= here:
-        check("Turkish picks the Turkish voice",
-              voice._pick("tr") == "tr_TR-dfki-medium", voice._pick("tr"))
-        check("English keeps the configured voice",
-              voice._pick("en") == "en_US-lessac-medium", voice._pick("en"))
-        check("a language with no voice downloaded falls back",
-              voice._pick("ja") == "en_US-lessac-medium", voice._pick("ja"))
+        check(
+            "Turkish picks the Turkish voice",
+            voice._pick("tr") == "tr_TR-dfki-medium",
+            voice._pick("tr"),
+        )
+        check(
+            "English keeps the configured voice",
+            voice._pick("en") == "en_US-lessac-medium",
+            voice._pick("en"),
+        )
+        check(
+            "a language with no voice downloaded falls back",
+            voice._pick("ja") == "en_US-lessac-medium",
+            voice._pick("ja"),
+        )
     else:
-        check("both test voices downloaded (skipped)", True,
-              f"have {sorted(here)}")
+        check("both test voices downloaded (skipped)", True, f"have {sorted(here)}")
 
     from providers.tts_system import SystemTTS
-    check("the system voice is NOT told a language it cannot use",
-          not _accepts_language(SystemTTS({})))
+
+    check(
+        "the system voice is NOT told a language it cannot use",
+        not _accepts_language(SystemTTS({})),
+    )
 
 
 def test_panel_settings_survive():
@@ -964,6 +1221,7 @@ def test_panel_settings_survive():
     Qt runs offscreen so this needs no display.
     """
     import os
+
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
     section("[10] The settings panel remembers")
@@ -975,58 +1233,78 @@ def test_panel_settings_survive():
     app = QApplication.instance() or QApplication([])
 
     import ui as UI
-    from memory.config_manager import (get_pipeline, get_provider_config,
-                                       get_provider_mode, save_pipeline,
-                                       save_provider_config,
-                                       save_provider_mode,
-                                       save_sidecar_provider)
+    from memory.config_manager import (
+        get_pipeline,
+        get_provider_config,
+        get_provider_mode,
+        save_pipeline,
+        save_provider_config,
+        save_provider_mode,
+        save_sidecar_provider,
+    )
 
     restore = json.loads(
-        (Path(__file__).resolve().parent.parent /
-         "config" / "api_keys.json").read_text(encoding="utf-8")).get("providers")
+        (Path(__file__).resolve().parent.parent / "config" / "api_keys.json").read_text(
+            encoding="utf-8"
+        )
+    ).get("providers")
 
     try:
         save_provider_mode("gemini")
         save_pipeline(stt="", llm="", tts="")
         save_sidecar_provider("")
-        save_provider_config("openai_compat",
-                             {"base_url": "", "model": "", "catalog": ""})
+        save_provider_config(
+            "openai_compat", {"base_url": "", "model": "", "catalog": ""}
+        )
 
         # -- a provider chosen for background requests is configurable --------
         ov = UI.ProvidersOverlay()
         box = ov._sidecar_combo
-        i = next((k for k in range(box.count())
-                  if box.itemData(k) == ("openai_compat", "ollama")), -1)
+        i = next(
+            (
+                k
+                for k in range(box.count())
+                if box.itemData(k) == ("openai_compat", "ollama")
+            ),
+            -1,
+        )
         check("named services are offered for background requests", i > 0)
         if i > 0:
             box.setCurrentIndex(i)
             ov._sidecar_changed(i)
             ov._rebuild_body()
-            check("choosing one shows its form", "openai_compat" in ov._edits,
-                  str(list(ov._edits)))
-            check("its address is filled in from the preset",
-                  get_provider_config("openai_compat").get("base_url", "")
-                  .endswith("11434/v1"),
-                  str(get_provider_config("openai_compat")))
+            check(
+                "choosing one shows its form",
+                "openai_compat" in ov._edits,
+                str(list(ov._edits)),
+            )
+            check(
+                "its address is filled in from the preset",
+                get_provider_config("openai_compat")
+                .get("base_url", "")
+                .endswith("11434/v1"),
+                str(get_provider_config("openai_compat")),
+            )
 
         # -- typing survives a redraw ----------------------------------------
         if "openai_compat" in ov._edits:
             ov._edits["openai_compat"]["model"][0].setCurrentText("qwen3:8b")
             ov._rebuild_body()
-            check("a typed model survives a redraw",
-                  get_provider_config("openai_compat").get("model") == "qwen3:8b",
-                  str(get_provider_config("openai_compat").get("model")))
+            check(
+                "a typed model survives a redraw",
+                get_provider_config("openai_compat").get("model") == "qwen3:8b",
+                str(get_provider_config("openai_compat").get("model")),
+            )
 
         # -- the whole setup round-trips -------------------------------------
         ov._set_mode("pipeline")
         ov._rebuild_body()
-        ov._pipe.update({"stt": "whisper", "llm": "openai_compat",
-                         "tts": "elevenlabs"})
-        ov._picked.update({"stt": "local", "llm": "ollama",
-                           "tts": "elevenlabs"})
+        ov._pipe.update({"stt": "whisper", "llm": "openai_compat", "tts": "elevenlabs"})
+        ov._picked.update({"stt": "local", "llm": "ollama", "tts": "elevenlabs"})
         ov._rebuild_body()
 
         import pathlib
+
         writes = [0]
         real = pathlib.Path.write_text
 
@@ -1042,28 +1320,40 @@ def test_panel_settings_survive():
             pathlib.Path.write_text = real
 
         check("APPLY writes the config once", writes[0] == 1, str(writes[0]))
-        check("the mode was stored", get_provider_mode() == "pipeline",
-              get_provider_mode())
-        check("all three slots were stored",
-              all(get_pipeline().get(k) for k in ("stt", "llm", "tts")),
-              str(get_pipeline()))
+        check(
+            "the mode was stored",
+            get_provider_mode() == "pipeline",
+            get_provider_mode(),
+        )
+        check(
+            "all three slots were stored",
+            all(get_pipeline().get(k) for k in ("stt", "llm", "tts")),
+            str(get_pipeline()),
+        )
 
         ov2 = UI.ProvidersOverlay()
         check("reopening shows MY OWN SETUP", ov2._mode == "pipeline", ov2._mode)
         check("the local card is the selected one", ov2._card_local.isChecked())
-        check("Ollama is remembered",
-              ov2._current_entry("llm", "openai_compat") == "ollama",
-              ov2._current_entry("llm", "openai_compat"))
-        check("no slot reads 'not set'",
-              all(ov2._pipe.get(s) for s in ("stt", "llm", "tts")),
-              str(ov2._pipe))
+        check(
+            "Ollama is remembered",
+            ov2._current_entry("llm", "openai_compat") == "ollama",
+            ov2._current_entry("llm", "openai_compat"),
+        )
+        check(
+            "no slot reads 'not set'",
+            all(ov2._pipe.get(s) for s in ("stt", "llm", "tts")),
+            str(ov2._pipe),
+        )
 
         # -- the wheel does not change a box you scroll past -----------------
         combos = ov2.findChildren(QComboBox)
-        check(f"all {len(combos)} boxes ignore the wheel unless focused",
-              combos and all(isinstance(c, UI._ScrollSafeCombo) for c in combos))
+        check(
+            f"all {len(combos)} boxes ignore the wheel unless focused",
+            combos and all(isinstance(c, UI._ScrollSafeCombo) for c in combos),
+        )
     finally:
         from memory.config_manager import _patch_config
+
         _patch_config(providers=restore or {})
 
 

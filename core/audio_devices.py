@@ -89,10 +89,10 @@ _chosen_api: dict = {"input": None, "output": None}
 _PREFERRED_APIS = {
     "Windows": ("directsound", "mme", "wasapi"),
     # macOS has only Core Audio, so there is nothing to disambiguate.
-    "Darwin":  ("core audio",),
+    "Darwin": ("core audio",),
     # PulseAudio/PipeWire present one clean endpoint per device; raw ALSA
     # presents dozens of routing permutations of the same card.
-    "Linux":   ("pulse", "pipewire", "jack", "alsa"),
+    "Linux": ("pulse", "pipewire", "jack", "alsa"),
 }
 
 # ── "It opens" is not "it works" ─────────────────────────────────────────────
@@ -128,6 +128,7 @@ def _transport_works(idx: int, kind: str, api_key) -> bool:
     ok = False
     try:
         import sounddevice as sd
+
         rate = _RATES.get(kind, 16000)
         secs = _PROBE_SECONDS.get(kind, 0.5)
 
@@ -138,18 +139,22 @@ def _transport_works(idx: int, kind: str, api_key) -> bool:
         if kind == "output":
             # main.py writes with stream.write() — a real sink is rate-limited
             # by the hardware clock, a fake one swallows the buffer instantly.
-            st = sd.RawOutputStream(samplerate=rate, channels=1, dtype="int16",
-                                    blocksize=1024, device=idx)
+            st = sd.RawOutputStream(
+                samplerate=rate, channels=1, dtype="int16", blocksize=1024, device=idx
+            )
             st.start()
             t0 = time.monotonic()
-            st.write(bytes(int(rate * secs) * 2))   # silence — inaudible
+            st.write(bytes(int(rate * secs) * 2))  # silence — inaudible
             elapsed = time.monotonic() - t0
-            st.stop(); st.close()
+            st.stop()
+            st.close()
             ok = elapsed > secs * 0.5
             if not ok:
-                print(f"[Audio] output: host API reports success but moves no "
-                      f"audio ({elapsed*1000:.0f} ms for {secs*1000:.0f} ms) "
-                      f"— skipping it")
+                print(
+                    f"[Audio] output: host API reports success but moves no "
+                    f"audio ({elapsed*1000:.0f} ms for {secs*1000:.0f} ms) "
+                    f"— skipping it"
+                )
         else:
             # main.py reads through a callback — count what arrives.
             frames = [0]
@@ -157,15 +162,24 @@ def _transport_works(idx: int, kind: str, api_key) -> bool:
             def _cb(indata, n, *_a):
                 frames[0] += n
 
-            st = sd.InputStream(samplerate=rate, channels=1, dtype="int16",
-                                blocksize=1024, device=idx, callback=_cb)
+            st = sd.InputStream(
+                samplerate=rate,
+                channels=1,
+                dtype="int16",
+                blocksize=1024,
+                device=idx,
+                callback=_cb,
+            )
             st.start()
             time.sleep(secs)
-            st.stop(); st.close()
+            st.stop()
+            st.close()
             ok = frames[0] > rate * secs * 0.3
             if not ok:
-                print(f"[Audio] input: host API delivered {frames[0]} frames in "
-                      f"{secs*1000:.0f} ms — skipping it")
+                print(
+                    f"[Audio] input: host API delivered {frames[0]} frames in "
+                    f"{secs*1000:.0f} ms — skipping it"
+                )
     except Exception as e:
         print(f"[Audio] {kind} transport probe failed: {e}")
         ok = False
@@ -189,6 +203,7 @@ def _display_name(name: str, devices) -> str:
             best = other
     return best
 
+
 # The rates the app opens its streams at. Defaults match main.py; main.py calls
 # configure() at startup with its own constants so the two can never drift apart
 # and silently reintroduce the bug above.
@@ -202,7 +217,7 @@ def configure(input_rate: int, output_rate: int) -> None:
     Drops any cached list: which devices are usable depends on the rate, so a
     list built under the old rates would be stale."""
     global _cache
-    _RATES["input"]  = int(input_rate)
+    _RATES["input"] = int(input_rate)
     _RATES["output"] = int(output_rate)
     with _cache_lock:
         _cache = None
@@ -219,14 +234,21 @@ def _usable(idx: int, kind: str) -> bool:
     st = None
     try:
         import sounddevice as sd
+
         rate = _RATES.get(kind, 16000)
         if kind == "input":
-            st = sd.InputStream(samplerate=rate, channels=1, dtype="int16",
-                                blocksize=1024, device=idx,
-                                callback=lambda *_a: None)
+            st = sd.InputStream(
+                samplerate=rate,
+                channels=1,
+                dtype="int16",
+                blocksize=1024,
+                device=idx,
+                callback=lambda *_a: None,
+            )
         else:
-            st = sd.RawOutputStream(samplerate=rate, channels=1, dtype="int16",
-                                    blocksize=1024, device=idx)
+            st = sd.RawOutputStream(
+                samplerate=rate, channels=1, dtype="int16", blocksize=1024, device=idx
+            )
         st.start()
         return True
     except Exception:
@@ -234,20 +256,27 @@ def _usable(idx: int, kind: str) -> bool:
     finally:
         if st is not None:
             try:
-                st.stop(); st.close()
+                st.stop()
+                st.close()
             except Exception:
                 pass
+
 
 # Aliases for "the default device" and internal routing endpoints. Matched
 # case-insensitively as substrings against the device name.
 _PSEUDO_DEVICES = (
-    "sound mapper",        # Windows MME
-    "primary sound",       # Windows DirectSound ("Primary Sound Capture Driver")
-    "sysdefault",          # ALSA
-    "default",             # ALSA / PulseAudio alias
-    "dmix", "dsnoop",      # ALSA software mixing plugins
-    "surround",            # ALSA channel-layout permutations of one card
-    "samplerate", "speexrate", "upmix", "vdownmix", "null",
+    "sound mapper",  # Windows MME
+    "primary sound",  # Windows DirectSound ("Primary Sound Capture Driver")
+    "sysdefault",  # ALSA
+    "default",  # ALSA / PulseAudio alias
+    "dmix",
+    "dsnoop",  # ALSA software mixing plugins
+    "surround",  # ALSA channel-layout permutations of one card
+    "samplerate",
+    "speexrate",
+    "upmix",
+    "vdownmix",
+    "null",
 )
 
 
@@ -285,7 +314,11 @@ def _query() -> dict[str, list[str]]:
                 if dev.get(chan, 0) <= 0:
                     continue
                 if api_filter is not None:
-                    api = apis[dev["hostapi"]].lower() if dev.get("hostapi", -1) < len(apis) else ""
+                    api = (
+                        apis[dev["hostapi"]].lower()
+                        if dev.get("hostapi", -1) < len(apis)
+                        else ""
+                    )
                     if api_filter not in api:
                         continue
                 if not _usable(idx, kind):
@@ -310,9 +343,11 @@ def _query() -> dict[str, list[str]]:
                 out[kind] = [_display_name(n, devices) for _i, n in found]
                 break
             if out[kind]:
-                print(f"[Audio] {kind}: using "
-                      f"{_chosen_api[kind] or 'any host API'} "
-                      f"({len(out[kind])} devices)")
+                print(
+                    f"[Audio] {kind}: using "
+                    f"{_chosen_api[kind] or 'any host API'} "
+                    f"({len(out[kind])} devices)"
+                )
         return out
 
     except Exception as e:
@@ -323,13 +358,17 @@ def _query() -> dict[str, list[str]]:
 def prefetch() -> None:
     """Warm the cache on a background thread. Called once at startup so the
     settings drawer never pays for enumeration on the Qt thread."""
+
     def _work():
         global _cache
         result = _query()
         with _cache_lock:
             _cache = result
-        print(f"[Audio] {len(result['input'])} input / "
-              f"{len(result['output'])} output devices found")
+        print(
+            f"[Audio] {len(result['input'])} input / "
+            f"{len(result['output'])} output devices found"
+        )
+
     threading.Thread(target=_work, daemon=True, name="audio-devices").start()
 
 
@@ -372,7 +411,7 @@ def resolve(name: str, kind: str):
         except Exception:
             apis = []
 
-        want_in  = (kind == "input")
+        want_in = kind == "input"
         chan_key = "max_input_channels" if want_in else "max_output_channels"
 
         def _candidates(api_filter):
@@ -380,7 +419,11 @@ def resolve(name: str, kind: str):
                 if dev.get(chan_key, 0) <= 0:
                     continue
                 if api_filter is not None:
-                    api = apis[dev["hostapi"]].lower() if dev.get("hostapi", -1) < len(apis) else ""
+                    api = (
+                        apis[dev["hostapi"]].lower()
+                        if dev.get("hostapi", -1) < len(apis)
+                        else ""
+                    )
                     if api_filter not in api:
                         continue
                 yield idx, (dev.get("name") or "").strip()
@@ -391,9 +434,11 @@ def resolve(name: str, kind: str):
         # populates it; calling it here is a no-op once the cache is warm.
         list_devices(kind)
         chosen = _chosen_api.get(kind)
-        orders = ([chosen] if chosen is not None else []) \
-            + [a for a in _PREFERRED_APIS.get(platform.system(), ()) if a != chosen] \
+        orders = (
+            ([chosen] if chosen is not None else [])
+            + [a for a in _PREFERRED_APIS.get(platform.system(), ()) if a != chosen]
             + [None]
+        )
 
         # A candidate only counts if it can be opened at the rate this side runs
         # at. The prefix match matters because the API that carries the audio is
@@ -407,15 +452,18 @@ def resolve(name: str, kind: str):
                     if _usable(idx, kind):
                         return idx
                     continue
-                if partial is None and (dev_name.startswith(wanted[:24])
-                                        or wanted.startswith(dev_name[:24])):
+                if partial is None and (
+                    dev_name.startswith(wanted[:24]) or wanted.startswith(dev_name[:24])
+                ):
                     if _usable(idx, kind):
                         partial = idx
             if partial is not None:
                 return partial
 
-        print(f"[Audio] Saved {kind} device '{wanted}' cannot be opened at "
-              f"{_RATES.get(kind)} Hz on any host API — using system default")
+        print(
+            f"[Audio] Saved {kind} device '{wanted}' cannot be opened at "
+            f"{_RATES.get(kind)} Hz on any host API — using system default"
+        )
         return None
     except Exception as e:
         print(f"[Audio] resolve({kind}) failed: {e} — using system default")
@@ -477,7 +525,11 @@ def measure_input(name: str, seconds: float = 3.0, on_level=None) -> dict:
         rate = _RATES.get("input", 16000)
 
         def _cb(indata, _frames, _t, _status):
-            block = int(np.abs(np.frombuffer(indata, dtype="int16")).max())                 if len(indata) else 0
+            block = (
+                int(np.abs(np.frombuffer(indata, dtype="int16")).max())
+                if len(indata)
+                else 0
+            )
             if block > peak_seen[0]:
                 peak_seen[0] = block
             if on_level is not None:
@@ -486,27 +538,44 @@ def measure_input(name: str, seconds: float = 3.0, on_level=None) -> dict:
                 except Exception:
                     pass
 
-        stream = sd.RawInputStream(samplerate=rate, channels=1, dtype="int16",
-                                   blocksize=int(rate / 20), device=idx,
-                                   callback=_cb)
+        stream = sd.RawInputStream(
+            samplerate=rate,
+            channels=1,
+            dtype="int16",
+            blocksize=int(rate / 20),
+            device=idx,
+            callback=_cb,
+        )
         with stream:
             time.sleep(max(0.5, float(seconds)))
         peak = peak_seen[0]
     except Exception as e:
-        return {"ok": False, "peak": 0, "level": 0.0,
-                "verdict": f"This microphone could not be opened: {e}"}
+        return {
+            "ok": False,
+            "peak": 0,
+            "level": 0.0,
+            "verdict": f"This microphone could not be opened: {e}",
+        }
 
     if peak < _SILENT_PEAK:
-        verdict = ("Nothing arrived. The microphone is muted, its level is at "
-                   "zero, or this is not the device you are speaking into.")
+        verdict = (
+            "Nothing arrived. The microphone is muted, its level is at "
+            "zero, or this is not the device you are speaking into."
+        )
     elif peak < _QUIET_PEAK:
-        verdict = ("Very quiet. Speech recognition will struggle — raise the "
-                   "input level in the system sound settings.")
+        verdict = (
+            "Very quiet. Speech recognition will struggle — raise the "
+            "input level in the system sound settings."
+        )
     else:
         verdict = "Working. Your voice is coming through clearly."
 
-    return {"ok": peak >= _QUIET_PEAK, "peak": peak,
-            "level": min(1.0, peak / 12000.0), "verdict": verdict}
+    return {
+        "ok": peak >= _QUIET_PEAK,
+        "peak": peak,
+        "level": min(1.0, peak / 12000.0),
+        "verdict": verdict,
+    }
 
 
 def play_tone(name: str, seconds: float = 0.6) -> dict:
@@ -547,6 +616,7 @@ def play_tone(name: str, seconds: float = 0.6) -> dict:
 # per-platform volume plumbing and had a real bug in it (see
 # _win_endpoint_volume there). One implementation, not two.
 
+
 def _endpoint_for(name: str):
     """The Windows volume interface for ONE named output, or None.
 
@@ -572,6 +642,7 @@ def _endpoint_for(name: str):
         return None
     try:
         from pycaw.pycaw import AudioUtilities
+
         wanted = _fold(name)
         if not wanted:
             return None
@@ -616,8 +687,9 @@ def _endpoint_for(name: str):
             if friendly == wanted:
                 exact = endpoint
                 break
-            if partial is None and (friendly.startswith(wanted[:24])
-                                    or wanted.startswith(friendly[:24])):
+            if partial is None and (
+                friendly.startswith(wanted[:24]) or wanted.startswith(friendly[:24])
+            ):
                 partial = endpoint
         return exact or partial
     except Exception as e:
@@ -627,6 +699,7 @@ def _endpoint_for(name: str):
 
 def _platform_is() -> str:
     import platform
+
     return platform.system()
 
 
@@ -635,6 +708,7 @@ def _fold(text: str) -> str:
     lazily so this module keeps working if that one is ever absent."""
     try:
         from core.appidentity import fold
+
         return fold(text)
     except Exception:
         return "".join(c for c in str(text or "").lower() if c.isalnum())
@@ -650,12 +724,12 @@ def get_output_volume(name: str = "") -> Optional[int]:
     endpoint = _endpoint_for(name)
     if endpoint is not None:
         try:
-            return max(0, min(100, round(
-                endpoint.GetMasterVolumeLevelScalar() * 100)))
+            return max(0, min(100, round(endpoint.GetMasterVolumeLevelScalar() * 100)))
         except Exception as e:
             print(f"[Audio] could not read '{name}' volume: {e}")
     try:
         from actions.computer_settings import volume_get
+
         return volume_get()
     except Exception as e:
         print(f"[Audio] could not read the output volume: {e}")
@@ -678,10 +752,13 @@ def set_output_volume(percent: int, name: str = "") -> bool:
         except Exception as e:
             print(f"[Audio] could not set '{name}' volume: {e}")
     if name:
-        print(f"[Audio] '{name}' has no separate volume control here — "
-              f"setting the system level instead.")
+        print(
+            f"[Audio] '{name}' has no separate volume control here — "
+            f"setting the system level instead."
+        )
     try:
         from actions.computer_settings import volume_set, volume_get
+
         volume_set(percent)
         now = volume_get()
         return now is None or abs(now - percent) <= 3

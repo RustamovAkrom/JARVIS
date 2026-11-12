@@ -34,17 +34,56 @@ else:
 os.environ.setdefault("QT_LOGGING_RULES", "qt.multimedia.*=false")
 
 from PyQt6.QtCore import (
-    QEasingCurve, QBuffer, QByteArray, QEvent, QIODevice, QLineF, QLocale, QMimeData, QObject,
-    QParallelAnimationGroup, QModelIndex, QPointF, QPoint, QPropertyAnimation, QRect, QRectF,
-    QSize, QSizeF, Qt,
-    QTimer, QUrl, QDir, QVariantAnimation, pyqtSignal, pyqtSlot,
+    QEasingCurve,
+    QBuffer,
+    QByteArray,
+    QEvent,
+    QIODevice,
+    QLineF,
+    QLocale,
+    QMimeData,
+    QObject,
+    QParallelAnimationGroup,
+    QModelIndex,
+    QPointF,
+    QPoint,
+    QPropertyAnimation,
+    QRect,
+    QRectF,
+    QSize,
+    QSizeF,
+    Qt,
+    QTimer,
+    QUrl,
+    QDir,
+    QVariantAnimation,
+    pyqtSignal,
+    pyqtSlot,
 )
 from PyQt6.QtGui import (
-    QBrush, QColor, QConicalGradient, QCursor, QDragEnterEvent, QDropEvent, QFont,
-    QFileSystemModel, QFontDatabase, QFontMetricsF, QIcon, QKeySequence, QLinearGradient, QPainter, QPainterPath,
-    QDesktopServices, QImage,
-    QPen, QPixmap, QRadialGradient, QShortcut,
+    QBrush,
+    QColor,
+    QConicalGradient,
+    QCursor,
+    QDragEnterEvent,
+    QDropEvent,
+    QFont,
+    QFileSystemModel,
+    QFontDatabase,
+    QFontMetricsF,
+    QIcon,
+    QKeySequence,
+    QLinearGradient,
+    QPainter,
+    QPainterPath,
+    QDesktopServices,
+    QImage,
+    QPen,
+    QPixmap,
+    QRadialGradient,
+    QShortcut,
 )
+
 # Video playback for the HUD. Part of PyQt6, so it costs no new dependency —
 # but the multimedia plugins are a separate piece of the Qt install and can be
 # absent on a stripped-down system, so a failure here disables one feature
@@ -52,31 +91,59 @@ from PyQt6.QtGui import (
 try:
     from PyQt6.QtMultimedia import QAudioOutput, QMediaPlayer
     from PyQt6.QtMultimediaWidgets import QGraphicsVideoItem
+
     HAVE_VIDEO = True
-except Exception as _e:            # noqa: BLE001 - reported, never fatal
+except Exception as _e:  # noqa: BLE001 - reported, never fatal
     QAudioOutput = QMediaPlayer = QGraphicsVideoItem = None
     HAVE_VIDEO = False
     print(f"[Video] playback unavailable ({_e}) — the HUD will not show video.")
 
 from PyQt6.QtWidgets import (
-    QApplication, QCheckBox, QComboBox, QDialog, QFileDialog, QFrame, QGridLayout,
-    QHBoxLayout, QLabel, QLineEdit,
-    QListWidget, QListWidgetItem, QMessageBox, QTabWidget,
-    QMainWindow, QPushButton, QScrollArea, QSizePolicy, QSplitter, QToolButton,
-    QGraphicsScene, QGraphicsView,
-    QPlainTextEdit, QStackedWidget, QTextBrowser, QTextEdit, QTreeView,
-    QVBoxLayout, QWidget, QProgressBar, QSlider,
+    QApplication,
+    QCheckBox,
+    QComboBox,
+    QDialog,
+    QFileDialog,
+    QFrame,
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QMessageBox,
+    QTabWidget,
+    QInputDialog,
+    QMainWindow,
+    QPushButton,
+    QScrollArea,
+    QSizePolicy,
+    QSplitter,
+    QToolButton,
+    QGraphicsScene,
+    QGraphicsView,
+    QPlainTextEdit,
+    QStackedWidget,
+    QTextBrowser,
+    QTextEdit,
+    QTreeView,
+    QVBoxLayout,
+    QWidget,
+    QProgressBar,
+    QSlider,
 )
 from memory.translations import LANGUAGES, translate as _translate
+
 
 def _base_dir() -> Path:
     if getattr(sys, "frozen", False):
         return Path(sys.executable).parent
     return Path(__file__).resolve().parent
 
-BASE_DIR   = _base_dir()
+
+BASE_DIR = _base_dir()
 CONFIG_DIR = BASE_DIR / "config"
-API_FILE   = CONFIG_DIR / "api_keys.json"
+API_FILE = CONFIG_DIR / "api_keys.json"
 _UI_TASKS_FILE = CONFIG_DIR / "ui_tasks.json"
 _UI_REMINDERS_FILE = CONFIG_DIR / "ui_reminders.json"
 _UI_HISTORY_FILE = CONFIG_DIR / "ui_history.json"
@@ -150,51 +217,64 @@ def _save_config_value(key: str, value) -> None:
 
 # Single source of truth for the release name — the window title, the header
 # badge and the readme must never disagree again.
-APP_VERSION  = "MARK LVI"
+APP_VERSION = "MARK LVI"
 APP_PROTOCOL = APP_VERSION.split()[-1]
 
 _DEFAULT_W, _DEFAULT_H = 1200, 820
-_MIN_W,     _MIN_H     = 820, 580
-_LEFT_W  = 220
+_MIN_W, _MIN_H = 820, 580
+_LEFT_W = 220
 _RIGHT_W = 340
 
 _OS = platform.system()  # "Windows" | "Darwin" | "Linux"
 
 
 class C:
-    BG        = "#00060a"
-    PANEL     = "#010d14"
-    PANEL2    = "#010f18"
-    BORDER    = "#0d3347"
-    BORDER_B  = "#1a5c7a"
-    BORDER_A  = "#0f4060"
-    PRI       = "#00d4ff"
-    PRI_DIM   = "#007a99"
-    PRI_GHO   = "#001f2e"
-    ACC       = "#ff6b00"
-    ACC2      = "#ffcc00"
-    GREEN     = "#00ff88"
-    GREEN_D   = "#00aa55"
-    RED       = "#ff3355"
-    MUTED_C   = "#ff3366"
-    TEXT      = "#8ffcff"
-    TEXT_DIM  = "#3a8a9a"
-    TEXT_MED  = "#5ab8cc"
-    WHITE     = "#d8f8ff"
-    DARK      = "#000d14"
-    BAR_BG    = "#011520"
+    BG = "#00060a"
+    PANEL = "#010d14"
+    PANEL2 = "#010f18"
+    BORDER = "#0d3347"
+    BORDER_B = "#1a5c7a"
+    BORDER_A = "#0f4060"
+    PRI = "#00d4ff"
+    PRI_DIM = "#007a99"
+    PRI_GHO = "#001f2e"
+    ACC = "#ff6b00"
+    ACC2 = "#ffcc00"
+    GREEN = "#00ff88"
+    GREEN_D = "#00aa55"
+    RED = "#ff3355"
+    MUTED_C = "#ff3366"
+    TEXT = "#8ffcff"
+    TEXT_DIM = "#3a8a9a"
+    TEXT_MED = "#5ab8cc"
+    WHITE = "#d8f8ff"
+    DARK = "#000d14"
+    BAR_BG = "#011520"
 
 
 # Keys tied to the accent colour — status colours (ACC, GREEN, RED…) stay fixed
 _HUE_LINKED = (
-    "BG", "PANEL", "PANEL2", "BORDER", "BORDER_B", "BORDER_A",
-    "PRI", "PRI_DIM", "PRI_GHO", "TEXT", "TEXT_DIM", "TEXT_MED",
-    "WHITE", "DARK", "BAR_BG",
+    "BG",
+    "PANEL",
+    "PANEL2",
+    "BORDER",
+    "BORDER_B",
+    "BORDER_A",
+    "PRI",
+    "PRI_DIM",
+    "PRI_GHO",
+    "TEXT",
+    "TEXT_DIM",
+    "TEXT_MED",
+    "WHITE",
+    "DARK",
+    "BAR_BG",
 )
 _STATUS_COLORS = ("ACC", "ACC2", "GREEN", "GREEN_D", "RED", "MUTED_C")
 _STATUS_DEFAULTS = {key: getattr(C, key) for key in _STATUS_COLORS}
 from PyQt6.QtWebChannel import QWebChannel
 from PyQt6.QtWebEngineWidgets import QWebEngineView
+
 _PALETTE_DEFAULTS: dict[str, str] = {k: getattr(C, k) for k in _HUE_LINKED}
 DEFAULT_UI_COLOR = _PALETTE_DEFAULTS["PRI"]
 
@@ -222,9 +302,14 @@ def apply_ui_accent(accent_hex: str) -> bool:
         for key, value in _PALETTE_DEFAULTS.items():
             setattr(C, key, value)
         for key, value in {
-            "BG": "#000103", "PANEL": "#030609", "PANEL2": "#050a10",
-            "BORDER": "#101a22", "BORDER_B": "#1b2d3a", "BORDER_A": "#14232d",
-            "DARK": "#000205", "BAR_BG": "#02070b",
+            "BG": "#000103",
+            "PANEL": "#030609",
+            "PANEL2": "#050a10",
+            "BORDER": "#101a22",
+            "BORDER_B": "#1b2d3a",
+            "BORDER_A": "#14232d",
+            "DARK": "#000205",
+            "BAR_BG": "#02070b",
         }.items():
             setattr(C, key, value)
         return True
@@ -236,17 +321,30 @@ def apply_ui_accent(accent_hex: str) -> bool:
         for key, value in _STATUS_DEFAULTS.items():
             setattr(C, key, value)
         for key, value in {
-            "ACC": "#b54708", "ACC2": "#815b00",
-            "GREEN": "#137333", "GREEN_D": "#116329",
-            "RED": "#b42318", "MUTED_C": "#b42318",
+            "ACC": "#b54708",
+            "ACC2": "#815b00",
+            "GREEN": "#137333",
+            "GREEN_D": "#116329",
+            "RED": "#b42318",
+            "MUTED_C": "#b42318",
         }.items():
             setattr(C, key, value)
         for key, value in {
-            "BG": "#f3f5f7", "PANEL": "#ffffff", "PANEL2": "#f7f9fb",
-            "BORDER": "#d8dee5", "BORDER_B": "#b7c1cc", "BORDER_A": "#c6d0da",
-            "PRI": "#36434f", "PRI_DIM": "#62717f", "PRI_GHO": "#e8edf2",
-            "TEXT": "#1f2933", "TEXT_DIM": "#61707d", "TEXT_MED": "#45515d",
-            "WHITE": "#111820", "DARK": "#ffffff", "BAR_BG": "#f7f9fb",
+            "BG": "#f3f5f7",
+            "PANEL": "#ffffff",
+            "PANEL2": "#f7f9fb",
+            "BORDER": "#d8dee5",
+            "BORDER_B": "#b7c1cc",
+            "BORDER_A": "#c6d0da",
+            "PRI": "#36434f",
+            "PRI_DIM": "#62717f",
+            "PRI_GHO": "#e8edf2",
+            "TEXT": "#1f2933",
+            "TEXT_DIM": "#61707d",
+            "TEXT_MED": "#45515d",
+            "WHITE": "#111820",
+            "DARK": "#ffffff",
+            "BAR_BG": "#f7f9fb",
         }.items():
             setattr(C, key, value)
         return True
@@ -262,18 +360,23 @@ def apply_ui_accent(accent_hex: str) -> bool:
     for key, value in _STATUS_DEFAULTS.items():
         setattr(C, key, value)
 
-    base_h            = _hsv(_PALETTE_DEFAULTS["PRI"])[0]
+    base_h = _hsv(_PALETTE_DEFAULTS["PRI"])[0]
     acc_h, acc_s, _av = _hsv(accent_hex)
-    dh   = acc_h - base_h
-    grey = acc_s < 0.08   # near-grey accent → the whole theme is desaturated
+    dh = acc_h - base_h
+    grey = acc_s < 0.08  # near-grey accent → the whole theme is desaturated
 
     for key, hex0 in _PALETTE_DEFAULTS.items():
         h, s, v = _hsv(hex0)
         if grey:
             s *= 0.15
         r, g, b = colorsys.hsv_to_rgb((h + dh) % 1.0, s, v)
-        setattr(C, key, "#{:02x}{:02x}{:02x}".format(
-            int(r * 255 + 0.5), int(g * 255 + 0.5), int(b * 255 + 0.5)))
+        setattr(
+            C,
+            key,
+            "#{:02x}{:02x}{:02x}".format(
+                int(r * 255 + 0.5), int(g * 255 + 0.5), int(b * 255 + 0.5)
+            ),
+        )
     return True
 
 
@@ -289,12 +392,17 @@ def retheme_all_widgets(old: dict[str, str], new: dict[str, str]) -> None:
     colour change applies INSTANTLY across the whole interface — panels, buttons,
     borders included — not just the painted elements. No restart needed.
     """
-    mapping = {old[k].lower(): new[k].lower()
-               for k in old if old[k].lower() != new.get(k, old[k]).lower()}
+    mapping = {
+        old[k].lower(): new[k].lower()
+        for k in old
+        if old[k].lower() != new.get(k, old[k]).lower()
+    }
     # A few older panels still use these literal surface colours in their QSS.
     # Keep them attached to the live palette during a preview or saved change.
     for literal, key in {
-        "#00060a": "BG", "#000308": "BG", "#000d12": "PANEL2",
+        "#00060a": "BG",
+        "#000308": "BG",
+        "#000d12": "PANEL2",
     }.items():
         target = getattr(C, key).lower()
         if literal != target:
@@ -320,7 +428,9 @@ def retheme_all_widgets(old: dict[str, str], new: dict[str, str]) -> None:
 
 
 def qcol(h: str, a: int = 255) -> QColor:
-    c = QColor(h); c.setAlpha(a); return c
+    c = QColor(h)
+    c.setAlpha(a)
+    return c
 
 
 def _tint_icon(icon: QIcon, color: str) -> QIcon:
@@ -346,9 +456,17 @@ def _accent_icon(path: Path, color: str) -> QIcon:
 
 
 # ── DESIGN SYSTEM: shared styling for the main window ──────────────────────
-FONT_UI   = "Segoe UI" if _OS == "Windows" else ("Helvetica Neue" if _OS == "Darwin" else "Noto Sans")
-FONT_MONO = "Consolas" if _OS == "Windows" else ("Menlo" if _OS == "Darwin" else "DejaVu Sans Mono")
-R_L, R_S  = 16, 8
+FONT_UI = (
+    "Segoe UI"
+    if _OS == "Windows"
+    else ("Helvetica Neue" if _OS == "Darwin" else "Noto Sans")
+)
+FONT_MONO = (
+    "Consolas"
+    if _OS == "Windows"
+    else ("Menlo" if _OS == "Darwin" else "DejaVu Sans Mono")
+)
+R_L, R_S = 16, 8
 
 
 def _close_icon_path() -> str:
@@ -361,8 +479,14 @@ def _close_icon_path() -> str:
             pm.fill(Qt.GlobalColor.transparent)
             painter = QPainter(pm)
             painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-            painter.setPen(QPen(QColor(170, 220, 255, 210), 1.6,
-                                Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+            painter.setPen(
+                QPen(
+                    QColor(170, 220, 255, 210),
+                    1.6,
+                    Qt.PenStyle.SolidLine,
+                    Qt.PenCapStyle.RoundCap,
+                )
+            )
             painter.drawLine(4, 4, 10, 10)
             painter.drawLine(10, 4, 4, 10)
             painter.end()
@@ -373,31 +497,39 @@ def _close_icon_path() -> str:
 
 
 def _card_qss(name: str) -> str:
-    return (f"QWidget#{name} {{ background: {C.PANEL}; border: 1px solid {C.BORDER};"
-            f" border-radius: 8px; }}")
+    return (
+        f"QWidget#{name} {{ background: {C.PANEL}; border: 1px solid {C.BORDER};"
+        f" border-radius: 8px; }}"
+    )
 
 
 def _ghost_qss() -> str:
-    return (f"QPushButton {{ background: {C.PANEL2}; color: {C.TEXT_MED};"
-            f" border: 1px solid {C.BORDER}; border-radius: 5px; padding: 3px 12px; }}"
-            f"QPushButton:hover {{ background: {C.DARK}; color: {C.PRI}; border-color: {C.PRI_DIM}; }}"
-            f"QPushButton:checked {{ background: {C.PRI_GHO}; color: {C.PRI}; border-color: {C.PRI}; }}"
-            f"QPushButton:pressed {{ background: {C.PRI_GHO}; }}")
+    return (
+        f"QPushButton {{ background: {C.PANEL2}; color: {C.TEXT_MED};"
+        f" border: 1px solid {C.BORDER}; border-radius: 5px; padding: 3px 12px; }}"
+        f"QPushButton:hover {{ background: {C.DARK}; color: {C.PRI}; border-color: {C.PRI_DIM}; }}"
+        f"QPushButton:checked {{ background: {C.PRI_GHO}; color: {C.PRI}; border-color: {C.PRI}; }}"
+        f"QPushButton:pressed {{ background: {C.PRI_GHO}; }}"
+    )
 
 
 def _combo_qss() -> str:
-    return (f"QComboBox {{ background: {C.PANEL2}; color: {C.TEXT}; border: 1px solid {C.BORDER};"
-            f" border-radius: 5px; padding: 5px 8px; }}"
-            f"QComboBox:hover {{ border-color: {C.BORDER_B}; }}"
-            f"QComboBox QAbstractItemView {{ background: {C.PANEL2}; color: {C.TEXT};"
-            f" selection-background-color: {C.PRI_GHO}; selection-color: {C.PRI};"
-            f" border: 1px solid {C.BORDER}; outline: 0; }}")
+    return (
+        f"QComboBox {{ background: {C.PANEL2}; color: {C.TEXT}; border: 1px solid {C.BORDER};"
+        f" border-radius: 5px; padding: 5px 8px; }}"
+        f"QComboBox:hover {{ border-color: {C.BORDER_B}; }}"
+        f"QComboBox QAbstractItemView {{ background: {C.PANEL2}; color: {C.TEXT};"
+        f" selection-background-color: {C.PRI_GHO}; selection-color: {C.PRI};"
+        f" border: 1px solid {C.BORDER}; outline: 0; }}"
+    )
 
 
 def _input_qss() -> str:
-    return (f"QLineEdit {{ background: {C.PANEL2}; color: {C.WHITE}; border: 1px solid {C.BORDER};"
-            f" border-radius: 5px; padding: 4px 10px; selection-background-color: {C.PRI_GHO}; }}"
-            f"QLineEdit:focus {{ border: 1px solid {C.PRI}; }}")
+    return (
+        f"QLineEdit {{ background: {C.PANEL2}; color: {C.WHITE}; border: 1px solid {C.BORDER};"
+        f" border-radius: 5px; padding: 4px 10px; selection-background-color: {C.PRI_GHO}; }}"
+        f"QLineEdit:focus {{ border: 1px solid {C.PRI}; }}"
+    )
 
 
 def _scroll_qss() -> str:
@@ -408,53 +540,60 @@ def _scroll_qss() -> str:
         "QScrollBar::handle:horizontal { background: rgba(170,220,255,70); border-radius: 3px; min-width: 28px; }"
         "QScrollBar::handle:vertical:hover, QScrollBar::handle:horizontal:hover { background: rgba(170,220,255,130); }"
         "QScrollBar::add-line, QScrollBar::sub-line { width: 0; height: 0; border: none; background: none; }"
-        "QScrollBar::add-page, QScrollBar::sub-page { background: none; }")
+        "QScrollBar::add-page, QScrollBar::sub-page { background: none; }"
+    )
 
 
 def _inset_qss(sel: str) -> str:
-    return (f"{sel} {{ background: {C.PANEL2}; color: {C.TEXT}; border: 1px solid {C.BORDER};"
-            f" border-radius: 5px; padding: 6px; selection-background-color: {C.PRI_GHO}; }}"
-            f"QListWidget::item {{ padding: 8px 6px; border-bottom: 1px solid rgba(170,220,255,24); }}"
-            f"QListWidget::item:selected {{ background: {C.PRI_GHO}; color: {C.PRI}; }}"
-            + _scroll_qss())
+    return (
+        f"{sel} {{ background: {C.PANEL2}; color: {C.TEXT}; border: 1px solid {C.BORDER};"
+        f" border-radius: 5px; padding: 6px; selection-background-color: {C.PRI_GHO}; }}"
+        f"QListWidget::item {{ padding: 8px 6px; border-bottom: 1px solid rgba(170,220,255,24); }}"
+        f"QListWidget::item:selected {{ background: {C.PRI_GHO}; color: {C.PRI}; }}"
+        + _scroll_qss()
+    )
 
 
 def _tabs_qss() -> str:
     icon = (BASE_DIR / "assets" / "icons" / "close.svg").as_posix()
-    close = (f"QTabBar::close-button {{ image: url('{icon}'); subcontrol-position: right;"
-             f" width: 12px; height: 12px; border-radius: 4px; margin: 2px; }}"
-             f"QTabBar::close-button:hover {{ background: {C.PRI_GHO}; }}")
-    return ("QTabWidget::pane { border: none; background: transparent; }"
-            "QTabBar { background: transparent; }"
-            f"QTabBar QToolButton {{ background: {C.PANEL2}; color: {C.PRI};"
-            f" border: 1px solid {C.BORDER}; border-radius: 4px; padding: 1px; }}"
-            f"QTabBar QToolButton:hover {{ background: {C.PRI_GHO}; border-color: {C.PRI_DIM}; }}"
-            f"QTabBar QToolButton:disabled {{ color: {C.TEXT_DIM}; background: {C.PANEL}; }}"
-            f"QTabBar::tab {{ background: {C.PANEL2}; color: {C.TEXT_DIM}; padding: 4px 8px;"
-            f" font-size: 8pt; margin-right: 2px; border: 1px solid {C.BORDER}; border-radius: 4px; }}"
-            f"QTabBar::tab:hover {{ color: {C.TEXT}; background: {C.DARK}; }}"
-            f"QTabBar::tab:selected {{ color: {C.PRI}; background: {C.PRI_GHO}; border-color: {C.PRI_DIM}; }}"
-            + close)
+    close = (
+        f"QTabBar::close-button {{ image: url('{icon}'); subcontrol-position: right;"
+        f" width: 12px; height: 12px; border-radius: 4px; margin: 2px; }}"
+        f"QTabBar::close-button:hover {{ background: {C.PRI_GHO}; }}"
+    )
+    return (
+        "QTabWidget::pane { border: none; background: transparent; }"
+        "QTabBar { background: transparent; }"
+        f"QTabBar QToolButton {{ background: {C.PANEL2}; color: {C.PRI};"
+        f" border: 1px solid {C.BORDER}; border-radius: 4px; padding: 1px; }}"
+        f"QTabBar QToolButton:hover {{ background: {C.PRI_GHO}; border-color: {C.PRI_DIM}; }}"
+        f"QTabBar QToolButton:disabled {{ color: {C.TEXT_DIM}; background: {C.PANEL}; }}"
+        f"QTabBar::tab {{ background: {C.PANEL2}; color: {C.TEXT_DIM}; padding: 4px 8px;"
+        f" font-size: 8pt; margin-right: 2px; border: 1px solid {C.BORDER}; border-radius: 4px; }}"
+        f"QTabBar::tab:hover {{ color: {C.TEXT}; background: {C.DARK}; }}"
+        f"QTabBar::tab:selected {{ color: {C.PRI}; background: {C.PRI_GHO}; border-color: {C.PRI_DIM}; }}"
+        + close
+    )
 
 
 class _SysMetrics:
     def __init__(self):
-        self.cpu  = 0.0
-        self.mem  = 0.0
-        self.net  = 0.0
-        self.gpu  = -1.0
-        self.tmp  = -1.0
+        self.cpu = 0.0
+        self.mem = 0.0
+        self.net = 0.0
+        self.gpu = -1.0
+        self.tmp = -1.0
         self._lock = threading.Lock()
         self._last_net = psutil.net_io_counters()
         self._last_net_t = time.time()
         self._running = True
         # Probe caches — GPU and temperature are refreshed less often than
         # CPU/memory/network metrics to keep the monitor lightweight.
-        self._slow_tick = 0            # gpu/temp refreshed every 3rd cycle
-        self._pynvml    = None         # cached pynvml module + device handle
-        self._pynvml_h  = None
-        self._pynvml_ok = None         # None=untested, False=unavailable here
-        self._nv_unix   = None         # cached (lib, dev) for Linux/macOS NVML
+        self._slow_tick = 0  # gpu/temp refreshed every 3rd cycle
+        self._pynvml = None  # cached pynvml module + device handle
+        self._pynvml_h = None
+        self._pynvml_ok = None  # None=untested, False=unavailable here
+        self._nv_unix = None  # cached (lib, dev) for Linux/macOS NVML
         t = threading.Thread(target=self._loop, daemon=True)
         t.start()
 
@@ -470,16 +609,16 @@ class _SysMetrics:
         cpu = psutil.cpu_percent(interval=None)
         mem = psutil.virtual_memory().percent
 
-        nc  = psutil.net_io_counters()
+        nc = psutil.net_io_counters()
         now = time.time()
-        dt  = now - self._last_net_t
+        dt = now - self._last_net_t
         if dt > 0:
             sent = (nc.bytes_sent - self._last_net.bytes_sent) / dt
             recv = (nc.bytes_recv - self._last_net.bytes_recv) / dt
-            net  = (sent + recv) / (1024 * 1024)
+            net = (sent + recv) / (1024 * 1024)
         else:
             net = 0.0
-        self._last_net   = nc
+        self._last_net = nc
         self._last_net_t = now
 
         # GPU and temperature change slowly and are the most expensive probes
@@ -514,11 +653,14 @@ class _SysMetrics:
             try:
                 if self._pynvml_h is None:
                     import pynvml  # type: ignore
+
                     pynvml.nvmlInit()
-                    self._pynvml    = pynvml
-                    self._pynvml_h  = pynvml.nvmlDeviceGetHandleByIndex(0)
+                    self._pynvml = pynvml
+                    self._pynvml_h = pynvml.nvmlDeviceGetHandleByIndex(0)
                     self._pynvml_ok = True
-                return float(self._pynvml.nvmlDeviceGetUtilizationRates(self._pynvml_h).gpu)
+                return float(
+                    self._pynvml.nvmlDeviceGetUtilizationRates(self._pynvml_h).gpu
+                )
             except Exception:
                 self._pynvml_ok = False
 
@@ -544,14 +686,21 @@ class _SysMetrics:
         except Exception:
             pass
 
-        return -1.0   # N/A — zero subprocess on all platforms
+        return -1.0  # N/A — zero subprocess on all platforms
 
     def _get_temp(self) -> float:
         # psutil — works on Linux; occasionally Windows with driver support
         try:
             temps = psutil.sensors_temperatures()
-            for name in ["coretemp", "k10temp", "cpu_thermal", "acpitz",
-                         "cpu-thermal", "zenpower", "it8688"]:
+            for name in [
+                "coretemp",
+                "k10temp",
+                "cpu_thermal",
+                "acpitz",
+                "cpu-thermal",
+                "zenpower",
+                "it8688",
+            ]:
                 if name in temps and temps[name]:
                     return temps[name][0].current
             for entries in temps.values():
@@ -562,7 +711,7 @@ class _SysMetrics:
 
         # Windows WMI requires COM apartment management that is not safe from
         # this lightweight polling thread on all supported Python builds.
-        return -1.0   # N/A — zero subprocess on all platforms
+        return -1.0  # N/A — zero subprocess on all platforms
 
     def snapshot(self) -> dict:
         with self._lock:
@@ -577,19 +726,23 @@ class _SysMetrics:
 
 _metrics = _SysMetrics()
 
+
 class HudCanvas(QWidget):
-    def __init__(self, face_path: str, assistant_name: str = "J.A.R.V.I.S", parent=None):
+    def __init__(
+        self, face_path: str, assistant_name: str = "J.A.R.V.I.S", parent=None
+    ):
         super().__init__(parent)
         self.setMinimumSize(300, 300)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
-        self.muted    = False
+        self.muted = False
         self.speaking = False
-        self.state    = "INITIALISING"
+        self.state = "INITIALISING"
         self._assistant_name = assistant_name
 
         self._avatar = None
         from memory.config_manager import get_hud_style
+
         self.hud_style = get_hud_style()
         self._core_phase = 0.0
         self._orb_pts, self._orb_edges = self._make_orb_points(320)
@@ -600,16 +753,20 @@ class HudCanvas(QWidget):
         self._pointer_tilt_x = 0.0
         self._pointer_tilt_y = 0.0
         self.setMouseTracking(True)
-        self._sats = [(1.35, 0.5, 0.9, 0.0), (1.55, -0.9, -0.6, 2.1),
-                      (1.75, 1.3, 0.45, 4.0), (1.45, -0.2, -1.1, 5.2)]
-        self._tick       = 0
-        self._scale      = 1.0
-        self._tgt_scale  = 1.0
-        self._halo       = 55.0
-        self._tgt_halo   = 55.0
-        self._last_t     = time.time()
-        self._step_t     = time.time()
-        self._blink      = True
+        self._sats = [
+            (1.35, 0.5, 0.9, 0.0),
+            (1.55, -0.9, -0.6, 2.1),
+            (1.75, 1.3, 0.45, 4.0),
+            (1.45, -0.2, -1.1, 5.2),
+        ]
+        self._tick = 0
+        self._scale = 1.0
+        self._tgt_scale = 1.0
+        self._halo = 55.0
+        self._tgt_halo = 55.0
+        self._last_t = time.time()
+        self._step_t = time.time()
+        self._blink = True
         self._blink_tick = 0
 
         # Rescaled-face cache: the smooth rescale is expensive, so we keep the
@@ -620,14 +777,14 @@ class HudCanvas(QWidget):
 
         # Live audio reactivity: _live_amp is written from the audio threads
         # (0.0–1.0), _amp_disp is the smoothed value the paint code reads.
-        self._live_amp  = 0.0
-        self._amp_disp  = 0.0
+        self._live_amp = 0.0
+        self._amp_disp = 0.0
         # (frames, start_time, hop) posted by the playback thread — see
         # push_visemes(). None means "no schedule; use the plain level".
         self._visemes = None
-        self._vis_i = None        # first schedule frame not yet handed to the mouth
-        self._base_scale = 1.0    # slow "breathing" target; amp is added per-frame
-        self._base_halo  = 55.0
+        self._vis_i = None  # first schedule frame not yet handed to the mouth
+        self._base_scale = 1.0  # slow "breathing" target; amp is added per-frame
+        self._base_halo = 55.0
 
         self._tmr = QTimer(self)
         self._tmr.timeout.connect(self._step)
@@ -700,7 +857,7 @@ class HudCanvas(QWidget):
         don't make the waveform stutter; _step() decays it back down."""
         try:
             lv = float(level)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return
         if lv < 0.0:
             lv = 0.0
@@ -744,7 +901,7 @@ class HudCanvas(QWidget):
                 # frames long. Sampling one and discarding the rest is how the
                 # closures between words went missing.
                 j = self._vis_i if self._vis_i is not None else i
-                v_seq = frames[max(0, j):i + 1]
+                v_seq = frames[max(0, j) : i + 1]
                 self._vis_i = max(j, i + 1)
                 v_level, v_open, v_wide = frames[i]
                 if v_seq:
@@ -752,7 +909,7 @@ class HudCanvas(QWidget):
                     if peak > self._live_amp:
                         self._live_amp = peak
             elif i >= len(frames):
-                self._visemes = None        # schedule spent
+                self._visemes = None  # schedule spent
                 self._vis_i = None
 
         # Audio threads push peaks into _live_amp; decay it toward silence so
@@ -767,49 +924,60 @@ class HudCanvas(QWidget):
         self._step_t = now
         pointer_lerp = 1.0 - math.exp(-min(0.1, max(0.0, dt)) * 7.0)
         self._pointer_tilt_x += (
-            self._pointer_target_x - self._pointer_tilt_x) * pointer_lerp
+            self._pointer_target_x - self._pointer_tilt_x
+        ) * pointer_lerp
         self._pointer_tilt_y += (
-            self._pointer_target_y - self._pointer_tilt_y) * pointer_lerp
+            self._pointer_target_y - self._pointer_tilt_y
+        ) * pointer_lerp
         # Integrated, not derived from absolute time: multiplying wall-clock by
         # a rate that changes with state jumps the rings the instant JARVIS
         # starts talking. Same lesson the head's sway taught.
         self._core_phase += min(0.10, max(0.0, dt))
         self._orb_rot += min(0.10, max(0.0, dt)) * (
-            0.30 + (0.9 if self.state in ("THINKING", "PROCESSING") else 0.0)
-            + (0.7 if self.speaking else 0.0))
+            0.30
+            + (0.9 if self.state in ("THINKING", "PROCESSING") else 0.0)
+            + (0.7 if self.speaking else 0.0)
+        )
 
         if self._avatar is not None and self.hud_style == "face":
-            self._avatar.step(dt, amp, speaking=self.speaking,
-                              muted=self.muted, state=self.state,
-                              v_open=v_open, v_wide=v_wide or 0.0,
-                              v_level=v_level, v_seq=v_seq,
-                              v_hop=(sched[2] if sched is not None else 0.02))
+            self._avatar.step(
+                dt,
+                amp,
+                speaking=self.speaking,
+                muted=self.muted,
+                state=self.state,
+                v_open=v_open,
+                v_wide=v_wide or 0.0,
+                v_level=v_level,
+                v_seq=v_seq,
+                v_hop=(sched[2] if sched is not None else 0.02),
+            )
         else:
             # Fallback core: slow "breathing" base target, lifted by the level.
             if now - self._last_t > (0.12 if self.speaking else 0.5):
                 if self.speaking:
                     self._base_scale = 1.03
-                    self._base_halo  = 122.0
+                    self._base_halo = 122.0
                 elif self.muted:
                     self._base_scale = random.uniform(0.998, 1.002)
-                    self._base_halo  = random.uniform(15, 28)
+                    self._base_halo = random.uniform(15, 28)
                 else:
                     self._base_scale = random.uniform(1.001, 1.008)
-                    self._base_halo  = random.uniform(48, 68)
+                    self._base_halo = random.uniform(48, 68)
                 self._last_t = now
 
             if self.muted:
                 self._tgt_scale, self._tgt_halo = self._base_scale, self._base_halo
             elif self.speaking:
                 self._tgt_scale = self._base_scale + amp * 0.13
-                self._tgt_halo  = self._base_halo  + amp * 95.0
+                self._tgt_halo = self._base_halo + amp * 95.0
             else:
                 self._tgt_scale = self._base_scale + amp * 0.06
-                self._tgt_halo  = self._base_halo  + amp * 75.0
+                self._tgt_halo = self._base_halo + amp * 75.0
 
             sp = 0.38 if self.speaking else (0.30 if amp > 0.02 else 0.15)
             self._scale += (self._tgt_scale - self._scale) * sp
-            self._halo  += (self._tgt_halo  - self._halo)  * sp
+            self._halo += (self._tgt_halo - self._halo) * sp
 
         self._blink_tick += 1
         if self._blink_tick >= 38:
@@ -830,10 +998,15 @@ class HudCanvas(QWidget):
             abs(self._pointer_target_x - self._pointer_tilt_x) > 0.003
             or abs(self._pointer_target_y - self._pointer_tilt_y) > 0.003
         )
-        active = (self.speaking or amp > 0.02 or pointer_active
-                  or self.state in ("THINKING", "PROCESSING"))
-        if _blinked or (self._paint_tick % 2 == 0 if active
-                        else self._paint_tick % 3 == 0):
+        active = (
+            self.speaking
+            or amp > 0.02
+            or pointer_active
+            or self.state in ("THINKING", "PROCESSING")
+        )
+        if _blinked or (
+            self._paint_tick % 2 == 0 if active else self._paint_tick % 3 == 0
+        ):
             # Nothing is on screen when the window is hidden or minimised, so
             # rendering the avatar into it is pure waste — and this app is meant
             # to sit running all day. The animation state above keeps stepping,
@@ -849,7 +1022,7 @@ class HudCanvas(QWidget):
             win = self.window()
             return not (win.isMinimized() or win.isHidden())
         except Exception:
-            return True      # never let a visibility check stop the HUD drawing
+            return True  # never let a visibility check stop the HUD drawing
 
     # ── reactor core ─────────────────────────────────────────────────────────
     # The centrepiece for anyone who did not want a face looking back at them.
@@ -866,8 +1039,15 @@ class HudCanvas(QWidget):
             return qcol(C.PRI), qcol(C.ACC2)
         return qcol(C.PRI), qcol(C.WHITE)
 
-    def _paint_core(self, p: QPainter, cx: float, cy: float, r: float,
-                    W: float = 0.0, H: float = 0.0):
+    def _paint_core(
+        self,
+        p: QPainter,
+        cx: float,
+        cy: float,
+        r: float,
+        W: float = 0.0,
+        H: float = 0.0,
+    ):
         """Draw the reactor at (cx, cy) with outer radius r, using the whole
         canvas (W x H) for the marks that frame it."""
         main, acc = self._core_colours()
@@ -881,9 +1061,11 @@ class HudCanvas(QWidget):
             The raster engine's opaque path is several times faster than its
             translucent one, and everything here is a line or an arc."""
             k = max(0.0, min(1.0, a))
-            return QColor(int(bg.red()   + (col.red()   - bg.red())   * k),
-                          int(bg.green() + (col.green() - bg.green()) * k),
-                          int(bg.blue()  + (col.blue()  - bg.blue())  * k))
+            return QColor(
+                int(bg.red() + (col.red() - bg.red()) * k),
+                int(bg.green() + (col.green() - bg.green()) * k),
+                int(bg.blue() + (col.blue() - bg.blue()) * k),
+            )
 
         p.setBrush(Qt.BrushStyle.NoBrush)
 
@@ -945,11 +1127,23 @@ class HudCanvas(QWidget):
             a = math.radians(i * 5.0)
             ca, sa = math.cos(a), math.sin(a)
             if i % 3 == 0:
-                major.append(QLineF(cx + ca * r * 0.885, cy + sa * r * 0.885,
-                                    cx + ca * r * 0.985, cy + sa * r * 0.985))
+                major.append(
+                    QLineF(
+                        cx + ca * r * 0.885,
+                        cy + sa * r * 0.885,
+                        cx + ca * r * 0.985,
+                        cy + sa * r * 0.985,
+                    )
+                )
             else:
-                minor.append(QLineF(cx + ca * r * 0.945, cy + sa * r * 0.945,
-                                    cx + ca * r * 0.985, cy + sa * r * 0.985))
+                minor.append(
+                    QLineF(
+                        cx + ca * r * 0.945,
+                        cy + sa * r * 0.945,
+                        cx + ca * r * 0.985,
+                        cy + sa * r * 0.985,
+                    )
+                )
         p.setPen(QPen(blend(main, 0.42), 1.3))
         p.drawLines(major)
         p.setPen(QPen(blend(main, 0.18), 1))
@@ -958,21 +1152,26 @@ class HudCanvas(QWidget):
         # 6. Sweeping arcs. Long spans, not dashes — the original's grandeur
         #    came from a few big strokes. Speed is the state: idle drifts,
         #    thinking hurries, speaking runs.
-        rate = 1.0 + (1.9 if self.state in ("THINKING", "PROCESSING") else 0.0) \
-                   + (1.2 if self.speaking else 0.0)
-        for k, (rr, span, count, dirn, col, a, wid) in enumerate((
-                (0.955, 118, 2, +1, acc,  0.75, 2.0),
-                (0.845, 82,  3, -1, main, 0.38, 1.3),
-                (0.760, 150, 1, +1, acc,  0.45, 1.6),
-                (0.660, 64,  4, -1, main, 0.26, 1.1),
-                (0.545, 128, 2, +1, main, 0.30, 1.2))):
+        rate = (
+            1.0
+            + (1.9 if self.state in ("THINKING", "PROCESSING") else 0.0)
+            + (1.2 if self.speaking else 0.0)
+        )
+        for k, (rr, span, count, dirn, col, a, wid) in enumerate(
+            (
+                (0.955, 118, 2, +1, acc, 0.75, 2.0),
+                (0.845, 82, 3, -1, main, 0.38, 1.3),
+                (0.760, 150, 1, +1, acc, 0.45, 1.6),
+                (0.660, 64, 4, -1, main, 0.26, 1.1),
+                (0.545, 128, 2, +1, main, 0.30, 1.2),
+            )
+        ):
             rad = r * rr
             p.setPen(QPen(blend(col, a), wid))
             box = QRectF(cx - rad, cy - rad, rad * 2, rad * 2)
             base = (t * rate * (9 + k * 6) * dirn) % 360.0
             for sgm in range(count):
-                p.drawArc(box, int((base + sgm * (360.0 / count)) * 16),
-                          int(span * 16))
+                p.drawArc(box, int((base + sgm * (360.0 / count)) * 16), int(span * 16))
 
         # 7. The voice, as a ring of graduations that grow with it. Kept out at
         #    a wide radius so it never crowds the middle.
@@ -985,8 +1184,14 @@ class HudCanvas(QWidget):
             wob = 0.5 + 0.5 * math.sin(t * 2.3 + i * 0.42)
             idle = 0.018 + 0.012 * math.sin(t * 1.2 + i * 0.7)
             h = r * (idle + (amp * 0.20 * wob if live else 0.0))
-            spikes.append(QLineF(cx + ca * ring, cy + sa * ring,
-                                 cx + ca * (ring + h), cy + sa * (ring + h)))
+            spikes.append(
+                QLineF(
+                    cx + ca * ring,
+                    cy + sa * ring,
+                    cx + ca * (ring + h),
+                    cy + sa * (ring + h),
+                )
+            )
         p.setPen(QPen(blend(acc if live else main, 0.25 + 0.5 * amp), 1.6))
         p.drawLines(spikes)
 
@@ -1002,14 +1207,18 @@ class HudCanvas(QWidget):
         name = self._assistant_name or ""
         if name:
             space = max(1.0, r * 0.018)
-            fsz = max(8, int(min(r * 0.105,
-                                 (inner * 1.75) / max(1, len(name)) * 1.6 - space)))
+            fsz = max(
+                8, int(min(r * 0.105, (inner * 1.75) / max(1, len(name)) * 1.6 - space))
+            )
             f = QFont(FONT_MONO, fsz, QFont.Weight.Bold)
             f.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, space)
             p.setFont(f)
             p.setPen(QPen(blend(qcol(C.WHITE), 0.6 + 0.4 * min(1.0, amp * 2)), 1))
-            p.drawText(QRectF(cx - r, cy - fsz, r * 2, fsz * 2),
-                       Qt.AlignmentFlag.AlignCenter, name)
+            p.drawText(
+                QRectF(cx - r, cy - fsz, r * 2, fsz * 2),
+                Qt.AlignmentFlag.AlignCenter,
+                name,
+            )
 
     @staticmethod
     def _make_orb_points(n: int = 320):
@@ -1020,17 +1229,24 @@ class HudCanvas(QWidget):
             rr = math.sqrt(max(0.0, 1.0 - y * y))
             th = golden * i
             pts.append((math.cos(th) * rr, y, math.sin(th) * rr))
-        limit = 0.27 ** 2
+        limit = 0.27**2
         edges = []
         for i, (xi, yi, zi) in enumerate(pts):
             for j in range(i + 1, n):
                 xj, yj, zj = pts[j]
-                if (xi-xj)**2 + (yi-yj)**2 + (zi-zj)**2 < limit:
+                if (xi - xj) ** 2 + (yi - yj) ** 2 + (zi - zj) ** 2 < limit:
                     edges.append((i, j))
         return pts, edges
 
-    def _paint_orb3d(self, p: QPainter, cx: float, cy: float, r: float,
-                     W: float = 0.0, H: float = 0.0):
+    def _paint_orb3d(
+        self,
+        p: QPainter,
+        cx: float,
+        cy: float,
+        r: float,
+        W: float = 0.0,
+        H: float = 0.0,
+    ):
         main, acc = self._core_colours()
         amp = 0.0 if self.muted else self._amp_disp
         t = self._core_phase
@@ -1038,10 +1254,12 @@ class HudCanvas(QWidget):
         R = r * 0.60
         glow_x = cx + self._pointer_tilt_x * r * 0.55
         glow_y = cy + self._pointer_tilt_y * r * 0.55
+
         def rgba(col, alpha):
             c = QColor(col)
             c.setAlpha(max(0, min(255, int(alpha))))
             return c
+
         p.setPen(Qt.PenStyle.NoPen)
         for gr, a0 in ((r, 46), (r * 0.62, 70)):
             grad = QRadialGradient(glow_x, glow_y, gr)
@@ -1049,56 +1267,81 @@ class HudCanvas(QWidget):
             grad.setColorAt(0.6, rgba(main, a0 * 0.25))
             grad.setColorAt(1, rgba(main, 0))
             p.setBrush(QBrush(grad))
-            p.drawEllipse(QRectF(cx-gr, cy-gr, 2*gr, 2*gr))
+            p.drawEllipse(QRectF(cx - gr, cy - gr, 2 * gr, 2 * gr))
         ay = self._orb_rot + self._pointer_tilt_x
         ax = 0.40 + 0.10 * math.sin(t * 0.35) + self._pointer_tilt_y
         cyw, syw, cxw, sxw = math.cos(ay), math.sin(ay), math.cos(ax), math.sin(ax)
         proj = []
         for (x, y, z), ph in zip(self._orb_pts, self._orb_ph):
-            k = 1 + 0.012*math.sin(t*1.4+ph) + amp*0.55*(0.5+0.5*math.sin(t*6+ph*3))
-            x, y, z = x*k, y*k, z*k
-            x1, z1 = x*cyw+z*syw, -x*syw+z*cyw
-            y1, z2 = y*cxw-z1*sxw, y*sxw+z1*cxw
-            scale = 3.2/(3.2-z2)
-            proj.append((cx+x1*R*scale, cy+y1*R*scale, z2))
+            k = (
+                1
+                + 0.012 * math.sin(t * 1.4 + ph)
+                + amp * 0.55 * (0.5 + 0.5 * math.sin(t * 6 + ph * 3))
+            )
+            x, y, z = x * k, y * k, z * k
+            x1, z1 = x * cyw + z * syw, -x * syw + z * cyw
+            y1, z2 = y * cxw - z1 * sxw, y * sxw + z1 * cxw
+            scale = 3.2 / (3.2 - z2)
+            proj.append((cx + x1 * R * scale, cy + y1 * R * scale, z2))
         layers = ([], [], [])
         for i, j in self._orb_edges:
             a, b = proj[i], proj[j]
-            z = (a[2]+b[2])*0.5
-            layers[0 if z < -0.25 else 1 if z < 0.35 else 2].append(QLineF(a[0],a[1],b[0],b[1]))
-        for lines, color, alpha, width in ((layers[0],main,28,.6),(layers[1],main,80,.8),(layers[2],acc if live else main,150+80*amp,1.1)):
-            p.setPen(QPen(rgba(color, alpha), width)); p.drawLines(lines)
+            z = (a[2] + b[2]) * 0.5
+            layers[0 if z < -0.25 else 1 if z < 0.35 else 2].append(
+                QLineF(a[0], a[1], b[0], b[1])
+            )
+        for lines, color, alpha, width in (
+            (layers[0], main, 28, 0.6),
+            (layers[1], main, 80, 0.8),
+            (layers[2], acc if live else main, 150 + 80 * amp, 1.1),
+        ):
+            p.setPen(QPen(rgba(color, alpha), width))
+            p.drawLines(lines)
         p.setPen(Qt.PenStyle.NoPen)
-        for x, y, z in sorted(proj, key=lambda q:q[2]):
-            d = max(0, min(1, (z+1.3)/2.6))
-            p.setBrush(QBrush(rgba(acc if live and z > .3 else main, 50+200*d)))
-            p.drawEllipse(QPointF(x,y), .9+2.3*d*(1+amp), .9+2.3*d*(1+amp))
+        for x, y, z in sorted(proj, key=lambda q: q[2]):
+            d = max(0, min(1, (z + 1.3) / 2.6))
+            p.setBrush(QBrush(rgba(acc if live and z > 0.3 else main, 50 + 200 * d)))
+            p.drawEllipse(
+                QPointF(x, y), 0.9 + 2.3 * d * (1 + amp), 0.9 + 2.3 * d * (1 + amp)
+            )
         for orb, tilt, speed, phase in self._sats:
-            for trail in range(5,-1,-1):
-                a = t*speed*1.6 + phase - trail*.07*(1 if speed > 0 else -1)
-                x, z = math.cos(a)*orb, math.sin(a)*orb
-                y, z = -z*math.sin(tilt), z*math.cos(tilt)
-                x1 = x*cyw*.4 + z*syw*.4 + x*.6
-                scale = 3.2/(3.2-z)
-                fade = 1-trail/6
-                p.setBrush(QBrush(rgba(acc,230*fade*fade)))
-                rad = (3.2 if trail == 0 else 2.2)*fade
-                p.drawEllipse(QPointF(cx+x1*R*scale,cy+y*R*scale),rad,rad)
+            for trail in range(5, -1, -1):
+                a = t * speed * 1.6 + phase - trail * 0.07 * (1 if speed > 0 else -1)
+                x, z = math.cos(a) * orb, math.sin(a) * orb
+                y, z = -z * math.sin(tilt), z * math.cos(tilt)
+                x1 = x * cyw * 0.4 + z * syw * 0.4 + x * 0.6
+                scale = 3.2 / (3.2 - z)
+                fade = 1 - trail / 6
+                p.setBrush(QBrush(rgba(acc, 230 * fade * fade)))
+                rad = (3.2 if trail == 0 else 2.2) * fade
+                p.drawEllipse(
+                    QPointF(cx + x1 * R * scale, cy + y * R * scale), rad, rad
+                )
         name = self._assistant_name or ""
         if name:
-            fsz = max(8,int(r*.075)); font = QFont(FONT_MONO,fsz,QFont.Weight.Bold)
-            font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing,max(1.0,r*.02))
-            p.setFont(font); p.setPen(QPen(rgba(C.WHITE,150+100*min(1,amp*2)),1))
-            p.drawText(QRectF(cx-r,cy+R*1.28,2*r,fsz*2),Qt.AlignmentFlag.AlignCenter,name)
+            fsz = max(8, int(r * 0.075))
+            font = QFont(FONT_MONO, fsz, QFont.Weight.Bold)
+            font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, max(1.0, r * 0.02))
+            p.setFont(font)
+            p.setPen(QPen(rgba(C.WHITE, 150 + 100 * min(1, amp * 2)), 1))
+            p.drawText(
+                QRectF(cx - r, cy + R * 1.28, 2 * r, fsz * 2),
+                Qt.AlignmentFlag.AlignCenter,
+                name,
+            )
         p.setBrush(Qt.BrushStyle.NoBrush)
 
     def paintEvent(self, _):
         p = QPainter(self)
-        if not p.isActive():      # device not ready (e.g. 0-size during layout) — skip cleanly
+        if (
+            not p.isActive()
+        ):  # device not ready (e.g. 0-size during layout) — skip cleanly
             return
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         _card = QPainterPath()
-        _card.addRoundedRect(QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5), R_L, R_L)
+        _card.addRoundedRect(
+            QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5), R_L, R_L
+        )
         p.setClipPath(_card)
         p.fillRect(self.rect(), qcol(C.PANEL))
 
@@ -1172,8 +1415,11 @@ class HudCanvas(QWidget):
         p.drawEllipse(QPointF(dot_x, dot_y), 3.2, 3.2)
         p.setPen(QPen(col, 1))
         p.setFont(status_font)
-        p.drawText(QRectF(dot_x + 11, chip.top(), chip_w - 31, chip.height()),
-                   Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, txt)
+        p.drawText(
+            QRectF(dot_x + 11, chip.top(), chip_w - 31, chip.height()),
+            Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
+            txt,
+        )
 
         # waveform — reacts to the real audio level (mic while listening,
         # JARVIS's own voice while speaking). Falls back to a gentle idle
@@ -1187,10 +1433,10 @@ class HudCanvas(QWidget):
             if self.muted:
                 hgt, cl = 2, qcol(C.MUTED_C)
             else:
-                env     = (1.0 - abs(i - mid) / mid) ** 0.7      # center-weighted hump
+                env = (1.0 - abs(i - mid) / mid) ** 0.7  # center-weighted hump
                 shimmer = 0.55 + 0.45 * math.sin(self._tick * 0.18 + i * 0.7)
-                idle    = 3.0 + 2.0 * math.sin(self._tick * 0.09 + i * 0.6)
-                hgt     = int(max(2, min(24, idle + amp * 22.0 * env * shimmer)))
+                idle = 3.0 + 2.0 * math.sin(self._tick * 0.09 + i * 0.6)
+                hgt = int(max(2, min(24, idle + amp * 22.0 * env * shimmer)))
                 if amp > 0.05:
                     cl = qcol(C.PRI) if hgt > 12 else qcol(C.PRI_DIM)
                 else:
@@ -1201,7 +1447,8 @@ class HudCanvas(QWidget):
         p.setPen(QPen(QColor(170, 220, 255, 46), 1))
         p.setBrush(Qt.BrushStyle.NoBrush)
         p.drawRoundedRect(QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5), R_L, R_L)
-        p.end()   # end deterministically so the backing store never flushes an active painter
+        p.end()  # end deterministically so the backing store never flushes an active painter
+
 
 class MetricGauge(QWidget):
 
@@ -1257,8 +1504,9 @@ class MetricGauge(QWidget):
         p.drawEllipse(outer)
 
         p.setBrush(Qt.BrushStyle.NoBrush)
-        p.setPen(QPen(qcol(C.BORDER_B), 6, Qt.PenStyle.SolidLine,
-                      Qt.PenCapStyle.RoundCap))
+        p.setPen(
+            QPen(qcol(C.BORDER_B), 6, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
+        )
         p.drawArc(ring, 90 * 16, -360 * 16)
 
         for tick in range(24):
@@ -1266,25 +1514,30 @@ class MetricGauge(QWidget):
             major = tick % 6 == 0
             start_r = 36.5 if major else 37.5
             end_r = 39.2
-            p.setPen(QPen(
-                qcol(self._color, 155 if major else 72),
-                1.4 if major else 1,
-            ))
+            p.setPen(
+                QPen(
+                    qcol(self._color, 155 if major else 72),
+                    1.4 if major else 1,
+                )
+            )
             p.drawLine(
-                QPointF(cx + start_r * math.cos(angle),
-                        cy + start_r * math.sin(angle)),
-                QPointF(cx + end_r * math.cos(angle),
-                        cy + end_r * math.sin(angle)),
+                QPointF(cx + start_r * math.cos(angle), cy + start_r * math.sin(angle)),
+                QPointF(cx + end_r * math.cos(angle), cy + end_r * math.sin(angle)),
             )
 
         progress = max(0.0, min(100.0, self._display_value))
         if progress > 0:
             span = -round(360 * progress * 16 / 100)
-            p.setPen(QPen(qcol(self._color, 34), 11, Qt.PenStyle.SolidLine,
-                          Qt.PenCapStyle.RoundCap))
+            p.setPen(
+                QPen(
+                    qcol(self._color, 34),
+                    11,
+                    Qt.PenStyle.SolidLine,
+                    Qt.PenCapStyle.RoundCap,
+                )
+            )
             p.drawArc(ring, 90 * 16, span)
-            p.setPen(QPen(bar_col, 6, Qt.PenStyle.SolidLine,
-                          Qt.PenCapStyle.RoundCap))
+            p.setPen(QPen(bar_col, 6, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
             p.drawArc(ring, 90 * 16, span)
 
             angle = math.radians(90 - 360 * progress / 100)
@@ -1296,28 +1549,39 @@ class MetricGauge(QWidget):
 
         p.setPen(QPen(qcol(C.TEXT_DIM), 1))
         p.setFont(QFont(FONT_MONO, 7, QFont.Weight.Bold))
-        p.drawText(QRectF(5, cy - 13, W - 10, 11),
-                   Qt.AlignmentFlag.AlignCenter, self._label.upper())
+        p.drawText(
+            QRectF(5, cy - 13, W - 10, 11),
+            Qt.AlignmentFlag.AlignCenter,
+            self._label.upper(),
+        )
 
         value_size = 11 if len(self._text) <= 5 else 8
         value_font = QFont(FONT_MONO, value_size, QFont.Weight.Bold)
-        while value_size > 7 and QFontMetricsF(value_font).horizontalAdvance(
-                self._text) > W - 16:
+        while (
+            value_size > 7
+            and QFontMetricsF(value_font).horizontalAdvance(self._text) > W - 16
+        ):
             value_size -= 1
             value_font.setPointSize(value_size)
         p.setFont(value_font)
         p.setPen(QPen(bar_col if self._text != "--" else qcol(C.TEXT_DIM), 1))
-        p.drawText(QRectF(5, cy - 2, W - 10, 16),
-                   Qt.AlignmentFlag.AlignCenter, self._text)
+        p.drawText(
+            QRectF(5, cy - 2, W - 10, 16), Qt.AlignmentFlag.AlignCenter, self._text
+        )
 
         detail_font = QFont(FONT_MONO, 6)
-        while QFontMetricsF(detail_font).horizontalAdvance(
-                self._detail) > W - 16 and detail_font.pointSize() > 5:
+        while (
+            QFontMetricsF(detail_font).horizontalAdvance(self._detail) > W - 16
+            and detail_font.pointSize() > 5
+        ):
             detail_font.setPointSize(detail_font.pointSize() - 1)
         p.setFont(detail_font)
         p.setPen(QPen(qcol(C.TEXT_DIM), 1))
-        p.drawText(QRectF(5, cy + 14, W - 10, 9),
-                   Qt.AlignmentFlag.AlignCenter, self._detail.upper())
+        p.drawText(
+            QRectF(5, cy + 14, W - 10, 9),
+            Qt.AlignmentFlag.AlignCenter,
+            self._detail.upper(),
+        )
 
         p.end()
 
@@ -1330,8 +1594,7 @@ class MetricTrendChart(QWidget):
         self._memory_label = memory_label
         self._samples: list[tuple[float, float]] = []
         self.setMinimumHeight(100)
-        self.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
     def set_values(self, cpu: float, memory: float):
         sample = (
@@ -1355,9 +1618,11 @@ class MetricTrendChart(QWidget):
 
         p.setFont(QFont(FONT_MONO, 7, QFont.Weight.Bold))
         p.setPen(QPen(qcol(C.TEXT_MED), 1))
-        p.drawText(QRectF(10, 7, max(50, W - 130), 14),
-                   Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-                   self._title)
+        p.drawText(
+            QRectF(10, 7, max(50, W - 130), 14),
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+            self._title,
+        )
 
         legend_x = W - 104
         for color, label in ((C.GREEN, "CPU"), (C.ACC2, self._memory_label)):
@@ -1366,9 +1631,11 @@ class MetricTrendChart(QWidget):
             p.drawEllipse(QPointF(legend_x, 14), 2.5, 2.5)
             p.setFont(QFont(FONT_MONO, 6, QFont.Weight.Bold))
             p.setPen(QPen(qcol(C.TEXT_DIM), 1))
-            p.drawText(QRectF(legend_x + 5, 7, 31, 14),
-                       Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-                       label)
+            p.drawText(
+                QRectF(legend_x + 5, 7, 31, 14),
+                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                label,
+            )
             legend_x += 43
 
         plot = QRectF(31, 29, W - 42, H - 50)
@@ -1376,21 +1643,27 @@ class MetricTrendChart(QWidget):
         p.setPen(QPen(qcol(C.TEXT_DIM), 1))
         for value in (100, 50, 0):
             y = plot.bottom() - plot.height() * value / 100
-            p.drawText(QRectF(5, y - 5, 21, 10),
-                       Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
-                       str(value))
+            p.drawText(
+                QRectF(5, y - 5, 21, 10),
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+                str(value),
+            )
             p.setPen(QPen(qcol(C.BORDER, 170), 1, Qt.PenStyle.DashLine))
             p.drawLine(QPointF(plot.left(), y), QPointF(plot.right(), y))
         for division in range(1, 6):
             x = plot.left() + plot.width() * division / 6
             p.drawLine(QPointF(x, plot.top()), QPointF(x, plot.bottom()))
         p.setPen(QPen(qcol(C.TEXT_DIM), 1))
-        p.drawText(QRectF(plot.left(), H - 16, 36, 10),
-                   Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-                   "-60s")
-        p.drawText(QRectF(plot.right() - 30, H - 16, 30, 10),
-                   Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
-                   "NOW")
+        p.drawText(
+            QRectF(plot.left(), H - 16, 36, 10),
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+            "-60s",
+        )
+        p.drawText(
+            QRectF(plot.right() - 30, H - 16, 30, 10),
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+            "NOW",
+        )
 
         if len(self._samples) < 2:
             p.setFont(QFont(FONT_MONO, 6))
@@ -1412,8 +1685,9 @@ class MetricTrendChart(QWidget):
                 line.lineTo(point)
 
             p.setBrush(Qt.BrushStyle.NoBrush)
-            p.setPen(QPen(qcol(color, 42), 5, Qt.PenStyle.SolidLine,
-                          Qt.PenCapStyle.RoundCap))
+            p.setPen(
+                QPen(qcol(color, 42), 5, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
+            )
             p.drawPath(line)
             p.setPen(QPen(qcol(color, 215), 1.6))
             p.drawPath(line)
@@ -1422,6 +1696,8 @@ class MetricTrendChart(QWidget):
             p.drawEllipse(points[-1], 2.2, 2.2)
 
         p.end()
+
+
 class LogWidget(QTextEdit):
     _sig = pyqtSignal(str)
     _console_sig = pyqtSignal(str)
@@ -1455,11 +1731,11 @@ class LogWidget(QTextEdit):
             }}
         """)
         self._queue: list[str] = []
-        self._typing  = False
-        self._text    = ""
-        self._pos     = 0
-        self._tag     = "sys"
-        self._ai_name_lc = "jarvis"   # updated when assistant name changes
+        self._typing = False
+        self._text = ""
+        self._pos = 0
+        self._tag = "sys"
+        self._ai_name_lc = "jarvis"  # updated when assistant name changes
         self._tmr = QTimer(self)
         self._tmr.timeout.connect(self._step)
         self._sig.connect(self._enqueue)
@@ -1475,7 +1751,9 @@ class LogWidget(QTextEdit):
         cur = self.textCursor()
         cur.movePosition(cur.MoveOperation.End)
         fmt = cur.charFormat()
-        fmt.setForeground(QBrush(qcol(C.RED if text.startswith("[stderr]") else C.TEXT_MED)))
+        fmt.setForeground(
+            QBrush(qcol(C.RED if text.startswith("[stderr]") else C.TEXT_MED))
+        )
         cur.insertText(text.rstrip("\r\n") + "\n", fmt)
         self.setTextCursor(cur)
         self.ensureCursorVisible()
@@ -1490,33 +1768,38 @@ class LogWidget(QTextEdit):
             self._typing = False
             return
         self._typing = True
-        self._text   = self._queue.pop(0)
-        self._pos    = 0
+        self._text = self._queue.pop(0)
+        self._pos = 0
         tl = self._text.lower()
         _ai_pfx = f"{self._ai_name_lc}:"
-        if   tl.startswith("you:"):                              self._tag = "you"
-        elif tl.startswith(_ai_pfx) or tl.startswith("jarvis:"): self._tag = "ai"
-        elif tl.startswith("file:"):                             self._tag = "file"
-        elif "err" in tl:                                        self._tag = "err"
-        else:                                                    self._tag = "sys"
+        if tl.startswith("you:"):
+            self._tag = "you"
+        elif tl.startswith(_ai_pfx) or tl.startswith("jarvis:"):
+            self._tag = "ai"
+        elif tl.startswith("file:"):
+            self._tag = "file"
+        elif "err" in tl:
+            self._tag = "err"
+        else:
+            self._tag = "sys"
         self._tmr.start(6)
 
     def _step(self):
         if self._pos < len(self._text):
-            ch  = self._text[self._pos]
+            ch = self._text[self._pos]
             cur = self.textCursor()
             fmt = cur.charFormat()
             col = {
-                "you":  qcol(C.WHITE),
-                "ai":   qcol(C.PRI),
-                "err":  qcol(C.RED),
+                "you": qcol(C.WHITE),
+                "ai": qcol(C.PRI),
+                "err": qcol(C.RED),
                 "file": qcol(C.GREEN),
                 # SYS lines are the bulk of the log. Amber fought the cyan HUD
                 # and, being a fixed status colour rather than a hue-linked one,
                 # stayed amber even after the accent picker retinted everything
                 # else. TEXT_MED follows the theme and drops the contrast to a
                 # level you can read past.
-                "sys":  qcol(C.TEXT_MED),
+                "sys": qcol(C.TEXT_MED),
             }.get(self._tag, qcol(C.TEXT))
             fmt.setForeground(QBrush(col))
             cur.movePosition(cur.MoveOperation.End)
@@ -1533,37 +1816,77 @@ class LogWidget(QTextEdit):
             self.ensureCursorVisible()
             QTimer.singleShot(20, self._next)
 
+
 _FILE_ICONS = {
-    "image":   ("🖼", "#00d4ff"), "video":   ("🎬", "#ff6b00"),
-    "audio":   ("🎵", "#cc44ff"), "pdf":     ("📄", "#ff4444"),
-    "word":    ("📝", "#4488ff"), "excel":   ("📊", "#44bb44"),
-    "code":    ("💻", "#ffcc00"), "archive": ("📦", "#ff8844"),
-    "pptx":    ("📊", "#ff6622"), "text":    ("📃", "#aaaaaa"),
-    "data":    ("🔧", "#88ddff"), "unknown": ("📎", "#888888"),
+    "image": ("🖼", "#00d4ff"),
+    "video": ("🎬", "#ff6b00"),
+    "audio": ("🎵", "#cc44ff"),
+    "pdf": ("📄", "#ff4444"),
+    "word": ("📝", "#4488ff"),
+    "excel": ("📊", "#44bb44"),
+    "code": ("💻", "#ffcc00"),
+    "archive": ("📦", "#ff8844"),
+    "pptx": ("📊", "#ff6622"),
+    "text": ("📃", "#aaaaaa"),
+    "data": ("🔧", "#88ddff"),
+    "unknown": ("📎", "#888888"),
 }
 _EXT_TO_CAT = {
-    **dict.fromkeys(["jpg","jpeg","png","gif","webp","bmp","tiff","svg","ico"], "image"),
-    **dict.fromkeys(["mp4","avi","mov","mkv","wmv","flv","webm","m4v"],         "video"),
-    **dict.fromkeys(["mp3","wav","ogg","m4a","aac","flac","wma","opus"],        "audio"),
-    **dict.fromkeys(["pdf"],                                                     "pdf"),
-    **dict.fromkeys(["doc","docx"],                                              "word"),
-    **dict.fromkeys(["xls","xlsx","ods"],                                        "excel"),
-    **dict.fromkeys(["ppt","pptx"],                                              "pptx"),
-    **dict.fromkeys(["py","js","ts","jsx","tsx","html","css","java","c","cpp",
-                     "cs","go","rs","rb","php","swift","kt","sh","sql","lua"],   "code"),
-    **dict.fromkeys(["zip","rar","tar","gz","7z","bz2","xz"],                   "archive"),
-    **dict.fromkeys(["txt","md","rst","log"],                                    "text"),
-    **dict.fromkeys(["csv","tsv","json","xml"],                                  "data"),
+    **dict.fromkeys(
+        ["jpg", "jpeg", "png", "gif", "webp", "bmp", "tiff", "svg", "ico"], "image"
+    ),
+    **dict.fromkeys(["mp4", "avi", "mov", "mkv", "wmv", "flv", "webm", "m4v"], "video"),
+    **dict.fromkeys(
+        ["mp3", "wav", "ogg", "m4a", "aac", "flac", "wma", "opus"], "audio"
+    ),
+    **dict.fromkeys(["pdf"], "pdf"),
+    **dict.fromkeys(["doc", "docx"], "word"),
+    **dict.fromkeys(["xls", "xlsx", "ods"], "excel"),
+    **dict.fromkeys(["ppt", "pptx"], "pptx"),
+    **dict.fromkeys(
+        [
+            "py",
+            "js",
+            "ts",
+            "jsx",
+            "tsx",
+            "html",
+            "css",
+            "java",
+            "c",
+            "cpp",
+            "cs",
+            "go",
+            "rs",
+            "rb",
+            "php",
+            "swift",
+            "kt",
+            "sh",
+            "sql",
+            "lua",
+        ],
+        "code",
+    ),
+    **dict.fromkeys(["zip", "rar", "tar", "gz", "7z", "bz2", "xz"], "archive"),
+    **dict.fromkeys(["txt", "md", "rst", "log"], "text"),
+    **dict.fromkeys(["csv", "tsv", "json", "xml"], "data"),
 }
+
 
 def _file_category(path: Path) -> str:
     return _EXT_TO_CAT.get(path.suffix.lower().lstrip("."), "unknown")
 
+
 def _fmt_size(size: int) -> str:
-    if   size < 1024:    return f"{size} B"
-    elif size < 1024**2: return f"{size/1024:.1f} KB"
-    elif size < 1024**3: return f"{size/1024**2:.1f} MB"
-    else:                return f"{size/1024**3:.1f} GB"
+    if size < 1024:
+        return f"{size} B"
+    elif size < 1024**2:
+        return f"{size/1024:.1f} KB"
+    elif size < 1024**3:
+        return f"{size/1024**2:.1f} MB"
+    else:
+        return f"{size/1024**3:.1f} GB"
 
 
 class FileDropZone(QWidget):
@@ -1575,7 +1898,7 @@ class FileDropZone(QWidget):
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFixedHeight(100)
         self._current_file: str | None = None
-        self._hovering  = False
+        self._hovering = False
         self._drag_over = False
         self._dash_offset = 0.0
         self._anim_tmr = QTimer(self)
@@ -1600,10 +1923,12 @@ class FileDropZone(QWidget):
     def dragEnterEvent(self, e: QDragEnterEvent):
         if e.mimeData().hasUrls():
             e.acceptProposedAction()
-            self._drag_over = True; self._canvas.update()
+            self._drag_over = True
+            self._canvas.update()
 
     def dragLeaveEvent(self, e):
-        self._drag_over = False; self._canvas.update()
+        self._drag_over = False
+        self._canvas.update()
 
     def dropEvent(self, e: QDropEvent):
         self._drag_over = False
@@ -1619,20 +1944,25 @@ class FileDropZone(QWidget):
             self._browse()
 
     def enterEvent(self, e):
-        self._hovering = True; self._canvas.update()
+        self._hovering = True
+        self._canvas.update()
 
     def leaveEvent(self, e):
-        self._hovering = False; self._canvas.update()
+        self._hovering = False
+        self._canvas.update()
 
     def current_file(self) -> str | None:
         return self._current_file
 
     def clear_file(self):
-        self._current_file = None; self._canvas.update()
+        self._current_file = None
+        self._canvas.update()
 
     def _browse(self):
         path, _ = QFileDialog.getOpenFileName(
-            self, "Select a file for JARVIS", str(Path.home()),
+            self,
+            "Select a file for JARVIS",
+            str(Path.home()),
             "All Files (*.*);;"
             "Images (*.jpg *.jpeg *.png *.gif *.webp *.bmp *.svg);;"
             "Documents (*.pdf *.docx *.txt *.md *.pptx);;"
@@ -1653,6 +1983,7 @@ class FileDropZone(QWidget):
 
 class ChatInput(QLineEdit):
     """Command field that accepts dropped files and pasted screenshots."""
+
     file_dropped = pyqtSignal(str)
     image_pasted = pyqtSignal(bytes)
     image_paste_failed = pyqtSignal(str)
@@ -1668,26 +1999,30 @@ class ChatInput(QLineEdit):
                 image = clipboard.image()
                 if image.isNull():
                     self.image_paste_failed.emit(
-                        "The clipboard contains an unreadable image.")
+                        "The clipboard contains an unreadable image."
+                    )
                     event.accept()
                     return
                 if image.width() > 1280 or image.height() > 720:
                     image = image.scaled(
-                        QSize(1280, 720), Qt.AspectRatioMode.KeepAspectRatio,
+                        QSize(1280, 720),
+                        Qt.AspectRatioMode.KeepAspectRatio,
                         Qt.TransformationMode.SmoothTransformation,
                     )
                 data = QByteArray()
                 buffer = QBuffer(data)
                 if not buffer.open(QIODevice.OpenModeFlag.WriteOnly):
                     self.image_paste_failed.emit(
-                        "Could not prepare the clipboard image.")
+                        "Could not prepare the clipboard image."
+                    )
                     event.accept()
                     return
                 saved = image.save(buffer, "JPEG", 82)
                 buffer.close()
                 if not saved:
                     self.image_paste_failed.emit(
-                        "Could not encode the clipboard image.")
+                        "Could not encode the clipboard image."
+                    )
                 else:
                     self.image_pasted.emit(bytes(data))
                 event.accept()
@@ -1695,7 +2030,9 @@ class ChatInput(QLineEdit):
         super().keyPressEvent(event)
 
     def dragEnterEvent(self, event: QDragEnterEvent):
-        if event.mimeData().hasUrls() and any(u.isLocalFile() for u in event.mimeData().urls()):
+        if event.mimeData().hasUrls() and any(
+            u.isLocalFile() for u in event.mimeData().urls()
+        ):
             event.acceptProposedAction()
             self.setProperty("draggingFile", True)
             self.style().unpolish(self)
@@ -1713,8 +2050,11 @@ class ChatInput(QLineEdit):
         self.setProperty("draggingFile", False)
         self.style().unpolish(self)
         self.style().polish(self)
-        paths = [u.toLocalFile() for u in event.mimeData().urls()
-                 if u.isLocalFile() and Path(u.toLocalFile()).is_file()]
+        paths = [
+            u.toLocalFile()
+            for u in event.mimeData().urls()
+            if u.isLocalFile() and Path(u.toLocalFile()).is_file()
+        ]
         if paths:
             self.file_dropped.emit(paths[0])
             event.acceptProposedAction()
@@ -1732,47 +2072,63 @@ class _DropCanvas(QWidget):
         if not p.isActive():
             return
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        z    = self._z
+        z = self._z
         W, H = self.width(), self.height()
-        pad  = 6
+        pad = 6
         rect = QRectF(pad, pad, W - pad * 2, H - pad * 2)
 
         bg_col = qcol(C.PRI_GHO if z._drag_over else C.PANEL2)
-        p.setBrush(QBrush(bg_col)); p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QBrush(bg_col))
+        p.setPen(Qt.PenStyle.NoPen)
         p.drawRoundedRect(rect, R_S, R_S)
 
-        if z._current_file:   border_col = qcol(C.GREEN, 200)
-        elif z._drag_over:    border_col = qcol(C.PRI, 230)
-        elif z._hovering:     border_col = qcol(C.BORDER_B, 200)
-        else:                 border_col = qcol(C.BORDER, 160)
+        if z._current_file:
+            border_col = qcol(C.GREEN, 200)
+        elif z._drag_over:
+            border_col = qcol(C.PRI, 230)
+        elif z._hovering:
+            border_col = qcol(C.BORDER_B, 200)
+        else:
+            border_col = qcol(C.BORDER, 160)
 
         pen = QPen(border_col, 1.5, Qt.PenStyle.DashLine)
         pen.setDashOffset(z._dash_offset)
-        p.setPen(pen); p.setBrush(Qt.BrushStyle.NoBrush)
+        p.setPen(pen)
+        p.setBrush(Qt.BrushStyle.NoBrush)
         p.drawRoundedRect(rect, R_S, R_S)
 
-        if z._current_file:   self._paint_file(p, W, H)
-        elif z._drag_over:    self._paint_drag_over(p, W, H)
-        else:                 self._paint_idle(p, W, H, z._hovering)
+        if z._current_file:
+            self._paint_file(p, W, H)
+        elif z._drag_over:
+            self._paint_drag_over(p, W, H)
+        else:
+            self._paint_idle(p, W, H, z._hovering)
 
         p.end()
 
     def _paint_idle(self, p, W, H, hover):
         cx, cy = W / 2, H / 2
         col = qcol(C.PRI_DIM if not hover else C.PRI)
-        p.setPen(QPen(col, 2)); p.setBrush(Qt.BrushStyle.NoBrush)
+        p.setPen(QPen(col, 2))
+        p.setBrush(Qt.BrushStyle.NoBrush)
         p.drawLine(QPointF(cx, cy - 14), QPointF(cx, cy + 4))
         p.drawLine(QPointF(cx - 8, cy - 6), QPointF(cx, cy - 14))
         p.drawLine(QPointF(cx + 8, cy - 6), QPointF(cx, cy - 14))
         p.drawLine(QPointF(cx - 14, cy + 4), QPointF(cx + 14, cy + 4))
         p.setFont(QFont(FONT_MONO, 8))
         p.setPen(QPen(qcol(C.PRI_DIM if not hover else C.TEXT), 1))
-        p.drawText(QRectF(0, cy + 8, W, 16), Qt.AlignmentFlag.AlignCenter,
-                   "Drop file here  or  Click to Browse")
+        p.drawText(
+            QRectF(0, cy + 8, W, 16),
+            Qt.AlignmentFlag.AlignCenter,
+            "Drop file here  or  Click to Browse",
+        )
         p.setFont(QFont(FONT_MONO, 7))
         p.setPen(QPen(qcol("#1a4a5a"), 1))
-        p.drawText(QRectF(0, cy + 24, W, 14), Qt.AlignmentFlag.AlignCenter,
-                   "Images · Video · Audio · PDF · Docs · Code · Data")
+        p.drawText(
+            QRectF(0, cy + 24, W, 14),
+            Qt.AlignmentFlag.AlignCenter,
+            "Images · Video · Audio · PDF · Docs · Code · Data",
+        )
 
     def _paint_drag_over(self, p, W, H):
         cx, cy = W / 2, H / 2
@@ -1781,17 +2137,21 @@ class _DropCanvas(QWidget):
         p.drawText(QRectF(0, cy - 24, W, 32), Qt.AlignmentFlag.AlignCenter, "⬇")
         p.setFont(QFont(FONT_MONO, 8, QFont.Weight.Bold))
         p.setPen(QPen(qcol(C.PRI), 1))
-        p.drawText(QRectF(0, cy + 12, W, 16), Qt.AlignmentFlag.AlignCenter, "Release to load")
+        p.drawText(
+            QRectF(0, cy + 12, W, 16), Qt.AlignmentFlag.AlignCenter, "Release to load"
+        )
 
     def _paint_file(self, p, W, H):
         path = Path(self._z._current_file)
-        cat  = _file_category(path)
+        cat = _file_category(path)
         icon, icon_col = _FILE_ICONS.get(cat, _FILE_ICONS["unknown"])
         size_str = _fmt_size(path.stat().st_size)
-        ext_str  = path.suffix.upper().lstrip(".") or "FILE"
+        ext_str = path.suffix.upper().lstrip(".") or "FILE"
 
         block_x, block_w = 10, 60
-        p.setFont(QFont("Segoe UI Emoji", 22) if _OS == "Windows" else QFont("Arial", 22))
+        p.setFont(
+            QFont("Segoe UI Emoji", 22) if _OS == "Windows" else QFont("Arial", 22)
+        )
         p.setPen(QPen(qcol(icon_col), 1))
         p.drawText(QRectF(block_x, 0, block_w, H), Qt.AlignmentFlag.AlignCenter, icon)
 
@@ -1801,21 +2161,30 @@ class _DropCanvas(QWidget):
         p.setFont(QFont(FONT_MONO, 8, QFont.Weight.Bold))
         p.setPen(QPen(qcol(C.WHITE), 1))
         name = path.name if len(path.name) <= 34 else path.name[:31] + "..."
-        p.drawText(QRectF(tx, H * 0.18, tw, 16),
-                   Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, name)
+        p.drawText(
+            QRectF(tx, H * 0.18, tw, 16),
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+            name,
+        )
 
         p.setFont(QFont(FONT_MONO, 7))
         p.setPen(QPen(qcol(C.TEXT_DIM), 1))
-        p.drawText(QRectF(tx, H * 0.18 + 18, tw, 14),
-                   Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-                   f"{ext_str}  ·  {size_str}")
+        p.drawText(
+            QRectF(tx, H * 0.18 + 18, tw, 14),
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+            f"{ext_str}  ·  {size_str}",
+        )
 
         p.setFont(QFont(FONT_MONO, 6))
         p.setPen(QPen(qcol("#1e5c6a"), 1))
         par = str(path.parent)
-        if len(par) > 42: par = "…" + par[-41:]
-        p.drawText(QRectF(tx, H * 0.18 + 34, tw, 12),
-                   Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, par)
+        if len(par) > 42:
+            par = "…" + par[-41:]
+        p.drawText(
+            QRectF(tx, H * 0.18 + 34, tw, 12),
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+            par,
+        )
 
         p.setFont(QFont(FONT_MONO, 9, QFont.Weight.Bold))
         p.setPen(QPen(qcol(C.RED, 180), 1))
@@ -1884,7 +2253,8 @@ class _CameraPreview(QWidget):
         if not px.isNull():
             max_w = self._W - 12
             scaled = px.scaled(
-                max_w, 160,
+                max_w,
+                160,
                 Qt.AspectRatioMode.KeepAspectRatio,
                 Qt.TransformationMode.SmoothTransformation,
             )
@@ -1893,7 +2263,7 @@ class _CameraPreview(QWidget):
             self.adjustSize()
         self.show()
         self.raise_()
-        self._timer.start(6_000)   # auto-dismiss after 6 s
+        self._timer.start(6_000)  # auto-dismiss after 6 s
 
 
 class SetupOverlay(QWidget):
@@ -1910,30 +2280,46 @@ class SetupOverlay(QWidget):
             }}
         """)
 
-        detected = {"darwin": "mac", "windows": "windows"}.get(
-            _OS.lower(), "linux"
-        )
+        detected = {"darwin": "mac", "windows": "windows"}.get(_OS.lower(), "linux")
         self._sel_os = detected
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(30, 22, 30, 22)
         layout.setSpacing(8)
 
-        def _lbl(txt, font_size=9, bold=False, color=C.PRI,
-                 align=Qt.AlignmentFlag.AlignCenter):
+        def _lbl(
+            txt,
+            font_size=9,
+            bold=False,
+            color=C.PRI,
+            align=Qt.AlignmentFlag.AlignCenter,
+        ):
             w = QLabel(txt)
             w.setAlignment(align)
-            w.setFont(QFont(FONT_MONO, font_size,
-                            QFont.Weight.Bold if bold else QFont.Weight.Normal))
+            w.setFont(
+                QFont(
+                    FONT_MONO,
+                    font_size,
+                    QFont.Weight.Bold if bold else QFont.Weight.Normal,
+                )
+            )
             w.setStyleSheet(f"color: {color}; background: transparent;")
             return w
 
         layout.addWidget(_lbl("◈  INITIALISATION REQUIRED", 13, True))
-        layout.addWidget(_lbl("Configure J.A.R.V.I.S. before first boot.", 9, color=C.PRI_DIM))
+        layout.addWidget(
+            _lbl("Configure J.A.R.V.I.S. before first boot.", 9, color=C.PRI_DIM)
+        )
         layout.addSpacing(6)
 
-        layout.addWidget(_lbl("INTERFACE LANGUAGE", 8, color=C.TEXT_DIM,
-                              align=Qt.AlignmentFlag.AlignLeft))
+        layout.addWidget(
+            _lbl(
+                "INTERFACE LANGUAGE",
+                8,
+                color=C.TEXT_DIM,
+                align=Qt.AlignmentFlag.AlignLeft,
+            )
+        )
         self._language_combo = QComboBox()
         self._language_combo.setMinimumHeight(32)
         for code, name in LANGUAGES.items():
@@ -1941,18 +2327,29 @@ class SetupOverlay(QWidget):
         selected_language = self._language_combo.findData(language)
         self._language_combo.setCurrentIndex(max(0, selected_language))
         self._language_combo.setToolTip(
-            "Choose English, Russian, or Uzbek for JARVIS panels.")
+            "Choose English, Russian, or Uzbek for JARVIS panels."
+        )
         layout.addWidget(self._language_combo)
-        layout.addWidget(_lbl(
-            "The selected language is applied throughout JARVIS after restart.",
-            7, color=C.TEXT_DIM, align=Qt.AlignmentFlag.AlignLeft))
+        layout.addWidget(
+            _lbl(
+                "The selected language is applied throughout JARVIS after restart.",
+                7,
+                color=C.TEXT_DIM,
+                align=Qt.AlignmentFlag.AlignLeft,
+            )
+        )
 
-        sep = QFrame(); sep.setFrameShape(QFrame.Shape.HLine)
-        sep.setStyleSheet(f"color: {C.BORDER};"); layout.addWidget(sep)
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setStyleSheet(f"color: {C.BORDER};")
+        layout.addWidget(sep)
         layout.addSpacing(4)
 
-        layout.addWidget(_lbl("GEMINI API KEY", 8, color=C.TEXT_DIM,
-                               align=Qt.AlignmentFlag.AlignLeft))
+        layout.addWidget(
+            _lbl(
+                "GEMINI API KEY", 8, color=C.TEXT_DIM, align=Qt.AlignmentFlag.AlignLeft
+            )
+        )
         self._key_input = QLineEdit()
         self._key_input.setEchoMode(QLineEdit.EchoMode.Password)
         self._key_input.setPlaceholderText("AIza…")
@@ -1969,19 +2366,38 @@ class SetupOverlay(QWidget):
         layout.addWidget(self._key_input)
         layout.addSpacing(12)
 
-        sep2 = QFrame(); sep2.setFrameShape(QFrame.Shape.HLine)
-        sep2.setStyleSheet(f"color: {C.BORDER};"); layout.addWidget(sep2)
+        sep2 = QFrame()
+        sep2.setFrameShape(QFrame.Shape.HLine)
+        sep2.setStyleSheet(f"color: {C.BORDER};")
+        layout.addWidget(sep2)
         layout.addSpacing(4)
 
-        layout.addWidget(_lbl("OPERATING SYSTEM", 8, color=C.TEXT_DIM,
-                               align=Qt.AlignmentFlag.AlignLeft))
+        layout.addWidget(
+            _lbl(
+                "OPERATING SYSTEM",
+                8,
+                color=C.TEXT_DIM,
+                align=Qt.AlignmentFlag.AlignLeft,
+            )
+        )
         det_name = {"windows": "Windows", "mac": "macOS", "linux": "Linux"}[detected]
-        layout.addWidget(_lbl(f"Auto-detected: {det_name}", 8, color=C.ACC2,
-                               align=Qt.AlignmentFlag.AlignLeft))
+        layout.addWidget(
+            _lbl(
+                f"Auto-detected: {det_name}",
+                8,
+                color=C.ACC2,
+                align=Qt.AlignmentFlag.AlignLeft,
+            )
+        )
 
-        os_row = QHBoxLayout(); os_row.setSpacing(6)
+        os_row = QHBoxLayout()
+        os_row.setSpacing(6)
         self._os_btns: dict[str, QPushButton] = {}
-        for key, label in [("windows","⊞  Windows"),("mac","  macOS"),("linux","🐧  Linux")]:
+        for key, label in [
+            ("windows", "⊞  Windows"),
+            ("mac", "  macOS"),
+            ("linux", "🐧  Linux"),
+        ]:
             btn = QPushButton(label)
             btn.setFont(QFont(FONT_MONO, 9, QFont.Weight.Bold))
             btn.setFixedHeight(32)
@@ -2011,8 +2427,11 @@ class SetupOverlay(QWidget):
 
     def _sel(self, key: str):
         self._sel_os = key
-        pal = {"windows":(C.PRI,C.PRI_GHO),"mac":(C.ACC2,C.PRI_GHO),
-               "linux":(C.GREEN,C.PRI_GHO)}
+        pal = {
+            "windows": (C.PRI, C.PRI_GHO),
+            "mac": (C.ACC2, C.PRI_GHO),
+            "linux": (C.GREEN, C.PRI_GHO),
+        }
         for k, btn in self._os_btns.items():
             if k == key:
                 fg, bg = pal[k]
@@ -2035,8 +2454,8 @@ class SetupOverlay(QWidget):
         key = self._key_input.text().strip()
         if not key:
             self._key_input.setStyleSheet(
-                self._key_input.styleSheet() +
-                f" QLineEdit {{ border: 1px solid {C.RED}; }}"
+                self._key_input.styleSheet()
+                + f" QLineEdit {{ border: 1px solid {C.RED}; }}"
             )
             return
         self.done.emit(key, self._sel_os, self._language_combo.currentData())
@@ -2044,6 +2463,7 @@ class SetupOverlay(QWidget):
 
 class LanguagePickerOverlay(QWidget):
     """First-run language choice for installations that predate localization."""
+
     done = pyqtSignal(str)
 
     def __init__(self, parent=None, language: str = "en"):
@@ -2052,19 +2472,20 @@ class LanguagePickerOverlay(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(
             f"QWidget#LanguagePickerOverlay {{ background:{C.PANEL}; "
-            f"border:1px solid {C.BORDER_B}; border-radius:10px; }}")
+            f"border:1px solid {C.BORDER_B}; border-radius:10px; }}"
+        )
         layout = QVBoxLayout(self)
         layout.setContentsMargins(22, 20, 22, 20)
         layout.setSpacing(12)
-        title = QLabel(
-            "Choose your language\nВыберите язык\nTilni tanlang")
+        title = QLabel("Choose your language\nВыберите язык\nTilni tanlang")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title.setFont(QFont(FONT_MONO, 11, QFont.Weight.Bold))
         title.setStyleSheet(f"color:{C.PRI}; background:transparent;")
         layout.addWidget(title)
         hint = QLabel(
             "English · Русский · O‘zbekcha\n"
-            "The choice is saved and applied after restart.")
+            "The choice is saved and applied after restart."
+        )
         hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
         hint.setWordWrap(True)
         hint.setStyleSheet(f"color:{C.TEXT_MED}; background:transparent;")
@@ -2074,7 +2495,8 @@ class LanguagePickerOverlay(QWidget):
         for code, name in LANGUAGES.items():
             self._language_combo.addItem(name, code)
         self._language_combo.setCurrentIndex(
-            max(0, self._language_combo.findData(language)))
+            max(0, self._language_combo.findData(language))
+        )
         layout.addWidget(self._language_combo)
         button = QPushButton("Continue / Продолжить / Davom etish")
         button.setMinimumHeight(36)
@@ -2082,9 +2504,11 @@ class LanguagePickerOverlay(QWidget):
         button.setStyleSheet(
             f"QPushButton {{ color:{C.PRI}; background:{C.PANEL2}; "
             f"border:1px solid {C.PRI_DIM}; border-radius:6px; }}"
-            f"QPushButton:hover {{ background:{C.PRI_GHO}; border-color:{C.PRI}; }}")
+            f"QPushButton:hover {{ background:{C.PRI_GHO}; border-color:{C.PRI}; }}"
+        )
         button.clicked.connect(
-            lambda: self.done.emit(self._language_combo.currentData()))
+            lambda: self.done.emit(self._language_combo.currentData())
+        )
         layout.addWidget(button)
 
 
@@ -2095,16 +2519,16 @@ class HueWheel(QWidget):
     is a live preview of the selected colour.
     """
 
-    hue_picked    = pyqtSignal(str)   # while dragging (live)
-    hue_committed = pyqtSignal(str)   # when the handle is released
+    hue_picked = pyqtSignal(str)  # while dragging (live)
+    hue_committed = pyqtSignal(str)  # when the handle is released
 
-    _RING = 16   # ring thickness (px)
+    _RING = 16  # ring thickness (px)
 
     def __init__(self, initial_hex: str = DEFAULT_UI_COLOR, parent=None):
         super().__init__(parent)
         self.setFixedSize(148, 148)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._hue  = 0.53
+        self._hue = 0.53
         self._drag = False
         self.set_color(initial_hex)
 
@@ -2124,10 +2548,10 @@ class HueWheel(QWidget):
         return QRectF(self.rect()).adjusted(m, m, -m, -m)
 
     def _hue_from_pos(self, pos: QPointF) -> float:
-        c  = QRectF(self.rect()).center()
+        c = QRectF(self.rect()).center()
         dx = pos.x() - c.x()
-        dy = c.y() - pos.y()          # screen y goes down — flip to math axis
-        ang = math.atan2(dy, dx)      # [-π, π], counter-clockwise
+        dy = c.y() - pos.y()  # screen y goes down — flip to math axis
+        ang = math.atan2(dy, dx)  # [-π, π], counter-clockwise
         return (ang / (2 * math.pi)) % 1.0
 
     # ── drawing ──────────────────────────────────────────────────────────────
@@ -2136,7 +2560,7 @@ class HueWheel(QWidget):
         if not p.isActive():
             return
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        rect   = self._ring_rect()
+        rect = self._ring_rect()
         center = rect.center()
 
         grad = QConicalGradient(center, 0)
@@ -2148,16 +2572,16 @@ class HueWheel(QWidget):
 
         # centre preview circle
         preview = QColor.fromHsvF(self._hue, 1.0, 1.0)
-        inner   = rect.adjusted(30, 30, -30, -30)
+        inner = rect.adjusted(30, 30, -30, -30)
         p.setPen(QPen(qcol(C.BORDER_B), 1))
         p.setBrush(QBrush(preview))
         p.drawEllipse(inner)
 
         # draggable handle
-        r   = rect.width() / 2
+        r = rect.width() / 2
         ang = self._hue * 2 * math.pi
-        hx  = center.x() + r * math.cos(ang)
-        hy  = center.y() - r * math.sin(ang)
+        hx = center.x() + r * math.cos(ang)
+        hy = center.y() - r * math.sin(ang)
         p.setPen(QPen(QColor("#00060a"), 2))
         p.setBrush(QBrush(QColor("#ffffff")))
         p.drawEllipse(QPointF(hx, hy), 7.5, 7.5)
@@ -2166,7 +2590,7 @@ class HueWheel(QWidget):
     # ── fare ─────────────────────────────────────────────────────────────────
     def mousePressEvent(self, e):
         self._drag = True
-        self._hue  = self._hue_from_pos(e.position())
+        self._hue = self._hue_from_pos(e.position())
         self.update()
         self.hue_picked.emit(self.color())
 
@@ -2188,9 +2612,16 @@ class CustomizeOverlay(QWidget):
     saved = pyqtSignal(str, str, str, str, int)
     _OW, _OH = 400, 668
 
-    def __init__(self, assistant_name="JARVIS", user_name="",
-                 ui_color=DEFAULT_UI_COLOR, voice="", ui_opacity=100,
-                 language="en", parent=None):
+    def __init__(
+        self,
+        assistant_name="JARVIS",
+        user_name="",
+        ui_color=DEFAULT_UI_COLOR,
+        voice="",
+        ui_opacity=100,
+        language="en",
+        parent=None,
+    ):
         super().__init__(parent)
         self._language = language if language in LANGUAGES else "en"
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
@@ -2205,25 +2636,35 @@ class CustomizeOverlay(QWidget):
         lay.setContentsMargins(24, 18, 24, 18)
         lay.setSpacing(8)
 
-        def _lbl(txt, fs=9, bold=False, color=C.PRI, align=Qt.AlignmentFlag.AlignCenter):
+        def _lbl(
+            txt, fs=9, bold=False, color=C.PRI, align=Qt.AlignmentFlag.AlignCenter
+        ):
             txt = _translate(txt, self._language)
-            w = QLabel(txt); w.setAlignment(align)
-            w.setFont(QFont(FONT_MONO, fs,
-                            QFont.Weight.Bold if bold else QFont.Weight.Normal))
+            w = QLabel(txt)
+            w.setAlignment(align)
+            w.setFont(
+                QFont(FONT_MONO, fs, QFont.Weight.Bold if bold else QFont.Weight.Normal)
+            )
             w.setStyleSheet(f"color: {color}; background: transparent;")
             return w
 
-        _fs = (f"QLineEdit {{ background: {C.PANEL2}; color: {C.TEXT}; "
-               f"border: 1px solid {C.BORDER}; border-radius: 3px; padding: 4px 8px; }}"
-               f"QLineEdit:focus {{ border: 1px solid {C.PRI}; }}")
+        _fs = (
+            f"QLineEdit {{ background: {C.PANEL2}; color: {C.TEXT}; "
+            f"border: 1px solid {C.BORDER}; border-radius: 3px; padding: 4px 8px; }}"
+            f"QLineEdit:focus {{ border: 1px solid {C.PRI}; }}"
+        )
 
         lay.addWidget(_lbl("⚙  CUSTOMISE ASSISTANT", 12, True))
-        sep = QFrame(); sep.setFrameShape(QFrame.Shape.HLine)
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
         sep.setStyleSheet(f"color: {C.BORDER}; margin: 2px 0;")
         lay.addWidget(sep)
 
-        lay.addWidget(_lbl("ASSISTANT NAME", 8, color=C.TEXT_DIM,
-                            align=Qt.AlignmentFlag.AlignLeft))
+        lay.addWidget(
+            _lbl(
+                "ASSISTANT NAME", 8, color=C.TEXT_DIM, align=Qt.AlignmentFlag.AlignLeft
+            )
+        )
         self._name_input = QLineEdit(assistant_name)
         self._name_input.setFont(QFont(FONT_MONO, 10))
         self._name_input.setFixedHeight(32)
@@ -2231,11 +2672,18 @@ class CustomizeOverlay(QWidget):
         lay.addWidget(self._name_input)
 
         lay.addSpacing(4)
-        lay.addWidget(_lbl("YOUR NAME  (leave blank for default sir / efendim)", 8,
-                            color=C.TEXT_DIM, align=Qt.AlignmentFlag.AlignLeft))
+        lay.addWidget(
+            _lbl(
+                "YOUR NAME  (leave blank for default sir / efendim)",
+                8,
+                color=C.TEXT_DIM,
+                align=Qt.AlignmentFlag.AlignLeft,
+            )
+        )
         self._user_input = QLineEdit(user_name)
-        self._user_input.setPlaceholderText(_translate(
-            "e.g.  Tony   (leave blank for auto)", self._language))
+        self._user_input.setPlaceholderText(
+            _translate("e.g.  Tony   (leave blank for auto)", self._language)
+        )
         self._user_input.setFont(QFont(FONT_MONO, 10))
         self._user_input.setFixedHeight(32)
         self._user_input.setStyleSheet(_fs)
@@ -2245,14 +2693,19 @@ class CustomizeOverlay(QWidget):
         # Names are language-neutral proper nouns, so the row reads the same in
         # every locale. Selecting one and applying rebuilds the Live session.
         from memory.config_manager import AVAILABLE_VOICES, DEFAULT_VOICE
+
         lay.addSpacing(4)
-        lay.addWidget(_lbl("ASSISTANT VOICE", 8, color=C.TEXT_DIM,
-                            align=Qt.AlignmentFlag.AlignLeft))
-        self._sel_voice   = (voice or DEFAULT_VOICE)
+        lay.addWidget(
+            _lbl(
+                "ASSISTANT VOICE", 8, color=C.TEXT_DIM, align=Qt.AlignmentFlag.AlignLeft
+            )
+        )
+        self._sel_voice = voice or DEFAULT_VOICE
         if self._sel_voice not in AVAILABLE_VOICES:
             self._sel_voice = DEFAULT_VOICE
         self._voice_btns: dict[str, QPushButton] = {}
-        voice_row = QHBoxLayout(); voice_row.setSpacing(4)
+        voice_row = QHBoxLayout()
+        voice_row.setSpacing(4)
         for _v in AVAILABLE_VOICES:
             b = QPushButton(_v)
             b.setCheckable(True)
@@ -2268,8 +2721,9 @@ class CustomizeOverlay(QWidget):
         # ── UI colour — colour wheel ─────────────────────────────────────────
         lay.addSpacing(4)
         clr_hdr = QHBoxLayout()
-        clr_hdr.addWidget(_lbl("UI COLOUR", 8,
-                               color=C.TEXT_DIM, align=Qt.AlignmentFlag.AlignLeft))
+        clr_hdr.addWidget(
+            _lbl("UI COLOUR", 8, color=C.TEXT_DIM, align=Qt.AlignmentFlag.AlignLeft)
+        )
         clr_hdr.addStretch()
         black_btn = QPushButton(_translate("BLACK", self._language))
         black_btn.setFixedSize(58, 20)
@@ -2278,7 +2732,8 @@ class CustomizeOverlay(QWidget):
         black_btn.setStyleSheet(
             f"QPushButton {{ background: #000000; color: {C.TEXT_MED}; "
             f"border: 1px solid {C.BORDER}; border-radius: {R_S}px; }}"
-            f"QPushButton:hover {{ color: {C.PRI}; border-color: {C.PRI_DIM}; }}")
+            f"QPushButton:hover {{ color: {C.PRI}; border-color: {C.PRI_DIM}; }}"
+        )
         black_btn.clicked.connect(lambda: self._set_color("#000000"))
         clr_hdr.addWidget(black_btn)
         white_btn = QPushButton(_translate("WHITE", self._language))
@@ -2288,7 +2743,8 @@ class CustomizeOverlay(QWidget):
         white_btn.setStyleSheet(
             f"QPushButton {{ background: #ffffff; color: #111820; "
             f"border: 1px solid #aeb8c0; border-radius: {R_S}px; }}"
-            f"QPushButton:hover {{ border-color: {C.PRI}; }}")
+            f"QPushButton:hover {{ border-color: {C.PRI}; }}"
+        )
         white_btn.clicked.connect(lambda: self._set_color("#ffffff"))
         clr_hdr.addWidget(white_btn)
         df_btn = QPushButton(_translate("DEFAULT", self._language))
@@ -2307,21 +2763,24 @@ class CustomizeOverlay(QWidget):
         lay.addLayout(clr_hdr)
 
         self._initial_color = (ui_color or DEFAULT_UI_COLOR).strip().lower()
-        self._sel_color     = self._initial_color
-        self.on_preview     = None   # callable(hex) — live preview; MainWindow wires it
+        self._sel_color = self._initial_color
+        self.on_preview = None  # callable(hex) — live preview; MainWindow wires it
         self._initial_opacity = max(60, min(100, int(ui_opacity)))
         self.on_opacity_preview = None
 
         self._wheel = HueWheel(self._sel_color)
         wheel_row = QHBoxLayout()
-        wheel_row.addStretch(); wheel_row.addWidget(self._wheel); wheel_row.addStretch()
+        wheel_row.addStretch()
+        wheel_row.addWidget(self._wheel)
+        wheel_row.addStretch()
         lay.addLayout(wheel_row)
         self._wheel.hue_picked.connect(self._on_wheel_pick)
         self._wheel.hue_committed.connect(self._on_wheel_commit)
 
         self._hex_input = QLineEdit(self._sel_color)
-        self._hex_input.setPlaceholderText(_translate(
-            "#00d4ff   (custom hex colour)", self._language))
+        self._hex_input.setPlaceholderText(
+            _translate("#00d4ff   (custom hex colour)", self._language)
+        )
         self._hex_input.setFont(QFont(FONT_MONO, 10))
         self._hex_input.setFixedHeight(28)
         self._hex_input.setStyleSheet(_fs)
@@ -2329,26 +2788,38 @@ class CustomizeOverlay(QWidget):
         lay.addWidget(self._hex_input)
 
         opacity_header = QHBoxLayout()
-        opacity_header.addWidget(_lbl(
-            "INTERFACE OPACITY", 8, color=C.TEXT_DIM,
-            align=Qt.AlignmentFlag.AlignLeft))
+        opacity_header.addWidget(
+            _lbl(
+                "INTERFACE OPACITY",
+                8,
+                color=C.TEXT_DIM,
+                align=Qt.AlignmentFlag.AlignLeft,
+            )
+        )
         opacity_header.addStretch(1)
         self._opacity_value = _lbl(
-            f"{self._initial_opacity}%", 8, color=C.PRI,
-            align=Qt.AlignmentFlag.AlignRight)
+            f"{self._initial_opacity}%",
+            8,
+            color=C.PRI,
+            align=Qt.AlignmentFlag.AlignRight,
+        )
         opacity_header.addWidget(self._opacity_value)
         lay.addLayout(opacity_header)
 
         opacity_row = QHBoxLayout()
         opacity_row.setSpacing(8)
-        opacity_row.addWidget(_lbl(
-            "Glass", 7, color=C.TEXT_DIM, align=Qt.AlignmentFlag.AlignLeft))
+        opacity_row.addWidget(
+            _lbl("Glass", 7, color=C.TEXT_DIM, align=Qt.AlignmentFlag.AlignLeft)
+        )
         self._opacity_slider = QSlider(Qt.Orientation.Horizontal)
         self._opacity_slider.setRange(60, 100)
         self._opacity_slider.setValue(self._initial_opacity)
-        self._opacity_slider.setToolTip(_translate(
-            "Adjust the transparency of the main JARVIS window and its UI.",
-            self._language))
+        self._opacity_slider.setToolTip(
+            _translate(
+                "Adjust the transparency of the main JARVIS window and its UI.",
+                self._language,
+            )
+        )
         self._opacity_slider.setStyleSheet(f"""
             QSlider::groove:horizontal {{
                 height: 5px; background: {C.BORDER}; border-radius: 2px;
@@ -2364,12 +2835,14 @@ class CustomizeOverlay(QWidget):
         """)
         self._opacity_slider.valueChanged.connect(self._on_opacity_changed)
         opacity_row.addWidget(self._opacity_slider, 1)
-        opacity_row.addWidget(_lbl(
-            "Solid", 7, color=C.TEXT_DIM, align=Qt.AlignmentFlag.AlignRight))
+        opacity_row.addWidget(
+            _lbl("Solid", 7, color=C.TEXT_DIM, align=Qt.AlignmentFlag.AlignRight)
+        )
         lay.addLayout(opacity_row)
 
         lay.addSpacing(6)
-        btn_row = QHBoxLayout(); btn_row.setSpacing(8)
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(8)
 
         save_btn = QPushButton(_translate("▸  APPLY CHANGES", self._language))
         save_btn.setFixedHeight(34)
@@ -2408,7 +2881,7 @@ class CustomizeOverlay(QWidget):
     def _refresh_voice_btns(self):
         """Highlight the selected voice pill; dim the rest."""
         for name, b in self._voice_btns.items():
-            on = (name == self._sel_voice)
+            on = name == self._sel_voice
             b.setChecked(on)
             if on:
                 b.setStyleSheet(f"""
@@ -2471,8 +2944,12 @@ class CustomizeOverlay(QWidget):
         name = self._name_input.text().strip() or "JARVIS"
         user = self._user_input.text().strip()
         self.saved.emit(
-            name, user, self._sel_color or DEFAULT_UI_COLOR, self._sel_voice,
-            self._opacity_slider.value())
+            name,
+            user,
+            self._sel_color or DEFAULT_UI_COLOR,
+            self._sel_voice,
+            self._opacity_slider.value(),
+        )
         self.hide()
 
 
@@ -2501,7 +2978,8 @@ class PluginManagerOverlay(QWidget):
         hdr.setFont(QFont(FONT_MONO, 12, QFont.Weight.Bold))
         hdr.setStyleSheet(f"color: {C.PRI}; background: transparent;")
         lay.addWidget(hdr)
-        sep = QFrame(); sep.setFrameShape(QFrame.Shape.HLine)
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
         sep.setStyleSheet(f"color: {C.BORDER}; margin: 2px 0;")
         lay.addWidget(sep)
 
@@ -2531,12 +3009,15 @@ class PluginManagerOverlay(QWidget):
         self.adjustSize()
 
     def _build_row(self, p: dict) -> QHBoxLayout:
-        row = QHBoxLayout(); row.setSpacing(6)
+        row = QHBoxLayout()
+        row.setSpacing(6)
 
         label_text = p["name"] if p["valid"] else f"{p['name']}  (? {p['file']})"
         lbl = QLabel(label_text)
         lbl.setFont(QFont(FONT_MONO, 8))
-        lbl.setStyleSheet(f"color: {C.TEXT if p['valid'] else C.TEXT_DIM}; background: transparent;")
+        lbl.setStyleSheet(
+            f"color: {C.TEXT if p['valid'] else C.TEXT_DIM}; background: transparent;"
+        )
         lbl.setToolTip(p["description"] if p["valid"] else p["error"])
         lbl.setWordWrap(False)
         row.addWidget(lbl, stretch=1)
@@ -2582,6 +3063,7 @@ class PluginManagerOverlay(QWidget):
 
     def _toggle(self, name: str, btn: QPushButton):
         from memory.config_manager import get_plugin_enabled, save_plugin_enabled
+
         new_val = not get_plugin_enabled(name)
         save_plugin_enabled(name, new_val)
         self._style_toggle(btn, new_val)
@@ -2656,7 +3138,8 @@ class ConfirmBanner(_HudOverlay):
             dtl.setStyleSheet(f"color: {C.TEXT_MED}; background: transparent;")
             lay.addWidget(dtl)
 
-        row = QHBoxLayout(); row.setSpacing(8)
+        row = QHBoxLayout()
+        row.setSpacing(8)
 
         yes = QPushButton("▸  CONFIRM")
         yes.setFixedHeight(32)
@@ -2697,7 +3180,7 @@ class AudioDeviceOverlay(_HudOverlay):
     is plugged in. 'JARVIS can't hear me' is usually 'JARVIS is listening to the
     webcam'."""
 
-    picked = pyqtSignal()      # emitted after Apply, when something changed
+    picked = pyqtSignal()  # emitted after Apply, when something changed
 
     # THESE EXIST BECAUSE QTimer.singleShot FROM A WORKER THREAD NEVER FIRES.
     #
@@ -2712,8 +3195,8 @@ class AudioDeviceOverlay(_HudOverlay):
     # object's thread, which for a widget is the GUI thread. Both carry only
     # plain values — never a widget — because the widgets belong to the GUI
     # thread and the worker must not touch them even to pass them along.
-    _level_seen = pyqtSignal(int)          # 0-100, while recording
-    _test_result = pyqtSignal(str, bool)   # sentence, was it good
+    _level_seen = pyqtSignal(int)  # 0-100, while recording
+    _test_result = pyqtSignal(str, bool)  # sentence, was it good
 
     _OW = 460
 
@@ -2741,7 +3224,8 @@ class AudioDeviceOverlay(_HudOverlay):
         hdr.setStyleSheet(f"color: {C.PRI}; background: transparent;")
         lay.addWidget(hdr)
 
-        sep = QFrame(); sep.setFrameShape(QFrame.Shape.HLine)
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
         sep.setStyleSheet(f"color: {C.BORDER}; margin: 2px 0;")
         lay.addWidget(sep)
 
@@ -2796,7 +3280,8 @@ class AudioDeviceOverlay(_HudOverlay):
             # So the button is here, beside the dropdown, in the panel somebody
             # opens when JARVIS cannot hear them. It replaces a loose
             # `ses_testi.py` in the project root that nobody would ever find.
-            btn_row = QHBoxLayout(); btn_row.setSpacing(6)
+            btn_row = QHBoxLayout()
+            btn_row.setSpacing(6)
             btn_row.addWidget(box, 1)
             test = QPushButton("TEST")
             test.setFixedSize(64, 30)
@@ -2818,7 +3303,8 @@ class AudioDeviceOverlay(_HudOverlay):
             meter.setStyleSheet(
                 f"QProgressBar {{ background: {C.PANEL2}; border: 1px solid {C.BORDER}; "
                 f"border-radius: 3px; }}"
-                f"QProgressBar::chunk {{ background: {C.PRI}; border-radius: 2px; }}")
+                f"QProgressBar::chunk {{ background: {C.PRI}; border-radius: 2px; }}"
+            )
             meter.hide()
             lay.addWidget(meter)
 
@@ -2829,22 +3315,26 @@ class AudioDeviceOverlay(_HudOverlay):
             lay.addWidget(result)
 
             test.clicked.connect(
-                lambda _=False, k=kind, b=box, t=test, r=result, m=meter:
-                    self._run_test(k, b, t, r, m))
+                lambda _=False, k=kind, b=box, t=test, r=result, m=meter: self._run_test(
+                    k, b, t, r, m
+                )
+            )
             return box
 
         # Which row is being tested right now. One at a time — the button is
         # disabled for the duration — so a single slot is enough, and it keeps
         # widgets off the signal payload.
-        self._active = None                # (button, label, meter)
+        self._active = None  # (button, label, meter)
         self._level_seen.connect(self._on_level)
         self._test_result.connect(self._on_result)
 
-        self._in_box  = _row("MICROPHONE — what JARVIS hears you with",
-                             "input", get_input_device())
+        self._in_box = _row(
+            "MICROPHONE — what JARVIS hears you with", "input", get_input_device()
+        )
         lay.addSpacing(4)
-        self._out_box = _row("SPEAKERS — what JARVIS talks through",
-                             "output", get_output_device())
+        self._out_box = _row(
+            "SPEAKERS — what JARVIS talks through", "output", get_output_device()
+        )
 
         # ── Output volume, beside the output device ──────────────────────────
         #
@@ -2855,6 +3345,7 @@ class AudioDeviceOverlay(_HudOverlay):
         _vol_now = None
         try:
             from core.audio_devices import get_output_volume
+
             # The SELECTED output, not the system default. Somebody puts the
             # assistant on their speakers and keeps everything else in their
             # headphones; a slider labelled with one device that moves the
@@ -2870,7 +3361,8 @@ class AudioDeviceOverlay(_HudOverlay):
             lay.addSpacing(4)
             lay.addWidget(vcap)
 
-            vrow = QHBoxLayout(); vrow.setSpacing(8)
+            vrow = QHBoxLayout()
+            vrow.setSpacing(8)
             self._vol = QSlider(Qt.Orientation.Horizontal)
             self._vol.setRange(0, 100)
             self._vol.setValue(int(_vol_now))
@@ -2881,7 +3373,8 @@ class AudioDeviceOverlay(_HudOverlay):
                 f"QSlider::sub-page:horizontal {{ background: {C.PRI_DIM}; "
                 f"border-radius: 2px; }}"
                 f"QSlider::handle:horizontal {{ background: {C.PRI}; width: 10px; "
-                f"margin: -5px 0; border-radius: 5px; }}")
+                f"margin: -5px 0; border-radius: 5px; }}"
+            )
             self._vol_lbl = QLabel(f"{int(_vol_now)}%")
             self._vol_lbl.setFont(QFont(FONT_MONO, 8))
             self._vol_lbl.setFixedWidth(40)
@@ -2894,11 +3387,11 @@ class AudioDeviceOverlay(_HudOverlay):
             # COM call into the audio endpoint. sliderReleased fires once, when
             # the user has decided — the label still follows the handle so the
             # number moves while they drag.
-            self._vol.valueChanged.connect(
-                lambda v: self._vol_lbl.setText(f"{v}%"))
+            self._vol.valueChanged.connect(lambda v: self._vol_lbl.setText(f"{v}%"))
             self._vol.sliderReleased.connect(self._apply_volume)
             self._out_box.currentIndexChanged.connect(
-                lambda _i: self._volume_follows_device())
+                lambda _i: self._volume_follows_device()
+            )
 
         note = QLabel("Applying reconnects the session. Your conversation is kept.")
         note.setWordWrap(True)
@@ -2907,7 +3400,8 @@ class AudioDeviceOverlay(_HudOverlay):
         lay.addSpacing(6)
         lay.addWidget(note)
 
-        row = QHBoxLayout(); row.setSpacing(8)
+        row = QHBoxLayout()
+        row.setSpacing(8)
         ok = QPushButton("▸  APPLY")
         ok.setFixedHeight(32)
         ok.setFont(QFont(FONT_MONO, 9, QFont.Weight.Bold))
@@ -2942,14 +3436,17 @@ class AudioDeviceOverlay(_HudOverlay):
         it.
         """
         import threading
+
         value = self._vol.value()
         device = self._out_box.currentData() or ""
 
         def _work():
             from core import audio_devices
+
             if not audio_devices.set_output_volume(value, device):
-                print(f"[Audio] the volume of '{device}' could not be set "
-                      f"to {value}%")
+                print(
+                    f"[Audio] the volume of '{device}' could not be set " f"to {value}%"
+                )
 
         threading.Thread(target=_work, daemon=True, name="audio-volume").start()
 
@@ -2964,6 +3461,7 @@ class AudioDeviceOverlay(_HudOverlay):
             return
         try:
             from core.audio_devices import get_output_volume
+
             now = get_output_volume(self._out_box.currentData() or "")
         except Exception:
             now = None
@@ -2998,11 +3496,12 @@ class AudioDeviceOverlay(_HudOverlay):
 
         def _work():
             from core import audio_devices
+
             try:
                 if kind == "input":
                     res = audio_devices.measure_input(
-                        name,
-                        on_level=lambda f: self._level_seen.emit(int(f * 100)))
+                        name, on_level=lambda f: self._level_seen.emit(int(f * 100))
+                    )
                     text = f"peak {res['peak']}  —  {res['verdict']}"
                 else:
                     res = audio_devices.play_tone(name)
@@ -3029,15 +3528,19 @@ class AudioDeviceOverlay(_HudOverlay):
             meter.setValue(0)
             meter.hide()
         label.setStyleSheet(
-            f"color: {C.PRI if good else C.TEXT_DIM}; background: transparent;")
+            f"color: {C.PRI if good else C.TEXT_DIM}; background: transparent;"
+        )
         label.setText(text)
 
     def _apply(self):
         from memory.config_manager import (
-            get_input_device, get_output_device,
-            save_input_device, save_output_device,
+            get_input_device,
+            get_output_device,
+            save_input_device,
+            save_output_device,
         )
-        new_in  = self._in_box.currentData()  or ""
+
+        new_in = self._in_box.currentData() or ""
         new_out = self._out_box.currentData() or ""
         changed = (new_in != get_input_device()) or (new_out != get_output_device())
         save_input_device(new_in)
@@ -3133,8 +3636,10 @@ class MemoryOverlay(_HudOverlay):
         if p is None:
             self.update()
             return
-        self.move(max(0, (p.width()  - self.width())  // 2),
-                  max(0, (p.height() - self.height()) // 2))
+        self.move(
+            max(0, (p.width() - self.width()) // 2),
+            max(0, (p.height() - self.height()) // 2),
+        )
         p.update(before.united(self.geometry()))
         self.update()
 
@@ -3149,15 +3654,18 @@ class MemoryOverlay(_HudOverlay):
         hdr.setStyleSheet(f"color: {C.PRI}; background: transparent;")
         self._lay.addWidget(hdr)
 
-        sep = QFrame(); sep.setFrameShape(QFrame.Shape.HLine)
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
         sep.setStyleSheet(f"color: {C.BORDER}; margin: 2px 0;")
         self._lay.addWidget(sep)
 
         rows = all_entries_for_ui()
 
-        cap = QLabel(f"{len(rows)} stored facts — newest first. "
-                     f"Nothing here is sent anywhere; it lives in "
-                     f"memory/long_term.json on this machine.")
+        cap = QLabel(
+            f"{len(rows)} stored facts — newest first. "
+            f"Nothing here is sent anywhere; it lives in "
+            f"memory/long_term.json on this machine."
+        )
         cap.setWordWrap(True)
         cap.setFont(QFont(FONT_MONO, 7))
         cap.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
@@ -3177,14 +3685,17 @@ class MemoryOverlay(_HudOverlay):
                 f"background: transparent; }}"
             )
             inner = QWidget()
-            ilay  = QVBoxLayout(inner)
+            ilay = QVBoxLayout(inner)
             ilay.setContentsMargins(6, 6, 6, 6)
             ilay.setSpacing(3)
 
             for r in rows:
-                line = QHBoxLayout(); line.setSpacing(6)
-                txt = QLabel(f"<b>{r['key'].replace('_', ' ')}</b> "
-                             f"<span style='color:{C.TEXT_MED}'>— {r['value']}</span>")
+                line = QHBoxLayout()
+                line.setSpacing(6)
+                txt = QLabel(
+                    f"<b>{r['key'].replace('_', ' ')}</b> "
+                    f"<span style='color:{C.TEXT_MED}'>— {r['value']}</span>"
+                )
                 txt.setWordWrap(True)
                 txt.setFont(QFont(FONT_MONO, 8))
                 txt.setStyleSheet(f"color: {C.TEXT}; background: transparent;")
@@ -3206,7 +3717,8 @@ class MemoryOverlay(_HudOverlay):
                     QPushButton:hover {{ color: {C.RED}; border-color: {C.RED}; }}
                 """)
                 rm.clicked.connect(
-                    lambda _=False, c=r["category"], k=r["key"]: self._forget(c, k))
+                    lambda _=False, c=r["category"], k=r["key"]: self._forget(c, k)
+                )
                 line.addWidget(rm)
 
                 holder = QWidget()
@@ -3237,6 +3749,7 @@ class MemoryOverlay(_HudOverlay):
 
     def _forget(self, category: str, key: str):
         from memory.memory_manager import forget
+
         forget(key, category)
         # Rebuild on the NEXT event-loop turn, not inside this click handler.
         # The rebuild destroys the very ✕ button that emitted this signal, and
@@ -3310,7 +3823,7 @@ class ProvidersOverlay(_HudOverlay):
         look broken.
     """
 
-    changed = pyqtSignal()          # emitted on APPLY when the engine moved
+    changed = pyqtSignal()  # emitted on APPLY when the engine moved
     # Emitted from a worker thread when something the machine had to be asked
     # for — the installed voices — has arrived. A signal rather than a direct
     # call because the worker must not touch a widget.
@@ -3318,12 +3831,12 @@ class ProvidersOverlay(_HudOverlay):
     # (provider id, [(value, label), ...]) from a worker that went and asked an
     # endpoint what it offers.
     _models_ready = pyqtSignal(str, list)
-    _OW = 760                       # the window's own minimum is 820
+    _OW = 760  # the window's own minimum is 820
 
     # Which provider fills each slot, and what the slot is FOR — in the words
     # somebody configuring it would use, not the words the code uses.
     _SLOTS = (
-        ("stt", "MIC", "HEARING",  "turns what you say into words"),
+        ("stt", "MIC", "HEARING", "turns what you say into words"),
         ("llm", "②", "THINKING", "understands, decides, uses your tools"),
         ("tts", "③", "SPEAKING", "reads the answer out loud"),
     )
@@ -3331,9 +3844,13 @@ class ProvidersOverlay(_HudOverlay):
     def __init__(self, parent=None):
         super().__init__(parent)
         # Imported HERE, on the click — never at startup. See the class docstring.
-        from memory.config_manager import (get_pipeline, get_provider_config,
-                                           get_provider_mode, get_sidecar_first,
-                                           get_sidecar_provider)
+        from memory.config_manager import (
+            get_pipeline,
+            get_provider_config,
+            get_provider_mode,
+            get_sidecar_first,
+            get_sidecar_provider,
+        )
         from providers import registry
 
         self._registry = registry
@@ -3351,20 +3868,21 @@ class ProvidersOverlay(_HudOverlay):
         for _kind in ("tts", "stt", "llm"):
             for _decl in registry.discover(_kind):
                 try:
-                    _mod = __import__(f"providers.{_decl['_module']}",
-                                      fromlist=["prefetch"])
+                    _mod = __import__(
+                        f"providers.{_decl['_module']}", fromlist=["prefetch"]
+                    )
                     _pf = getattr(_mod, "prefetch", None)
                     if _pf:
                         _pf(self._live_ready.emit)
                 except Exception:
                     pass
-        self._edits: dict[str, dict] = {}       # provider id -> {key: (widget, Field)}
-        self._status: dict[str, QLabel] = {}    # provider id -> status line
-        self._more: dict[str, bool] = {}        # provider id -> advanced shown
+        self._edits: dict[str, dict] = {}  # provider id -> {key: (widget, Field)}
+        self._status: dict[str, QLabel] = {}  # provider id -> status line
+        self._more: dict[str, bool] = {}  # provider id -> advanced shown
         # Fields deliberately not drawn — the catalog already answered them, or
         # they are behind MORE. Tracked rather than asked of Qt: see _fields_into.
         self._hidden: dict[str, set] = {}
-        self._picked: dict[str, str] = {}       # slot -> catalog entry id
+        self._picked: dict[str, str] = {}  # slot -> catalog entry id
 
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(f"""
@@ -3385,8 +3903,10 @@ class ProvidersOverlay(_HudOverlay):
         title.setStyleSheet(f"color: {C.PRI}; background: transparent;")
         outer.addWidget(title)
 
-        sub = QLabel("Choose what powers the conversation. "
-                     "Gemini is the default and needs nothing set up here.")
+        sub = QLabel(
+            "Choose what powers the conversation. "
+            "Gemini is the default and needs nothing set up here."
+        )
         sub.setWordWrap(True)
         sub.setFont(QFont(FONT_MONO, 8))
         sub.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
@@ -3397,18 +3917,21 @@ class ProvidersOverlay(_HudOverlay):
         # decision on the panel that changes everything below it, and both
         # answers deserve to be readable at the same time.
         self._mode = get_provider_mode()
-        cards = QHBoxLayout(); cards.setSpacing(10)
+        cards = QHBoxLayout()
+        cards.setSpacing(10)
         self._card_gemini = self._mode_card(
             "AI  GEMINI LIVE",
             "One connection carries your voice, its voice, the transcript and "
             "the tools together. The fastest option — about half a second to "
             "the first word.",
-            "gemini")
+            "gemini",
+        )
         self._card_local = self._mode_card(
             "🖥  MY OWN SETUP",
             "Your choice of hearing, thinking and speaking. Can run entirely on "
             "this computer, with nothing leaving it. Slower: 1.5 to 4 seconds.",
-            "pipeline")
+            "pipeline",
+        )
         cards.addWidget(self._card_gemini)
         cards.addWidget(self._card_local)
         outer.addLayout(cards)
@@ -3424,7 +3947,8 @@ class ProvidersOverlay(_HudOverlay):
             f"QScrollBar::handle:vertical {{ background: {C.BORDER_B}; "
             f"border-radius: 4px; min-height: 30px; }}"
             "QScrollBar::add-line, QScrollBar::sub-line { height: 0; }"
-            "QScrollBar::add-page, QScrollBar::sub-page { background: none; }")
+            "QScrollBar::add-page, QScrollBar::sub-page { background: none; }"
+        )
         self._scroll.setMinimumHeight(230)
         self._scroll.setMaximumHeight(360)
         outer.addWidget(self._scroll, 1)
@@ -3450,7 +3974,8 @@ class ProvidersOverlay(_HudOverlay):
 
         outer.addWidget(self._footer)
 
-        row = QHBoxLayout(); row.setSpacing(8)
+        row = QHBoxLayout()
+        row.setSpacing(8)
         apply_btn = QPushButton("▸  SAVE  &  APPLY")
         apply_btn.setFixedHeight(34)
         apply_btn.setFont(QFont(FONT_MONO, 9, QFont.Weight.Bold))
@@ -3599,8 +4124,12 @@ class ProvidersOverlay(_HudOverlay):
             box.setCurrentIndex(j)
         elif keep:
             box.setCurrentText(keep)
-        self._say(pid, f"{len(items)} model{'s' if len(items) != 1 else ''} "
-                       f"found on this server — pick one above.", C.TEXT_DIM)
+        self._say(
+            pid,
+            f"{len(items)} model{'s' if len(items) != 1 else ''} "
+            f"found on this server — pick one above.",
+            C.TEXT_DIM,
+        )
 
     def _set_mode(self, value: str) -> None:
         if value == self._mode:
@@ -3615,8 +4144,10 @@ class ProvidersOverlay(_HudOverlay):
         """A bordered section. Grouping is the difference between three
         decisions and eleven controls."""
         w = QWidget()
-        w.setStyleSheet(f"background: {C.PANEL}; border: 1px solid {C.BORDER}; "
-                        f"border-radius: 5px;")
+        w.setStyleSheet(
+            f"background: {C.PANEL}; border: 1px solid {C.BORDER}; "
+            f"border-radius: 5px;"
+        )
         lay = QVBoxLayout(w)
         lay.setContentsMargins(12, 10, 12, 11)
         lay.setSpacing(5)
@@ -3624,14 +4155,17 @@ class ProvidersOverlay(_HudOverlay):
             lay.addWidget(tw)
         return w, lay
 
-    def _label(self, text: str, size: int = 8, colour: str = None,
-               bold: bool = False) -> QLabel:
+    def _label(
+        self, text: str, size: int = 8, colour: str = None, bold: bool = False
+    ) -> QLabel:
         lb = QLabel(text)
         lb.setWordWrap(True)
-        lb.setFont(QFont(FONT_MONO, size,
-                         QFont.Weight.Bold if bold else QFont.Weight.Normal))
-        lb.setStyleSheet(f"color: {colour or C.TEXT_MED}; background: transparent; "
-                         f"border: none;")
+        lb.setFont(
+            QFont(FONT_MONO, size, QFont.Weight.Bold if bold else QFont.Weight.Normal)
+        )
+        lb.setStyleSheet(
+            f"color: {colour or C.TEXT_MED}; background: transparent; " f"border: none;"
+        )
         return lb
 
     def _combo(self) -> QComboBox:
@@ -3645,7 +4179,8 @@ class ProvidersOverlay(_HudOverlay):
             f"QComboBox::drop-down {{ border: none; width: 18px; }}"
             f"QComboBox QAbstractItemView {{ background: {C.DARK}; color: {C.TEXT}; "
             f"selection-background-color: {C.PRI_GHO}; "
-            f"border: 1px solid {C.BORDER_B}; padding: 2px; }}")
+            f"border: 1px solid {C.BORDER_B}; padding: 2px; }}"
+        )
         return box
 
     def _line(self, text: str = "") -> QLineEdit:
@@ -3655,7 +4190,8 @@ class ProvidersOverlay(_HudOverlay):
         w.setStyleSheet(
             f"QLineEdit {{ background: {C.DARK}; color: {C.TEXT}; "
             f"border: 1px solid {C.BORDER}; border-radius: 3px; padding: 2px 9px; }}"
-            f"QLineEdit:focus {{ border-color: {C.PRI_DIM}; }}")
+            f"QLineEdit:focus {{ border-color: {C.PRI_DIM}; }}"
+        )
         return w
 
     def _btn(self, text: str, slot, colour: str = None) -> QPushButton:
@@ -3681,8 +4217,14 @@ class ProvidersOverlay(_HudOverlay):
         out = []
         for decl in self._registry.discover(kind):
             entries = decl.get("catalog") or (
-                {"id": decl["id"], "label": decl["label"],
-                 "note": decl.get("hint", ""), "local": None, "values": {}},)
+                {
+                    "id": decl["id"],
+                    "label": decl["label"],
+                    "note": decl.get("hint", ""),
+                    "local": None,
+                    "values": {},
+                },
+            )
             for e in entries:
                 out.append((decl["id"], e["id"], e, decl))
         return out
@@ -3705,8 +4247,9 @@ class ProvidersOverlay(_HudOverlay):
             return ""
         cfg = self._get_cfg(pid)
         saved = str(cfg.get("catalog") or "").strip()
-        entries = [(eid, entry) for _p, eid, entry, _d in self._catalog(kind)
-                   if _p == pid]
+        entries = [
+            (eid, entry) for _p, eid, entry, _d in self._catalog(kind) if _p == pid
+        ]
         if saved and any(eid == saved for eid, _e in entries):
             return saved
 
@@ -3715,10 +4258,13 @@ class ProvidersOverlay(_HudOverlay):
         for eid, entry in entries:
             vals = entry.get("values") or {}
             if not vals:
-                best = best or eid            # a catch-all like "Something else"
+                best = best or eid  # a catch-all like "Something else"
                 continue
-            if all(str(cfg.get(k, "")).rstrip("/") == str(v).rstrip("/")
-                   for k, v in vals.items() if k in ("base_url", "backend")):
+            if all(
+                str(cfg.get(k, "")).rstrip("/") == str(v).rstrip("/")
+                for k, v in vals.items()
+                if k in ("base_url", "backend")
+            ):
                 return eid
         return best or (entries[0][0] if len(entries) == 1 else "")
 
@@ -3752,13 +4298,23 @@ class ProvidersOverlay(_HudOverlay):
                 self._body_lay.addWidget(self._slot_box(slot, num, name, what))
         else:
             w, lay = self._box([])
-            lay.addWidget(self._label(
-                "Nothing to set up. Your voice goes to Gemini and comes back as "
-                "speech over one connection, with the transcript and every tool "
-                "call on the same wire.", 8, C.TEXT_DIM))
-            lay.addWidget(self._label(
-                "Pick MY OWN SETUP above to run it on your own machine, or "
-                "through another company's model.", 7, C.TEXT_DIM))
+            lay.addWidget(
+                self._label(
+                    "Nothing to set up. Your voice goes to Gemini and comes back as "
+                    "speech over one connection, with the transcript and every tool "
+                    "call on the same wire.",
+                    8,
+                    C.TEXT_DIM,
+                )
+            )
+            lay.addWidget(
+                self._label(
+                    "Pick MY OWN SETUP above to run it on your own machine, or "
+                    "through another company's model.",
+                    7,
+                    C.TEXT_DIM,
+                )
+            )
             self._body_lay.addWidget(w)
 
         self._body_lay.addWidget(self._sidecar_box_widget())
@@ -3804,7 +4360,8 @@ class ProvidersOverlay(_HudOverlay):
                     break
         box.setCurrentIndex(idx if idx >= 0 else 0)
         box.currentIndexChanged.connect(
-            lambda _i, s=slot, b=box: self._slot_changed(s, b))
+            lambda _i, s=slot, b=box: self._slot_changed(s, b)
+        )
         if pid_now:
             QTimer.singleShot(0, lambda p=pid_now: self._prepare(p))
         lay.addWidget(box)
@@ -3813,8 +4370,9 @@ class ProvidersOverlay(_HudOverlay):
             self._fields_into(lay, slot, pid_now, eid_now)
             # If a list was already fetched, use it; if not, go and get one.
             if self._model_cache.get(pid_now):
-                QTimer.singleShot(0, lambda p=pid_now: self._on_models_ready(
-                    p, self._model_cache[p]))
+                QTimer.singleShot(
+                    0, lambda p=pid_now: self._on_models_ready(p, self._model_cache[p])
+                )
             else:
                 QTimer.singleShot(0, lambda p=pid_now: self._fetch_models(p))
         return w
@@ -3829,6 +4387,7 @@ class ProvidersOverlay(_HudOverlay):
             # Ollama and the address is already right. The choice itself is
             # saved alongside it — see _current_entry for why.
             from memory.config_manager import save_provider_config
+
             for _p, _e, entry, _d in self._catalog(slot):
                 if _p == pid and _e == eid:
                     values = dict(entry.get("values") or {})
@@ -3845,8 +4404,9 @@ class ProvidersOverlay(_HudOverlay):
         if decl is None:
             return
         stored = dict(self._get_cfg(pid))
-        entry = next((e for p, i, e, _ in self._catalog(slot)
-                      if p == pid and i == eid), {})
+        entry = next(
+            (e for p, i, e, _ in self._catalog(slot) if p == pid and i == eid), {}
+        )
         is_local = entry.get("local") is True
         entry_values = entry.get("values") or {}
         # An entry that MENTIONS the address has answered it — including
@@ -3864,9 +4424,9 @@ class ProvidersOverlay(_HudOverlay):
         # returned True for every field and the form came up completely empty.
         # Which of these a field lands in is a decision made here, so it is kept
         # here rather than inferred from Qt afterwards.
-        shown: dict = {}        # drawn now
-        carried: dict = {}      # kept for saving, never drawn — answered by the catalog
-        advanced: list = []     # drawn only behind MORE
+        shown: dict = {}  # drawn now
+        carried: dict = {}  # kept for saving, never drawn — answered by the catalog
+        advanced: list = []  # drawn only behind MORE
 
         for f in decl.get("needs", ()):
             if not isinstance(f, Field):
@@ -3876,16 +4436,25 @@ class ProvidersOverlay(_HudOverlay):
             # more thing to break; a key a local server never asks for is a box
             # that makes people think they need an account.
             if f.key == "base_url" and not custom:
-                carried[f.key] = (self._line(
-                    str(stored.get(f.key, f.default) or "")), f)
+                carried[f.key] = (
+                    self._line(str(stored.get(f.key, f.default) or "")),
+                    f,
+                )
                 continue
             if f.key == "api_key" and is_local:
                 carried[f.key] = (self._line(str(stored.get(f.key, "") or "")), f)
                 continue
             if f.key == "backend":
-                carried[f.key] = (self._line(
-                    str(entry.get("values", {}).get("backend")
-                        or stored.get(f.key, f.default) or "")), f)
+                carried[f.key] = (
+                    self._line(
+                        str(
+                            entry.get("values", {}).get("backend")
+                            or stored.get(f.key, f.default)
+                            or ""
+                        )
+                    ),
+                    f,
+                )
                 continue
             w = self._make_widget(pid, f, stored.get(f.key, f.default))
             if f.advanced:
@@ -3894,8 +4463,11 @@ class ProvidersOverlay(_HudOverlay):
                 shown[f.key] = (w, f)
 
         for _key, (w, f) in shown.items():
-            lay.addWidget(self._label(
-                f.label + ("" if f.required else "   (optional)"), 7, C.TEXT_DIM))
+            lay.addWidget(
+                self._label(
+                    f.label + ("" if f.required else "   (optional)"), 7, C.TEXT_DIM
+                )
+            )
             lay.addWidget(w)
             # A text box already shows its hint as placeholder text. Adding the
             # label as well printed every hint twice, which is how the panel
@@ -3911,7 +4483,8 @@ class ProvidersOverlay(_HudOverlay):
         status = self._label("", 7, C.TEXT_DIM)
         self._status[pid] = status
 
-        brow = QHBoxLayout(); brow.setSpacing(6)
+        brow = QHBoxLayout()
+        brow.setSpacing(6)
         brow.addWidget(self._btn("TEST", lambda _=0, p=pid: self._test(p), C.PRI))
         # Not "LIST" any more: the list arrives on its own when a service is
         # chosen. This is the button for when it did not — the server was
@@ -3919,12 +4492,20 @@ class ProvidersOverlay(_HudOverlay):
         if any(k in shown for k in ("model", "voice_id", "voice")):
             brow.addWidget(self._btn("↻ REFRESH", lambda _=0, p=pid: self._list(p)))
         if advanced:
-            brow.addWidget(self._btn(
-                ("⌃ LESS" if self._more.get(pid) else "⌄ MORE"),
-                lambda _=0, p=pid: self._toggle_more(p)))
+            brow.addWidget(
+                self._btn(
+                    ("⌃ LESS" if self._more.get(pid) else "⌄ MORE"),
+                    lambda _=0, p=pid: self._toggle_more(p),
+                )
+            )
         if not decl.get("_available", True) and decl.get("install"):
-            brow.addWidget(self._btn(f"INSTALL {decl['install']}",
-                                     lambda _=0, p=pid: self._install(p), C.ACC2))
+            brow.addWidget(
+                self._btn(
+                    f"INSTALL {decl['install']}",
+                    lambda _=0, p=pid: self._install(p),
+                    C.ACC2,
+                )
+            )
         brow.addStretch(1)
         holder = QWidget()
         holder.setStyleSheet("background: transparent; border: none;")
@@ -3988,12 +4569,16 @@ class ProvidersOverlay(_HudOverlay):
     def _sidecar_box_widget(self) -> QWidget:
         head = self._label("⚡  BACKGROUND REQUESTS", 9, C.PRI, bold=True)
         w, lay = self._box([head])
-        lay.addWidget(self._label(
-            "Reading a document, looking at your screen, writing code — the "
-            "assistant's own requests, not the conversation. These use Gemini's "
-            "text quota, which runs out before the voice does. Sending them "
-            "somewhere else keeps them working, and changes nothing you hear.",
-            7, C.TEXT_DIM))
+        lay.addWidget(
+            self._label(
+                "Reading a document, looking at your screen, writing code — the "
+                "assistant's own requests, not the conversation. These use Gemini's "
+                "text quota, which runs out before the voice does. Sending them "
+                "somewhere else keeps them working, and changes nothing you hear.",
+                7,
+                C.TEXT_DIM,
+            )
+        )
 
         # Read the stored choice BEFORE the box exists. The first version asked
         # `_sidecar_choice()`, which reads the combo — and at this point that is
@@ -4003,13 +4588,18 @@ class ProvidersOverlay(_HudOverlay):
         cur_eid = self._current_entry("llm", cur_pid) if cur_pid else ""
 
         self._sidecar_combo = self._combo()
-        self._sidecar_combo.addItem("Gemini only  —  the way it has always been",
-                                    ("", ""))
+        self._sidecar_combo.addItem(
+            "Gemini only  —  the way it has always been", ("", "")
+        )
         for pid, eid, entry, decl in self._catalog("llm"):
-            mark = "🖥" if entry.get("local") else ("AI" if entry.get("local")
-                                                   is False else "  ")
+            mark = (
+                "🖥"
+                if entry.get("local")
+                else ("AI" if entry.get("local") is False else "  ")
+            )
             self._sidecar_combo.addItem(
-                f"{mark}  Fall back to {entry['label']}", (pid, eid))
+                f"{mark}  Fall back to {entry['label']}", (pid, eid)
+            )
         i = self._sidecar_combo.findData((cur_pid, cur_eid)) if cur_pid else 0
         if cur_pid and i < 0:
             for j in range(1, self._sidecar_combo.count()):
@@ -4023,7 +4613,8 @@ class ProvidersOverlay(_HudOverlay):
         self._first_combo = self._combo()
         self._first_combo.addItem("Try Gemini first  —  faster", "after")
         self._first_combo.addItem(
-            "Try the other one first  —  keeps more on your machine", "before")
+            "Try the other one first  —  keeps more on your machine", "before"
+        )
         self._first_combo.setCurrentIndex(1 if self._sidecar_first else 0)
         lay.addWidget(self._first_combo)
 
@@ -4034,14 +4625,22 @@ class ProvidersOverlay(_HudOverlay):
         # service picked here gets its own form, right here.
         if cur_pid:
             if self._mode == "pipeline" and cur_pid == self._pipe.get("llm"):
-                lay.addWidget(self._label(
-                    "Uses the model you chose for ② THINKING.", 7, C.TEXT_DIM))
+                lay.addWidget(
+                    self._label(
+                        "Uses the model you chose for ② THINKING.", 7, C.TEXT_DIM
+                    )
+                )
             else:
                 self._fields_into(lay, "llm", cur_pid, cur_eid)
         else:
-            lay.addWidget(self._label(
-                "Left as it is, these keep using Gemini and stop working when "
-                "its text quota runs out.", 7, C.TEXT_DIM))
+            lay.addWidget(
+                self._label(
+                    "Left as it is, these keep using Gemini and stop working when "
+                    "its text quota runs out.",
+                    7,
+                    C.TEXT_DIM,
+                )
+            )
         return w
 
     def _sidecar_choice(self) -> tuple:
@@ -4060,6 +4659,7 @@ class ProvidersOverlay(_HudOverlay):
         self._sidecar = pid
         if pid and eid:
             from memory.config_manager import save_provider_config
+
             for _p, _e, entry, _d in self._catalog("llm"):
                 if _p == pid and _e == eid:
                     values = dict(entry.get("values") or {})
@@ -4071,22 +4671,27 @@ class ProvidersOverlay(_HudOverlay):
     def _update_footer(self) -> None:
         if self._mode != "pipeline":
             self._footer.setText(
-                "Gemini Live. Nothing on this panel changes the conversation.")
+                "Gemini Live. Nothing on this panel changes the conversation."
+            )
             return
-        missing = [name for slot, _n, name, _w in self._SLOTS
-                   if not self._pipe.get(slot)]
+        missing = [
+            name for slot, _n, name, _w in self._SLOTS if not self._pipe.get(slot)
+        ]
         if "THINKING" in missing:
             self._footer.setText(
                 "?  ② THINKING is not set — without it the assistant falls back "
-                "to Gemini Live and says so in the log.")
+                "to Gemini Live and says so in the log."
+            )
         elif missing:
             words = " and ".join(f"{m.lower()}" for m in missing)
             self._footer.setText(
                 f"Only {words} is missing — it will run, but you will type "
-                f"instead of speak, or read instead of listen.")
+                f"instead of speak, or read instead of listen."
+            )
         else:
             self._footer.setText(
-                "All three set. SAVE & APPLY reconnects; the conversation is kept.")
+                "All three set. SAVE & APPLY reconnects; the conversation is kept."
+            )
 
     # ── actions ──────────────────────────────────────────────────────────────
     def _live_choices(self, pid: str, key: str) -> tuple:
@@ -4104,8 +4709,11 @@ class ProvidersOverlay(_HudOverlay):
         stored = self._get_cfg(pid)
         for key, (w, _f) in self._edits.get(pid, {}).items():
             if isinstance(w, QComboBox):
-                value = (w.currentText().strip() if w.isEditable()
-                         else (w.currentData() or ""))
+                value = (
+                    w.currentText().strip()
+                    if w.isEditable()
+                    else (w.currentData() or "")
+                )
             else:
                 value = w.text().strip()
             # A field nobody can see must never blank out a setting that has
@@ -4126,6 +4734,7 @@ class ProvidersOverlay(_HudOverlay):
         Without it, changing the speech engine wiped an API key somebody had
         just entered into the box above."""
         from memory.config_manager import save_provider_config
+
         for pid in list(self._edits):
             try:
                 save_provider_config(pid, self._values(pid))
@@ -4163,13 +4772,14 @@ class ProvidersOverlay(_HudOverlay):
         seen = (getattr(inst, "caps", {}) or {}).get("vision")
         if ok and seen is not None:
             from memory.config_manager import save_provider_config
+
             save_provider_config(pid, {"vision": "1" if seen else ""})
             entry = self._edits.get(pid, {}).get("vision")
             if entry is not None and isinstance(entry[0], QComboBox):
                 entry[0].setCurrentIndex(1 if seen else 0)
 
     def _list(self, pid: str) -> None:
-        values = self._values(pid)          # before processEvents — see _test
+        values = self._values(pid)  # before processEvents — see _test
         self._say(pid, "reading…", C.TEXT_DIM)
         QApplication.processEvents()
         try:
@@ -4187,8 +4797,11 @@ class ProvidersOverlay(_HudOverlay):
 
         entry = self._edits.get(pid, {}).get(key)
         if entry is None or not items:
-            self._say(pid, f"✓  {len(items)} found." if items else "None found.",
-                      C.GREEN if items else C.TEXT_DIM)
+            self._say(
+                pid,
+                f"✓  {len(items)} found." if items else "None found.",
+                C.GREEN if items else C.TEXT_DIM,
+            )
             return
         box = entry[0]
         if isinstance(box, QComboBox):
@@ -4199,8 +4812,12 @@ class ProvidersOverlay(_HudOverlay):
             j = box.findData(keep)
             box.setCurrentIndex(j if j >= 0 else 0)
         else:
-            self._say(pid, f"✓  {len(items)} available: "
-                           f"{', '.join(str(v) for v, _ in items[:8])}", C.GREEN)
+            self._say(
+                pid,
+                f"✓  {len(items)} available: "
+                f"{', '.join(str(v) for v, _ in items[:8])}",
+                C.GREEN,
+            )
             return
         self._say(pid, f"✓  {len(items)} available — pick one above.", C.GREEN)
 
@@ -4221,21 +4838,31 @@ class ProvidersOverlay(_HudOverlay):
             try:
                 r = subprocess.run(
                     [_sys.executable, "-m", "pip", "install", pkg],
-                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=900)
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    timeout=900,
+                )
                 good = r.returncode == 0
                 tail = r.stdout.decode("utf-8", "replace").strip().splitlines()
-                msg = ("✓  installed — close and reopen this panel"
-                       if good else (tail[-1][:150] if tail else "pip failed"))
+                msg = (
+                    "✓  installed — close and reopen this panel"
+                    if good
+                    else (tail[-1][:150] if tail else "pip failed")
+                )
             except Exception as e:
                 good, msg = False, f"{type(e).__name__}: {str(e)[:120]}"
-            QTimer.singleShot(0, lambda: self._say(pid, msg,
-                                                   C.GREEN if good else C.RED))
+            QTimer.singleShot(
+                0, lambda: self._say(pid, msg, C.GREEN if good else C.RED)
+            )
 
         threading.Thread(target=work, daemon=True).start()
 
     def _apply(self) -> None:
-        from memory.config_manager import (get_pipeline, get_provider_mode,
-                                           save_providers)
+        from memory.config_manager import (
+            get_pipeline,
+            get_provider_mode,
+            save_providers,
+        )
 
         before = (get_provider_mode(), dict(get_pipeline()))
 
@@ -4251,9 +4878,11 @@ class ProvidersOverlay(_HudOverlay):
 
         save_providers(
             mode=self._mode,
-            pipeline={"stt": self._pipe.get("stt", ""),
-                      "llm": self._pipe.get("llm", ""),
-                      "tts": self._pipe.get("tts", "")},
+            pipeline={
+                "stt": self._pipe.get("stt", ""),
+                "llm": self._pipe.get("llm", ""),
+                "tts": self._pipe.get("tts", ""),
+            },
             creds=creds,
             sidecar=sidecar_pid,
             sidecar_first=self._first_combo.currentData() == "before",
@@ -4305,11 +4934,13 @@ class ClipboardPanel(QWidget):
         lay.setContentsMargins(11, 9, 11, 10)
         lay.setSpacing(7)
 
-        hdr = QHBoxLayout(); hdr.setSpacing(6)
+        hdr = QHBoxLayout()
+        hdr.setSpacing(6)
         icon_lbl = QLabel("JARVIS")
         icon_lbl.setFont(QFont(FONT_MONO, 8, QFont.Weight.Bold))
         icon_lbl.setStyleSheet(f"color: {C.PRI}; background: transparent;")
-        hdr.addWidget(icon_lbl); hdr.addStretch()
+        hdr.addWidget(icon_lbl)
+        hdr.addStretch()
         context_lbl = QLabel("QUICK ACTIONS")
         context_lbl.setFont(QFont(FONT_MONO, 7, QFont.Weight.Bold))
         context_lbl.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
@@ -4338,16 +4969,19 @@ class ClipboardPanel(QWidget):
         self._preview.setFixedHeight(30)
         lay.addWidget(self._preview)
 
-        btn_row = QHBoxLayout(); btn_row.setSpacing(6)
-        _bs = (f"QPushButton {{ background: {C.PANEL2}; color: {C.TEXT_MED}; "
-               f"border: 1px solid {C.BORDER}; border-radius: 6px; padding: 5px 7px; }}"
-               f"QPushButton:hover {{ color: {C.PRI}; background: {C.PRI_GHO}; "
-               f"border-color: {C.PRI_DIM}; }}")
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(6)
+        _bs = (
+            f"QPushButton {{ background: {C.PANEL2}; color: {C.TEXT_MED}; "
+            f"border: 1px solid {C.BORDER}; border-radius: 6px; padding: 5px 7px; }}"
+            f"QPushButton:hover {{ color: {C.PRI}; background: {C.PRI_GHO}; "
+            f"border-color: {C.PRI_DIM}; }}"
+        )
         for label, cmd_fmt in [
             ("Translate", "Translate this text to English: {text}"),
             ("Summarise", "Summarise this: {text}"),
-            ("Explain",   "Explain this: {text}"),
-            ("Fix",       "Fix grammar and spelling: {text}"),
+            ("Explain", "Explain this: {text}"),
+            ("Fix", "Fix grammar and spelling: {text}"),
         ]:
             b = QPushButton(label)
             b.setFixedHeight(30)
@@ -4375,7 +5009,8 @@ class ClipboardPanel(QWidget):
         if len(normalized) > 72:
             preview += "…"
         self._preview.setText(preview)
-        self.show(); self.raise_()
+        self.show()
+        self.raise_()
         self._dismiss_timer.start(8000)
 
 
@@ -4439,14 +5074,22 @@ class CursorFollowerOverlay(QWidget):
             painter.drawEllipse(center, radius, radius)
             gap = max(2.0, radius / 3)
             extent = radius + 4
-            painter.drawLine(QPointF(center.x() - extent, center.y()),
-                             QPointF(center.x() - gap, center.y()))
-            painter.drawLine(QPointF(center.x() + gap, center.y()),
-                             QPointF(center.x() + extent, center.y()))
-            painter.drawLine(QPointF(center.x(), center.y() - extent),
-                             QPointF(center.x(), center.y() - gap))
-            painter.drawLine(QPointF(center.x(), center.y() + gap),
-                             QPointF(center.x(), center.y() + extent))
+            painter.drawLine(
+                QPointF(center.x() - extent, center.y()),
+                QPointF(center.x() - gap, center.y()),
+            )
+            painter.drawLine(
+                QPointF(center.x() + gap, center.y()),
+                QPointF(center.x() + extent, center.y()),
+            )
+            painter.drawLine(
+                QPointF(center.x(), center.y() - extent),
+                QPointF(center.x(), center.y() - gap),
+            )
+            painter.drawLine(
+                QPointF(center.x(), center.y() + gap),
+                QPointF(center.x(), center.y() + extent),
+            )
         else:
             painter.drawEllipse(center, radius, radius)
             painter.setBrush(accent)
@@ -4477,16 +5120,27 @@ def _cursor_style_pixmap(style: str, size: int) -> QPixmap:
         halo.setAlpha(175)
         painter.setPen(QPen(halo, max(1.2, 1.8 * scale)))
         painter.setBrush(Qt.BrushStyle.NoBrush)
-        painter.drawEllipse(QPointF(5.0 * scale, 5.0 * scale),
-                            4.0 * scale, 4.0 * scale)
-        painter.setPen(QPen(white, max(2.0, 2.8 * scale),
-                            Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap,
-                            Qt.PenJoinStyle.RoundJoin))
+        painter.drawEllipse(QPointF(5.0 * scale, 5.0 * scale), 4.0 * scale, 4.0 * scale)
+        painter.setPen(
+            QPen(
+                white,
+                max(2.0, 2.8 * scale),
+                Qt.PenStyle.SolidLine,
+                Qt.PenCapStyle.RoundCap,
+                Qt.PenJoinStyle.RoundJoin,
+            )
+        )
         painter.setBrush(white)
         painter.drawPath(arrow)
-        painter.setPen(QPen(outline, max(1.0, 1.4 * scale),
-                            Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap,
-                            Qt.PenJoinStyle.RoundJoin))
+        painter.setPen(
+            QPen(
+                outline,
+                max(1.0, 1.4 * scale),
+                Qt.PenStyle.SolidLine,
+                Qt.PenCapStyle.RoundCap,
+                Qt.PenJoinStyle.RoundJoin,
+            )
+        )
         painter.setBrush(accent)
         painter.drawPath(arrow)
     elif style == "orb":
@@ -4502,15 +5156,15 @@ def _cursor_style_pixmap(style: str, size: int) -> QPixmap:
         painter.drawEllipse(center, radius * 0.72, radius * 0.72)
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(white)
-        painter.drawEllipse(center, max(1.0, 1.5 * scale),
-                            max(1.0, 1.5 * scale))
+        painter.drawEllipse(center, max(1.0, 1.5 * scale), max(1.0, 1.5 * scale))
     elif style == "reticle":
         center = QPointF(size / 2, size / 2)
         extent = size * 0.44
         gap = size * 0.15
         for color, width in ((outline, 3.2 * scale), (accent, 1.8 * scale)):
-            painter.setPen(QPen(color, width, Qt.PenStyle.SolidLine,
-                                Qt.PenCapStyle.RoundCap))
+            painter.setPen(
+                QPen(color, width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
+            )
             for x1, y1, x2, y2 in (
                 (center.x(), center.y() - extent, center.x(), center.y() - gap),
                 (center.x(), center.y() + gap, center.x(), center.y() + extent),
@@ -4520,8 +5174,7 @@ def _cursor_style_pixmap(style: str, size: int) -> QPixmap:
                 painter.drawLine(QPointF(x1, y1), QPointF(x2, y2))
         painter.setPen(QPen(outline, max(1.0, 1.3 * scale)))
         painter.setBrush(accent)
-        painter.drawEllipse(center, max(1.5, 2.4 * scale),
-                            max(1.5, 2.4 * scale))
+        painter.drawEllipse(center, max(1.5, 2.4 * scale), max(1.5, 2.4 * scale))
     elif style == "dot":
         center = QPointF(size / 2, size / 2)
         radius = max(2.4, size * 0.14)
@@ -4543,39 +5196,65 @@ def _apply_windows_system_cursor(style: str, size: int) -> None:
 
     class BitmapInfoHeader(ctypes.Structure):
         _fields_ = [
-            ("biSize", wintypes.DWORD), ("biWidth", wintypes.LONG),
-            ("biHeight", wintypes.LONG), ("biPlanes", wintypes.WORD),
-            ("biBitCount", wintypes.WORD), ("biCompression", wintypes.DWORD),
-            ("biSizeImage", wintypes.DWORD), ("biXPelsPerMeter", wintypes.LONG),
-            ("biYPelsPerMeter", wintypes.LONG), ("biClrUsed", wintypes.DWORD),
+            ("biSize", wintypes.DWORD),
+            ("biWidth", wintypes.LONG),
+            ("biHeight", wintypes.LONG),
+            ("biPlanes", wintypes.WORD),
+            ("biBitCount", wintypes.WORD),
+            ("biCompression", wintypes.DWORD),
+            ("biSizeImage", wintypes.DWORD),
+            ("biXPelsPerMeter", wintypes.LONG),
+            ("biYPelsPerMeter", wintypes.LONG),
+            ("biClrUsed", wintypes.DWORD),
             ("biClrImportant", wintypes.DWORD),
         ]
 
     class IconInfo(ctypes.Structure):
         _fields_ = [
-            ("fIcon", wintypes.BOOL), ("xHotspot", wintypes.DWORD),
-            ("yHotspot", wintypes.DWORD), ("hbmMask", ctypes.c_void_p),
+            ("fIcon", wintypes.BOOL),
+            ("xHotspot", wintypes.DWORD),
+            ("yHotspot", wintypes.DWORD),
+            ("hbmMask", ctypes.c_void_p),
             ("hbmColor", ctypes.c_void_p),
         ]
 
-    image = _cursor_style_pixmap(style, size).toImage().convertToFormat(
-        QImage.Format.Format_ARGB32_Premultiplied)
+    image = (
+        _cursor_style_pixmap(style, size)
+        .toImage()
+        .convertToFormat(QImage.Format.Format_ARGB32_Premultiplied)
+    )
     width, height = image.width(), image.height()
     pixels = image.bits().asstring(image.sizeInBytes())
     header = BitmapInfoHeader(
-        ctypes.sizeof(BitmapInfoHeader), width, -height, 1, 32, 0,
-        len(pixels), 0, 0, 0, 0,
+        ctypes.sizeof(BitmapInfoHeader),
+        width,
+        -height,
+        1,
+        32,
+        0,
+        len(pixels),
+        0,
+        0,
+        0,
+        0,
     )
     gdi32 = ctypes.WinDLL("gdi32", use_last_error=True)
     user32 = ctypes.WinDLL("user32", use_last_error=True)
     gdi32.CreateDIBSection.restype = ctypes.c_void_p
     gdi32.CreateDIBSection.argtypes = [
-        ctypes.c_void_p, ctypes.POINTER(BitmapInfoHeader), wintypes.UINT,
-        ctypes.POINTER(ctypes.c_void_p), ctypes.c_void_p, wintypes.DWORD,
+        ctypes.c_void_p,
+        ctypes.POINTER(BitmapInfoHeader),
+        wintypes.UINT,
+        ctypes.POINTER(ctypes.c_void_p),
+        ctypes.c_void_p,
+        wintypes.DWORD,
     ]
     gdi32.CreateBitmap.restype = ctypes.c_void_p
     gdi32.CreateBitmap.argtypes = [
-        ctypes.c_int, ctypes.c_int, wintypes.UINT, wintypes.UINT,
+        ctypes.c_int,
+        ctypes.c_int,
+        wintypes.UINT,
+        wintypes.UINT,
         ctypes.c_void_p,
     ]
     gdi32.DeleteObject.argtypes = [ctypes.c_void_p]
@@ -4587,7 +5266,8 @@ def _apply_windows_system_cursor(style: str, size: int) -> None:
 
     bits = ctypes.c_void_p()
     color_bitmap = gdi32.CreateDIBSection(
-        None, ctypes.byref(header), 0, ctypes.byref(bits), None, 0)
+        None, ctypes.byref(header), 0, ctypes.byref(bits), None, 0
+    )
     if not color_bitmap or not bits:
         raise ctypes.WinError(ctypes.get_last_error())
     mask_bitmap = None
@@ -4602,8 +5282,12 @@ def _apply_windows_system_cursor(style: str, size: int) -> None:
         else:
             x_hotspot = y_hotspot = size // 2
         icon_info = IconInfo(
-            False, max(0, min(width - 1, x_hotspot)),
-            max(0, min(height - 1, y_hotspot)), mask_bitmap, color_bitmap)
+            False,
+            max(0, min(width - 1, x_hotspot)),
+            max(0, min(height - 1, y_hotspot)),
+            mask_bitmap,
+            color_bitmap,
+        )
         cursor = user32.CreateIconIndirect(ctypes.byref(icon_info))
         if not cursor:
             raise ctypes.WinError(ctypes.get_last_error())
@@ -4623,9 +5307,13 @@ def _apply_windows_system_cursor(style: str, size: int) -> None:
 
 def _restore_windows_system_cursors() -> None:
     import ctypes
+
     user32 = ctypes.WinDLL("user32", use_last_error=True)
     user32.SystemParametersInfoW.argtypes = [
-        ctypes.c_uint, ctypes.c_uint, ctypes.c_void_p, ctypes.c_uint,
+        ctypes.c_uint,
+        ctypes.c_uint,
+        ctypes.c_void_p,
+        ctypes.c_uint,
     ]
     user32.SystemParametersInfoW.restype = ctypes.c_int
     if not user32.SystemParametersInfoW(0x0057, 0, None, 0):
@@ -4746,6 +5434,7 @@ class CursorRadialMenu(QWidget):
             if item.widget():
                 item.widget().deleteLater()
         from memory.config_manager import get_cursor_assistant_settings
+
         settings = get_cursor_assistant_settings()
         actions = [key for key in settings["menu_actions"] if key in self._ACTIONS]
         if not actions:
@@ -4785,7 +5474,8 @@ class CursorRadialMenu(QWidget):
         self._rebuild_actions()
         has_clipboard = bool(QApplication.clipboard().text().strip())
         self.prompt.setPlaceholderText(
-            "Ask about copied text…" if has_clipboard else "Ask JARVIS…")
+            "Ask about copied text…" if has_clipboard else "Ask JARVIS…"
+        )
         point = QCursor.pos()
         screen = QApplication.screenAt(point) or QApplication.primaryScreen()
         area = screen.availableGeometry() if screen else QRect(0, 0, 1920, 1080)
@@ -4824,8 +5514,9 @@ class CursorRadialMenu(QWidget):
             self._dismiss_timer.stop()
 
     def _dismiss_if_idle(self):
-        if (self._prompt_row.isVisible()
-                and (self.prompt.hasFocus() or self.prompt.text().strip())):
+        if self._prompt_row.isVisible() and (
+            self.prompt.hasFocus() or self.prompt.text().strip()
+        ):
             return
         self.hide()
 
@@ -4849,7 +5540,8 @@ class CursorRadialMenu(QWidget):
             text = QApplication.clipboard().text().strip()
             if not text:
                 self.owner._log.append_log(
-                    "SYS: Clipboard is empty — copy text first, then retry.")
+                    "SYS: Clipboard is empty — copy text first, then retry."
+                )
                 return
             prompts = {
                 "summarize": "Summarise this text concisely:\n\n",
@@ -4886,7 +5578,8 @@ class ScreenRegionSelector(QWidget):
         self.setCursor(Qt.CursorShape.CrossCursor)
         self._screenshot = screenshot
         self._display = screenshot.scaled(
-            geometry.size(), Qt.AspectRatioMode.IgnoreAspectRatio,
+            geometry.size(),
+            Qt.AspectRatioMode.IgnoreAspectRatio,
             Qt.TransformationMode.SmoothTransformation,
         )
         self._on_selected = on_selected
@@ -4911,8 +5604,9 @@ class ScreenRegionSelector(QWidget):
             painter.setPen(QPen(QColor(C.PRI), 2))
             painter.drawRect(border)
 
-            corner_length = max(6, min(18, selection.width() // 3,
-                                       selection.height() // 3))
+            corner_length = max(
+                6, min(18, selection.width() // 3, selection.height() // 3)
+            )
             left, top = selection.left(), selection.top()
             right, bottom = selection.right(), selection.bottom()
             painter.setPen(QPen(QColor(C.PRI), 3))
@@ -4927,8 +5621,9 @@ class ScreenRegionSelector(QWidget):
         painter.setBrush(QColor(0, 13, 20, 220))
         painter.drawRoundedRect(hint, 8, 8)
         painter.setPen(QColor(C.WHITE))
-        painter.drawText(hint, Qt.AlignmentFlag.AlignCenter,
-                         "Drag to select  ·  Esc to cancel")
+        painter.drawText(
+            hint, Qt.AlignmentFlag.AlignCenter, "Drag to select  ·  Esc to cancel"
+        )
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
@@ -4941,7 +5636,9 @@ class ScreenRegionSelector(QWidget):
 
     def mouseMoveEvent(self, event):
         if self._start is not None:
-            self._selection = QRect(self._start, event.position().toPoint()).normalized()
+            self._selection = QRect(
+                self._start, event.position().toPoint()
+            ).normalized()
             self.update()
             event.accept()
             return
@@ -4950,11 +5647,12 @@ class ScreenRegionSelector(QWidget):
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton and self._start is not None:
             self._selection = QRect(
-                    self._start, event.position().toPoint()).normalized()
+                self._start, event.position().toPoint()
+            ).normalized()
             self._start = None
             if self._selection.width() < 12 or self._selection.height() < 12:
-                    self._cancel()
-                    return
+                self._cancel()
+                return
             self._finish_selection()
             event.accept()
             return
@@ -4982,10 +5680,12 @@ class ScreenRegionSelector(QWidget):
         cropped = self._screenshot.copy(source)
         if cropped.width() > 1280 or cropped.height() > 720:
             target = cropped.size().scaled(
-                    QSize(1280, 720), Qt.AspectRatioMode.KeepAspectRatio)
+                QSize(1280, 720), Qt.AspectRatioMode.KeepAspectRatio
+            )
             cropped = cropped.scaled(
-                    target, Qt.AspectRatioMode.KeepAspectRatio,
-                    Qt.TransformationMode.SmoothTransformation,
+                target,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
             )
         data = QByteArray()
         buffer = QBuffer(data)
@@ -5054,7 +5754,8 @@ class CursorAnswerBubble(QWidget):
         layout.addWidget(self._question)
         self._analyze = QPushButton("ANALYZE SELECTED AREA")
         self._analyze.clicked.connect(
-            lambda: self.analysis_requested.emit(self._question.text().strip()))
+            lambda: self.analysis_requested.emit(self._question.text().strip())
+        )
         self._analyze.setStyleSheet(
             f"QPushButton {{ background:{C.PRI_GHO}; color:{C.PRI}; "
             f"border:1px solid {C.BORDER_B}; border-radius:5px; padding:6px; }}"
@@ -5073,7 +5774,8 @@ class CursorAnswerBubble(QWidget):
         footer.addStretch(1)
         self._copy = QPushButton("COPY ANSWER")
         self._copy.clicked.connect(
-            lambda: QApplication.clipboard().setText(self._answer.toPlainText()))
+            lambda: QApplication.clipboard().setText(self._answer.toPlainText())
+        )
         self._copy.setStyleSheet(
             f"QPushButton {{ color:{C.TEXT_MED}; background:transparent; "
             f"border:1px solid {C.BORDER}; border-radius:4px; padding:4px 8px; }}"
@@ -5086,10 +5788,8 @@ class CursorAnswerBubble(QWidget):
         point = QCursor.pos()
         screen = QApplication.screenAt(point) or QApplication.primaryScreen()
         area = screen.availableGeometry() if screen else QRect(0, 0, 1920, 1080)
-        x = max(area.left(), min(point.x() + 16,
-                                     area.right() - self.width() + 1))
-        y = max(area.top(), min(point.y() + 16,
-                                    area.bottom() - self.height() + 1))
+        x = max(area.left(), min(point.x() + 16, area.right() - self.width() + 1))
+        y = max(area.top(), min(point.y() + 16, area.bottom() - self.height() + 1))
         self.move(x, y)
         self.show()
         self.raise_()
@@ -5099,9 +5799,13 @@ class CursorAnswerBubble(QWidget):
     def set_busy(self, busy: bool):
         self._analyze.setEnabled(not busy)
         if busy:
-            self._answer.setPlainText("Analyzing the selected area with the fast vision model…")
+            self._answer.setPlainText(
+                "Analyzing the selected area with the fast vision model…"
+            )
         else:
-            self._answer.setPlainText("Analysis failed. Check the JARVIS activity log and retry.")
+            self._answer.setPlainText(
+                "Analysis failed. Check the JARVIS activity log and retry."
+            )
 
     def set_ready(self):
         self._analyze.setEnabled(True)
@@ -5109,7 +5813,9 @@ class CursorAnswerBubble(QWidget):
 
     def set_result(self, text: str, ok: bool):
         self._analyze.setEnabled(True)
-        self._answer.setPlainText(text if ok else f"Could not analyze the selected area:\n{text}")
+        self._answer.setPlainText(
+            text if ok else f"Could not analyze the selected area:\n{text}"
+        )
 
 
 class PluginSettingsOverlay(QWidget):
@@ -5123,7 +5829,7 @@ class PluginSettingsOverlay(QWidget):
     install none and this panel simply says there's nothing to configure.
     """
 
-    _test_done = pyqtSignal(str, bool, str)   # namespace, ok, message
+    _test_done = pyqtSignal(str, bool, str)  # namespace, ok, message
     _OW = 460
 
     def __init__(self, sections: list[dict], parent=None):
@@ -5137,29 +5843,37 @@ class PluginSettingsOverlay(QWidget):
             }}
         """)
         self._sections = sections or []
-        self._widgets: dict[tuple, object] = {}    # (namespace, key) -> input widget
-        self._types:   dict[tuple, str]    = {}     # (namespace, key) -> field type
-        self._status_labels: dict[str, QLabel] = {} # namespace -> status QLabel
+        self._widgets: dict[tuple, object] = {}  # (namespace, key) -> input widget
+        self._types: dict[tuple, str] = {}  # (namespace, key) -> field type
+        self._status_labels: dict[str, QLabel] = {}  # namespace -> status QLabel
         self._test_done.connect(self._on_test_done)
 
-        self._fs = (f"QLineEdit {{ background: {C.PANEL2}; color: {C.TEXT}; "
-                    f"border: 1px solid {C.BORDER}; border-radius: 3px; padding: 4px 8px; }}"
-                    f"QLineEdit:focus {{ border: 1px solid {C.PRI}; }}")
+        self._fs = (
+            f"QLineEdit {{ background: {C.PANEL2}; color: {C.TEXT}; "
+            f"border: 1px solid {C.BORDER}; border-radius: 3px; padding: 4px 8px; }}"
+            f"QLineEdit:focus {{ border: 1px solid {C.PRI}; }}"
+        )
 
         root = QVBoxLayout(self)
         root.setContentsMargins(22, 16, 22, 16)
         root.setSpacing(8)
 
         root.addWidget(self._lbl("⚙  PLUGIN SETTINGS", 12, True))
-        sep = QFrame(); sep.setFrameShape(QFrame.Shape.HLine)
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
         sep.setStyleSheet(f"color: {C.BORDER}; margin: 2px 0;")
         root.addWidget(sep)
 
         if not self._sections:
-            root.addWidget(self._lbl(
-                "No configurable plugins are installed.\nDrop a plugin that needs "
-                "settings (like the 3D-printer suite) into the plugins folder and "
-                "it will show up here.", 9, color=C.TEXT_DIM))
+            root.addWidget(
+                self._lbl(
+                    "No configurable plugins are installed.\nDrop a plugin that needs "
+                    "settings (like the 3D-printer suite) into the plugins folder and "
+                    "it will show up here.",
+                    9,
+                    color=C.TEXT_DIM,
+                )
+            )
         else:
             scroll = QScrollArea()
             scroll.setWidgetResizable(True)
@@ -5177,7 +5891,8 @@ class PluginSettingsOverlay(QWidget):
             root.addWidget(scroll, 1)
 
         # ── bottom buttons ───────────────────────────────────────────────────
-        btn_row = QHBoxLayout(); btn_row.setSpacing(8)
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(8)
         if self._sections:
             save_btn = QPushButton("▸  SAVE")
             save_btn.setFixedHeight(34)
@@ -5205,17 +5920,21 @@ class PluginSettingsOverlay(QWidget):
         root.addLayout(btn_row)
 
     # ── helpers ───────────────────────────────────────────────────────────────
-    def _lbl(self, txt, fs=9, bold=False, color=C.PRI,
-             align=Qt.AlignmentFlag.AlignLeft):
-        w = QLabel(txt); w.setAlignment(align); w.setWordWrap(True)
-        w.setFont(QFont(FONT_MONO, fs,
-                        QFont.Weight.Bold if bold else QFont.Weight.Normal))
+    def _lbl(
+        self, txt, fs=9, bold=False, color=C.PRI, align=Qt.AlignmentFlag.AlignLeft
+    ):
+        w = QLabel(txt)
+        w.setAlignment(align)
+        w.setWordWrap(True)
+        w.setFont(
+            QFont(FONT_MONO, fs, QFont.Weight.Bold if bold else QFont.Weight.Normal)
+        )
         w.setStyleSheet(f"color: {color}; background: transparent;")
         return w
 
     def _build_section(self, form: QVBoxLayout, sec: dict):
-        ns     = sec.get("namespace") or sec.get("plugin") or "plugin"
-        title  = sec.get("title") or ns
+        ns = sec.get("namespace") or sec.get("plugin") or "plugin"
+        title = sec.get("title") or ns
         fields = sec.get("fields") or []
         values = sec.get("values") or {}
 
@@ -5225,11 +5944,11 @@ class PluginSettingsOverlay(QWidget):
         for field in fields:
             if not isinstance(field, dict) or not field.get("key"):
                 continue
-            key   = field["key"]
+            key = field["key"]
             ftype = (field.get("type") or "text").lower()
             label = field.get("label") or key
             default = field.get("default")
-            stored  = values.get(key, default)
+            stored = values.get(key, default)
 
             form.addWidget(self._lbl(label.upper(), 8, color=C.TEXT_DIM))
 
@@ -5242,7 +5961,8 @@ class PluginSettingsOverlay(QWidget):
                     f"QComboBox {{ background: {C.PANEL2}; color: {C.TEXT}; "
                     f"border: 1px solid {C.BORDER}; border-radius: 3px; padding: 2px 8px; }}"
                     f"QComboBox QAbstractItemView {{ background: {C.PANEL2}; color: {C.TEXT}; "
-                    f"selection-background-color: {C.PRI_GHO}; }}")
+                    f"selection-background-color: {C.PRI_GHO}; }}"
+                )
                 if stored is not None:
                     w.setCurrentText(str(stored))
             elif ftype == "toggle":
@@ -5265,7 +5985,7 @@ class PluginSettingsOverlay(QWidget):
                     w.setEchoMode(QLineEdit.EchoMode.Password)
 
             self._widgets[(ns, key)] = w
-            self._types[(ns, key)]   = ftype
+            self._types[(ns, key)] = ftype
             form.addWidget(w)
 
         # optional test/connect action button + status line
@@ -5288,7 +6008,8 @@ class PluginSettingsOverlay(QWidget):
         self._status_labels[ns] = status
         form.addWidget(status)
 
-        line = QFrame(); line.setFrameShape(QFrame.Shape.HLine)
+        line = QFrame()
+        line.setFrameShape(QFrame.Shape.HLine)
         line.setStyleSheet(f"color: {C.BORDER}; margin: 4px 0;")
         form.addWidget(line)
 
@@ -5296,11 +6017,15 @@ class PluginSettingsOverlay(QWidget):
         on = btn.isChecked()
         btn.setText("ON" if on else "OFF")
         if on:
-            btn.setStyleSheet(f"QPushButton {{ background: {C.PRI_GHO}; color: {C.PRI}; "
-                              f"border: 1px solid {C.PRI}; border-radius: 3px; }}")
+            btn.setStyleSheet(
+                f"QPushButton {{ background: {C.PRI_GHO}; color: {C.PRI}; "
+                f"border: 1px solid {C.PRI}; border-radius: 3px; }}"
+            )
         else:
-            btn.setStyleSheet(f"QPushButton {{ background: transparent; color: {C.TEXT_MED}; "
-                              f"border: 1px solid {C.BORDER}; border-radius: 3px; }}")
+            btn.setStyleSheet(
+                f"QPushButton {{ background: transparent; color: {C.TEXT_MED}; "
+                f"border: 1px solid {C.BORDER}; border-radius: 3px; }}"
+            )
 
     # ── data ──────────────────────────────────────────────────────────────────
     def _gather(self, ns: str) -> dict:
@@ -5319,6 +6044,7 @@ class PluginSettingsOverlay(QWidget):
 
     def _save_ns(self, ns: str):
         from memory.config_manager import save_plugin_config
+
         save_plugin_config(ns, self._gather(ns))
 
     def _save_all(self):
@@ -5332,14 +6058,20 @@ class PluginSettingsOverlay(QWidget):
                     lbl.setStyleSheet(f"color: {C.PRI}; background: transparent;")
 
     def _run_action(self, ns: str):
-        sec = next((s for s in self._sections
-                    if (s.get("namespace") or s.get("plugin")) == ns), None)
+        sec = next(
+            (
+                s
+                for s in self._sections
+                if (s.get("namespace") or s.get("plugin")) == ns
+            ),
+            None,
+        )
         if not sec:
             return
         run_fn = (sec.get("action") or {}).get("run")
         if not callable(run_fn):
             return
-        self._save_ns(ns)                 # persist what the user typed before testing
+        self._save_ns(ns)  # persist what the user typed before testing
         values = self._gather(ns)
         lbl = self._status_labels.get(ns)
         if lbl:
@@ -5375,9 +6107,16 @@ class RemoteKeyOverlay(QWidget):
 
     _OW, _OH = 400, 465
 
-    def __init__(self, url: str, key: str, auto_login_url: str = "",
-                 manual_url: str = "", expiry_secs: int = 600, parent=None,
-                 bind_error: str = ""):
+    def __init__(
+        self,
+        url: str,
+        key: str,
+        auto_login_url: str = "",
+        manual_url: str = "",
+        expiry_secs: int = 600,
+        parent=None,
+        bind_error: str = "",
+    ):
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(f"""
@@ -5387,27 +6126,30 @@ class RemoteKeyOverlay(QWidget):
                 border-radius: 14px;
             }}
         """)
-        self._expiry          = time.time() + expiry_secs
-        self._on_new_key      = None
-        self._auto_login_url  = auto_login_url
-        self._manual_url      = manual_url or url
+        self._expiry = time.time() + expiry_secs
+        self._on_new_key = None
+        self._auto_login_url = auto_login_url
+        self._manual_url = manual_url or url
 
         lay = QVBoxLayout(self)
         lay.setContentsMargins(24, 16, 24, 16)
         lay.setSpacing(5)
 
-        def _lbl(txt, fs=9, bold=False, color=C.PRI,
-                 align=Qt.AlignmentFlag.AlignCenter):
+        def _lbl(
+            txt, fs=9, bold=False, color=C.PRI, align=Qt.AlignmentFlag.AlignCenter
+        ):
             w = QLabel(txt)
             w.setAlignment(align)
-            w.setFont(QFont(FONT_MONO, fs,
-                            QFont.Weight.Bold if bold else QFont.Weight.Normal))
+            w.setFont(
+                QFont(FONT_MONO, fs, QFont.Weight.Bold if bold else QFont.Weight.Normal)
+            )
             w.setStyleSheet(f"color: {color}; background: transparent;")
             w.setWordWrap(True)
             return w
 
         lay.addWidget(_lbl("◈  REMOTE ACCESS", 12, True))
-        sep = QFrame(); sep.setFrameShape(QFrame.Shape.HLine)
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
         sep.setStyleSheet(f"color: {C.BORDER}; margin: 1px 0;")
         lay.addWidget(sep)
 
@@ -5426,7 +6168,9 @@ class RemoteKeyOverlay(QWidget):
 
         self._update_qr(auto_login_url)
 
-        lay.addWidget(_lbl("Scan with phone camera to connect instantly", 8, color=C.TEXT_DIM))
+        lay.addWidget(
+            _lbl("Scan with phone camera to connect instantly", 8, color=C.TEXT_DIM)
+        )
 
         # THE ONE FAILURE THAT LOOKS LIKE THE SERVER BEING OFF.
         #
@@ -5449,6 +6193,7 @@ class RemoteKeyOverlay(QWidget):
 
         try:
             from dashboard.server import blocking_firewall_rules
+
             _blocked = blocking_firewall_rules()
         except Exception:
             _blocked = []
@@ -5459,22 +6204,32 @@ class RemoteKeyOverlay(QWidget):
                 "and accept the Windows prompt, or remove the rules named "
                 + ", ".join(sorted({n for n, _ in _blocked}))
                 + " under Windows Defender Firewall → Inbound Rules.",
-                8, color="#f4b942")
+                8,
+                color="#f4b942",
+            )
             lay.addWidget(warn)
 
-        sep2 = QFrame(); sep2.setFrameShape(QFrame.Shape.HLine)
+        sep2 = QFrame()
+        sep2.setFrameShape(QFrame.Shape.HLine)
         sep2.setStyleSheet(f"color: {C.BORDER}; margin: 1px 0;")
         lay.addWidget(sep2)
 
-        lay.addWidget(_lbl("Or enter manually:", 7, color=C.TEXT_DIM,
-                           align=Qt.AlignmentFlag.AlignLeft))
+        lay.addWidget(
+            _lbl(
+                "Or enter manually:",
+                7,
+                color=C.TEXT_DIM,
+                align=Qt.AlignmentFlag.AlignLeft,
+            )
+        )
 
         self._url_lbl = QLabel(self._manual_url)
         self._url_lbl.setFont(QFont(FONT_MONO, 8))
         self._url_lbl.setStyleSheet(f"color: {C.PRI_DIM}; background: transparent;")
         self._url_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._url_lbl.setTextInteractionFlags(
-            Qt.TextInteractionFlag.TextSelectableByMouse)
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
         lay.addWidget(self._url_lbl)
 
         self._key_lbl = QLabel(key)
@@ -5496,7 +6251,8 @@ class RemoteKeyOverlay(QWidget):
         self._timer_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lay.addWidget(self._timer_lbl)
 
-        btn_row = QHBoxLayout(); btn_row.setSpacing(8)
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(8)
         new_btn = QPushButton("NEW KEY")
         new_btn.setFixedHeight(32)
         new_btn.setFont(QFont(FONT_MONO, 8, QFont.Weight.Bold))
@@ -5541,8 +6297,10 @@ class RemoteKeyOverlay(QWidget):
         try:
             import qrcode as _qrmod
             from io import BytesIO
+
             qr = _qrmod.QRCode(
-                box_size=5, border=2,
+                box_size=5,
+                border=2,
                 error_correction=_qrmod.constants.ERROR_CORRECT_M,
             )
             qr.add_data(url)
@@ -5553,9 +6311,12 @@ class RemoteKeyOverlay(QWidget):
             px = QPixmap()
             px.loadFromData(buf.getvalue())
             self._qr_label.setPixmap(
-                px.scaled(170, 170,
-                          Qt.AspectRatioMode.KeepAspectRatio,
-                          Qt.TransformationMode.SmoothTransformation)
+                px.scaled(
+                    170,
+                    170,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
             )
         except ImportError:
             self._qr_label.setText("pip install\nqrcode[pil]")
@@ -5601,11 +6362,11 @@ class RemoteKeyOverlay(QWidget):
         if self._on_new_key:
             result = self._on_new_key()
             if result:
-                url    = result[0]
-                key    = result[1]
-                auto   = result[2] if len(result) >= 3 else ""
+                url = result[0]
+                key = result[1]
+                auto = result[2] if len(result) >= 3 else ""
                 manual = result[3] if len(result) >= 4 else url
-                self._manual_url     = manual or url
+                self._manual_url = manual or url
                 self._url_lbl.setText(self._manual_url)
                 self._key_lbl.setText(key)
                 self._auto_login_url = auto
@@ -5637,6 +6398,7 @@ class CommandPalette(QWidget):
     It deliberately delegates to MainWindow instead of owning assistant state;
     that keeps all existing callbacks, plugins and threading rules unchanged.
     """
+
     def __init__(self, owner, parent=None):
         super().__init__(parent)
         self._owner = owner
@@ -5684,10 +6446,24 @@ class CommandPalette(QWidget):
             ("◌  Plugins", self._owner._open_plugin_manager),
             ("◉  Memory", self._owner._open_memory_panel),
             ("⌂  Remote control", self._owner._open_remote),
-            ("⇥  Explain clipboard", lambda: self._clipboard("Explain this code step by step: {text}")),
-            ("≡  Summarise clipboard", lambda: self._clipboard("Summarise this: {text}")),
-            ("↔  Translate clipboard", lambda: self._clipboard("Translate this text to English: {text}")),
-            ("◷  Plan my day", lambda: self._owner._dispatch_text("Help me plan my day. Ask what is on my list.")),
+            (
+                "⇥  Explain clipboard",
+                lambda: self._clipboard("Explain this code step by step: {text}"),
+            ),
+            (
+                "≡  Summarise clipboard",
+                lambda: self._clipboard("Summarise this: {text}"),
+            ),
+            (
+                "↔  Translate clipboard",
+                lambda: self._clipboard("Translate this text to English: {text}"),
+            ),
+            (
+                "◷  Plan my day",
+                lambda: self._owner._dispatch_text(
+                    "Help me plan my day. Ask what is on my list."
+                ),
+            ),
         ]
 
     def _clear_rows(self):
@@ -5699,7 +6475,9 @@ class CommandPalette(QWidget):
     def _render(self):
         self._clear_rows()
         query = self._query.text().strip().lower()
-        matches = [(label, fn) for label, fn in self._actions() if query in label.lower()]
+        matches = [
+            (label, fn) for label, fn in self._actions() if query in label.lower()
+        ]
         for label, fn in matches[:8]:
             btn = QPushButton(label)
             btn.setFont(QFont(FONT_MONO, 9))
@@ -5707,7 +6485,9 @@ class CommandPalette(QWidget):
             btn.clicked.connect(lambda _=False, action=fn: self._run(action))
             self._rows.addWidget(btn)
         if not matches:
-            empty = QLabel("No matching action — press Enter to send this as a request.")
+            empty = QLabel(
+                "No matching action — press Enter to send this as a request."
+            )
             empty.setStyleSheet(f"color: {C.TEXT_DIM};")
             self._rows.addWidget(empty)
 
@@ -5716,7 +6496,9 @@ class CommandPalette(QWidget):
         if text:
             self._owner._dispatch_text(template.format(text=text))
         else:
-            self._owner._log.append_log("SYS: Clipboard is empty — copy text first, then retry.")
+            self._owner._log.append_log(
+                "SYS: Clipboard is empty — copy text first, then retry."
+            )
 
     def _run(self, action):
         self.close()
@@ -5735,11 +6517,13 @@ class CommandPalette(QWidget):
 
 class MiniOrb(QWidget):
     """Compact always-on-top JARVIS interface used in place of the main window."""
+
     def __init__(self, owner):
         # Deliberately parentless: hiding the full window must not hide this one.
         super().__init__(
             None,
-            Qt.WindowType.Tool | Qt.WindowType.WindowStaysOnTopHint
+            Qt.WindowType.Tool
+            | Qt.WindowType.WindowStaysOnTopHint
             | Qt.WindowType.FramelessWindowHint,
         )
         self.owner = owner
@@ -5767,23 +6551,28 @@ class MiniOrb(QWidget):
         bar.addWidget(self.status)
         bar.addStretch(1)
         self.full_button = self._icon_button(
-            "fullscreen.svg", "Return to the full JARVIS interface",
+            "fullscreen.svg",
+            "Return to the full JARVIS interface",
             owner._restore_full_window,
         )
         bar.addWidget(self.full_button)
         self.mic = self._icon_button(
-            "microphone.svg", "Mute microphone", owner._toggle_mute)
+            "microphone.svg", "Mute microphone", owner._toggle_mute
+        )
         bar.addWidget(self.mic)
         self.stop_button = self._icon_button(
-            "stop.svg", "Interrupt JARVIS", owner._do_interrupt)
+            "stop.svg", "Interrupt JARVIS", owner._do_interrupt
+        )
         bar.addWidget(self.stop_button)
         self.collapse_button = self._icon_button(
-            "collapse.svg", "Collapse to a small floating orb",
+            "collapse.svg",
+            "Collapse to a small floating orb",
             lambda: self._set_collapsed(True),
         )
         bar.addWidget(self.collapse_button)
         self.close_button = self._icon_button(
-            "close.svg", "Hide JARVIS Mini", self.hide)
+            "close.svg", "Hide JARVIS Mini", self.hide
+        )
         bar.addWidget(self.close_button)
         root.addLayout(bar)
 
@@ -5795,10 +6584,10 @@ class MiniOrb(QWidget):
         self.prompt.setFixedHeight(27)
         row.addWidget(self.prompt, 1)
         self.attach_button = self._icon_button(
-            "attach.svg", "Attach a file", self._attach)
+            "attach.svg", "Attach a file", self._attach
+        )
         row.addWidget(self.attach_button)
-        self.send_button = self._icon_button(
-            "send.svg", "Send message", self._send)
+        self.send_button = self._icon_button("send.svg", "Send message", self._send)
         row.addWidget(self.send_button)
         root.addLayout(row)
         self._timer = QTimer(self)
@@ -5808,7 +6597,9 @@ class MiniOrb(QWidget):
         self._apply_theme()
         self.setFixedSize(292, 68)
         screen = QApplication.primaryScreen().availableGeometry()
-        self.move(screen.right() - self.width() - 24, screen.bottom() - self.height() - 48)
+        self.move(
+            screen.right() - self.width() - 24, screen.bottom() - self.height() - 48
+        )
 
     def _icon_button(self, filename: str, hint: str, callback) -> QPushButton:
         button = QPushButton()
@@ -5835,10 +6626,14 @@ class MiniOrb(QWidget):
             f"QPushButton:hover {{ background:{C.PRI_GHO}; border-color:{C.PRI_DIM}; }}"
         )
         self.title.setStyleSheet(f"color:{C.PRI}; border:none; background:transparent;")
-        self.status.setStyleSheet(f"color:{C.TEXT_DIM}; border:none; background:transparent;")
+        self.status.setStyleSheet(
+            f"color:{C.TEXT_DIM}; border:none; background:transparent;"
+        )
         for button in self.findChildren(QPushButton):
             original = button._mini_original_icon
-            button.setIcon(_tint_icon(original, C.PRI) if C.PANEL == "#ffffff" else original)
+            button.setIcon(
+                _tint_icon(original, C.PRI) if C.PANEL == "#ffffff" else original
+            )
         self._update_mic_button(force=True)
 
     def _update_mic_button(self, force: bool = False):
@@ -5849,10 +6644,12 @@ class MiniOrb(QWidget):
         icon_name = "microphone-muted.svg" if muted else "microphone.svg"
         icon = QIcon(str(BASE_DIR / "assets" / "icons" / icon_name))
         self.mic._mini_original_icon = icon
-        self.mic.setIcon(_tint_icon(icon, C.MUTED_C if muted else C.GREEN)
-                         if C.PANEL == "#ffffff" else icon)
-        self.mic.setToolTip(
-            "Unmute microphone" if muted else "Mute microphone")
+        self.mic.setIcon(
+            _tint_icon(icon, C.MUTED_C if muted else C.GREEN)
+            if C.PANEL == "#ffffff"
+            else icon
+        )
+        self.mic.setToolTip("Unmute microphone" if muted else "Mute microphone")
         self.mic.setAccessibleName(self.mic.toolTip())
 
     def _set_collapsed(self, collapsed: bool):
@@ -5861,9 +6658,16 @@ class MiniOrb(QWidget):
         bottom_right = self.frameGeometry().bottomRight()
         self._collapsed = collapsed
         for widget in (
-            self.title, self.status, self.full_button, self.mic,
-            self.stop_button, self.collapse_button, self.close_button,
-            self.prompt, self.attach_button, self.send_button,
+            self.title,
+            self.status,
+            self.full_button,
+            self.mic,
+            self.stop_button,
+            self.collapse_button,
+            self.close_button,
+            self.prompt,
+            self.attach_button,
+            self.send_button,
         ):
             widget.setVisible(not collapsed)
         if collapsed:
@@ -5878,8 +6682,9 @@ class MiniOrb(QWidget):
             self._root_layout.setContentsMargins(6, 5, 6, 5)
             self._root_layout.setSpacing(4)
             self.setFixedSize(292, 68)
-        self.move(bottom_right.x() - self.width() + 1,
-                  bottom_right.y() - self.height() + 1)
+        self.move(
+            bottom_right.x() - self.width() + 1, bottom_right.y() - self.height() + 1
+        )
 
     def _expand(self):
         if self._collapsed:
@@ -5914,13 +6719,18 @@ class _MiniOrbTitle(QLabel):
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
-            self._drag_offset = event.globalPosition().toPoint() - self._owner.frameGeometry().topLeft()
+            self._drag_offset = (
+                event.globalPosition().toPoint() - self._owner.frameGeometry().topLeft()
+            )
             event.accept()
             return
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
-        if self._drag_offset is not None and event.buttons() & Qt.MouseButton.LeftButton:
+        if (
+            self._drag_offset is not None
+            and event.buttons() & Qt.MouseButton.LeftButton
+        ):
             self._owner.move(event.globalPosition().toPoint() - self._drag_offset)
             event.accept()
             return
@@ -6029,7 +6839,9 @@ class ContentReaderWindow(QWidget):
         self._syncing_tabs = False
         root.addWidget(self._tabs, 1)
 
-        self._status = QLabel("Select text to ask JARVIS about it. Right-click for copy options.")
+        self._status = QLabel(
+            "Select text to ask JARVIS about it. Right-click for copy options."
+        )
         self._status.setFont(QFont(FONT_UI, 9))
         self._status.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
         root.addWidget(self._status)
@@ -6066,8 +6878,14 @@ class ContentReaderWindow(QWidget):
                 page.setProperty("contentHtml", html)
                 page.moveCursor(page.textCursor().MoveOperation.Start)
 
-        active = next((i for i in range(self._tabs.count())
-                       if self._tabs.widget(i).property("contentId") == active_id), 0)
+        active = next(
+            (
+                i
+                for i in range(self._tabs.count())
+                if self._tabs.widget(i).property("contentId") == active_id
+            ),
+            0,
+        )
         if self._tabs.count():
             self._tabs.setCurrentIndex(active)
         self._syncing_tabs = False
@@ -6103,7 +6921,9 @@ class ContentReaderWindow(QWidget):
                 self._status.setText("No match found.")
 
     def _operate(self, operation: str):
-        selected = self._edit.textCursor().selectedText().replace("\u2029", "\n").strip()
+        selected = (
+            self._edit.textCursor().selectedText().replace("\u2029", "\n").strip()
+        )
         if not selected:
             self._status.setText("Select a passage first.")
             return
@@ -6123,8 +6943,10 @@ class ContentReaderWindow(QWidget):
         self.owner._reattach_content()
         event.accept()
 
+
 class _GalaxyBG(QWidget):
     """Solid app background that follows the active UI theme."""
+
     def __init__(self):
         super().__init__()
         self.setAutoFillBackground(False)
@@ -6150,16 +6972,16 @@ class _WindowHeader(QWidget):
                 event.accept()
                 return
             self._drag_offset = (
-                event.globalPosition().toPoint()
-                - self._owner.frameGeometry().topLeft()
+                event.globalPosition().toPoint() - self._owner.frameGeometry().topLeft()
             )
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
-        if (self._drag_offset is not None
-                and event.buttons() & Qt.MouseButton.LeftButton):
-            self._owner.move(
-                event.globalPosition().toPoint() - self._drag_offset)
+        if (
+            self._drag_offset is not None
+            and event.buttons() & Qt.MouseButton.LeftButton
+        ):
+            self._owner.move(event.globalPosition().toPoint() - self._drag_offset)
             event.accept()
             return
         super().mouseMoveEvent(event)
@@ -6195,14 +7017,14 @@ class _ProjectEditorDialog(QDialog):
         self._path_label = QLabel(str(path))
         self._path_label.setToolTip(str(path))
         self._path_label.setTextInteractionFlags(
-            Qt.TextInteractionFlag.TextSelectableByMouse)
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
         toolbar.addWidget(self._path_label, 1)
         self._save_button = QPushButton("Save  Ctrl+S")
         self._save_button.clicked.connect(self._save)
         toolbar.addWidget(self._save_button)
         external = QPushButton("Open in external app")
-        external.clicked.connect(
-            lambda: owner._open_external_project_file(path))
+        external.clicked.connect(lambda: owner._open_external_project_file(path))
         toolbar.addWidget(external)
         layout.addLayout(toolbar)
 
@@ -6218,14 +7040,14 @@ class _ProjectEditorDialog(QDialog):
         layout.addWidget(self.editor, 1)
         self._status = QLabel("Ready")
         layout.addWidget(self._status)
-        self.editor.document().modificationChanged.connect(
-            self._update_modified_state)
+        self.editor.document().modificationChanged.connect(self._update_modified_state)
         QShortcut(QKeySequence("Ctrl+S"), self).activated.connect(self._save)
         self._update_modified_state(False)
 
     def _update_modified_state(self, modified: bool):
         self.setWindowTitle(
-            f"{'* ' if modified else ''}{self._path.name} — JARVIS Editor")
+            f"{'* ' if modified else ''}{self._path.name} — JARVIS Editor"
+        )
         self._save_button.setEnabled(modified)
         self._status.setText("Unsaved changes" if modified else "Saved")
 
@@ -6253,8 +7075,7 @@ class _ProjectEditorDialog(QDialog):
             if choice == QMessageBox.StandardButton.Cancel:
                 event.ignore()
                 return
-            if (choice == QMessageBox.StandardButton.Save
-                    and not self._save()):
+            if choice == QMessageBox.StandardButton.Save and not self._save():
                 event.ignore()
                 return
         event.accept()
@@ -6262,6 +7083,7 @@ class _ProjectEditorDialog(QDialog):
 
 class _TerminalBridge(QObject):
     """Private Qt WebChannel bridge between xterm.js and the local PTY."""
+
     output = pyqtSignal(str)
 
     def __init__(self, owner, session_id: str):
@@ -6298,46 +7120,46 @@ class _TerminalSession:
 
 
 class MainWindow(QMainWindow):
-    _log_sig        = pyqtSignal(str)
-    _state_sig      = pyqtSignal(str)
-    _content_sig    = pyqtSignal(str, str, str)  # (title, text, stable update key)
-    _reconfig_sig   = pyqtSignal()           # trigger setup overlay from any thread
-    _camera_sig     = pyqtSignal(bytes)      # show camera frame preview (small overlay)
-    _cam_stream_sig = pyqtSignal(bool)       # True=start live stream, False=stop
-    _cam_frame_sig  = pyqtSignal(bytes)      # live camera frame → HUD area
-    _video_open_sig  = pyqtSignal(str, str, bool, str)  # video, title, muted, audio
-    _wake_btns_sig   = pyqtSignal()          # wake state resolved off-thread
+    _log_sig = pyqtSignal(str)
+    _state_sig = pyqtSignal(str)
+    _content_sig = pyqtSignal(str, str, str)  # (title, text, stable update key)
+    _reconfig_sig = pyqtSignal()  # trigger setup overlay from any thread
+    _camera_sig = pyqtSignal(bytes)  # show camera frame preview (small overlay)
+    _cam_stream_sig = pyqtSignal(bool)  # True=start live stream, False=stop
+    _cam_frame_sig = pyqtSignal(bytes)  # live camera frame → HUD area
+    _video_open_sig = pyqtSignal(str, str, bool, str)  # video, title, muted, audio
+    _wake_btns_sig = pyqtSignal()  # wake state resolved off-thread
     _video_close_sig = pyqtSignal()
-    _video_mute_sig  = pyqtSignal(bool)
-    _clipboard_sig  = pyqtSignal(str)        # clipboard text changed (thread-safe)
+    _video_mute_sig = pyqtSignal(bool)
+    _clipboard_sig = pyqtSignal(str)  # clipboard text changed (thread-safe)
     _region_analysis_sig = pyqtSignal(str, bool)
-    _confirm_sig    = pyqtSignal(str, str)   # (title, detail) — irreversible-action gate
+    _confirm_sig = pyqtSignal(str, str)  # (title, detail) — irreversible-action gate
     _confirm_hide_sig = pyqtSignal()
-    _wake_dl_sig    = pyqtSignal(bool, str)  # wake-word install finished (ok, message)
-    _quiz_sig       = pyqtSignal(str, object, object)  # (topic, questions, grader)
-    _quiz_hide_sig  = pyqtSignal()
-    _review_sig     = pyqtSignal(str, str, object, object)  # document review payload
-
+    _wake_dl_sig = pyqtSignal(bool, str)  # wake-word install finished (ok, message)
+    _quiz_sig = pyqtSignal(str, object, object)  # (topic, questions, grader)
+    _quiz_hide_sig = pyqtSignal()
+    _review_sig = pyqtSignal(str, str, object, object)  # document review payload
 
     def __init__(self, face_path: str):
         super().__init__()
         self._face_path = face_path
         self._custom_chrome_enabled = platform.system() == "Windows"
         if self._custom_chrome_enabled:
-            self.setWindowFlags(
-                self.windowFlags() | Qt.WindowType.FramelessWindowHint)
+            self.setWindowFlags(self.windowFlags() | Qt.WindowType.FramelessWindowHint)
 
         # Load customization from config
         _cfg = _read_full_config()
         from memory.config_manager import get_ui_language
+
         configured_language = _cfg.get("ui_language")
         self._language_missing = not (
-            isinstance(configured_language, str)
-            and configured_language in LANGUAGES
+            isinstance(configured_language, str) and configured_language in LANGUAGES
         )
         self._ui_language = (
-            get_ui_language() if not self._language_missing
-            else self._detect_ui_language())
+            get_ui_language()
+            if not self._language_missing
+            else self._detect_ui_language()
+        )
         self._assistant_name: str = (_cfg.get("assistant_name") or "JARVIS").strip()
         _display = self._assistant_name.upper()
         self._reader_window = None
@@ -6363,6 +7185,7 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle(f"{_display} — {APP_VERSION}")
         from memory.config_manager import get_ui_opacity
+
         self.setWindowOpacity(get_ui_opacity() / 100)
         self.setMinimumSize(_MIN_W, _MIN_H)
         screen = QApplication.primaryScreen().availableGeometry()
@@ -6374,26 +7197,38 @@ class MainWindow(QMainWindow):
             screen.top() + (screen.height() - start_h) // 2,
         )
 
-        self.on_text_command   = None
-        self.on_remote_clicked = None   # callable: () -> (url, key) | None
-        self.on_interrupt      = None   # callable: () -> None — stop JARVIS mid-speech
-        self.on_voice_change   = None   # callable: () -> None — rebuild session with new voice
-        self.on_audio_device_change = None  # callable: () -> None — reopen audio streams
-        self._confirm_overlay  = None   # live ConfirmBanner, if one is on screen
-        self.get_plugins       = None   # callable: () -> list[dict], set by JarvisLive
-        self.get_plugin_settings = None # callable: () -> list[dict] settings schemas, set by JarvisLive
-        self.on_wake_toggle    = None   # callable: (enable: bool) -> str, set by JarvisLive
-        self.on_wake_manual    = None   # callable: () -> None — manual sleep/wake
-        self.on_push_to_talk   = None   # callable: (enable: bool) -> str scope
-        self.ptt_hold          = None   # callable: (held: bool) -> None — windowed chord
-        self.wake_get_state    = None   # callable: () -> dict {enabled, awake, ready}
-        self._muted            = False
+        self.on_text_command = None
+        self.on_remote_clicked = None  # callable: () -> (url, key) | None
+        self.on_interrupt = None  # callable: () -> None — stop JARVIS mid-speech
+        self.on_voice_change = (
+            None  # callable: () -> None — rebuild session with new voice
+        )
+        self.on_audio_device_change = (
+            None  # callable: () -> None — reopen audio streams
+        )
+        self._confirm_overlay = None  # live ConfirmBanner, if one is on screen
+        self.get_plugins = None  # callable: () -> list[dict], set by JarvisLive
+        self.get_plugin_settings = (
+            None  # callable: () -> list[dict] settings schemas, set by JarvisLive
+        )
+        self.on_wake_toggle = None  # callable: (enable: bool) -> str, set by JarvisLive
+        self.on_wake_manual = None  # callable: () -> None — manual sleep/wake
+        self.on_push_to_talk = None  # callable: (enable: bool) -> str scope
+        self.ptt_hold = None  # callable: (held: bool) -> None — windowed chord
+        self.wake_get_state = None  # callable: () -> dict {enabled, awake, ready}
+        self._muted = False
+        self._lecture_recorder = None
+        self._lecture_started_monotonic = 0.0
+        self._lecture_timer = QTimer(self)
+        self._lecture_timer.setInterval(1000)
+        self._lecture_timer.timeout.connect(self._update_lecture_button)
         self._current_file: str | None = None
         self._project_editors: dict[str, _ProjectEditorDialog] = {}
         self._remote_overlay: RemoteKeyOverlay | None = None
         self._customize_overlay: CustomizeOverlay | None = None
         self._pending_chat_image: bytes | None = None
         from memory.config_manager import get_cursor_assistant_settings
+
         self._cursor_settings = get_cursor_assistant_settings()
         self._cursor_overlay = CursorFollowerOverlay()
         self._cursor_overlay.set_settings(self._cursor_settings)
@@ -6401,8 +7236,7 @@ class MainWindow(QMainWindow):
         self._region_selector = None
         self._cursor_answer = None
         self._region_image_bytes = b""
-        if (platform.system() != "Windows"
-                and self._cursor_settings["cursor_visible"]):
+        if platform.system() != "Windows" and self._cursor_settings["cursor_visible"]:
             self._cursor_overlay.show()
 
         central = _GalaxyBG()
@@ -6426,7 +7260,9 @@ class MainWindow(QMainWindow):
 
         # Center column: HUD + resizable content panel via QSplitter
         self.hud = HudCanvas(face_path, _display)
-        self.hud.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.hud.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
         self._content_panel = self._build_content_panel()
         self._quiz_panel = self._build_quiz_panel()
 
@@ -6470,8 +7306,8 @@ class MainWindow(QMainWindow):
         # for a while and then gives it back. Sharing the stack rather than
         # inventing a second mechanism means the avatar, the camera and a video
         # can never be on screen at once.
-        self._video_split = False        # is the sound a separate stream?
-        self._video_auto_muted = False   # did JARVIS close the mic, or the user?
+        self._video_split = False  # is the sound a separate stream?
+        self._video_auto_muted = False  # did JARVIS close the mic, or the user?
         # A plain flag rather than reading the widget. video_is_playing() is
         # called from plugin threads, and reading a widget's state from one is
         # not something to rely on; an attribute is.
@@ -6508,8 +7344,9 @@ class MainWindow(QMainWindow):
         # assistant worse rather than better.
         self._video_mute_btn = _vid_btn("🔇  SOUND OFF")
         self._video_mute_btn.setText("SOUND OFF")
-        self._video_mute_btn.setIcon(_accent_icon(
-            BASE_DIR / "assets" / "icons" / "volume-off.svg", C.PRI))
+        self._video_mute_btn.setIcon(
+            _accent_icon(BASE_DIR / "assets" / "icons" / "volume-off.svg", C.PRI)
+        )
         self._video_mute_btn.setIconSize(QSize(14, 14))
         self._video_mute_btn.setToolTip("Turn video sound on")
         self._video_mute_btn.clicked.connect(self._toggle_video_mute)
@@ -6540,9 +7377,11 @@ class MainWindow(QMainWindow):
             self._video_widget.setStyleSheet("background: #000; border: none;")
             self._video_widget.setFrameShape(QGraphicsView.Shape.NoFrame)
             self._video_widget.setHorizontalScrollBarPolicy(
-                Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+                Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+            )
             self._video_widget.setVerticalScrollBarPolicy(
-                Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+                Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+            )
             self._video_widget.setSizePolicy(
                 QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
             )
@@ -6593,7 +7432,9 @@ class MainWindow(QMainWindow):
         # Playback controls stay inside the HUD, below the picture. The second
         # YouTube audio player is driven by the same controls as the video.
         controls = QWidget()
-        controls.setStyleSheet(f"background: {C.PANEL}; border: 1px solid {C.BORDER}; border-radius: 4px;")
+        controls.setStyleSheet(
+            f"background: {C.PANEL}; border: 1px solid {C.BORDER}; border-radius: 4px;"
+        )
         controls_row = QHBoxLayout(controls)
         controls_row.setContentsMargins(7, 4, 7, 4)
         controls_row.setSpacing(6)
@@ -6603,7 +7444,9 @@ class MainWindow(QMainWindow):
         self._video_back_btn.setToolTip("Back 10 seconds (←)")
         self._video_back_btn.setText("")
         self._video_back_btn.setFixedSize(28, 26)
-        self._video_back_btn.setIcon(_accent_icon(BASE_DIR / "assets" / "icons" / "rewind.svg", C.PRI))
+        self._video_back_btn.setIcon(
+            _accent_icon(BASE_DIR / "assets" / "icons" / "rewind.svg", C.PRI)
+        )
         self._video_back_btn.setIconSize(QSize(16, 16))
         self._video_back_btn.setToolTip("Back 10 seconds")
         self._video_back_btn.clicked.connect(lambda: self._seek_video(-10_000))
@@ -6614,7 +7457,9 @@ class MainWindow(QMainWindow):
         self._video_play_btn.setToolTip("Play or pause (Space)")
         self._video_play_btn.setText("")
         self._video_play_btn.setFixedSize(28, 26)
-        self._video_play_btn.setIcon(_accent_icon(BASE_DIR / "assets" / "icons" / "play.svg", C.PRI))
+        self._video_play_btn.setIcon(
+            _accent_icon(BASE_DIR / "assets" / "icons" / "play.svg", C.PRI)
+        )
         self._video_play_btn.setIconSize(QSize(16, 16))
         self._video_play_btn.clicked.connect(self._toggle_video_playback)
         controls_row.addWidget(self._video_play_btn)
@@ -6624,7 +7469,9 @@ class MainWindow(QMainWindow):
         self._video_forward_btn.setToolTip("Forward 10 seconds (→)")
         self._video_forward_btn.setText("")
         self._video_forward_btn.setFixedSize(28, 26)
-        self._video_forward_btn.setIcon(_accent_icon(BASE_DIR / "assets" / "icons" / "fast-forward.svg", C.PRI))
+        self._video_forward_btn.setIcon(
+            _accent_icon(BASE_DIR / "assets" / "icons" / "fast-forward.svg", C.PRI)
+        )
         self._video_forward_btn.setIconSize(QSize(16, 16))
         self._video_forward_btn.setToolTip("Forward 10 seconds")
         self._video_forward_btn.clicked.connect(lambda: self._seek_video(10_000))
@@ -6640,15 +7487,21 @@ class MainWindow(QMainWindow):
             QSlider::handle:horizontal {{ width: 12px; margin: -5px 0; border-radius: 6px; background: {C.PRI}; }}
             QSlider::handle:horizontal:hover {{ background: {C.WHITE}; }}
         """)
-        self._video_seek_slider.sliderPressed.connect(lambda: setattr(self, "_video_seeking", True))
+        self._video_seek_slider.sliderPressed.connect(
+            lambda: setattr(self, "_video_seeking", True)
+        )
         self._video_seek_slider.sliderReleased.connect(self._finish_video_seek)
         controls_row.addWidget(self._video_seek_slider, stretch=1)
 
         self._video_time_lbl = QLabel("00:00 / 00:00")
         self._video_time_lbl.setMinimumWidth(88)
-        self._video_time_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self._video_time_lbl.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
         self._video_time_lbl.setFont(QFont(FONT_MONO, 8))
-        self._video_time_lbl.setStyleSheet(f"color: {C.TEXT_MED}; background: transparent; border: none;")
+        self._video_time_lbl.setStyleSheet(
+            f"color: {C.TEXT_MED}; background: transparent; border: none;"
+        )
         controls_row.addWidget(self._video_time_lbl)
         _vid_v.addWidget(controls)
 
@@ -6657,15 +7510,20 @@ class MainWindow(QMainWindow):
             self._video_player.playbackStateChanged.connect(self._sync_video_play_btn)
             self._video_player.durationChanged.connect(self._update_video_duration)
             self._video_player.positionChanged.connect(self._update_video_position)
-            for sequence, callback in (("Space", self._toggle_video_playback),
-                                        ("Left", lambda: self._seek_video(-10_000)),
-                                        ("Right", lambda: self._seek_video(10_000))):
+            for sequence, callback in (
+                ("Space", self._toggle_video_playback),
+                ("Left", lambda: self._seek_video(-10_000)),
+                ("Right", lambda: self._seek_video(10_000)),
+            ):
                 shortcut = QShortcut(QKeySequence(sequence), self._video_cont)
                 shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
                 shortcut.activated.connect(callback)
         else:
-            for button in (self._video_back_btn, self._video_play_btn,
-                           self._video_forward_btn):
+            for button in (
+                self._video_back_btn,
+                self._video_play_btn,
+                self._video_forward_btn,
+            ):
                 button.setEnabled(False)
 
         # Stack: 0 = animated HUD, 1 = live camera, 2 = video
@@ -6727,6 +7585,7 @@ class MainWindow(QMainWindow):
         self._warm_wake_state()
         self._update_autostart_btn(self._check_autostart())
         from memory.config_manager import get_brief_enabled as _gbe
+
         self._update_brief_btn(_gbe())
 
         self._clock_tmr = QTimer(self)
@@ -6815,12 +7674,15 @@ class MainWindow(QMainWindow):
 
     def _show_initial_language_picker(self):
         overlay = LanguagePickerOverlay(
-            self.centralWidget(), language=self._ui_language)
+            self.centralWidget(), language=self._ui_language
+        )
         width, height = 380, 230
         overlay.setGeometry(
             (self.centralWidget().width() - width) // 2,
             (self.centralWidget().height() - height) // 2,
-            width, height)
+            width,
+            height,
+        )
         overlay.done.connect(self._save_initial_language)
         overlay.show()
         overlay.raise_()
@@ -6836,12 +7698,17 @@ class MainWindow(QMainWindow):
             self._language_picker.close()
             self._language_picker = None
         QMessageBox.information(
-            self, "Language saved",
-            _translate("Language saved. Restart JARVIS to apply it throughout the interface.",
-                       self._ui_language))
+            self,
+            "Language saved",
+            _translate(
+                "Language saved. Restart JARVIS to apply it throughout the interface.",
+                self._ui_language,
+            ),
+        )
 
     def _save_ui_language(self, language: str):
         from memory.config_manager import save_ui_language
+
         save_ui_language(language)
         self._ui_language = language
         self._language_missing = False
@@ -6856,10 +7723,13 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Language", str(exc))
             return
         QMessageBox.information(
-            self, _translate("Language", language),
+            self,
+            _translate("Language", language),
             _translate(
                 "Language saved. Restart JARVIS to apply it throughout the interface.",
-                language))
+                language,
+            ),
+        )
 
     def _style_tab_scrollers(self, tabs: QTabWidget) -> None:
         """Replace Qt's native tab arrows with small theme-matched icons."""
@@ -6885,9 +7755,7 @@ class MainWindow(QMainWindow):
             button.setAccessibleName(
                 "Scroll tabs left" if direction == "left" else "Scroll tabs right"
             )
-            button.setToolTip(
-                "Previous tabs" if direction == "left" else "More tabs"
-            )
+            button.setToolTip("Previous tabs" if direction == "left" else "More tabs")
             button.setStyleSheet(f"""
                 QToolButton {{
                     background: {C.PANEL2}; color: {C.PRI};
@@ -6945,7 +7813,9 @@ class MainWindow(QMainWindow):
             put(panel, _card_qss("SidePanel"))
         put(self._content_panel, _card_qss("ContentPanel"))
         put(self._quiz_panel, _card_qss("QuizPanel"))
-        put(self._terminal_panel, f"""
+        put(
+            self._terminal_panel,
+            f"""
             QWidget#TerminalPanel {{
                 background: {C.PANEL}; border-top: 1px solid {C.BORDER};
             }}
@@ -6959,35 +7829,52 @@ class MainWindow(QMainWindow):
             QWidget#TerminalPanel QPushButton:pressed {{
                 color: {C.PRI}; background: {C.DARK}; border-color: {C.PRI};
             }}
-        """)
+        """,
+        )
 
         layout = self.centralWidget().layout()
         for index, side in ((0, "bottom"), (layout.count() - 1, "top")):
             bar = layout.itemAt(index).widget()
             if bar is not None:
                 bar.setObjectName("GlassBar")
-                put(bar, f"QWidget#GlassBar {{ background: {C.DARK};"
-                         f" border-{side}: 1px solid {C.BORDER}; }}")
-        for button in (self._drawer_btn, self._ctrl_btn,
-                       self._left_toggle_btn, self._right_toggle_btn,
-                       self._content_toggle_btn, self._terminal_toggle_btn):
+                put(
+                    bar,
+                    f"QWidget#GlassBar {{ background: {C.DARK};"
+                    f" border-{side}: 1px solid {C.BORDER}; }}",
+                )
+        for button in (
+            self._drawer_btn,
+            self._ctrl_btn,
+            self._left_toggle_btn,
+            self._right_toggle_btn,
+            self._content_toggle_btn,
+            self._terminal_toggle_btn,
+        ):
             # These compact header buttons are only 28 px wide. The shared
             # ghost style's 12 px side padding consumed the whole text area.
             put(button, _ghost_qss() + "QPushButton { padding: 0px; }")
 
-        for splitter in (self._main_splitter, self._center_split, self._workspace_split):
+        for splitter in (
+            self._main_splitter,
+            self._center_split,
+            self._workspace_split,
+        ):
             splitter.setHandleWidth(5)
             put(splitter, "QSplitter::handle { background: transparent; }")
 
         info = self._uptime_lbl.parentWidget()
         if info is not None:
             info.setObjectName("InfoCard")
-            put(info, f"QWidget#InfoCard {{ background: {C.PANEL2}; border: 1px solid {C.BORDER};"
-                      f" border-radius: 5px; }}")
+            put(
+                info,
+                f"QWidget#InfoCard {{ background: {C.PANEL2}; border: 1px solid {C.BORDER};"
+                f" border-radius: 5px; }}",
+            )
         put(self._work_tabs, _tabs_qss())
         self._style_tab_scrollers(self._work_tabs)
         self._work_tabs.setTabIcon(
-            3, _accent_icon(BASE_DIR / "assets" / "icons" / "files.svg", C.PRI))
+            3, _accent_icon(BASE_DIR / "assets" / "icons" / "files.svg", C.PRI)
+        )
         put(self._chat_view, _inset_qss("QTextBrowser"))
         put(self._history_list, _inset_qss("QListWidget"))
         put(self._task_list, _inset_qss("QListWidget"))
@@ -6996,18 +7883,22 @@ class MainWindow(QMainWindow):
         terminal_theme = json.dumps(self._terminal_theme(), separators=(",", ":"))
         for session in self._terminal_sessions.values():
             session.view.setStyleSheet(
-                f"background:{C.DARK}; border:1px solid {C.BORDER}; border-radius:5px;")
+                f"background:{C.DARK}; border:1px solid {C.BORDER}; border-radius:5px;"
+            )
             session.view.page().runJavaScript(
-                f"window.setTerminalTheme && window.setTerminalTheme({terminal_theme})")
+                f"window.setTerminalTheme && window.setTerminalTheme({terminal_theme})"
+            )
         for field in (self._input, self._task_input):
             put(field, _input_qss())
         for button in self._right_panel.findChildren(QPushButton):
             if button not in (self._interrupt_btn, self._mute_btn):
                 put(button, _ghost_qss() + "QPushButton { padding: 2px 7px; }")
-        put(self._interrupt_btn,
+        put(
+            self._interrupt_btn,
             f"QPushButton {{ background: {C.PANEL2}; color: {C.MUTED_C};"
             f" border: 1px solid {C.MUTED_C}; border-radius: 5px; }}"
-            f"QPushButton:hover {{ background: {C.DARK}; border-color: {C.MUTED_C}; }}")
+            f"QPushButton:hover {{ background: {C.DARK}; border-color: {C.MUTED_C}; }}",
+        )
         self._style_mute_btn()
 
         put(self._content_tabs, _tabs_qss())
@@ -7049,9 +7940,13 @@ class MainWindow(QMainWindow):
         pw = _CameraPreview._W
         ph = self._cam_preview.height()
         self._cam_preview.setGeometry(
-            cw.width() - (self._right_panel.width() if hasattr(self, "_right_panel") else _RIGHT_W) - pw - 12,
+            cw.width()
+            - (self._right_panel.width() if hasattr(self, "_right_panel") else _RIGHT_W)
+            - pw
+            - 12,
             cw.height() - ph - 28,
-            pw, ph,
+            pw,
+            ph,
         )
 
     # --- Live camera stream in HUD area ------------------------------------
@@ -7069,9 +7964,12 @@ class MainWindow(QMainWindow):
             w, h = self._cam_live_lbl.width(), self._cam_live_lbl.height()
             if w > 1 and h > 1:
                 self._cam_live_lbl.setPixmap(
-                    px.scaled(w, h,
-                              Qt.AspectRatioMode.KeepAspectRatio,
-                              Qt.TransformationMode.SmoothTransformation)
+                    px.scaled(
+                        w,
+                        h,
+                        Qt.AspectRatioMode.KeepAspectRatio,
+                        Qt.TransformationMode.SmoothTransformation,
+                    )
                 )
 
     def start_camera_stream(self) -> None:
@@ -7083,10 +7981,12 @@ class MainWindow(QMainWindow):
     def _cam_loop(self) -> None:
         try:
             import cv2
+
             # Reuse camera index detected by screen_processor (cached in api_keys.json)
             cam_idx = 0
             try:
                 import json as _j
+
                 cfg = _j.loads((CONFIG_DIR / "api_keys.json").read_text())
                 cam_idx = int(cfg.get("camera_index", 0))
             except Exception:
@@ -7122,11 +8022,13 @@ class MainWindow(QMainWindow):
     # Everything below runs on the Qt thread. Plugins and the assistant reach it
     # through the signals above, the same way every other panel is driven, so a
     # background thread never touches a widget.
-    def _on_video_open(self, source: str, title: str, muted: bool,
-                       audio_source: str = "") -> None:
+    def _on_video_open(
+        self, source: str, title: str, muted: bool, audio_source: str = ""
+    ) -> None:
         if not HAVE_VIDEO or not self._video_player:
-            self.write_log("SYS: Video playback is not available in this Qt "
-                           "install.")
+            self.write_log(
+                "SYS: Video playback is not available in this Qt " "install."
+            )
             return
         # A video and the live camera cannot share the centre of the HUD.
         self._cam_stop.set()
@@ -7141,8 +8043,7 @@ class MainWindow(QMainWindow):
         self._video_play_btn.setText("Ⅱ  PAUSE")
         self._set_video_muted(bool(muted))
 
-        url = (QUrl.fromLocalFile(source) if Path(source).exists()
-               else QUrl(source))
+        url = QUrl.fromLocalFile(source) if Path(source).exists() else QUrl(source)
         self._video_player.setSource(url)
         if self._video_split:
             self._video_sound.setSource(QUrl(audio_source))
@@ -7161,20 +8062,26 @@ class MainWindow(QMainWindow):
         seconds = max(0, int(milliseconds) // 1000)
         hours, remainder = divmod(seconds, 3600)
         minutes, seconds = divmod(remainder, 60)
-        return (f"{hours}:{minutes:02d}:{seconds:02d}" if hours
-                else f"{minutes:02d}:{seconds:02d}")
+        return (
+            f"{hours}:{minutes:02d}:{seconds:02d}"
+            if hours
+            else f"{minutes:02d}:{seconds:02d}"
+        )
 
     def _update_video_duration(self, duration: int) -> None:
         self._video_seek_slider.setRange(0, max(0, int(duration)))
         self._video_seek_slider.setEnabled(duration > 0)
-        self._update_video_position(self._video_player.position() if self._video_player else 0)
+        self._update_video_position(
+            self._video_player.position() if self._video_player else 0
+        )
 
     def _update_video_position(self, position: int) -> None:
         if not self._video_seeking:
             self._video_seek_slider.setValue(max(0, int(position)))
         duration = self._video_player.duration() if self._video_player else 0
         self._video_time_lbl.setText(
-            f"{self._video_time(position)} / {self._video_time(duration)}")
+            f"{self._video_time(position)} / {self._video_time(duration)}"
+        )
 
     def _finish_video_seek(self) -> None:
         self._video_seeking = False
@@ -7184,7 +8091,9 @@ class MainWindow(QMainWindow):
     def _seek_video(self, amount: int, absolute: bool = False) -> None:
         if not self._video_on or not self._video_player:
             return
-        target = int(amount) if absolute else self._video_player.position() + int(amount)
+        target = (
+            int(amount) if absolute else self._video_player.position() + int(amount)
+        )
         duration = self._video_player.duration()
         if duration > 0:
             target = max(0, min(duration, target))
@@ -7198,7 +8107,10 @@ class MainWindow(QMainWindow):
     def _toggle_video_playback(self) -> None:
         if not self._video_on or not self._video_player:
             return
-        if self._video_player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
+        if (
+            self._video_player.playbackState()
+            == QMediaPlayer.PlaybackState.PlayingState
+        ):
             self._video_player.pause()
             if self._video_split and self._video_sound:
                 self._video_sound.pause()
@@ -7208,15 +8120,20 @@ class MainWindow(QMainWindow):
                 self._video_sound.play()
 
     def _sync_video_play_btn(self, *_args) -> None:
-        playing = bool(self._video_player and self._video_player.playbackState()
-                       == QMediaPlayer.PlaybackState.PlayingState)
+        playing = bool(
+            self._video_player
+            and self._video_player.playbackState()
+            == QMediaPlayer.PlaybackState.PlayingState
+        )
         self._video_play_btn.setText("Ⅱ  PAUSE" if playing else "▶  PLAY")
-        self._video_play_btn.setToolTip("Pause (Space)" if playing
-                                        else "Resume playback (Space)")
+        self._video_play_btn.setToolTip(
+            "Pause (Space)" if playing else "Resume playback (Space)"
+        )
         self._video_play_btn.setText("")
         icon_name = "pause.svg" if playing else "play.svg"
-        self._video_play_btn.setIcon(_accent_icon(
-            BASE_DIR / "assets" / "icons" / icon_name, C.PRI))
+        self._video_play_btn.setIcon(
+            _accent_icon(BASE_DIR / "assets" / "icons" / icon_name, C.PRI)
+        )
         self._video_play_btn.setToolTip("Pause (Space)" if playing else "Play (Space)")
 
     def _fit_video(self, *_a) -> None:
@@ -7228,8 +8145,7 @@ class MainWindow(QMainWindow):
             if native.isEmpty():
                 return
             view = self._video_widget.viewport().size()
-            scale = min(view.width() / native.width(),
-                        view.height() / native.height())
+            scale = min(view.width() / native.width(), view.height() / native.height())
             w, h = native.width() * scale, native.height() * scale
             self._video_item.setSize(QSizeF(w, h))
             self._video_scene.setSceneRect(0, 0, w, h)
@@ -7247,7 +8163,7 @@ class MainWindow(QMainWindow):
         self._video_split = False
         self._video_on = False
         self._hud_cam_stack.setCurrentIndex(0)
-        self._sync_mic_for_video()      # gives the microphone back
+        self._sync_mic_for_video()  # gives the microphone back
 
     def _set_video_muted(self, muted: bool) -> None:
         """Silence whichever output is carrying the sound for this video."""
@@ -7259,16 +8175,20 @@ class MainWindow(QMainWindow):
         if self._video_sound_out:
             self._video_sound_out.setMuted(muted)
         self._sync_video_mute_btn()
-        sound_muted = bool((self._video_sound_out if self._video_split
-                            else self._video_audio) and
-                           (self._video_sound_out if self._video_split
-                            else self._video_audio).isMuted())
+        sound_muted = bool(
+            (self._video_sound_out if self._video_split else self._video_audio)
+            and (
+                self._video_sound_out if self._video_split else self._video_audio
+            ).isMuted()
+        )
         self._video_mute_btn.setText("SOUND OFF" if sound_muted else "SOUND ON")
         icon_name = "volume-off.svg" if sound_muted else "volume-on.svg"
-        self._video_mute_btn.setIcon(_accent_icon(
-            BASE_DIR / "assets" / "icons" / icon_name, C.PRI))
+        self._video_mute_btn.setIcon(
+            _accent_icon(BASE_DIR / "assets" / "icons" / icon_name, C.PRI)
+        )
         self._video_mute_btn.setToolTip(
-            "Turn video sound on" if sound_muted else "Turn video sound off")
+            "Turn video sound on" if sound_muted else "Turn video sound off"
+        )
         self._sync_mic_for_video()
 
     def _on_video_mute(self, muted: bool) -> None:
@@ -7289,12 +8209,18 @@ class MainWindow(QMainWindow):
         muted, and pressing the mute key during a video hands the decision back
         to them for good.
         """
-        sound_on = bool(self._video_on and self._video_sound_out
-                        and not self._video_sound_out.isMuted())
+        sound_on = bool(
+            self._video_on
+            and self._video_sound_out
+            and not self._video_sound_out.isMuted()
+        )
         if sound_on and not self._muted:
             self._video_auto_muted = True
-            self._set_muted(True, "The video's sound is on — silence it, close "
-                                  "it, or press F4 to talk. Typing still works.")
+            self._set_muted(
+                True,
+                "The video's sound is on — silence it, close "
+                "it, or press F4 to talk. Typing still works.",
+            )
         elif not sound_on and self._video_auto_muted:
             self._video_auto_muted = False
             self._set_muted(False, "The video is quiet again.")
@@ -7311,7 +8237,10 @@ class MainWindow(QMainWindow):
         if not (self._video_split and self._video_sound and self._video_player):
             return
         try:
-            if self._video_player.playbackState() != QMediaPlayer.PlaybackState.PlayingState:
+            if (
+                self._video_player.playbackState()
+                != QMediaPlayer.PlaybackState.PlayingState
+            ):
                 return
             drift = self._video_sound.position() - self._video_player.position()
             if abs(drift) > 300:
@@ -7329,7 +8258,6 @@ class MainWindow(QMainWindow):
         if out:
             self._set_video_muted(not out.isMuted())
 
-
     def _on_video_error(self, *_a) -> None:
         err = ""
 
@@ -7341,8 +8269,7 @@ class MainWindow(QMainWindow):
         # MainWindow has a LogWidget instance in self._log.
         # write_log() is not a MainWindow method.
         self._log.append_log(
-            f"SYS: The video could not be played"
-            f"{(' — ' + err) if err else ''}."
+            f"SYS: The video could not be played" f"{(' — ' + err) if err else ''}."
         )
 
         self._on_video_close()
@@ -7371,31 +8298,33 @@ class MainWindow(QMainWindow):
         except ImportError:
             return False
 
-        CYAN   = (0, 212, 255)
-        DIM    = (0, 100, 140)
-        DARK   = (0, 6, 10)
-        GLOW   = (0, 160, 200)
-        WHITE  = (220, 240, 255)
+        CYAN = (0, 212, 255)
+        DIM = (0, 100, 140)
+        DARK = (0, 6, 10)
+        GLOW = (0, 160, 200)
+        WHITE = (220, 240, 255)
 
         def _render(sz: int) -> PIL.Image.Image:
-            S  = sz * 4                     # draw at 4× then downscale
+            S = sz * 4  # draw at 4× then downscale
             img = PIL.Image.new("RGBA", (S, S), (0, 0, 0, 0))
-            d   = PIL.ImageDraw.Draw(img)
+            d = PIL.ImageDraw.Draw(img)
             cx = cy = S // 2
 
             # ── filled background circle ──────────────────────────────────
             R = S // 2 - 2
-            d.ellipse([cx-R, cy-R, cx+R, cy+R], fill=(*DARK, 255))
+            d.ellipse([cx - R, cy - R, cx + R, cy + R], fill=(*DARK, 255))
 
             # ── outer border ring ─────────────────────────────────────────
             lw = max(2, S // 40)
-            d.ellipse([cx-R, cy-R, cx+R, cy+R],
-                      outline=(*CYAN, 220), width=lw)
+            d.ellipse([cx - R, cy - R, cx + R, cy + R], outline=(*CYAN, 220), width=lw)
 
             # ── mid decorative ring ───────────────────────────────────────
             R2 = int(R * 0.72)
-            d.ellipse([cx-R2, cy-R2, cx+R2, cy+R2],
-                      outline=(*DIM, 180), width=max(1, lw // 2))
+            d.ellipse(
+                [cx - R2, cy - R2, cx + R2, cy + R2],
+                outline=(*DIM, 180),
+                width=max(1, lw // 2),
+            )
 
             # ── 6 radial spokes (hex bolt) ────────────────────────────────
             R_inner = int(R * 0.30)
@@ -7413,37 +8342,43 @@ class MainWindow(QMainWindow):
             for i in range(6):
                 angle = math.radians(i * 60)
                 for dr in range(lw * 2):
-                    rx = (R - lw - dr)
+                    rx = R - lw - dr
                     d.point(
-                        [cx + int(rx * math.cos(angle)),
-                         cy + int(rx * math.sin(angle))],
+                        [
+                            cx + int(rx * math.cos(angle)),
+                            cy + int(rx * math.sin(angle)),
+                        ],
                         fill=(*WHITE, 220),
                     )
 
             # ── inner glowing ring ────────────────────────────────────────
             Ri = int(R * 0.26)
-            d.ellipse([cx-Ri, cy-Ri, cx+Ri, cy+Ri],
-                      outline=(*CYAN, 255), width=max(2, lw))
+            d.ellipse(
+                [cx - Ri, cy - Ri, cx + Ri, cy + Ri],
+                outline=(*CYAN, 255),
+                width=max(2, lw),
+            )
 
             # ── bright glow soft blur applied before core ─────────────────
             # (draw a slightly larger cyan circle on a separate layer)
             glow_layer = PIL.Image.new("RGBA", (S, S), (0, 0, 0, 0))
             gd = PIL.ImageDraw.Draw(glow_layer)
             Rc = int(R * 0.13)
-            gd.ellipse([cx-Rc*2, cy-Rc*2, cx+Rc*2, cy+Rc*2],
-                       fill=(*CYAN, 110))
+            gd.ellipse(
+                [cx - Rc * 2, cy - Rc * 2, cx + Rc * 2, cy + Rc * 2], fill=(*CYAN, 110)
+            )
             glow_layer = glow_layer.filter(PIL.ImageFilter.GaussianBlur(S // 14))
             img = PIL.Image.alpha_composite(img, glow_layer)
-            d   = PIL.ImageDraw.Draw(img)
+            d = PIL.ImageDraw.Draw(img)
 
             # ── core dot ──────────────────────────────────────────────────
-            d.ellipse([cx-Rc, cy-Rc, cx+Rc, cy+Rc], fill=(*WHITE, 255))
+            d.ellipse([cx - Rc, cy - Rc, cx + Rc, cy + Rc], fill=(*WHITE, 255))
 
             # ── downscale to target size ──────────────────────────────────
             return img.resize((sz, sz), PIL.Image.LANCZOS)
 
         try:
-            sizes  = [256, 128, 64, 48, 32, 16]
+            sizes = [256, 128, 64, 48, 32, 16]
             frames = [_render(s) for s in sizes]
             frames[0].save(
                 out_path,
@@ -7457,8 +8392,9 @@ class MainWindow(QMainWindow):
             return False
 
     @staticmethod
-    def _create_lnk_windows(lnk: str, target: str, args: str,
-                             work_dir: str, icon_loc: str) -> None:
+    def _create_lnk_windows(
+        lnk: str, target: str, args: str, work_dir: str, icon_loc: str
+    ) -> None:
         """
         Create a Windows .lnk shortcut WITHOUT launching PowerShell or cmd.
         Tries win32com (pywin32) first; falls back to wscript.exe + VBScript.
@@ -7466,14 +8402,15 @@ class MainWindow(QMainWindow):
         """
         # ── Option 1: pywin32 (pure Python COM, zero subprocess) ──────────
         try:
-            from win32com.client import Dispatch   # type: ignore
+            from win32com.client import Dispatch  # type: ignore
+
             sh = Dispatch("WScript.Shell")
             sc = sh.CreateShortCut(lnk)
-            sc.TargetPath       = target
-            sc.Arguments        = f'"{args}"'
+            sc.TargetPath = target
+            sc.Arguments = f'"{args}"'
             sc.WorkingDirectory = work_dir
-            sc.Description      = "J.A.R.V.I.S AI Assistant"
-            sc.IconLocation     = icon_loc
+            sc.Description = "J.A.R.V.I.S AI Assistant"
+            sc.IconLocation = icon_loc
             sc.save()
             return
         except ImportError:
@@ -7481,17 +8418,20 @@ class MainWindow(QMainWindow):
 
         # ── Option 2: wscript.exe + VBScript (always available on Windows,
         #    GUI-mode executable — never opens a console window) ────────────
-        vbs = "\n".join([
-            'Set ws = CreateObject("WScript.Shell")',
-            f'Set sc = ws.CreateShortcut("{lnk}")',
-            f'sc.TargetPath = "{target}"',
-            f'sc.Arguments = Chr(34) & "{args}" & Chr(34)',
-            f'sc.WorkingDirectory = "{work_dir}"',
-            'sc.Description = "J.A.R.V.I.S AI Assistant"',
-            f'sc.IconLocation = "{icon_loc}"',
-            'sc.Save',
-        ])
+        vbs = "\n".join(
+            [
+                'Set ws = CreateObject("WScript.Shell")',
+                f'Set sc = ws.CreateShortcut("{lnk}")',
+                f'sc.TargetPath = "{target}"',
+                f'sc.Arguments = Chr(34) & "{args}" & Chr(34)',
+                f'sc.WorkingDirectory = "{work_dir}"',
+                'sc.Description = "J.A.R.V.I.S AI Assistant"',
+                f'sc.IconLocation = "{icon_loc}"',
+                "sc.Save",
+            ]
+        )
         import tempfile
+
         fd, tmp = tempfile.mkstemp(suffix=".vbs")
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
@@ -7529,18 +8469,29 @@ class MainWindow(QMainWindow):
                 from ctypes import wintypes
 
                 class _GUID(ctypes.Structure):
-                    _fields_ = [("Data1", wintypes.DWORD),
-                                ("Data2", wintypes.WORD),
-                                ("Data3", wintypes.WORD),
-                                ("Data4", ctypes.c_ubyte * 8)]
+                    _fields_ = [
+                        ("Data1", wintypes.DWORD),
+                        ("Data2", wintypes.WORD),
+                        ("Data3", wintypes.WORD),
+                        ("Data4", ctypes.c_ubyte * 8),
+                    ]
 
                 # FOLDERID_Desktop {B4BFCC3A-DB2C-424C-B029-7FE99A87C641}
-                fid = _GUID(0xB4BFCC3A, 0xDB2C, 0x424C,
-                            (ctypes.c_ubyte * 8)(0xB0, 0x29, 0x7F, 0xE9,
-                                                 0x9A, 0x87, 0xC6, 0x41))
+                fid = _GUID(
+                    0xB4BFCC3A,
+                    0xDB2C,
+                    0x424C,
+                    (ctypes.c_ubyte * 8)(
+                        0xB0, 0x29, 0x7F, 0xE9, 0x9A, 0x87, 0xC6, 0x41
+                    ),
+                )
                 buf = ctypes.c_wchar_p()
-                if ctypes.windll.shell32.SHGetKnownFolderPath(
-                        ctypes.byref(fid), 0, None, ctypes.byref(buf)) == 0:
+                if (
+                    ctypes.windll.shell32.SHGetKnownFolderPath(
+                        ctypes.byref(fid), 0, None, ctypes.byref(buf)
+                    )
+                    == 0
+                ):
                     p = Path(buf.value)
                     ctypes.windll.ole32.CoTaskMemFree(buf)
                     if p.is_dir():
@@ -7551,10 +8502,12 @@ class MainWindow(QMainWindow):
             # ── 2) Registry: User Shell Folders (may contain %VARS%) ──────
             try:
                 import winreg
+
                 with winreg.OpenKey(
-                        winreg.HKEY_CURRENT_USER,
-                        r"Software\Microsoft\Windows\CurrentVersion"
-                        r"\Explorer\User Shell Folders") as key:
+                    winreg.HKEY_CURRENT_USER,
+                    r"Software\Microsoft\Windows\CurrentVersion"
+                    r"\Explorer\User Shell Folders",
+                ) as key:
                     val, _t = winreg.QueryValueEx(key, "Desktop")
                 p = Path(os.path.expandvars(val))
                 if p.is_dir():
@@ -7565,8 +8518,14 @@ class MainWindow(QMainWindow):
         elif _os == "Linux":
             # ── xdg-user-dir honours localized names (~/Masaüstü, …) ──────
             try:
-                out = subprocess.run(["xdg-user-dir", "DESKTOP"],
-                                     capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5)
+                out = subprocess.run(
+                    ["xdg-user-dir", "DESKTOP"],
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    timeout=5,
+                )
                 p = Path(out.stdout.strip())
                 if out.stdout.strip() and p != home and p.is_dir():
                     return p
@@ -7594,8 +8553,9 @@ class MainWindow(QMainWindow):
         Never opens a terminal, console, or PowerShell window on any platform.
         """
         import stat as _stat
-        script  = Path(__file__).resolve().parent / "main.py"
-        python  = Path(sys.executable)
+
+        script = Path(__file__).resolve().parent / "main.py"
+        python = Path(sys.executable)
         desktop = self._get_desktop_dir()
 
         # Arc-reactor icon (.ico — also exported as .png for Linux/macOS)
@@ -7608,16 +8568,17 @@ class MainWindow(QMainWindow):
 
             # ── Windows ───────────────────────────────────────────────────────
             if _os == "Windows":
-                pythonw  = python.parent / "pythonw.exe"
-                target   = str(pythonw if pythonw.exists() else python)
-                lnk      = str(desktop / "J.A.R.V.I.S.lnk")
+                pythonw = python.parent / "pythonw.exe"
+                target = str(pythonw if pythonw.exists() else python)
+                lnk = str(desktop / "J.A.R.V.I.S.lnk")
                 icon_loc = str(ico_path) if ico_path.exists() else f"{target},0"
-                self._create_lnk_windows(lnk, target, str(script),
-                                         str(script.parent), icon_loc)
+                self._create_lnk_windows(
+                    lnk, target, str(script), str(script.parent), icon_loc
+                )
 
             # ── macOS — proper .app bundle (no Terminal window) ───────────────
             elif _os == "Darwin":
-                app     = desktop / "J.A.R.V.I.S.app"
+                app = desktop / "J.A.R.V.I.S.app"
                 mac_dir = app / "Contents" / "MacOS"
                 res_dir = app / "Contents" / "Resources"
                 mac_dir.mkdir(parents=True, exist_ok=True)
@@ -7631,8 +8592,12 @@ class MainWindow(QMainWindow):
                     f'cd "{script.parent}"\n'
                     f'exec "{python}" "{script}"\n'
                 )
-                launcher.chmod(launcher.stat().st_mode
-                               | _stat.S_IEXEC | _stat.S_IXGRP | _stat.S_IXOTH)
+                launcher.chmod(
+                    launcher.stat().st_mode
+                    | _stat.S_IEXEC
+                    | _stat.S_IXGRP
+                    | _stat.S_IXOTH
+                )
 
                 # Minimal Info.plist (required for .app recognition)
                 (app / "Contents" / "Info.plist").write_text(
@@ -7640,18 +8605,19 @@ class MainWindow(QMainWindow):
                     '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" '
                     '"http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n'
                     '<plist version="1.0"><dict>\n'
-                    '  <key>CFBundleExecutable</key><string>JARVIS</string>\n'
-                    '  <key>CFBundleIdentifier</key>'
-                    '<string>com.jarvis.assistant</string>\n'
-                    '  <key>CFBundleName</key><string>J.A.R.V.I.S</string>\n'
-                    '  <key>CFBundlePackageType</key><string>APPL</string>\n'
-                    '  <key>CFBundleVersion</key><string>1.0</string>\n'
-                    '</dict></plist>\n'
+                    "  <key>CFBundleExecutable</key><string>JARVIS</string>\n"
+                    "  <key>CFBundleIdentifier</key>"
+                    "<string>com.jarvis.assistant</string>\n"
+                    "  <key>CFBundleName</key><string>J.A.R.V.I.S</string>\n"
+                    "  <key>CFBundlePackageType</key><string>APPL</string>\n"
+                    "  <key>CFBundleVersion</key><string>1.0</string>\n"
+                    "</dict></plist>\n"
                 )
 
                 # Optional: copy icon as .icns (skip silently if Pillow is missing)
                 try:
                     import PIL.Image
+
                     icns = res_dir / "AppIcon.icns"
                     PIL.Image.open(ico_path).save(icns, format="ICNS")
                     # Inject icon reference into plist
@@ -7659,9 +8625,9 @@ class MainWindow(QMainWindow):
                     txt = plist.read_text()
                     plist.write_text(
                         txt.replace(
-                            '</dict></plist>',
-                            '  <key>CFBundleIconFile</key>'
-                            '<string>AppIcon</string>\n</dict></plist>\n',
+                            "</dict></plist>",
+                            "  <key>CFBundleIconFile</key>"
+                            "<string>AppIcon</string>\n</dict></plist>\n",
                         )
                     )
                 except Exception:
@@ -7674,6 +8640,7 @@ class MainWindow(QMainWindow):
                 if not png_path.exists() and ico_path.exists():
                     try:
                         import PIL.Image
+
                         PIL.Image.open(ico_path).resize(
                             (256, 256), PIL.Image.LANCZOS
                         ).save(png_path, format="PNG")
@@ -7689,8 +8656,7 @@ class MainWindow(QMainWindow):
                     f"Path={script.parent}\n"
                     "Type=Application\n"
                     "Terminal=false\n"
-                    "Categories=Utility;\n"
-                    + icon_line
+                    "Categories=Utility;\n" + icon_line
                 )
                 desk.chmod(desk.stat().st_mode | 0o755)
 
@@ -7716,8 +8682,10 @@ class MainWindow(QMainWindow):
         if button is not None:
             button.setText("❐" if self.isMaximized() else "□")
             button.setToolTip(
-                self._tr("Restore window") if self.isMaximized()
-                else self._tr("Maximize window"))
+                self._tr("Restore window")
+                if self.isMaximized()
+                else self._tr("Maximize window")
+            )
 
     def changeEvent(self, event):
         super().changeEvent(event)
@@ -7725,12 +8693,14 @@ class MainWindow(QMainWindow):
             self._update_window_controls()
 
     def eventFilter(self, watched, event):
-        if (self._custom_chrome_enabled
-                and event.type() == QEvent.Type.MouseButtonPress
-                and event.button() == Qt.MouseButton.LeftButton
-                and isinstance(watched, QWidget)
-                and watched.window() is self
-                and not (self.isMaximized() or self.isFullScreen())):
+        if (
+            self._custom_chrome_enabled
+            and event.type() == QEvent.Type.MouseButtonPress
+            and event.button() == Qt.MouseButton.LeftButton
+            and isinstance(watched, QWidget)
+            and watched.window() is self
+            and not (self.isMaximized() or self.isFullScreen())
+        ):
             point = self.mapFromGlobal(event.globalPosition().toPoint())
             margin = 7
             edges = Qt.Edge(0)
@@ -7753,39 +8723,46 @@ class MainWindow(QMainWindow):
         if self._overlay and self._overlay.isVisible():
             ow, oh = 460, 390
             self._overlay.setGeometry(
-                (cw.width()  - ow) // 2,
+                (cw.width() - ow) // 2,
                 (cw.height() - oh) // 2,
-                ow, oh,
+                ow,
+                oh,
             )
         if self._remote_overlay and self._remote_overlay.isVisible():
             ow, oh = RemoteKeyOverlay._OW, RemoteKeyOverlay._OH
             self._remote_overlay.setGeometry(
-                (cw.width()  - ow) // 2,
+                (cw.width() - ow) // 2,
                 (cw.height() - oh) // 2,
-                ow, oh,
+                ow,
+                oh,
             )
         if self._customize_overlay and self._customize_overlay.isVisible():
             ow, oh = CustomizeOverlay._OW, CustomizeOverlay._OH
             self._customize_overlay.setGeometry(
-                (cw.width()  - ow) // 2,
+                (cw.width() - ow) // 2,
                 (cw.height() - oh) // 2,
-                ow, oh,
+                ow,
+                oh,
             )
         # Camera preview — bottom-right corner of the center/HUD area
         pw = _CameraPreview._W
         ph = self._cam_preview.height() or _CameraPreview._H
         self._cam_preview.setGeometry(
-            cw.width() - (self._right_panel.width() if hasattr(self, "_right_panel") else _RIGHT_W) - pw - 12,
+            cw.width()
+            - (self._right_panel.width() if hasattr(self, "_right_panel") else _RIGHT_W)
+            - pw
+            - 12,
             cw.height() - ph - 28,
-            pw, ph,
+            pw,
+            ph,
         )
         # Clipboard panel — bottom-center
-        if hasattr(self, '_clipboard_panel') and self._clipboard_panel.isVisible():
+        if hasattr(self, "_clipboard_panel") and self._clipboard_panel.isVisible():
             self._position_clipboard_panel()
         # Quick drawer — reposition if open
-        if hasattr(self, '_quick_drawer') and self._quick_drawer.isVisible():
+        if hasattr(self, "_quick_drawer") and self._quick_drawer.isVisible():
             self._position_quick_drawer()
-        if hasattr(self, '_ctrl_drawer') and self._ctrl_drawer.isVisible():
+        if hasattr(self, "_ctrl_drawer") and self._ctrl_drawer.isVisible():
             self._position_ctrl_drawer()
         self._fit_video()
 
@@ -7826,13 +8803,12 @@ class MainWindow(QMainWindow):
             self._gauge_tmp.set_value(0, "N/A")
 
         try:
-            boot_t  = psutil.boot_time()
+            boot_t = psutil.boot_time()
             elapsed = time.time() - boot_t
             uptime = int(elapsed)
             h, rem = divmod(uptime, 3600)
             m, s = divmod(rem, 60)
-            self._uptime_lbl.setText(
-                f"{self._tr('UPTIME')}  {h:02d}:{m:02d}:{s:02d}")
+            self._uptime_lbl.setText(f"{self._tr('UPTIME')}  {h:02d}:{m:02d}:{s:02d}")
         except Exception:
             self._uptime_lbl.setText(f"{self._tr('UPTIME')}  --:--:--")
 
@@ -7841,7 +8817,6 @@ class MainWindow(QMainWindow):
             self._proc_lbl.setText(f"{self._tr('PROCESSES')}  {proc_count}")
         except Exception:
             self._proc_lbl.setText(f"{self._tr('PROCESSES')}  --")
-
 
     def _build_header(self) -> QWidget:
         w = _WindowHeader(self)
@@ -7889,7 +8864,9 @@ class MainWindow(QMainWindow):
         nav.addWidget(self._ctrl_btn)
 
         self._left_toggle_btn = QPushButton()
-        self._left_toggle_btn.setIcon(QIcon(str(BASE_DIR / "assets" / "icons" / "system.svg")))
+        self._left_toggle_btn.setIcon(
+            QIcon(str(BASE_DIR / "assets" / "icons" / "system.svg"))
+        )
         self._left_toggle_btn.setIconSize(QSize(16, 16))
         self._left_toggle_btn.setFixedSize(28, 28)
         self._left_toggle_btn.setFont(QFont(FONT_UI, 8, QFont.Weight.Bold))
@@ -7902,7 +8879,9 @@ class MainWindow(QMainWindow):
         nav.addWidget(self._left_toggle_btn)
 
         self._right_toggle_btn = QPushButton()
-        self._right_toggle_btn.setIcon(QIcon(str(BASE_DIR / "assets" / "icons" / "chat.svg")))
+        self._right_toggle_btn.setIcon(
+            QIcon(str(BASE_DIR / "assets" / "icons" / "chat.svg"))
+        )
         self._right_toggle_btn.setIconSize(QSize(16, 16))
         self._right_toggle_btn.setFixedSize(28, 28)
         self._right_toggle_btn.setFont(QFont(FONT_UI, 8, QFont.Weight.Bold))
@@ -7914,7 +8893,9 @@ class MainWindow(QMainWindow):
         nav.addWidget(self._right_toggle_btn)
 
         self._content_toggle_btn = QPushButton()
-        self._content_toggle_btn.setIcon(QIcon(str(BASE_DIR / "assets" / "icons" / "results.svg")))
+        self._content_toggle_btn.setIcon(
+            QIcon(str(BASE_DIR / "assets" / "icons" / "results.svg"))
+        )
         self._content_toggle_btn.setIconSize(QSize(16, 16))
         self._content_toggle_btn.setFixedSize(28, 28)
         self._content_toggle_btn.setCheckable(True)
@@ -7924,7 +8905,9 @@ class MainWindow(QMainWindow):
         nav.addWidget(self._content_toggle_btn)
 
         self._terminal_toggle_btn = QPushButton()
-        self._terminal_toggle_btn.setIcon(QIcon(str(BASE_DIR / "assets" / "icons" / "terminal.svg")))
+        self._terminal_toggle_btn.setIcon(
+            QIcon(str(BASE_DIR / "assets" / "icons" / "terminal.svg"))
+        )
         self._terminal_toggle_btn.setIconSize(QSize(16, 16))
         self._terminal_toggle_btn.setFixedSize(28, 28)
         self._terminal_toggle_btn.setCheckable(True)
@@ -7933,27 +8916,37 @@ class MainWindow(QMainWindow):
         self._terminal_toggle_btn.clicked.connect(self._toggle_terminal_panel)
         nav.addWidget(self._terminal_toggle_btn)
 
-        brand = QVBoxLayout(); brand.setSpacing(1)
+        brand = QVBoxLayout()
+        brand.setSpacing(1)
         _disp = self._assistant_name.upper()
         self._title_lbl = QLabel(_disp)
         self._title_lbl.setAttribute(
-            Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
-        self._title_lbl.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+            Qt.WidgetAttribute.WA_TransparentForMouseEvents, True
+        )
+        self._title_lbl.setAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        )
         self._title_lbl.setFont(QFont(FONT_MONO, 17, QFont.Weight.Bold))
         self._title_lbl.setStyleSheet(f"color: {C.PRI}; background: transparent;")
         brand.addWidget(self._title_lbl)
-        _sub_text = ("Just A Rather Very Intelligent System · V2"
-                     if _disp in ("JARVIS", "J.A.R.V.I.S")
-                     else "Personal AI Assistant · V2")
+        _sub_text = (
+            "Just A Rather Very Intelligent System · V2"
+            if _disp in ("JARVIS", "J.A.R.V.I.S")
+            else "Personal AI Assistant · V2"
+        )
         self._sub_lbl = QLabel(_sub_text)
         self._sub_lbl.setAttribute(
-            Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
-        self._sub_lbl.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+            Qt.WidgetAttribute.WA_TransparentForMouseEvents, True
+        )
+        self._sub_lbl.setAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        )
         self._sub_lbl.setFont(QFont(FONT_MONO, 7))
         self._sub_lbl.setStyleSheet(f"color: {C.PRI_DIM}; background: transparent;")
         brand.addWidget(self._sub_lbl)
 
-        right_col = QVBoxLayout(); right_col.setSpacing(2)
+        right_col = QVBoxLayout()
+        right_col.setSpacing(2)
         self._clock_lbl = QLabel("00:00:00")
         self._clock_lbl.setFont(QFont(FONT_MONO, 14, QFont.Weight.Bold))
         self._clock_lbl.setStyleSheet(f"color: {C.PRI}; background: transparent;")
@@ -7961,9 +8954,11 @@ class MainWindow(QMainWindow):
         right_col.addWidget(self._clock_lbl)
         self._date_lbl = QLabel("")
         self._clock_lbl.setAttribute(
-            Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+            Qt.WidgetAttribute.WA_TransparentForMouseEvents, True
+        )
         self._date_lbl.setAttribute(
-            Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+            Qt.WidgetAttribute.WA_TransparentForMouseEvents, True
+        )
         self._date_lbl.setFont(QFont(FONT_MONO, 7))
         self._date_lbl.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
         self._date_lbl.setAlignment(Qt.AlignmentFlag.AlignRight)
@@ -8003,8 +8998,7 @@ class MainWindow(QMainWindow):
                 button = QPushButton(text)
                 button.setFixedSize(30, 28)
                 button.setCursor(Qt.CursorShape.PointingHandCursor)
-                button.setStyleSheet(
-                    close_style if text == "×" else button_style)
+                button.setStyleSheet(close_style if text == "×" else button_style)
                 button.setToolTip(self._tr(tooltip))
                 button.clicked.connect(callback)
                 window_controls.addWidget(button)
@@ -8022,7 +9016,9 @@ class MainWindow(QMainWindow):
         w = QWidget()
         w.setMinimumWidth(200)
         w.setObjectName("SidePanel")
-        w.setStyleSheet(f"QWidget#SidePanel {{ background: {C.PANEL}; border: 1px solid {C.BORDER}; border-radius: 8px; }}")
+        w.setStyleSheet(
+            f"QWidget#SidePanel {{ background: {C.PANEL}; border: 1px solid {C.BORDER}; border-radius: 8px; }}"
+        )
         lay = QVBoxLayout(w)
         lay.setContentsMargins(10, 12, 10, 12)
         lay.setSpacing(7)
@@ -8030,8 +9026,9 @@ class MainWindow(QMainWindow):
         head_row = QHBoxLayout()
         head_row.setSpacing(5)
         hdr = QLabel(self._tr("SYSTEM MONITOR"))
-        hdr.setToolTip(self._tr(
-            "Live resource indicators; hover over a metric for details."))
+        hdr.setToolTip(
+            self._tr("Live resource indicators; hover over a metric for details.")
+        )
         hdr.setFont(QFont(FONT_MONO, 8, QFont.Weight.Bold))
         hdr.setStyleSheet(f"color: {C.PRI}; background: transparent;")
         head_row.addWidget(hdr, 1)
@@ -8040,7 +9037,8 @@ class MainWindow(QMainWindow):
         online.setAlignment(Qt.AlignmentFlag.AlignCenter)
         online.setStyleSheet(
             f"color:{C.GREEN}; background:{C.PRI_GHO}; "
-            f"border:1px solid {C.BORDER}; border-radius:8px; padding:3px 5px;")
+            f"border:1px solid {C.BORDER}; border-radius:8px; padding:3px 5px;"
+        )
         head_row.addWidget(online)
         lay.addLayout(head_row)
         rule = QFrame()
@@ -8052,26 +9050,20 @@ class MainWindow(QMainWindow):
         telemetry_row.setContentsMargins(2, 0, 2, 0)
         telemetry_label = QLabel(self._tr("LIVE TELEMETRY"))
         telemetry_label.setFont(QFont(FONT_MONO, 6, QFont.Weight.Bold))
-        telemetry_label.setStyleSheet(
-            f"color:{C.TEXT_DIM}; background:transparent;")
+        telemetry_label.setStyleSheet(f"color:{C.TEXT_DIM}; background:transparent;")
         telemetry_row.addWidget(telemetry_label)
         telemetry_row.addStretch(1)
         refresh_label = QLabel(self._tr("REFRESH 2S"))
         refresh_label.setFont(QFont(FONT_MONO, 6, QFont.Weight.Bold))
-        refresh_label.setStyleSheet(
-            f"color:{C.PRI_DIM}; background:transparent;")
+        refresh_label.setStyleSheet(f"color:{C.PRI_DIM}; background:transparent;")
         telemetry_row.addWidget(refresh_label)
         lay.addLayout(telemetry_row)
 
         self._gauge_cpu = MetricGauge("CPU", C.GREEN, self._tr("LOAD"))
-        self._gauge_mem = MetricGauge(
-            self._tr("MEM"), C.ACC2, self._tr("IN USE"))
-        self._gauge_net = MetricGauge(
-            self._tr("NET"), C.PRI, self._tr("TRAFFIC"))
-        self._gauge_gpu = MetricGauge(
-            "GPU", C.ACC, self._tr("GRAPHICS"))
-        self._gauge_tmp = MetricGauge(
-            self._tr("TMP"), C.MUTED_C, self._tr("THERMAL"))
+        self._gauge_mem = MetricGauge(self._tr("MEM"), C.ACC2, self._tr("IN USE"))
+        self._gauge_net = MetricGauge(self._tr("NET"), C.PRI, self._tr("TRAFFIC"))
+        self._gauge_gpu = MetricGauge("GPU", C.ACC, self._tr("GRAPHICS"))
+        self._gauge_tmp = MetricGauge(self._tr("TMP"), C.MUTED_C, self._tr("THERMAL"))
 
         gauges = [
             (self._gauge_cpu, "Current processor load"),
@@ -8104,7 +9096,8 @@ class MainWindow(QMainWindow):
         gauge_surface.setObjectName("MetricSurface")
         gauge_surface.setStyleSheet(
             f"QFrame#MetricSurface {{ background:{C.PANEL2}; "
-            f"border:1px solid {C.BORDER}; border-radius:8px; }}")
+            f"border:1px solid {C.BORDER}; border-radius:8px; }}"
+        )
         gauge_layout = QVBoxLayout(gauge_surface)
         gauge_layout.setContentsMargins(4, 4, 4, 4)
         gauge_layout.setSpacing(0)
@@ -8114,14 +9107,13 @@ class MainWindow(QMainWindow):
         lay.addWidget(gauge_surface)
 
         self._trend_chart = MetricTrendChart(
-            self._tr("LOAD HISTORY"), self._tr("COLLECTING TELEMETRY"),
-            self._tr("MEM"))
+            self._tr("LOAD HISTORY"), self._tr("COLLECTING TELEMETRY"), self._tr("MEM")
+        )
         lay.addWidget(self._trend_chart, 1)
 
         details_rule = QFrame()
         details_rule.setFixedHeight(1)
-        details_rule.setStyleSheet(
-            f"background:{C.BORDER_B}; border:none;")
+        details_rule.setStyleSheet(f"background:{C.BORDER_B}; border:none;")
         lay.addWidget(details_rule)
         info_title = QLabel(self._tr("SYSTEM DETAILS"))
         info_title.setFont(QFont(FONT_MONO, 7, QFont.Weight.Bold))
@@ -8138,12 +9130,16 @@ class MainWindow(QMainWindow):
 
         self._uptime_lbl = QLabel(f"{self._tr('UPTIME')}     --:--:--")
         self._uptime_lbl.setFont(QFont(FONT_MONO, 8, QFont.Weight.Bold))
-        self._uptime_lbl.setStyleSheet(f"color: {C.GREEN}; background: transparent; border: none;")
+        self._uptime_lbl.setStyleSheet(
+            f"color: {C.GREEN}; background: transparent; border: none;"
+        )
         ip_lay.addWidget(self._uptime_lbl)
 
         self._proc_lbl = QLabel(f"{self._tr('PROCESSES')}  --")
         self._proc_lbl.setFont(QFont(FONT_MONO, 8))
-        self._proc_lbl.setStyleSheet(f"color: {C.TEXT_MED}; background: transparent; border: none;")
+        self._proc_lbl.setStyleSheet(
+            f"color: {C.TEXT_MED}; background: transparent; border: none;"
+        )
         ip_lay.addWidget(self._proc_lbl)
 
         os_name = f"{platform.system()} {platform.release()}"
@@ -8151,28 +9147,37 @@ class MainWindow(QMainWindow):
             try:
                 build = int(platform.version().split(".")[-1])
                 os_name = f"Windows {11 if build >= 22000 else 10}"
-            except (ValueError, IndexError):
+            except ValueError, IndexError:
                 pass
         self._os_lbl = QLabel(f"{self._tr('OS')}         {os_name}")
         self._os_lbl.setFont(QFont(FONT_MONO, 8))
-        self._os_lbl.setStyleSheet(f"color: {C.TEXT_MED}; background: transparent; border: none;")
+        self._os_lbl.setStyleSheet(
+            f"color: {C.TEXT_MED}; background: transparent; border: none;"
+        )
         ip_lay.addWidget(self._os_lbl)
 
         import getpass
+
         self._user_lbl = QLabel(
-            f"{self._tr('USER')}       {getpass.getuser()} / {self._tr('Active')}")
+            f"{self._tr('USER')}       {getpass.getuser()} / {self._tr('Active')}"
+        )
         self._user_lbl.setFont(QFont(FONT_MONO, 8))
-        self._user_lbl.setStyleSheet(f"color: {C.TEXT_MED}; background: transparent; border: none;")
+        self._user_lbl.setStyleSheet(
+            f"color: {C.TEXT_MED}; background: transparent; border: none;"
+        )
         ip_lay.addWidget(self._user_lbl)
 
         lay.addWidget(info_panel)
 
         return w
+
     def _build_right_panel(self) -> QWidget:
         w = QWidget()
         w.setMinimumWidth(280)
         w.setObjectName("SidePanel")
-        w.setStyleSheet(f"QWidget#SidePanel {{ background: {C.PANEL}; border: 1px solid {C.BORDER}; border-radius: 8px; }}")
+        w.setStyleSheet(
+            f"QWidget#SidePanel {{ background: {C.PANEL}; border: 1px solid {C.BORDER}; border-radius: 8px; }}"
+        )
         lay = QVBoxLayout(w)
         lay.setContentsMargins(6, 6, 6, 6)
         lay.setSpacing(5)
@@ -8194,7 +9199,8 @@ class MainWindow(QMainWindow):
         chat_lay = QVBoxLayout(chat_page)
         chat_lay.setContentsMargins(4, 4, 4, 4)
         chat_lay.setSpacing(4)
-        chat_tools = QHBoxLayout(); chat_tools.setSpacing(5)
+        chat_tools = QHBoxLayout()
+        chat_tools.setSpacing(5)
         chat_title = QLabel(self._tr("Recent conversation"))
         chat_title.setStyleSheet(f"color:{C.TEXT_DIM}; background:transparent;")
         chat_title.setFont(QFont(FONT_MONO, 7))
@@ -8202,8 +9208,9 @@ class MainWindow(QMainWindow):
         chat_tools.addStretch(1)
         self._clear_chat_btn = QPushButton(self._tr("Clear chat"))
         self._clear_chat_btn.setFixedHeight(20)
-        self._clear_chat_btn.setToolTip(self._tr(
-            "Clear this chat view; saved conversation stays in Archive"))
+        self._clear_chat_btn.setToolTip(
+            self._tr("Clear this chat view; saved conversation stays in Archive")
+        )
         self._clear_chat_btn.clicked.connect(self._clear_chat)
         chat_tools.addWidget(self._clear_chat_btn)
         chat_lay.addLayout(chat_tools)
@@ -8215,7 +9222,8 @@ class MainWindow(QMainWindow):
         self._chat_view.setStyleSheet(
             f"QTextBrowser {{ background: {C.PANEL2}; color: {C.TEXT}; "
             f"border: none; border-radius: 5px; padding: 4px; "
-            f"selection-background-color: {C.PRI_GHO}; }}" + _scroll_qss())
+            f"selection-background-color: {C.PRI_GHO}; }}" + _scroll_qss()
+        )
         chat_lay.addWidget(self._chat_view)
         self._work_tabs.addTab(chat_page, self._tr("CHAT"))
 
@@ -8223,49 +9231,60 @@ class MainWindow(QMainWindow):
         history_lay = QVBoxLayout(history_page)
         history_lay.setContentsMargins(4, 4, 4, 4)
         history_lay.setSpacing(4)
-        history_tools = QHBoxLayout(); history_tools.setSpacing(5)
-        history_note = QLabel(self._tr(
-            "Conversation archive · Memory stores saved facts"))
+        history_tools = QHBoxLayout()
+        history_tools.setSpacing(5)
+        history_note = QLabel(
+            self._tr("Conversation archive · Memory stores saved facts")
+        )
         history_note.setWordWrap(True)
         history_note.setStyleSheet(f"color:{C.TEXT_DIM}; background:transparent;")
         history_note.setFont(QFont(FONT_MONO, 7))
         history_tools.addWidget(history_note, 1)
         self._clear_history_btn = QPushButton(self._tr("Clear history"))
         self._clear_history_btn.setFixedHeight(20)
-        self._clear_history_btn.setToolTip(self._tr(
-            "Delete the conversation archive and active chat; saved memory stays"))
+        self._clear_history_btn.setToolTip(
+            self._tr(
+                "Delete the conversation archive and active chat; saved memory stays"
+            )
+        )
         self._clear_history_btn.clicked.connect(self._clear_history)
         history_tools.addWidget(self._clear_history_btn)
         history_lay.addLayout(history_tools)
         self._history_list = QListWidget()
         self._history_list.setStyleSheet(
             f"background: {C.PANEL2}; color: {C.TEXT}; border: none; border-radius: 5px;"
-            f"QListWidget::item {{ padding: 6px; border-bottom: 1px solid {C.BORDER}; }}")
+            f"QListWidget::item {{ padding: 6px; border-bottom: 1px solid {C.BORDER}; }}"
+        )
         history_lay.addWidget(self._history_list, 1)
         self._work_tabs.addTab(history_page, self._tr("ARCHIVE"))
         self._work_tabs.setTabToolTip(
-            1, self._tr("Archived conversation turns. Saved facts are in Memory."))
+            1, self._tr("Archived conversation turns. Saved facts are in Memory.")
+        )
 
         task_page = QWidget()
         task_lay = QVBoxLayout(task_page)
         task_lay.setContentsMargins(4, 4, 4, 4)
         task_lay.setSpacing(4)
-        task_hint = QLabel(self._tr("Tasks you add here stay in your local JARVIS list."))
+        task_hint = QLabel(
+            self._tr("Tasks you add here stay in your local JARVIS list.")
+        )
         task_hint.setWordWrap(True)
         task_hint.setStyleSheet(f"color:{C.TEXT_DIM}; background:transparent;")
         task_lay.addWidget(task_hint)
         self._task_list = QListWidget()
         self._task_list.setStyleSheet(
             f"background: {C.PANEL2}; color: {C.TEXT}; border: none; border-radius: 5px;"
-            f"QListWidget::item {{ padding: 5px; border-bottom: 1px solid {C.BORDER}; }}")
+            f"QListWidget::item {{ padding: 5px; border-bottom: 1px solid {C.BORDER}; }}"
+        )
         self._task_list.itemChanged.connect(self._task_item_changed)
         task_lay.addWidget(self._task_list, 1)
         add_row = QHBoxLayout()
         self._task_input = QLineEdit()
-        self._task_input.setStyleSheet(f"QLineEdit {{ background: {C.PANEL2}; color: {C.TEXT}; border: 1px solid {C.BORDER}; border-radius: 5px; padding: 5px 8px; }}")
+        self._task_input.setStyleSheet(
+            f"QLineEdit {{ background: {C.PANEL2}; color: {C.TEXT}; border: 1px solid {C.BORDER}; border-radius: 5px; padding: 5px 8px; }}"
+        )
         self._task_input.setPlaceholderText(self._tr("Add a task…"))
-        self._task_input.setToolTip(self._tr(
-            "Add a reminder to your local task list."))
+        self._task_input.setToolTip(self._tr("Add a reminder to your local task list."))
         self._task_input.returnPressed.connect(self._add_ui_task)
         add_row.addWidget(self._task_input, 1)
         add_task = QPushButton("+")
@@ -8279,26 +9298,36 @@ class MainWindow(QMainWindow):
         files_lay = QVBoxLayout(files_page)
         files_lay.setContentsMargins(4, 4, 4, 4)
         files_lay.setSpacing(7)
-        project_hint = QLabel(self._tr(
-            "JARVIS can inspect this folder when you ask about the project. Double-click a file to read or edit it here."))
+        project_hint = QLabel(
+            self._tr(
+                "JARVIS can inspect this folder when you ask about the project. Double-click a file to read or edit it here."
+            )
+        )
         project_hint.setWordWrap(True)
         project_hint.setStyleSheet(f"color:{C.TEXT_DIM}; background:transparent;")
         files_lay.addWidget(project_hint)
         files_tools = QHBoxLayout()
         files_tools.setSpacing(5)
         from memory.config_manager import get_workspace_path
+
         self._workspace_path = get_workspace_path()
         self._workspace_label = QLabel(
-            Path(self._workspace_path).name if self._workspace_path
-            else self._tr("No project folder selected"))
+            Path(self._workspace_path).name
+            if self._workspace_path
+            else self._tr("No project folder selected")
+        )
         self._workspace_label.setToolTip(self._workspace_path)
         self._workspace_label.setStyleSheet(
-            f"color:{C.TEXT_MED}; background:transparent;")
+            f"color:{C.TEXT_MED}; background:transparent;"
+        )
         self._workspace_label.setFont(QFont(FONT_MONO, 8))
         files_tools.addWidget(self._workspace_label, 1)
         open_folder = QPushButton(self._tr("Open project folder"))
-        open_folder.setToolTip(self._tr(
-            "Choose a project folder for file browsing and new terminal sessions."))
+        open_folder.setToolTip(
+            self._tr(
+                "Choose a project folder for file browsing and new terminal sessions."
+            )
+        )
         open_folder.clicked.connect(self._select_workspace_folder)
         files_tools.addWidget(open_folder)
         refresh_files = QPushButton()
@@ -8316,13 +9345,19 @@ class MainWindow(QMainWindow):
         self._project_open_mode.addItem(self._tr("JARVIS editor"), "jarvis")
         self._project_open_mode.addItem(self._tr("System default app"), "external")
         from memory.config_manager import get_project_open_mode
+
         self._project_open_mode.setCurrentIndex(
-            max(0, self._project_open_mode.findData(get_project_open_mode())))
-        self._project_open_mode.setToolTip(self._tr(
-            "Choose whether double-click opens files in JARVIS or your default app."))
+            max(0, self._project_open_mode.findData(get_project_open_mode()))
+        )
+        self._project_open_mode.setToolTip(
+            self._tr(
+                "Choose whether double-click opens files in JARVIS or your default app."
+            )
+        )
         opener_row.addWidget(self._project_open_mode)
         self._project_open_mode.currentIndexChanged.connect(
-            self._save_project_open_mode)
+            self._save_project_open_mode
+        )
         files_lay.addLayout(opener_row)
         self._file_model = QFileSystemModel(self)
         self._file_model.setFilter(QDir.Filter.AllEntries | QDir.Filter.NoDotAndDotDot)
@@ -8352,13 +9387,21 @@ class MainWindow(QMainWindow):
         refresh_files.clicked.connect(self._refresh_project_files)
         files_lay.addWidget(self._file_tree, 1)
         self._work_tabs.addTab(files_page, self._tr("PROJECT"))
-        self._work_tabs.setTabIcon(3, QIcon(str(BASE_DIR / "assets" / "icons" / "files.svg")))
+        self._work_tabs.setTabIcon(
+            3, QIcon(str(BASE_DIR / "assets" / "icons" / "files.svg"))
+        )
         self._work_tabs.setTabToolTip(
-            3, self._tr("Select a project folder, browse its files, and use it as the terminal working directory."))
+            3,
+            self._tr(
+                "Select a project folder, browse its files, and use it as the terminal working directory."
+            ),
+        )
 
         self._log = LogWidget()
         self._work_tabs.addTab(self._log, self._tr("LOGS"))
-        self._development_mode = bool(_read_full_config().get("development_mode", False))
+        self._development_mode = bool(
+            _read_full_config().get("development_mode", False)
+        )
         self._work_tabs.setTabVisible(4, self._development_mode)
         self._work_tabs.setCurrentIndex(4 if self._development_mode else 0)
         lay.addWidget(self._work_tabs, stretch=1)
@@ -8369,7 +9412,8 @@ class MainWindow(QMainWindow):
         self._tasks_refresh_timer.timeout.connect(self._refresh_tasks)
         self._tasks_refresh_timer.start(60_000)
 
-        sep = QFrame(); sep.setFrameShape(QFrame.Shape.HLine)
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
         sep.setStyleSheet(f"color: {C.BORDER}; margin: 2px 0;")
         lay.addWidget(sep)
 
@@ -8377,8 +9421,9 @@ class MainWindow(QMainWindow):
         self._drop_zone.file_selected.connect(self._on_file_selected)
         self._drop_zone.hide()
 
-        self._file_hint = QLabel(self._tr(
-            "Attach with + or drop a file into the message field"))
+        self._file_hint = QLabel(
+            self._tr("Attach with + or drop a file into the message field")
+        )
         self._file_hint.setFont(QFont(FONT_MONO, 7))
         self._file_hint.setStyleSheet(f"color: {C.TEXT_MED}; background: transparent;")
         self._file_hint.setWordWrap(True)
@@ -8386,9 +9431,12 @@ class MainWindow(QMainWindow):
         lay.addWidget(self._file_hint)
 
         self._file_hint.setMaximumHeight(20)
-        action_row = QHBoxLayout(); action_row.setSpacing(6)
+        action_row = QHBoxLayout()
+        action_row.setSpacing(6)
         self._interrupt_btn = QPushButton()
-        self._interrupt_btn.setIcon(QIcon(str(BASE_DIR / "assets" / "icons" / "stop.svg")))
+        self._interrupt_btn.setIcon(
+            QIcon(str(BASE_DIR / "assets" / "icons" / "stop.svg"))
+        )
         self._interrupt_btn.setIconSize(QSize(14, 14))
         self._interrupt_btn.setToolTip("Stop JARVIS response · Esc")
         self._interrupt_btn.setFixedSize(28, 28)
@@ -8416,6 +9464,34 @@ class MainWindow(QMainWindow):
         self._mute_btn.clicked.connect(self._toggle_mute)
         self._style_mute_btn()
         action_row.addWidget(self._mute_btn)
+        self._lecture_btn = QPushButton()
+        self._lecture_btn.setFixedSize(28, 28)
+        self._lecture_btn.setIcon(
+            QIcon(str(BASE_DIR / "assets" / "icons" / "record.svg"))
+        )
+        self._lecture_btn.setIconSize(QSize(14, 14))
+        self._lecture_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._lecture_btn.setToolTip("Start an unlimited lecture recording")
+        self._lecture_btn.setStyleSheet(
+            f"QPushButton {{ background:{C.PANEL2}; border:1px solid {C.BORDER}; "
+            f"border-radius:8px; }} QPushButton:hover {{ border-color:{C.PRI}; }}"
+        )
+        self._lecture_btn.clicked.connect(self._toggle_lecture_recording)
+        action_row.addWidget(self._lecture_btn)
+        self._lecture_library_btn = QPushButton()
+        self._lecture_library_btn.setFixedSize(28, 28)
+        self._lecture_library_btn.setIcon(
+            QIcon(str(BASE_DIR / "assets" / "icons" / "files.svg"))
+        )
+        self._lecture_library_btn.setIconSize(QSize(14, 14))
+        self._lecture_library_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._lecture_library_btn.setToolTip("Browse saved lecture recordings")
+        self._lecture_library_btn.setStyleSheet(
+            f"QPushButton {{ background:{C.PANEL2}; border:1px solid {C.BORDER}; "
+            f"border-radius:8px; }} QPushButton:hover {{ border-color:{C.PRI}; }}"
+        )
+        self._lecture_library_btn.clicked.connect(self._show_lecture_library)
+        action_row.addWidget(self._lecture_library_btn)
         action_row.addStretch(1)
         lay.addLayout(action_row)
 
@@ -8441,9 +9517,11 @@ class MainWindow(QMainWindow):
         """
 
         self._BTN_PRI, self._BTN_DIM = _BTN_STYLE_PRI, _BTN_STYLE_DIM
+
         def _icon_button(button: QPushButton, filename: str):
             button.setIcon(QIcon(str(BASE_DIR / "assets" / "icons" / filename)))
             button.setIconSize(QSize(14, 14))
+
         w = QWidget(self.centralWidget())
         w.setObjectName("QuickDrawer")
         w.setStyleSheet(f"""
@@ -8462,8 +9540,10 @@ class MainWindow(QMainWindow):
 
         hdr = QLabel(f"◈ {self._tr('Setup')}")
         hdr.setFont(QFont(FONT_MONO, 7, QFont.Weight.Bold))
-        hdr.setStyleSheet(f"color: {C.PRI_DIM}; background: transparent; "
-                          f"border-bottom: 1px solid {C.BORDER}; padding-bottom: 4px;")
+        hdr.setStyleSheet(
+            f"color: {C.PRI_DIM}; background: transparent; "
+            f"border-bottom: 1px solid {C.BORDER}; padding-bottom: 4px;"
+        )
         lay.addWidget(hdr)
         intro = QLabel(self._tr("Setup and integrations"))
         intro.setWordWrap(True)
@@ -8506,8 +9586,9 @@ class MainWindow(QMainWindow):
         cust_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         cust_btn.setStyleSheet(_BTN_STYLE_DIM)
         cust_btn.clicked.connect(self._open_customize)
-        cust_btn.setToolTip(self._tr(
-            "Change assistant name, voice, accent color, and window opacity."))
+        cust_btn.setToolTip(
+            self._tr("Change assistant name, voice, accent color, and window opacity.")
+        )
         lay.addWidget(cust_btn)
 
         audio_btn = QPushButton(self._tr("Audio devices"))
@@ -8602,7 +9683,8 @@ class MainWindow(QMainWindow):
         hdr.setFont(QFont(FONT_MONO, 9, QFont.Weight.Bold))
         hdr.setStyleSheet(
             f"color:{C.PRI}; background:transparent; padding:2px 2px 7px;"
-            f"border-bottom:1px solid {C.BORDER}; letter-spacing:1px;")
+            f"border-bottom:1px solid {C.BORDER}; letter-spacing:1px;"
+        )
         outer.addWidget(hdr)
 
         scroll = QScrollArea()
@@ -8624,21 +9706,22 @@ class MainWindow(QMainWindow):
             card.setObjectName("ControlsSection")
             card.setStyleSheet(
                 f"QFrame#ControlsSection {{ background:{C.PANEL}; "
-                f"border:1px solid {C.BORDER}; border-radius:8px; }}")
+                f"border:1px solid {C.BORDER}; border-radius:8px; }}"
+            )
             section_lay = QVBoxLayout(card)
             section_lay.setContentsMargins(10, 9, 10, 10)
             section_lay.setSpacing(7)
             title_label = QLabel(self._tr(title))
             title_label.setFont(QFont(FONT_MONO, 8, QFont.Weight.Bold))
             title_label.setStyleSheet(
-                f"color:{C.PRI}; background:transparent; letter-spacing:.5px;")
+                f"color:{C.PRI}; background:transparent; letter-spacing:.5px;"
+            )
             section_lay.addWidget(title_label)
             if description:
                 note = QLabel(self._tr(description))
                 note.setWordWrap(True)
                 note.setFont(QFont(FONT_MONO, 7))
-                note.setStyleSheet(
-                    f"color:{C.TEXT_DIM}; background:transparent;")
+                note.setStyleSheet(f"color:{C.TEXT_DIM}; background:transparent;")
                 section_lay.addWidget(note)
             lay.addWidget(card)
             return section_lay
@@ -8674,10 +9757,8 @@ class MainWindow(QMainWindow):
         self._wake_sleep_btn = _row(QPushButton(), basics)
         self._wake_sleep_btn.clicked.connect(self._tap_wake_manual)
         self._wake_btn.setText(self._tr("Wake word"))
-        self._wake_btn.setToolTip(self._tr(
-            "Toggle hands-free voice activation."))
-        self._brief_btn.setToolTip(self._tr(
-            "Toggle the daily morning summary."))
+        self._wake_btn.setToolTip(self._tr("Toggle hands-free voice activation."))
+        self._brief_btn.setToolTip(self._tr("Toggle the daily morning summary."))
         self._wake_sleep_btn.hide()
 
         self._ptt_btn = _row(QPushButton(), basics)
@@ -8686,23 +9767,28 @@ class MainWindow(QMainWindow):
 
         language_section = _section(
             "Language",
-            "Choose the language used by JARVIS panels. Restart to apply everywhere.")
+            "Choose the language used by JARVIS panels. Restart to apply everywhere.",
+        )
         self._ui_language_combo = QComboBox()
         for code, name in LANGUAGES.items():
             self._ui_language_combo.addItem(name, code)
         self._ui_language_combo.setCurrentIndex(
-            max(0, self._ui_language_combo.findData(self._ui_language)))
+            max(0, self._ui_language_combo.findData(self._ui_language))
+        )
         self._ui_language_combo.setMinimumHeight(32)
         language_section.addWidget(self._ui_language_combo)
 
         from memory.config_manager import (
-            CURSOR_HOTKEYS, CURSOR_SIZES, CURSOR_STYLES, REGION_HOTKEYS,
-            CURSOR_MENU_ACTIONS, get_cursor_assistant_settings,
+            CURSOR_HOTKEYS,
+            CURSOR_SIZES,
+            CURSOR_STYLES,
+            REGION_HOTKEYS,
+            CURSOR_MENU_ACTIONS,
+            get_cursor_assistant_settings,
         )
+
         cursor_cfg = get_cursor_assistant_settings()
-        cursor = _section(
-            "CURSOR ASSISTANT",
-            "Quick tools that follow your workflow.")
+        cursor = _section("CURSOR ASSISTANT", "Quick tools that follow your workflow.")
         checkbox_style = f"""
             QCheckBox {{ color:{C.TEXT_MED}; background:transparent; spacing:8px; }}
             QCheckBox:hover {{ color:{C.WHITE}; }}
@@ -8732,16 +9818,19 @@ class MainWindow(QMainWindow):
         """
         self._ui_language_combo.setStyleSheet(combo_style)
         self._ui_language_combo.currentIndexChanged.connect(
-            self._change_interface_language)
+            self._change_interface_language
+        )
 
         self._cursor_enabled_check = QCheckBox(self._tr("Enable quick actions"))
         self._cursor_enabled_check.setChecked(cursor_cfg["enabled"])
-        self._cursor_enabled_check.setToolTip(self._tr(
-            "Show the compact action card when you invoke its shortcut."))
+        self._cursor_enabled_check.setToolTip(
+            self._tr("Show the compact action card when you invoke its shortcut.")
+        )
         self._cursor_visible_check = QCheckBox(self._tr("Use custom system cursor"))
         self._cursor_visible_check.setChecked(cursor_cfg["cursor_visible"])
-        self._cursor_visible_check.setToolTip(self._tr(
-            "Replace the Windows pointer with the selected JARVIS style."))
+        self._cursor_visible_check.setToolTip(
+            self._tr("Replace the Windows pointer with the selected JARVIS style.")
+        )
         for check in (self._cursor_enabled_check, self._cursor_visible_check):
             check.setFont(QFont(FONT_MONO, 8))
             check.setStyleSheet(checkbox_style)
@@ -8754,7 +9843,8 @@ class MainWindow(QMainWindow):
         pointer_label.setFont(QFont(FONT_MONO, 8))
         pointer_label.setStyleSheet(f"color:{C.TEXT_MED}; background:transparent;")
         pointer_label.setToolTip(
-            "Choosing a style applies it to the Windows system pointer.")
+            "Choosing a style applies it to the Windows system pointer."
+        )
         style_row.addWidget(pointer_label)
         self._cursor_style_combo = QComboBox()
         self._cursor_style_combo.setStyleSheet(combo_style)
@@ -8762,7 +9852,8 @@ class MainWindow(QMainWindow):
             self._cursor_style_combo.addItem(style.title(), style)
         self._cursor_style_combo.setMinimumHeight(32)
         self._cursor_style_combo.setToolTip(
-            "Choose a system pointer style; selecting one enables the custom pointer.")
+            "Choose a system pointer style; selecting one enables the custom pointer."
+        )
         style_row.addWidget(self._cursor_style_combo, 1)
         self._cursor_size_combo = QComboBox()
         self._cursor_size_combo.setStyleSheet(combo_style)
@@ -8774,13 +9865,13 @@ class MainWindow(QMainWindow):
         style_row.addWidget(self._cursor_size_combo)
         cursor.addLayout(style_row)
         self._cursor_style_combo.setCurrentIndex(
-            max(0, self._cursor_style_combo.findData(cursor_cfg["style"])))
+            max(0, self._cursor_style_combo.findData(cursor_cfg["style"]))
+        )
         self._cursor_size_combo.setCurrentIndex(
-            max(0, self._cursor_size_combo.findData(cursor_cfg["size"])))
-        self._cursor_style_combo.currentIndexChanged.connect(
-            self._enable_custom_cursor)
-        self._cursor_size_combo.currentIndexChanged.connect(
-            self._enable_custom_cursor)
+            max(0, self._cursor_size_combo.findData(cursor_cfg["size"]))
+        )
+        self._cursor_style_combo.currentIndexChanged.connect(self._enable_custom_cursor)
+        self._cursor_size_combo.currentIndexChanged.connect(self._enable_custom_cursor)
 
         hotkey_row = QHBoxLayout()
         quick_label = QLabel(self._tr("Quick menu"))
@@ -8795,9 +9886,11 @@ class MainWindow(QMainWindow):
         hotkey_row.addWidget(self._cursor_hotkey_combo, 1)
         cursor.addLayout(hotkey_row)
         self._cursor_hotkey_combo.setCurrentIndex(
-            max(0, self._cursor_hotkey_combo.findData(cursor_cfg["hotkey"])))
+            max(0, self._cursor_hotkey_combo.findData(cursor_cfg["hotkey"]))
+        )
         self._cursor_hotkey_combo.currentIndexChanged.connect(
-            self._save_cursor_controls)
+            self._save_cursor_controls
+        )
 
         region_hotkey_row = QHBoxLayout()
         region_label = QLabel(self._tr("Select area"))
@@ -8812,14 +9905,22 @@ class MainWindow(QMainWindow):
         region_hotkey_row.addWidget(self._region_hotkey_combo, 1)
         cursor.addLayout(region_hotkey_row)
         self._region_hotkey_combo.setCurrentIndex(
-            max(0, self._region_hotkey_combo.findData(cursor_cfg["region_hotkey"])))
+            max(0, self._region_hotkey_combo.findData(cursor_cfg["region_hotkey"]))
+        )
         self._region_hotkey_combo.currentIndexChanged.connect(
-            self._save_cursor_controls)
+            self._save_cursor_controls
+        )
 
         action_names = {
-            "microphone": "Mic", "ask": "Ask", "attach": "File",
-            "summarize": "Summary", "explain": "Explain", "translate": "Translate",
-            "fix": "Fix", "screen": "Region", "interrupt": "Stop",
+            "microphone": "Mic",
+            "ask": "Ask",
+            "attach": "File",
+            "summarize": "Summary",
+            "explain": "Explain",
+            "translate": "Translate",
+            "fix": "Fix",
+            "screen": "Region",
+            "interrupt": "Stop",
             "settings": "Settings",
         }
         action_grid = QGridLayout()
@@ -8839,10 +9940,13 @@ class MainWindow(QMainWindow):
 
         permissions_section = _section(
             "COMPUTER PERMISSIONS",
-            "Optional abilities; disabled unless you turn them on.")
-        from memory.config_manager import (
-            DEFAULT_COMPUTER_PERMISSIONS, get_computer_permissions,
+            "Optional abilities; disabled unless you turn them on.",
         )
+        from memory.config_manager import (
+            DEFAULT_COMPUTER_PERMISSIONS,
+            get_computer_permissions,
+        )
+
         permissions = get_computer_permissions()
         permission_labels = {
             "observe_screen": "Capture screen",
@@ -8874,6 +9978,7 @@ class MainWindow(QMainWindow):
 
     def _save_cursor_controls(self, *_):
         from memory.config_manager import save_cursor_assistant_settings
+
         values = {
             "enabled": self._cursor_enabled_check.isChecked(),
             "cursor_visible": self._cursor_visible_check.isChecked(),
@@ -8882,7 +9987,8 @@ class MainWindow(QMainWindow):
             "hotkey": self._cursor_hotkey_combo.currentData(),
             "region_hotkey": self._region_hotkey_combo.currentData(),
             "menu_actions": [
-                action for action, check in self._cursor_action_checks.items()
+                action
+                for action, check in self._cursor_action_checks.items()
                 if check.isChecked()
             ],
         }
@@ -8897,13 +10003,17 @@ class MainWindow(QMainWindow):
 
     def _save_computer_permission_controls(self, *_):
         from memory.config_manager import save_computer_permissions
-        save_computer_permissions({
-            key: check.isChecked()
-            for key, check in self._computer_permission_checks.items()
-        })
+
+        save_computer_permissions(
+            {
+                key: check.isChecked()
+                for key, check in self._computer_permission_checks.items()
+            }
+        )
 
     def _refresh_cursor_assistant(self):
         from memory.config_manager import get_cursor_assistant_settings
+
         self._cursor_settings = get_cursor_assistant_settings()
         self._cursor_overlay.set_settings(self._cursor_settings)
         should_show = self._cursor_settings["cursor_visible"]
@@ -8921,20 +10031,21 @@ class MainWindow(QMainWindow):
                     self._native_cursor_applied = True
                 except Exception as exc:
                     self._append_activity(
-                        f"ERR: Could not apply the Windows system cursor — {exc}")
+                        f"ERR: Could not apply the Windows system cursor — {exc}"
+                    )
             elif self._native_cursor_applied:
                 try:
                     _restore_windows_system_cursors()
                     self._native_cursor_applied = False
                 except Exception as exc:
                     self._append_activity(
-                        f"ERR: Could not restore the Windows system cursor — {exc}")
+                        f"ERR: Could not restore the Windows system cursor — {exc}"
+                    )
         else:
             self._cursor_overlay.setVisible(should_show)
             if should_show:
                 self._cursor_overlay.raise_()
-        if (platform.system() != "Windows"
-                and hasattr(self, "_cursor_shortcut")):
+        if platform.system() != "Windows" and hasattr(self, "_cursor_shortcut"):
             self._set_cursor_shortcut()
             self._set_region_shortcut()
 
@@ -8955,12 +10066,14 @@ class MainWindow(QMainWindow):
         import. Afterwards the same check costs about a millisecond, so it only
         ever needed to happen somewhere other than in front of the user.
         """
+
         def work():
             try:
                 self._wake_state()
             except Exception:
                 pass
             self._wake_btns_sig.emit()
+
         threading.Thread(target=work, daemon=True, name="wake-state-warm").start()
 
     def _toggle_drawer(self, checked: bool):
@@ -8975,7 +10088,7 @@ class MainWindow(QMainWindow):
     def _toggle_controls(self, checked: bool):
         if checked:
             self._close_setup()
-            self._refresh_wake_btns()   # cheap now: the state was warmed at boot
+            self._refresh_wake_btns()  # cheap now: the state was warmed at boot
             self._position_ctrl_drawer()
             self._ctrl_drawer.show()
             self._ctrl_drawer.raise_()
@@ -9012,10 +10125,13 @@ class MainWindow(QMainWindow):
             # moved to the right side of the header.
             try:
                 anchor_x = self._drawer_btn.mapTo(
-                    self.centralWidget(), QPoint(0, 0)).x()
+                    self.centralWidget(), QPoint(0, 0)
+                ).x()
                 drawer_width = 220
                 left = anchor_x + self._drawer_btn.width() - drawer_width
-                left = max(12, min(left, self.centralWidget().width() - drawer_width - 12))
+                left = max(
+                    12, min(left, self.centralWidget().width() - drawer_width - 12)
+                )
             except Exception:
                 left = 12
             self._place_drawer(self._quick_drawer, left)
@@ -9025,8 +10141,9 @@ class MainWindow(QMainWindow):
         if hasattr(self, "_ctrl_drawer"):
             left = 12
             try:
-                left = max(12, self._ctrl_btn.mapTo(self.centralWidget(),
-                                                    QPoint(0, 0)).x() - 8)
+                left = max(
+                    12, self._ctrl_btn.mapTo(self.centralWidget(), QPoint(0, 0)).x() - 8
+                )
                 left = min(left, self.centralWidget().width() - 342)
                 left = max(12, left)
             except Exception:
@@ -9053,7 +10170,8 @@ class MainWindow(QMainWindow):
         initial_cwd = self._terminal_start_directory()
         self._terminal_cwd = QLabel(initial_cwd)
         self._terminal_cwd.setToolTip(
-            self._tr("New terminal sessions start in the selected folder."))
+            self._tr("New terminal sessions start in the selected folder.")
+        )
         self._terminal_cwd.setFont(QFont(FONT_MONO, 7))
         self._terminal_cwd.setStyleSheet(f"color:{C.TEXT_DIM}; background:transparent;")
         header.addWidget(self._terminal_cwd)
@@ -9071,11 +10189,21 @@ class MainWindow(QMainWindow):
             header.addWidget(button)
             return button
 
-        terminal_button("terminal-new.svg", self._tr("New terminal"), self._new_terminal)
-        terminal_button("stop.svg", self._tr("Interrupt command (Ctrl+C)"), self._interrupt_terminal)
-        terminal_button("refresh.svg", self._tr("Restart this terminal"), self._restart_terminal)
-        terminal_button("clear.svg", self._tr("Clear terminal output"), self._clear_terminal)
-        terminal_button("close.svg", self._tr("Close terminal"), self._close_terminal_panel)
+        terminal_button(
+            "terminal-new.svg", self._tr("New terminal"), self._new_terminal
+        )
+        terminal_button(
+            "stop.svg", self._tr("Interrupt command (Ctrl+C)"), self._interrupt_terminal
+        )
+        terminal_button(
+            "refresh.svg", self._tr("Restart this terminal"), self._restart_terminal
+        )
+        terminal_button(
+            "clear.svg", self._tr("Clear terminal output"), self._clear_terminal
+        )
+        terminal_button(
+            "close.svg", self._tr("Close terminal"), self._close_terminal_panel
+        )
 
         layout.addLayout(header)
         self._terminal_tabs = QTabWidget()
@@ -9091,23 +10219,41 @@ class MainWindow(QMainWindow):
         light = C.PANEL.lower() == "#ffffff"
         if light:
             colors = {
-                "black": "#25313b", "red": "#b42318", "green": "#137333",
-                "yellow": "#815b00", "blue": "#175caa", "magenta": "#7a3e9d",
-                "cyan": "#087e8b", "white": "#f0f3f6",
-                "brightBlack": "#52616d", "brightRed": "#d92d20",
-                "brightGreen": "#16803c", "brightYellow": "#946b00",
-                "brightBlue": "#2672c8", "brightMagenta": "#8f50b5",
-                "brightCyan": "#098b9a", "brightWhite": "#ffffff",
+                "black": "#25313b",
+                "red": "#b42318",
+                "green": "#137333",
+                "yellow": "#815b00",
+                "blue": "#175caa",
+                "magenta": "#7a3e9d",
+                "cyan": "#087e8b",
+                "white": "#f0f3f6",
+                "brightBlack": "#52616d",
+                "brightRed": "#d92d20",
+                "brightGreen": "#16803c",
+                "brightYellow": "#946b00",
+                "brightBlue": "#2672c8",
+                "brightMagenta": "#8f50b5",
+                "brightCyan": "#098b9a",
+                "brightWhite": "#ffffff",
             }
         else:
             colors = {
-                "black": "#07100b", "red": "#ff4567", "green": "#00d979",
-                "yellow": "#c9e800", "blue": "#5da9ff", "magenta": "#d579ff",
-                "cyan": "#42e4d2", "white": "#c8ded2",
-                "brightBlack": "#52665a", "brightRed": "#ff7188",
-                "brightGreen": "#55ffa3", "brightYellow": "#eaff50",
-                "brightBlue": "#82bdff", "brightMagenta": "#e3a0ff",
-                "brightCyan": "#80fff0", "brightWhite": "#f1fff6",
+                "black": "#07100b",
+                "red": "#ff4567",
+                "green": "#00d979",
+                "yellow": "#c9e800",
+                "blue": "#5da9ff",
+                "magenta": "#d579ff",
+                "cyan": "#42e4d2",
+                "white": "#c8ded2",
+                "brightBlack": "#52665a",
+                "brightRed": "#ff7188",
+                "brightGreen": "#55ffa3",
+                "brightYellow": "#eaff50",
+                "brightBlue": "#82bdff",
+                "brightMagenta": "#e3a0ff",
+                "brightCyan": "#80fff0",
+                "brightWhite": "#f1fff6",
             }
         return {
             "background": C.DARK,
@@ -9149,7 +10295,8 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
 });</script></body></html>"""
         terminal_html = terminal_html.replace("__DARK__", C.DARK)
         terminal_html = terminal_html.replace(
-            "__THEME__", json.dumps(self._terminal_theme(), separators=(",", ":")))
+            "__THEME__", json.dumps(self._terminal_theme(), separators=(",", ":"))
+        )
         return terminal_html
 
     def _add_terminal_session(self):
@@ -9161,7 +10308,8 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         view.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         view.setContextMenuPolicy(Qt.ContextMenuPolicy.NoContextMenu)
         view.setStyleSheet(
-            f"background:{C.DARK}; border:1px solid {C.BORDER}; border-radius:5px;")
+            f"background:{C.DARK}; border:1px solid {C.BORDER}; border-radius:5px;"
+        )
         bridge = _TerminalBridge(self, session_id)
         channel = QWebChannel(view.page())
         channel.registerObject("bridge", bridge)
@@ -9189,8 +10337,10 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         session = self._terminal_sessions[session_id]
         self._terminal_active_id = session_id
         self._terminal_cwd.setText(session.cwd)
-        if getattr(self, "_terminal_panel", None) is not None \
-                and self._terminal_panel.isVisible():
+        if (
+            getattr(self, "_terminal_panel", None) is not None
+            and self._terminal_panel.isVisible()
+        ):
             QTimer.singleShot(0, view.setFocus)
 
     def _new_terminal(self):
@@ -9213,14 +10363,17 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         self._terminal_write("\x03", session_id, allow_closing=True)
         QTimer.singleShot(
             180,
-            lambda sid=session_id: self._terminal_write(
-                "exit\r", sid, allow_closing=True)
-            if sid in self._terminal_sessions
-            and self._terminal_sessions[sid].closing
-            and self._terminal_sessions[sid].pty is not None else None,
+            lambda sid=session_id: (
+                self._terminal_write("exit\r", sid, allow_closing=True)
+                if sid in self._terminal_sessions
+                and self._terminal_sessions[sid].closing
+                and self._terminal_sessions[sid].pty is not None
+                else None
+            ),
         )
         QTimer.singleShot(
-            1500, lambda sid=session_id: self._force_close_terminal_session(sid))
+            1500, lambda sid=session_id: self._force_close_terminal_session(sid)
+        )
 
     def _force_close_terminal_session(self, session_id: str):
         session = self._terminal_sessions.get(session_id)
@@ -9238,8 +10391,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                             text=True,
                             timeout=3,
                             check=False,
-                            creationflags=getattr(
-                                subprocess, "CREATE_NO_WINDOW", 0),
+                            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
                         )
                         detail = result.stderr.strip()
                     else:
@@ -9248,8 +10400,8 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                         detail = ""
                     if process.poll() is None:
                         raise OSError(
-                            detail
-                            or f"taskkill could not stop PID {process.pid}")
+                            detail or f"taskkill could not stop PID {process.pid}"
+                        )
                 try:
                     os.close(pty["fd"])
                 except OSError:
@@ -9267,8 +10419,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                             text=True,
                             timeout=3,
                             check=False,
-                            creationflags=getattr(
-                                subprocess, "CREATE_NO_WINDOW", 0),
+                            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
                         )
                         detail = result.stderr.strip()
                     else:
@@ -9276,11 +10427,12 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                         detail = ""
                     if pty.isalive():
                         raise OSError(
-                            detail
-                            or f"taskkill could not stop PID {pty.pid}")
+                            detail or f"taskkill could not stop PID {pty.pid}"
+                        )
         except (OSError, subprocess.SubprocessError) as exc:
             self._append_activity(
-                f"ERR: Could not stop terminal process {session_id}: {exc}")
+                f"ERR: Could not stop terminal process {session_id}: {exc}"
+            )
             return
         session.pty = None
         self._remove_terminal_session(session_id)
@@ -9314,7 +10466,8 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         session = self._active_terminal_session()
         if session is not None:
             session.view.page().runJavaScript(
-                "window.clearTerminal && window.clearTerminal()")
+                "window.clearTerminal && window.clearTerminal()"
+            )
 
     def _open_project_file(self, index):
         path = Path(self._file_model.filePath(index))
@@ -9326,20 +10479,21 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             relative_path = path.relative_to(root)
             if path.stat().st_size > 2_000_000:
                 QMessageBox.information(
-                    self, self._tr("File too large"),
-                    self._tr("JARVIS editor supports text files up to 2 MB."))
+                    self,
+                    self._tr("File too large"),
+                    self._tr("JARVIS editor supports text files up to 2 MB."),
+                )
                 return
         except (OSError, RuntimeError, ValueError) as exc:
-            QMessageBox.warning(
-                self, self._tr("Project file unavailable"), str(exc))
+            QMessageBox.warning(self, self._tr("Project file unavailable"), str(exc))
             return
 
         from memory.config_manager import save_active_project_file
+
         try:
             save_active_project_file(str(relative_path))
         except (ValueError, OSError) as exc:
-            QMessageBox.warning(
-                self, self._tr("Project file unavailable"), str(exc))
+            QMessageBox.warning(self, self._tr("Project file unavailable"), str(exc))
             return
 
         if self._project_open_mode.currentData() == "external":
@@ -9352,17 +10506,24 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                 content = path.read_text(encoding="utf-8")
             except (OSError, UnicodeError) as exc:
                 QMessageBox.warning(
-                    self, self._tr("Cannot open project file"), str(exc))
+                    self, self._tr("Cannot open project file"), str(exc)
+                )
                 return
             if "\x00" in content:
                 QMessageBox.information(
-                    self, self._tr("Not a text file"),
-                    self._tr("This file contains binary data and cannot be edited here."))
+                    self,
+                    self._tr("Not a text file"),
+                    self._tr(
+                        "This file contains binary data and cannot be edited here."
+                    ),
+                )
                 return
             editor = _ProjectEditorDialog(self, path, content)
             editor.finished.connect(
-                lambda _result, editor_key=key:
-                self._project_editors.pop(editor_key, None))
+                lambda _result, editor_key=key: self._project_editors.pop(
+                    editor_key, None
+                )
+            )
             self._project_editors[key] = editor
         editor.show()
         editor.raise_()
@@ -9371,17 +10532,19 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
     def _open_external_project_file(self, path: Path):
         if not QDesktopServices.openUrl(QUrl.fromLocalFile(str(path))):
             QMessageBox.warning(
-                self, self._tr("Could not open file"),
-                self._tr("Windows could not open this file with its default app."))
+                self,
+                self._tr("Could not open file"),
+                self._tr("Windows could not open this file with its default app."),
+            )
 
     def _save_project_open_mode(self, *_):
         from memory.config_manager import save_project_open_mode
+
         mode = self._project_open_mode.currentData()
         try:
             save_project_open_mode(mode)
         except (ValueError, OSError) as exc:
-            QMessageBox.warning(
-                self, self._tr("File opening preference"), str(exc))
+            QMessageBox.warning(self, self._tr("File opening preference"), str(exc))
 
     def _refresh_project_files(self):
         if not self._workspace_path:
@@ -9392,25 +10555,26 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
     def _select_workspace_folder(self):
         start = self._workspace_path or str(Path.home())
         path = QFileDialog.getExistingDirectory(
-            self, self._tr("Open project folder"), start)
+            self, self._tr("Open project folder"), start
+        )
         if path:
             self._set_workspace_path(path)
 
     def _set_workspace_path(self, path: str):
         from memory.config_manager import save_workspace_path
+
         try:
             save_workspace_path(path)
         except (ValueError, OSError) as exc:
-            QMessageBox.warning(
-                self, self._tr("Project folder unavailable"), str(exc))
+            QMessageBox.warning(self, self._tr("Project folder unavailable"), str(exc))
             return
         self._workspace_path = str(Path(path).expanduser().resolve())
         from memory.config_manager import save_active_project_file
+
         try:
             save_active_project_file("")
         except OSError as exc:
-            QMessageBox.warning(
-                self, self._tr("Project file unavailable"), str(exc))
+            QMessageBox.warning(self, self._tr("Project file unavailable"), str(exc))
         self._workspace_label.setText(Path(self._workspace_path).name)
         self._workspace_label.setToolTip(self._workspace_path)
         root_index = self._file_model.setRootPath(self._workspace_path)
@@ -9424,8 +10588,11 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             active = self._active_terminal_session()
             cwd = active.cwd if active is not None else self._workspace_path
             self._terminal_cwd.setText(cwd)
-            self._terminal_cwd.setToolTip(self._tr(
-                "Running terminals keep their current folder. New sessions use the selected folder."))
+            self._terminal_cwd.setToolTip(
+                self._tr(
+                    "Running terminals keep their current folder. New sessions use the selected folder."
+                )
+            )
 
     def _toggle_terminal_panel(self):
         if self._reading_mode:
@@ -9436,16 +10603,18 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         if not self._terminal_sessions:
             self._add_terminal_session()
         self._terminal_panel.show()
-        available = max(1, self._workspace_split.height() - self._workspace_split.handleWidth())
+        available = max(
+            1, self._workspace_split.height() - self._workspace_split.handleWidth()
+        )
         # Open at a useful height while preserving room for the dashboard.
         # The splitter remains unrestricted above this initial proportion.
         terminal_height = min(
             max(120, int(available * 0.34)),
             max(96, available - 220),
         )
-        self._workspace_split.setSizes([
-            max(1, available - terminal_height), terminal_height
-        ])
+        self._workspace_split.setSizes(
+            [max(1, available - terminal_height), terminal_height]
+        )
         self._terminal_toggle_btn.setChecked(True)
         session = self._active_terminal_session()
         if session is not None and session.pty is None:
@@ -9460,7 +10629,8 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             return
         if session.pty is None:
             session.view.page().runJavaScript(
-                "window.clearTerminal && window.clearTerminal()")
+                "window.clearTerminal && window.clearTerminal()"
+            )
             self._start_terminal_process(session.session_id)
             session.view.setFocus()
             return
@@ -9468,16 +10638,20 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             return
         session.restart_pending = True
         session.view.page().runJavaScript(
-            "window.clearTerminal && window.clearTerminal()")
+            "window.clearTerminal && window.clearTerminal()"
+        )
         # Interrupt a running foreground command, then exit its shell. The
         # normal PTY poller detects its exit and starts the replacement shell.
         session_id = session.session_id
         self._terminal_write("\x03", session_id)
         QTimer.singleShot(
             180,
-            lambda sid=session_id: self._terminal_write("exit\r", sid)
-            if sid in self._terminal_sessions
-            and self._terminal_sessions[sid].restart_pending else None,
+            lambda sid=session_id: (
+                self._terminal_write("exit\r", sid)
+                if sid in self._terminal_sessions
+                and self._terminal_sessions[sid].restart_pending
+                else None
+            ),
         )
 
     def _interrupt_terminal(self):
@@ -9494,23 +10668,32 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         try:
             if platform.system() == "Windows":
                 from winpty import PTY
+
                 session.pty = PTY(100, 24)
                 powershell = shutil.which("pwsh") or shutil.which("powershell.exe")
                 if powershell:
                     session.pty.spawn(
-                        powershell, cmdline="-NoLogo -NoProfile", cwd=session.cwd)
+                        powershell, cmdline="-NoLogo -NoProfile", cwd=session.cwd
+                    )
                 else:
                     session.pty.spawn(
                         os.environ.get("COMSPEC", "cmd.exe"),
-                        cmdline="/Q /D", cwd=session.cwd)
+                        cmdline="/Q /D",
+                        cwd=session.cwd,
+                    )
             else:
                 import pty as _pty
+
                 master_fd, slave_fd = _pty.openpty()
                 shell = os.environ.get("SHELL", "/bin/sh")
                 child = subprocess.Popen(
-                    [shell, "-i"], cwd=session.cwd,
-                    stdin=slave_fd, stdout=slave_fd, stderr=slave_fd,
-                    close_fds=True, start_new_session=True,
+                    [shell, "-i"],
+                    cwd=session.cwd,
+                    stdin=slave_fd,
+                    stdout=slave_fd,
+                    stderr=slave_fd,
+                    close_fds=True,
+                    start_new_session=True,
                     env={**os.environ, "TERM": "xterm-256color"},
                 )
                 os.close(slave_fd)
@@ -9520,7 +10703,8 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         except Exception as exc:
             session.pty = None
             self._append_terminal_output(
-                f"\r\nCould not start terminal: {exc}\r\n", session_id=session_id)
+                f"\r\nCould not start terminal: {exc}\r\n", session_id=session_id
+            )
 
     def _poll_terminal_output(self):
         for session_id in tuple(self._terminal_sessions):
@@ -9565,7 +10749,8 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                 self._append_terminal_output(chunk, session_id=session_id)
             if ended and not session.pending_output:
                 self._append_terminal_output(
-                    "\r\n[terminal process ended]\r\n", session_id=session_id)
+                    "\r\n[terminal process ended]\r\n", session_id=session_id
+                )
                 if isinstance(pty, dict):
                     try:
                         os.close(pty["fd"])
@@ -9577,10 +10762,12 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                 elif session.restart_pending:
                     session.restart_pending = False
                     QTimer.singleShot(
-                        120, lambda sid=session_id: self._start_terminal_process(sid))
+                        120, lambda sid=session_id: self._start_terminal_process(sid)
+                    )
         except Exception as exc:
             self._append_terminal_output(
-                f"\r\n[terminal read error: {exc}]\r\n", session_id=session_id)
+                f"\r\n[terminal read error: {exc}]\r\n", session_id=session_id
+            )
             session.pty = None
             if session.closing:
                 self._remove_terminal_session(session_id)
@@ -9602,11 +10789,10 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                     session.pty.write(data)
             except Exception as exc:
                 self._append_terminal_output(
-                    f"\r\n[terminal write error: {exc}]\r\n", session_id=session_id)
+                    f"\r\n[terminal write error: {exc}]\r\n", session_id=session_id
+                )
 
-    def _terminal_resize(
-        self, columns: int, rows: int, session_id: str | None = None
-    ):
+    def _terminal_resize(self, columns: int, rows: int, session_id: str | None = None):
         session = self._terminal_sessions.get(session_id or self._terminal_active_id)
         if session is not None and session.pty is not None:
             try:
@@ -9615,9 +10801,12 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                     import fcntl
                     import struct
                     import termios
+
                     fcntl.ioctl(
-                        session.pty["fd"], termios.TIOCSWINSZ,
-                        struct.pack("HHHH", rows, columns, 0, 0))
+                        session.pty["fd"],
+                        termios.TIOCSWINSZ,
+                        struct.pack("HHHH", rows, columns, 0, 0),
+                    )
                 else:
                     session.pty.set_size(columns, rows)
             except Exception:
@@ -9638,7 +10827,8 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         if text:
             text = str(text)
             session = self._terminal_sessions.get(
-                session_id or self._terminal_active_id)
+                session_id or self._terminal_active_id
+            )
             if session is None:
                 return
             if session.client_is_ready:
@@ -9647,10 +10837,10 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                 session.output_buffer = (session.output_buffer + text)[-100_000:]
 
     def _build_input_row(self) -> QHBoxLayout:
-        row = QHBoxLayout(); row.setSpacing(5)
+        row = QHBoxLayout()
+        row.setSpacing(5)
         self._input = ChatInput()
-        self._input.setPlaceholderText(self._tr(
-            "Message or paste a screenshot..."))
+        self._input.setPlaceholderText(self._tr("Message or paste a screenshot..."))
         self._input.setFont(QFont(FONT_MONO, 9))
         self._input.setFixedHeight(27)
         self._input.setStyleSheet(f"""
@@ -9663,7 +10853,8 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         self._input.returnPressed.connect(self._send)
         self._input.image_pasted.connect(self._on_chat_image_pasted)
         self._input.image_paste_failed.connect(
-            lambda message: self._append_activity(f"ERR: {message}"))
+            lambda message: self._append_activity(f"ERR: {message}")
+        )
         row.addWidget(self._input)
 
         self._pending_image_button = QPushButton(self._tr("Screenshot  ×"))
@@ -9677,8 +10868,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             }}
             QPushButton:hover {{ border-color: {C.PRI}; }}
         """)
-        self._pending_image_button.clicked.connect(
-            self._clear_pending_chat_image)
+        self._pending_image_button.clicked.connect(self._clear_pending_chat_image)
         self._pending_image_button.hide()
         row.addWidget(self._pending_image_button)
 
@@ -9687,9 +10877,10 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         attach.setIcon(QIcon(str(BASE_DIR / "assets" / "icons" / "attach.svg")))
         attach.setIconSize(QSize(14, 14))
         attach.setCursor(Qt.CursorShape.PointingHandCursor)
-        attach.setToolTip(self._tr(
-            "Attach a file, or drop it into the message field"))
-        attach.setStyleSheet(f"QPushButton {{ background:{C.PANEL}; color:{C.PRI}; border:1px solid {C.PRI_DIM}; border-radius:8px; }} QPushButton:hover {{ background:{C.PRI_GHO}; border-color:{C.PRI}; }}")
+        attach.setToolTip(self._tr("Attach a file, or drop it into the message field"))
+        attach.setStyleSheet(
+            f"QPushButton {{ background:{C.PANEL}; color:{C.PRI}; border:1px solid {C.PRI_DIM}; border-radius:8px; }} QPushButton:hover {{ background:{C.PRI_GHO}; border-color:{C.PRI}; }}"
+        )
         attach.clicked.connect(self._drop_zone._browse)
         row.addWidget(attach)
         self._input.file_dropped.connect(self._drop_zone._set_file)
@@ -9732,7 +10923,8 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         lay.setSpacing(4)
 
         # ── header row ───────────────────────────────────────────────────────
-        hdr = QHBoxLayout(); hdr.setSpacing(5)
+        hdr = QHBoxLayout()
+        hdr.setSpacing(5)
 
         dot = QLabel("◈")
         dot.setFont(QFont(FONT_MONO, 9, QFont.Weight.Bold))
@@ -9749,20 +10941,27 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
 
         self._content_ts_lbl = QLabel("")
         self._content_ts_lbl.setFont(QFont(FONT_MONO, 7))
-        self._content_ts_lbl.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
+        self._content_ts_lbl.setStyleSheet(
+            f"color: {C.TEXT_DIM}; background: transparent;"
+        )
         hdr.addWidget(self._content_ts_lbl)
 
         self._reading_mode_btn = QPushButton()
-        self._reading_mode_btn.setIcon(QIcon(str(BASE_DIR / "assets" / "icons" / "fullscreen.svg")))
+        self._reading_mode_btn.setIcon(
+            QIcon(str(BASE_DIR / "assets" / "icons" / "fullscreen.svg"))
+        )
         self._reading_mode_btn.setIconSize(QSize(14, 14))
         self._reading_mode_btn.setFixedSize(25, 25)
         self._reading_mode_btn.setToolTip(
-            "Fill the screen with this panel; hide the orb and side panels.")
+            "Fill the screen with this panel; hide the orb and side panels."
+        )
         self._reading_mode_btn.clicked.connect(self._toggle_reading_mode)
         hdr.addWidget(self._reading_mode_btn)
 
         self._content_expand_btn = QPushButton()
-        self._content_expand_btn.setIcon(QIcon(str(BASE_DIR / "assets" / "icons" / "expand.svg")))
+        self._content_expand_btn.setIcon(
+            QIcon(str(BASE_DIR / "assets" / "icons" / "expand.svg"))
+        )
         self._content_expand_btn.setIconSize(QSize(14, 14))
         self._content_expand_btn.setFixedSize(25, 25)
         self._content_expand_btn.setToolTip("Give results more space")
@@ -9770,7 +10969,9 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         hdr.addWidget(self._content_expand_btn)
 
         self._content_pop_btn = QPushButton("↗  DETACH")
-        self._content_pop_btn.setIcon(QIcon(str(BASE_DIR / "assets" / "icons" / "detach.svg")))
+        self._content_pop_btn.setIcon(
+            QIcon(str(BASE_DIR / "assets" / "icons" / "detach.svg"))
+        )
         self._content_pop_btn.setIconSize(QSize(14, 14))
         self._content_pop_btn.setFixedSize(25, 25)
         self._content_pop_btn.setToolTip("Open results in a separate window")
@@ -9796,8 +10997,10 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         lay.addLayout(hdr)
 
         # ── separator ─────────────────────────────────────────────────────────
-        sep = QFrame(); sep.setFrameShape(QFrame.Shape.HLine)
-        sep.setStyleSheet(f"color: {C.BORDER};"); lay.addWidget(sep)
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setStyleSheet(f"color: {C.BORDER};")
+        lay.addWidget(sep)
 
         # ── text display ──────────────────────────────────────────────────────
         self._content_display = QTextBrowser()
@@ -9852,7 +11055,9 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             return
         self._content_display = self._content_tabs.widget(index)
         self._content_title_lbl.setText(self._content_tabs.tabText(index))
-        if not self._content_display.property("contentHtml") and not self._content_display.property("contentKey"):
+        if not self._content_display.property(
+            "contentHtml"
+        ) and not self._content_display.property("contentKey"):
             self._set_content_empty_state(self._content_display)
         self._sync_reader_content()
 
@@ -9865,7 +11070,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             f'color:{C.TEXT_MED}; font-family:{FONT_UI};">'
             f'<div style="font-size:18px; color:{C.PRI}; font-weight:600;">No results yet</div>'
             f'<div style="margin-top:6px; color:{C.TEXT_DIM};">Search results, news, and documents will appear here.</div>'
-            f'</div>'
+            f"</div>"
         )
 
     def _reader_tab_selected(self, doc_id: str):
@@ -9895,7 +11100,9 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                 self._close_content_tab(i)
                 return
 
-    def _content_widget(self, title: str, key: str, rich_html: str = "", text: str = ""):
+    def _content_widget(
+        self, title: str, key: str, rich_html: str = "", text: str = ""
+    ):
         """Reuse keyed live views; otherwise keep this result in its own tab."""
         index = -1
         if key:
@@ -9914,8 +11121,9 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             browser.setProperty("contentKey", key or "")
             self._content_seq += 1
             browser.setProperty("contentId", f"content-{self._content_seq}")
-            reader_open = (self._reader_window is not None
-                           and self._reader_window.isVisible())
+            reader_open = (
+                self._reader_window is not None and self._reader_window.isVisible()
+            )
             was_visible = self._content_panel.isVisible() or reader_open
             index = self._content_tabs.addTab(browser, title[:24] or "RESULT")
             # Keyed views are live status panels: add them quietly while a
@@ -9952,6 +11160,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
     def _show_content(self, title: str, text: str, key: str = ""):
         """Keep independent results in tabs; a keyed live view updates in place."""
         import time as _time
+
         # The panel opens below the head, so the head looks down at it. It is a
         # tiny thing that answers "did that land?" before you read a word.
         self.hud.glance(0.0, -0.85, hold=1.3)
@@ -9968,9 +11177,13 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         if first_show:
             total = self._center_split.height()
             current = self._center_split.sizes()
-            quiz = current[2] if len(current) > 2 and self._quiz_panel.isVisible() else 0
+            quiz = (
+                current[2] if len(current) > 2 and self._quiz_panel.isVisible() else 0
+            )
             content = min(220, max(100, total // 3))
-            self._center_split.setSizes([max(total - content - quiz, 120), content, quiz])
+            self._center_split.setSizes(
+                [max(total - content - quiz, 120), content, quiz]
+            )
 
     def _dismiss_content(self):
         # In reading mode the close button must restore the hidden dashboard too;
@@ -9981,7 +11194,9 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         self._content_toggle_btn.setChecked(False)
         if self._reader_window is not None:
             self._reader_window.hide()
-        self._content_pop_btn.setIcon(QIcon(str(BASE_DIR / "assets" / "icons" / "detach.svg")))
+        self._content_pop_btn.setIcon(
+            QIcon(str(BASE_DIR / "assets" / "icons" / "detach.svg"))
+        )
         self._content_pop_btn.setToolTip("Open results in a separate window")
 
     def _format_article_results(self, title: str, text: str) -> str:
@@ -9997,8 +11212,12 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             if match:
                 if current:
                     entries.append(current)
-                current = {"number": match.group(1), "title": match.group(2),
-                           "body": [], "links": []}
+                current = {
+                    "number": match.group(1),
+                    "title": match.group(2),
+                    "body": [],
+                    "links": [],
+                }
                 continue
             target = current["body"] if current else intro
             urls = url_re.findall(line)
@@ -10021,7 +11240,9 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         cards = []
         if intro:
             intro_text = " ".join(intro)
-            cards.append(f'<p style="color:{C.TEXT_MED};">{_html.escape(intro_text)}</p>')
+            cards.append(
+                f'<p style="color:{C.TEXT_MED};">{_html.escape(intro_text)}</p>'
+            )
         for item in entries:
             body = " ".join(item["body"])
             links = "".join(
@@ -10035,10 +11256,12 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                 f'<h3 style="color:{C.PRI}; margin:0 0 7px 0;">'
                 f'{item["number"]}. {_html.escape(item["title"])}</h3>'
                 f'<p style="color:{C.TEXT}; margin:0 0 8px 0;">{_html.escape(body)}</p>'
-                f'<div>{links}</div></div>'
+                f"<div>{links}</div></div>"
             )
-        return (f'<html><body style="font-family:Segoe UI; font-size:11pt; '
-                f'color:{C.TEXT};">{"".join(cards)}</body></html>')
+        return (
+            f'<html><body style="font-family:Segoe UI; font-size:11pt; '
+            f'color:{C.TEXT};">{"".join(cards)}</body></html>'
+        )
 
     def _sync_reader_content(self):
         reader = self._reader_window
@@ -10046,9 +11269,13 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             documents = []
             for i in range(self._content_tabs.count()):
                 page = self._content_tabs.widget(i)
-                documents.append((page.property("contentId"),
-                                  self._content_tabs.tabText(i),
-                                  page.toHtml()))
+                documents.append(
+                    (
+                        page.property("contentId"),
+                        self._content_tabs.tabText(i),
+                        page.toHtml(),
+                    )
+                )
             active_id = self._content_display.property("contentId")
             reader.set_documents(documents, active_id)
 
@@ -10063,13 +11290,17 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             usable = max(240, total - quiz)
             self._center_split.setSizes([int(usable * 0.42), int(usable * 0.58), quiz])
             self._content_expanded = True
-            self._content_expand_btn.setIcon(QIcon(str(BASE_DIR / "assets" / "icons" / "collapse.svg")))
+            self._content_expand_btn.setIcon(
+                QIcon(str(BASE_DIR / "assets" / "icons" / "collapse.svg"))
+            )
             self._content_expand_btn.setToolTip("Restore results panel size")
         else:
             if self._content_split_sizes:
                 self._center_split.setSizes(self._content_split_sizes)
             self._content_expanded = False
-            self._content_expand_btn.setIcon(QIcon(str(BASE_DIR / "assets" / "icons" / "expand.svg")))
+            self._content_expand_btn.setIcon(
+                QIcon(str(BASE_DIR / "assets" / "icons" / "expand.svg"))
+            )
             self._content_expand_btn.setToolTip("Give results more space")
 
     def _toggle_side_panel(self, index: int):
@@ -10087,8 +11318,9 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             sizes = self._main_splitter.sizes()
             sizes[index] = max(self._side_restore_width[index], panel.minimumWidth())
             center = 1
-            sizes[center] = max(1, self._main_splitter.width()
-                                - sizes[index] - sizes[2 - index])
+            sizes[center] = max(
+                1, self._main_splitter.width() - sizes[index] - sizes[2 - index]
+            )
             self._main_splitter.setSizes(sizes)
         button.setChecked(panel.isVisible())
 
@@ -10104,7 +11336,9 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             total = max(1, self._center_split.height())
             quiz = sizes[2] if len(sizes) > 2 and self._quiz_panel.isVisible() else 0
             content = min(220, max(100, total // 3))
-            self._center_split.setSizes([max(total - content - quiz, 120), content, quiz])
+            self._center_split.setSizes(
+                [max(total - content - quiz, 120), content, quiz]
+            )
         self._content_toggle_btn.setChecked(self._content_panel.isVisible())
 
     def _toggle_reading_mode(self):
@@ -10139,7 +11373,8 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             self._terminal_panel.hide()
             self._terminal_toggle_btn.setChecked(False)
             self._reading_mode_btn.setIcon(
-                QIcon(str(BASE_DIR / "assets" / "icons" / "exit-fullscreen.svg")))
+                QIcon(str(BASE_DIR / "assets" / "icons" / "exit-fullscreen.svg"))
+            )
             self._reading_mode_btn.setToolTip("Return to the dashboard")
             self.showFullScreen()
 
@@ -10167,9 +11402,11 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         self._content_toggle_btn.setChecked(self._content_panel.isVisible())
         self._terminal_toggle_btn.setChecked(self._terminal_panel.isVisible())
         self._reading_mode_btn.setIcon(
-            QIcon(str(BASE_DIR / "assets" / "icons" / "fullscreen.svg")))
+            QIcon(str(BASE_DIR / "assets" / "icons" / "fullscreen.svg"))
+        )
         self._reading_mode_btn.setToolTip(
-            "Fill the screen with this panel; hide the orb and side panels.")
+            "Fill the screen with this panel; hide the orb and side panels."
+        )
 
         if saved.get("fullscreen"):
             self.showFullScreen()
@@ -10199,7 +11436,9 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         self._reader_window.raise_()
         self._reader_window.activateWindow()
         self._reader_detaching = False
-        self._content_pop_btn.setIcon(QIcon(str(BASE_DIR / "assets" / "icons" / "attach.svg")))
+        self._content_pop_btn.setIcon(
+            QIcon(str(BASE_DIR / "assets" / "icons" / "attach.svg"))
+        )
         self._content_pop_btn.setToolTip("Return results to the main window")
 
     def _reattach_content(self):
@@ -10211,7 +11450,9 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         if self._content_split_sizes:
             self._center_split.setSizes(self._content_split_sizes)
         self._reader_detaching = False
-        self._content_pop_btn.setIcon(QIcon(str(BASE_DIR / "assets" / "icons" / "detach.svg")))
+        self._content_pop_btn.setIcon(
+            QIcon(str(BASE_DIR / "assets" / "icons" / "detach.svg"))
+        )
         self._content_pop_btn.setToolTip("Open results in a separate window")
 
     # ── document review ──────────────────────────────────────────────────────
@@ -10229,12 +11470,21 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
     # A shape carries it in every language, and shape plus colour still reads
     # for someone who cannot separate red from amber. What the marks mean
     # arrives the way everything else does: JARVIS says it out loud.
-    _REVIEW_MARKS = {"serious": ("RED", "▲"), "caution": ("ACC2", "●"), "note": ("PRI_DIM", "·")}
+    _REVIEW_MARKS = {
+        "serious": ("RED", "▲"),
+        "caution": ("ACC2", "●"),
+        "note": ("PRI_DIM", "·"),
+    }
 
     @staticmethod
     def _esc(s) -> str:
-        return (str(s or "").replace("&", "&amp;").replace("<", "&lt;")
-                .replace(">", "&gt;").replace("\n", "<br>"))
+        return (
+            str(s or "")
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace("\n", "<br>")
+        )
 
     def _show_review(self, title: str, summary: str, findings, unclear):
         """Slot — Qt main thread. Lays a document review into the content panel."""
@@ -10244,16 +11494,18 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         if summary:
             parts.append(
                 f'<div style="color:{C.WHITE}; border-left:2px solid {C.PRI};'
-                f' padding-left:8px; margin-bottom:10px;">{e(summary)}</div>')
+                f' padding-left:8px; margin-bottom:10px;">{e(summary)}</div>'
+            )
 
-        for f in (findings or []):
+        for f in findings or []:
             key, mark = self._REVIEW_MARKS.get(f.get("severity"), ("PRI_DIM", "·"))
             colour = getattr(C, key)
             parts.append(f'<div style="margin-bottom:11px;">')
             parts.append(
                 f'<span style="color:{colour}; font-weight:bold;">{mark}</span> '
                 f'<span style="color:{C.WHITE}; font-weight:bold;">'
-                f'{e(f.get("heading"))}</span>')
+                f'{e(f.get("heading"))}</span>'
+            )
             if f.get("detail"):
                 parts.append(f'<div style="margin-left:12px;">{e(f["detail"])}</div>')
             if f.get("quote"):
@@ -10262,25 +11514,30 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                 parts.append(
                     f'<div style="margin-left:12px; color:{C.TEXT_DIM};'
                     f' border-left:1px solid {C.BORDER}; padding-left:7px;">'
-                    f'&ldquo;{e(f["quote"])}&rdquo;</div>')
+                    f'&ldquo;{e(f["quote"])}&rdquo;</div>'
+                )
             if f.get("suggestion"):
                 parts.append(
                     f'<div style="margin-left:12px; color:{C.PRI};">'
-                    f'&rarr; {e(f["suggestion"])}</div>')
-            parts.append('</div>')
+                    f'&rarr; {e(f["suggestion"])}</div>'
+                )
+            parts.append("</div>")
 
         if unclear:
             parts.append(
                 f'<div style="margin-top:6px; border-top:1px solid {C.BORDER};'
                 f' padding-top:7px; color:{C.TEXT_MED};">'
-                'The document does not settle:</div>')
+                "The document does not settle:</div>"
+            )
             for u in unclear:
                 parts.append(
                     f'<div style="margin-left:12px; color:{C.TEXT_MED};">'
-                    f'&middot; {e(u)}</div>')
-        parts.append('</div>')
+                    f"&middot; {e(u)}</div>"
+                )
+        parts.append("</div>")
 
         import time as _time
+
         self.hud.glance(0.0, -0.85, hold=1.3)
         # Left as written, not upper-cased. The other content-panel titles are
         # the app's own English labels, but this one is the document's name in
@@ -10291,8 +11548,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         self._content_title_lbl.setText((title or "Document")[:48])
         self._content_ts_lbl.setText(_time.strftime("%H:%M:%S"))
         self._content_widget((title or "Document")[:48], "", "".join(parts))
-        detached = (self._reader_window is not None
-                    and self._reader_window.isVisible())
+        detached = self._reader_window is not None and self._reader_window.isVisible()
         first_show = not self._content_panel.isVisible() and not detached
         if detached:
             self._content_panel.hide()
@@ -10343,7 +11599,8 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         lay.setContentsMargins(12, 7, 12, 8)
         lay.setSpacing(6)
 
-        hdr = QHBoxLayout(); hdr.setSpacing(6)
+        hdr = QHBoxLayout()
+        hdr.setSpacing(6)
         dot = QLabel("◈")
         dot.setFont(QFont(FONT_MONO, 9, QFont.Weight.Bold))
         dot.setStyleSheet(f"color: {C.PRI}; background: transparent;")
@@ -10352,13 +11609,16 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         self._quiz_title_lbl = QLabel("QUIZ")
         self._quiz_title_lbl.setFont(QFont(FONT_MONO, 8, QFont.Weight.Bold))
         self._quiz_title_lbl.setStyleSheet(
-            f"color: {C.PRI}; background: transparent; letter-spacing: 1px;")
+            f"color: {C.PRI}; background: transparent; letter-spacing: 1px;"
+        )
         hdr.addWidget(self._quiz_title_lbl)
         hdr.addStretch()
 
         self._quiz_count_lbl = QLabel("")
         self._quiz_count_lbl.setFont(QFont(FONT_MONO, 7))
-        self._quiz_count_lbl.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
+        self._quiz_count_lbl.setStyleSheet(
+            f"color: {C.TEXT_DIM}; background: transparent;"
+        )
         hdr.addWidget(self._quiz_count_lbl)
 
         quit_btn = QPushButton("DISMISS  ✕")
@@ -10376,7 +11636,8 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         hdr.addWidget(quit_btn)
         lay.addLayout(hdr)
 
-        rule = QFrame(); rule.setFixedHeight(1)
+        rule = QFrame()
+        rule.setFixedHeight(1)
         rule.setStyleSheet(f"background: {C.BORDER};")
         lay.addWidget(rule)
 
@@ -10396,7 +11657,9 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         self._quiz_note_lbl = QLabel("")
         self._quiz_note_lbl.setWordWrap(True)
         self._quiz_note_lbl.setFont(QFont(FONT_MONO, 8))
-        self._quiz_note_lbl.setStyleSheet(f"color: {C.TEXT_MED}; background: transparent;")
+        self._quiz_note_lbl.setStyleSheet(
+            f"color: {C.TEXT_MED}; background: transparent;"
+        )
         self._quiz_note_lbl.hide()
         lay.addWidget(self._quiz_note_lbl)
 
@@ -10462,8 +11725,11 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                 b.clicked.connect(lambda _=False, t=text: self._quiz_submit(t))
                 self._quiz_answers_lay.addWidget(b)
         else:
-            row = QWidget(); row.setStyleSheet("background: transparent;")
-            h = QHBoxLayout(row); h.setContentsMargins(0, 0, 0, 0); h.setSpacing(6)
+            row = QWidget()
+            row.setStyleSheet("background: transparent;")
+            h = QHBoxLayout(row)
+            h.setContentsMargins(0, 0, 0, 0)
+            h.setSpacing(6)
             field = QLineEdit()
             field.setFont(QFont(FONT_MONO, 9))
             field.setPlaceholderText("your answer")
@@ -10495,13 +11761,15 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                 verdict = grader(q, given)
             except Exception:
                 verdict = None
-        self._quiz["results"].append({
-            "question": q.get("question", ""),
-            "type": q.get("type", ""),
-            "given": str(given or "").strip(),
-            "answer": q.get("answer", ""),
-            "correct": verdict,
-        })
+        self._quiz["results"].append(
+            {
+                "question": q.get("question", ""),
+                "type": q.get("type", ""),
+                "given": str(given or "").strip(),
+                "answer": q.get("answer", ""),
+                "correct": verdict,
+            }
+        )
 
         for i in range(self._quiz_answers_lay.count()):
             wdg = self._quiz_answers_lay.itemAt(i).widget()
@@ -10550,15 +11818,21 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
 
         # Hand it back to JARVIS as a message, not as a tool return: the tool
         # call ended minutes ago. This is the same channel a dropped file uses.
-        lines = [f"[QUIZ_DONE] topic={topic or 'general'} | "
-                 f"auto-marked {right}/{total} correct"
-                 + (f", {unsure} still need your marking" if unsure else "")]
+        lines = [
+            f"[QUIZ_DONE] topic={topic or 'general'} | "
+            f"auto-marked {right}/{total} correct"
+            + (f", {unsure} still need your marking" if unsure else "")
+        ]
         for i, r in enumerate(results, 1):
-            state = ("correct" if r["correct"] is True
-                     else "wrong" if r["correct"] is False else "NEEDS MARKING")
+            state = (
+                "correct"
+                if r["correct"] is True
+                else "wrong" if r["correct"] is False else "NEEDS MARKING"
+            )
             lines.append(
                 f"{i}. [{r['type']}] {r['question']} | they answered: "
-                f"{r['given'] or '(blank)'} | expected: {r['answer']} | {state}")
+                f"{r['given'] or '(blank)'} | expected: {r['answer']} | {state}"
+            )
         lines.append(
             "Mark every question flagged NEEDS MARKING yourself — accept an answer "
             "that means the same thing. Then tell them how they did in their own "
@@ -10567,36 +11841,48 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             "Remember something only if it would still matter next week — that they "
             "are working through a subject, or keep missing the same thing. A score "
             "from one session is not worth a memory, and a memory per quiz would "
-            "bury the things that are.")
+            "bury the things that are."
+        )
         msg = "\n".join(lines)
         if self.on_text_command:
-            threading.Thread(target=self.on_text_command, args=(msg,), daemon=True).start()
+            threading.Thread(
+                target=self.on_text_command, args=(msg,), daemon=True
+            ).start()
 
     def _build_footer(self) -> QWidget:
         w = QWidget()
         w.setFixedHeight(22)
-        w.setStyleSheet("background: rgba(8,14,32,170); border-top: 1px solid rgba(140,210,255,60);")
-        lay = QHBoxLayout(w); lay.setContentsMargins(14, 0, 14, 0)
+        w.setStyleSheet(
+            "background: rgba(8,14,32,170); border-top: 1px solid rgba(140,210,255,60);"
+        )
+        lay = QHBoxLayout(w)
+        lay.setContentsMargins(14, 0, 14, 0)
 
         def _fl(txt, color=C.TEXT_MED):
-            l = QLabel(txt); l.setFont(QFont(FONT_MONO, 7))
+            l = QLabel(txt)
+            l.setFont(QFont(FONT_MONO, 7))
             l.setStyleSheet(f"color: {color}; background: transparent;")
             return l
 
-        lay.addWidget(_fl(
-            f"[F4] {self._tr('Mute')}  ·  [F11] {self._tr('Fullscreen')}  ·  "
-            f"[ESC] {self._tr('Interrupt')}  ·  [Ctrl+K] {self._tr('Commands')}"))
+        lay.addWidget(
+            _fl(
+                f"[F4] {self._tr('Mute')}  ·  [F11] {self._tr('Fullscreen')}  ·  "
+                f"[ESC] {self._tr('Interrupt')}  ·  [Ctrl+K] {self._tr('Commands')}"
+            )
+        )
         lay.addStretch()
         lay.addWidget(_fl("By Akrom Rustamov", C.PRI_DIM))
         return w
 
     def _on_file_selected(self, path: str):
         self._current_file = path
-        p    = Path(path)
-        cat  = _file_category(p)
+        p = Path(path)
+        cat = _file_category(p)
         icon, _ = _FILE_ICONS.get(cat, _FILE_ICONS["unknown"])
         size = _fmt_size(p.stat().st_size)
-        self._file_hint.setText(f"{icon}  {p.name}  ·  {size}  ·  Tell {self._assistant_name} what to do with it")
+        self._file_hint.setText(
+            f"{icon}  {p.name}  ·  {size}  ·  Tell {self._assistant_name} what to do with it"
+        )
         self._log.append_log(f"FILE: {p.name} ({size}) loaded")
         if self.on_text_command:
             msg = (
@@ -10605,7 +11891,9 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                 f"Briefly tell the user you can see the file '{p.name}' "
                 f"({size}) has been uploaded and ask what they'd like to do with it."
             )
-            threading.Thread(target=self.on_text_command, args=(msg,), daemon=True).start()
+            threading.Thread(
+                target=self.on_text_command, args=(msg,), daemon=True
+            ).start()
 
     def notify_phone_connected(self) -> None:
         if self._remote_overlay and self._remote_overlay.isVisible():
@@ -10619,25 +11907,32 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         if not result:
             self._log.append_log("SYS: Could not generate remote key.")
             return
-        url    = result[0]
-        key    = result[1]
-        auto   = result[2] if len(result) >= 3 else ""
+        url = result[0]
+        key = result[1]
+        auto = result[2] if len(result) >= 3 else ""
         manual = result[3] if len(result) >= 4 else url
-        berr   = result[4] if len(result) >= 5 else ""
+        berr = result[4] if len(result) >= 5 else ""
         if self._remote_overlay:
             self._remote_overlay._do_close()
-        cw  = self.centralWidget()
+        cw = self.centralWidget()
         ow, oh = RemoteKeyOverlay._OW, RemoteKeyOverlay._OH
-        ov  = RemoteKeyOverlay(url, key, auto_login_url=auto, manual_url=manual,
-                               expiry_secs=600, parent=cw,
-                               bind_error=berr)
+        ov = RemoteKeyOverlay(
+            url,
+            key,
+            auto_login_url=auto,
+            manual_url=manual,
+            expiry_secs=600,
+            parent=cw,
+            bind_error=berr,
+        )
         ov.set_new_key_callback(self.on_remote_clicked)
         ov.setGeometry(
-            (cw.width()  - ow) // 2,
+            (cw.width() - ow) // 2,
             (cw.height() - oh) // 2,
-            ow, oh,
+            ow,
+            oh,
         )
-        ov.closed.connect(lambda: setattr(self, '_remote_overlay', None))
+        ov.closed.connect(lambda: setattr(self, "_remote_overlay", None))
         ov.show()
         self._remote_overlay = ov
         self._log.append_log(f"SYS: Remote key generated — manual: {manual or url}")
@@ -10649,8 +11944,13 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         try:
             if _OS == "Windows":
                 import winreg
-                key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
-                    r"Software\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_READ)
+
+                key = winreg.OpenKey(
+                    winreg.HKEY_CURRENT_USER,
+                    r"Software\Microsoft\Windows\CurrentVersion\Run",
+                    0,
+                    winreg.KEY_READ,
+                )
                 try:
                     winreg.QueryValueEx(key, "JARVIS_AI")
                     return True
@@ -10659,10 +11959,16 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                 finally:
                     winreg.CloseKey(key)
             elif _OS == "Darwin":
-                return (Path.home() / "Library" / "LaunchAgents"
-                        / "com.jarvis.assistant.plist").exists()
+                return (
+                    Path.home()
+                    / "Library"
+                    / "LaunchAgents"
+                    / "com.jarvis.assistant.plist"
+                ).exists()
             else:
-                return (Path.home() / ".config" / "autostart" / "jarvis.desktop").exists()
+                return (
+                    Path.home() / ".config" / "autostart" / "jarvis.desktop"
+                ).exists()
         except Exception:
             return False
 
@@ -10672,15 +11978,21 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             script = str(Path(__file__).resolve().parent / "main.py")
             if _OS == "Windows":
                 import winreg
-                reg = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
-                    r"Software\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_ALL_ACCESS)
+
+                reg = winreg.OpenKey(
+                    winreg.HKEY_CURRENT_USER,
+                    r"Software\Microsoft\Windows\CurrentVersion\Run",
+                    0,
+                    winreg.KEY_ALL_ACCESS,
+                )
                 if currently_on:
                     winreg.DeleteValue(reg, "JARVIS_AI")
                 else:
                     pythonw = Path(sys.executable).parent / "pythonw.exe"
                     exe = str(pythonw if pythonw.exists() else sys.executable)
-                    winreg.SetValueEx(reg, "JARVIS_AI", 0, winreg.REG_SZ,
-                                      f'"{exe}" "{script}"')
+                    winreg.SetValueEx(
+                        reg, "JARVIS_AI", 0, winreg.REG_SZ, f'"{exe}" "{script}"'
+                    )
                 winreg.CloseKey(reg)
             elif _OS == "Darwin":
                 plist_dir = Path.home() / "Library" / "LaunchAgents"
@@ -10694,13 +12006,13 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                         '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" '
                         '"http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n'
                         '<plist version="1.0"><dict>\n'
-                        '  <key>Label</key><string>com.jarvis.assistant</string>\n'
-                        '  <key>ProgramArguments</key><array>\n'
-                        f'    <string>{sys.executable}</string>\n'
-                        f'    <string>{script}</string>\n'
-                        '  </array>\n'
-                        '  <key>RunAtLoad</key><true/>\n'
-                        '</dict></plist>\n'
+                        "  <key>Label</key><string>com.jarvis.assistant</string>\n"
+                        "  <key>ProgramArguments</key><array>\n"
+                        f"    <string>{sys.executable}</string>\n"
+                        f"    <string>{script}</string>\n"
+                        "  </array>\n"
+                        "  <key>RunAtLoad</key><true/>\n"
+                        "</dict></plist>\n"
                     )
             else:
                 desk_dir = Path.home() / ".config" / "autostart"
@@ -10719,12 +12031,13 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             enabled = not currently_on
             self._update_autostart_btn(enabled)
             self._log.append_log(
-                f"SYS: Auto-start {'enabled' if enabled else 'disabled'}.")
+                f"SYS: Auto-start {'enabled' if enabled else 'disabled'}."
+            )
         except Exception as e:
             self._log.append_log(f"ERR: Auto-start failed — {e}")
 
     def _update_autostart_btn(self, enabled: bool):
-        if not hasattr(self, '_autostart_btn'):
+        if not hasattr(self, "_autostart_btn"):
             return
         if enabled:
             self._autostart_btn.setText(self._tr("Auto-start: On"))
@@ -10749,6 +12062,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
 
     def _toggle_brief(self):
         from memory.config_manager import get_brief_enabled, save_brief_enabled
+
         new_val = not get_brief_enabled()
         save_brief_enabled(new_val)
         self._update_brief_btn(new_val)
@@ -10762,9 +12076,11 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         if self.wake_get_state:
             try:
                 s = self.wake_get_state()
-                return {"ready": bool(s.get("ready")),
-                        "enabled": bool(s.get("enabled")),
-                        "awake": bool(s.get("awake"))}
+                return {
+                    "ready": bool(s.get("ready")),
+                    "enabled": bool(s.get("enabled")),
+                    "awake": bool(s.get("awake")),
+                }
             except Exception:
                 pass
         # Before JarvisLive has wired its callback (drawer built at startup).
@@ -10772,13 +12088,14 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         try:
             from core.wake_word import is_ready
             from memory.config_manager import get_wake_word_enabled
+
             ready, enabled = is_ready(), get_wake_word_enabled()
         except Exception:
             pass
         return {"ready": ready, "enabled": enabled, "awake": True}
 
     def _refresh_wake_btns(self):
-        if not hasattr(self, '_wake_btn'):
+        if not hasattr(self, "_wake_btn"):
             return
         st = self._wake_state()
         _on = f"""
@@ -10800,8 +12117,9 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             self._wake_btn.setText(self._tr("Wake word  ·  On"))
             self._wake_btn.setStyleSheet(_on)
             self._wake_sleep_btn.show()
-            self._wake_sleep_btn.setText(self._tr(
-                "Sleep now" if st["awake"] else "Wake now"))
+            self._wake_sleep_btn.setText(
+                self._tr("Sleep now" if st["awake"] else "Wake now")
+            )
             self._wake_sleep_btn.setStyleSheet(_off)
         else:
             self._wake_btn.setText(self._tr("Wake word  ·  Off"))
@@ -10814,6 +12132,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             return
         from core.hotkey import chord_label
         from memory.config_manager import get_push_to_talk_enabled
+
         _on = f"""
             QPushButton {{ background: rgba(0,255,136,18); color: {C.GREEN};
                 border: 1px solid {C.GREEN_D}; border-radius: 6px;
@@ -10827,18 +12146,24 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
 
         ptt = get_push_to_talk_enabled()
         self._ptt_btn.setText(
-            self._tr("Push-to-talk  ·  {key}", key=chord_label()) if ptt
-            else self._tr("Push-to-talk  ·  Off"))
+            self._tr("Push-to-talk  ·  {key}", key=chord_label())
+            if ptt
+            else self._tr("Push-to-talk  ·  Off")
+        )
         self._ptt_btn.setStyleSheet(_on if ptt else _off)
         self._ptt_btn.setToolTip(
             "Microphone stays closed until you hold the key — nothing is sent "
-            "while you are not holding it." if ptt
-            else "Hold a key to talk instead of streaming the mic continuously.")
-
+            "while you are not holding it."
+            if ptt
+            else "Hold a key to talk instead of streaming the mic continuously."
+        )
 
     def _toggle_ptt(self):
-        from memory.config_manager import (get_push_to_talk_enabled,
-                                           save_push_to_talk_enabled)
+        from memory.config_manager import (
+            get_push_to_talk_enabled,
+            save_push_to_talk_enabled,
+        )
+
         want = not get_push_to_talk_enabled()
         save_push_to_talk_enabled(want)
         scope = None
@@ -10902,19 +12227,25 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             # First time: download openwakeword + model in a worker thread.
             self._wake_btn.setText("⬇  DOWNLOADING… (one-time)")
             self._wake_btn.setEnabled(False)
+
             def _work():
                 try:
                     from core.wake_word import install_and_download
+
                     ok, msg = install_and_download(
-                        logger=lambda m: self._log_sig.emit(f"SYS: {m}"))
+                        logger=lambda m: self._log_sig.emit(f"SYS: {m}")
+                    )
                 except Exception as e:
                     ok, msg = False, str(e)
                 if ok and self.on_wake_toggle:
                     try:
-                        self.on_wake_toggle(True)   # auto-enable after a successful download
+                        self.on_wake_toggle(
+                            True
+                        )  # auto-enable after a successful download
                     except Exception:
                         pass
                 self._wake_dl_sig.emit(ok, msg)
+
             threading.Thread(target=_work, daemon=True).start()
             return
         # Already downloaded → just flip enabled/disabled through JarvisLive.
@@ -10926,7 +12257,9 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         self._refresh_wake_btns()
 
     def _on_wake_install_done(self, ok: bool, msg: str):
-        self._log_sig.emit(f"SYS: {'Wake word ready.' if ok else 'Wake word setup failed: ' + msg}")
+        self._log_sig.emit(
+            f"SYS: {'Wake word ready.' if ok else 'Wake word setup failed: ' + msg}"
+        )
         self._refresh_wake_btns()
 
     def _tap_wake_manual(self):
@@ -10938,7 +12271,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         self._refresh_wake_btns()
 
     def _update_brief_btn(self, enabled: bool):
-        if not hasattr(self, '_brief_btn'):
+        if not hasattr(self, "_brief_btn"):
             return
         if enabled:
             self._brief_btn.setText(self._tr("Morning brief: On"))
@@ -10966,6 +12299,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
     def _open_customize(self):
         cfg = _read_full_config()
         from memory.config_manager import get_ui_opacity
+
         if self._customize_overlay:
             self._customize_overlay.hide()
         cw = self.centralWidget()
@@ -10981,9 +12315,10 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         ow, oh = CustomizeOverlay._OW, CustomizeOverlay._OH
         oh = min(oh, cw.height() - 16)
         ov.setGeometry(
-            (cw.width()  - ow) // 2,
+            (cw.width() - ow) // 2,
             (cw.height() - oh) // 2,
-            ow, oh,
+            ow,
+            oh,
         )
         ov.on_preview = self._preview_ui_color
         ov.on_opacity_preview = self._preview_ui_opacity
@@ -11001,8 +12336,14 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
     def _preview_ui_opacity(self, opacity: int):
         self.setWindowOpacity(max(60, min(100, int(opacity))) / 100)
 
-    def _apply_name_update(self, name: str, user_name: str, ui_color: str = "",
-                           voice: str = "", ui_opacity: int = 100):
+    def _apply_name_update(
+        self,
+        name: str,
+        user_name: str,
+        ui_color: str = "",
+        voice: str = "",
+        ui_opacity: int = 100,
+    ):
         """Update all name/theme-dependent UI elements and persist to config."""
         self._assistant_name = name.strip() or "JARVIS"
         display = self._assistant_name.upper()
@@ -11031,6 +12372,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         voice_changed = False
         if voice:
             from memory.config_manager import get_voice, save_voice
+
             if voice != get_voice():
                 save_voice(voice)
                 voice_changed = True
@@ -11060,9 +12402,10 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         cw = self.centralWidget()
         ov.adjustSize()
         ov.setGeometry(
-            max(0, (cw.width()  - ov.width())  // 2),
+            max(0, (cw.width() - ov.width()) // 2),
             max(0, (cw.height() - ov.height()) // 2),
-            ov.width(), ov.height(),
+            ov.width(),
+            ov.height(),
         )
         ov.show()
         ov.raise_()
@@ -11073,7 +12416,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         ov = AudioDeviceOverlay(parent=self.centralWidget())
         ov.picked.connect(self._on_audio_devices_applied)
         self._centre_overlay(ov)
-        self._audio_overlay = ov            # keep a reference so it isn't GC'd
+        self._audio_overlay = ov  # keep a reference so it isn't GC'd
 
     def _on_audio_devices_applied(self):
         self._log.append_log("SYS: Audio devices updated.")
@@ -11094,14 +12437,15 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         except ImportError:
             self._log.append_log(
                 "SYS: The providers folder is not installed — "
-                "the assistant runs on Gemini Live.")
+                "the assistant runs on Gemini Live."
+            )
             return
         except Exception as e:
             self._log.append_log(f"SYS: Provider settings unavailable: {e}")
             return
         ov.changed.connect(self._on_providers_applied)
         self._centre_overlay(ov)
-        self._providers_overlay = ov        # keep a reference so it isn't GC'd
+        self._providers_overlay = ov  # keep a reference so it isn't GC'd
 
     def _on_providers_applied(self):
         """Rebuild the session so the new engine takes over.
@@ -11144,6 +12488,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         self._hide_confirm_banner()
         try:
             from core.confirm import resolve
+
             resolve(bool(accepted))
         except Exception as e:
             self._log.append_log(f"ERR: Confirmation failed — {e}")
@@ -11154,13 +12499,14 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         ov = PluginManagerOverlay(plugins, parent=cw)
         ov.adjustSize()
         ov.setGeometry(
-            (cw.width()  - ov.width())  // 2,
+            (cw.width() - ov.width()) // 2,
             (cw.height() - ov.height()) // 2,
-            ov.width(), ov.height(),
+            ov.width(),
+            ov.height(),
         )
         ov.show()
         ov.raise_()
-        self._plugin_manager_overlay = ov   # keep a reference so it isn't GC'd
+        self._plugin_manager_overlay = ov  # keep a reference so it isn't GC'd
 
     def _open_plugin_settings(self):
         sections = self.get_plugin_settings() if self.get_plugin_settings else []
@@ -11169,13 +12515,14 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         ow = PluginSettingsOverlay._OW
         oh = min(560, cw.height() - 16)
         ov.setGeometry(
-            (cw.width()  - ow) // 2,
+            (cw.width() - ow) // 2,
             (cw.height() - oh) // 2,
-            ow, oh,
+            ow,
+            oh,
         )
         ov.show()
         ov.raise_()
-        self._plugin_settings_overlay = ov   # keep a reference so it isn't GC'd
+        self._plugin_settings_overlay = ov  # keep a reference so it isn't GC'd
 
     # ── Clipboard intelligence ───────────────────────────────────────────────────
 
@@ -11204,7 +12551,9 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
 
     def _on_clipboard_action(self, cmd: str):
         if self.on_text_command:
-            threading.Thread(target=self.on_text_command, args=(cmd,), daemon=True).start()
+            threading.Thread(
+                target=self.on_text_command, args=(cmd,), daemon=True
+            ).start()
 
     def _start_region_capture(self):
         if not self._cursor_settings.get("enabled", True):
@@ -11225,11 +12574,15 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             return
         if screenshot.isNull():
             self._refresh_cursor_assistant()
-            self._append_activity("ERR: Could not capture the screen for region selection.")
+            self._append_activity(
+                "ERR: Could not capture the screen for region selection."
+            )
             return
         selector = ScreenRegionSelector(
-            screenshot, screen.geometry(),
-            self._on_region_captured, self._on_region_selection_cancelled,
+            screenshot,
+            screen.geometry(),
+            self._on_region_captured,
+            self._on_region_selection_cancelled,
         )
         self._region_selector = selector
         selector.show()
@@ -11244,7 +12597,8 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         if self._cursor_answer is None:
             self._cursor_answer = CursorAnswerBubble()
             self._cursor_answer.analysis_requested.connect(
-                self._analyze_selected_region)
+                self._analyze_selected_region
+            )
         self._cursor_answer.set_ready()
         self._cursor_answer._question.setText("Explain what is shown here")
         self._cursor_answer.show_near_cursor()
@@ -11257,10 +12611,14 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
 
     def _analyze_selected_region(self, question: str):
         if not self._region_image_bytes:
-            self._cursor_answer.set_result("Select a screen area before analyzing.", False)
+            self._cursor_answer.set_result(
+                "Select a screen area before analyzing.", False
+            )
             return
         if not question:
-            self._cursor_answer.set_result("Enter a question about the selected area.", False)
+            self._cursor_answer.set_result(
+                "Enter a question about the selected area.", False
+            )
             return
         image_bytes = self._region_image_bytes
         self._cursor_answer.set_busy(True)
@@ -11269,13 +12627,13 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             try:
                 from google.genai import types
                 from core.gemini import VISION_FAST, call
+
                 response = call(
                     [
                         "Answer the user's question about this selected screen crop. "
                         "Be concise and refer only to what is visible.\n\n"
                         f"Question: {question}",
-                        types.Part.from_bytes(
-                            data=image_bytes, mime_type="image/jpeg"),
+                        types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg"),
                     ],
                     tier=VISION_FAST,
                     timeout_ms=15_000,
@@ -11284,14 +12642,15 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                 if not answer or not answer.strip():
                     raise RuntimeError(
                         "The fast vision model returned no answer. Check the API key, "
-                        "network, and model quota.")
+                        "network, and model quota."
+                    )
                 self._region_analysis_sig.emit(answer.strip(), True)
             except Exception as exc:
-                self._region_analysis_sig.emit(
-                    f"{type(exc).__name__}: {exc}", False)
+                self._region_analysis_sig.emit(f"{type(exc).__name__}: {exc}", False)
 
-        threading.Thread(target=work, daemon=True,
-                         name="cursor-region-analysis").start()
+        threading.Thread(
+            target=work, daemon=True, name="cursor-region-analysis"
+        ).start()
 
     def _show_region_analysis_result(self, text: str, ok: bool):
         if self._cursor_answer is not None:
@@ -11309,6 +12668,176 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         self._video_auto_muted = False
         self._set_muted(not self._muted)
 
+    def _toggle_lecture_recording(self):
+        """Record an independent lecture stream; it does not alter JARVIS's mic."""
+        if self._lecture_recorder is not None and self._lecture_recorder.recording:
+            recorder = self._lecture_recorder
+            path = recorder.stop()
+            self._lecture_timer.stop()
+            self._lecture_recorder = None
+            warning = recorder.error
+            latest_file = recorder.latest_file
+            if latest_file and latest_file.is_file():
+                # Make the saved recording the active attachment so the normal
+                # file_processor fallback can resolve follow-up questions.
+                self._drop_zone._set_file(str(latest_file))
+            self._update_lecture_button()
+            message = (
+                f"Lecture recording saved and attached:\n{path}"
+                if path
+                else "Recording stopped."
+            )
+            if warning:
+                message += f"\n\nAudio note: {warning}"
+            QMessageBox.information(self, "Lecture recording", message)
+            return
+
+        try:
+            from core.lecture_recorder import LectureRecorder
+
+            recorder = LectureRecorder()
+            inputs = recorder.input_sources()
+            labels = ["System default input"] + [name for _, name in inputs]
+            selected, accepted = QInputDialog.getItem(
+                self,
+                "Lecture recording source",
+                "Choose a microphone, line-in, Stereo Mix, or virtual audio input:",
+                labels,
+                0,
+                False,
+            )
+            if not accepted:
+                return
+            selected_index = labels.index(selected)
+            device_index = inputs[selected_index - 1][0] if selected_index else None
+            path = recorder.start(device_index=device_index)
+        except Exception as exc:
+            QMessageBox.warning(
+                self,
+                "Lecture recording",
+                f"Could not start recording. Check that a microphone is connected "
+                f"and available.\n\n{exc}",
+            )
+            return
+
+        self._lecture_recorder = recorder
+        self._lecture_started_monotonic = time.monotonic()
+        self._lecture_timer.start()
+        self._update_lecture_button()
+        self._append_activity(f"SYS: Lecture recording started. Saved to {path}")
+
+    def _show_lecture_library(self):
+        from core.lecture_recorder import recordings_dir
+
+        root = recordings_dir()
+        root.mkdir(parents=True, exist_ok=True)
+        sessions = sorted(
+            (folder for folder in root.glob("Lecture_*") if folder.is_dir()),
+            key=lambda folder: folder.stat().st_mtime,
+            reverse=True,
+        )
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Saved lectures")
+        dialog.setMinimumSize(520, 360)
+        layout = QVBoxLayout(dialog)
+        hint = QLabel(f"Saved locally in: {root}")
+        hint.setWordWrap(True)
+        layout.addWidget(hint)
+
+        recordings = QListWidget(dialog)
+        for folder in sessions:
+            parts = sorted(folder.glob("Part_*.wav"), key=lambda path: path.name)
+            if not parts:
+                continue
+            total_bytes = sum(part.stat().st_size for part in parts)
+            size_mb = total_bytes / (1024 * 1024)
+            label = (
+                f"{folder.name.removeprefix('Lecture_')}   ·   "
+                f"{len(parts)} part(s)   ·   {size_mb:.1f} MB"
+            )
+            item = QListWidgetItem(label)
+            item.setData(Qt.ItemDataRole.UserRole, str(folder))
+            item.setToolTip(str(folder))
+            recordings.addItem(item)
+        layout.addWidget(recordings, 1)
+
+        buttons = QHBoxLayout()
+        open_folder = QPushButton("Open selected folder")
+        attach_part = QPushButton("Attach latest part to chat")
+        close = QPushButton("Close")
+        buttons.addWidget(open_folder)
+        buttons.addWidget(attach_part)
+        buttons.addStretch(1)
+        buttons.addWidget(close)
+        layout.addLayout(buttons)
+
+        def selected_folder() -> Path | None:
+            item = recordings.currentItem()
+            if item is None:
+                return None
+            return Path(item.data(Qt.ItemDataRole.UserRole))
+
+        def open_selected():
+            folder = selected_folder()
+            if folder:
+                QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder)))
+
+        def attach_selected():
+            folder = selected_folder()
+            parts = (
+                sorted(folder.glob("Part_*.wav"), key=lambda path: path.name)
+                if folder
+                else []
+            )
+            if not parts:
+                QMessageBox.information(
+                    dialog, "Saved lectures", "This lecture has no audio parts yet."
+                )
+                return
+            self._drop_zone._set_file(str(parts[-1]))
+            dialog.accept()
+
+        open_folder.clicked.connect(open_selected)
+        attach_part.clicked.connect(attach_selected)
+        close.clicked.connect(dialog.reject)
+        if recordings.count():
+            recordings.setCurrentRow(0)
+        else:
+            recordings.addItem("No saved lecture recordings yet.")
+            recordings.setEnabled(False)
+            attach_part.setEnabled(False)
+            open_folder.setEnabled(False)
+        dialog.exec()
+
+    def _update_lecture_button(self):
+        if not hasattr(self, "_lecture_btn"):
+            return
+        recorder = self._lecture_recorder
+        active = recorder is not None and recorder.recording
+        if active:
+            seconds = max(0, int(time.monotonic() - self._lecture_started_monotonic))
+            hours, remainder = divmod(seconds, 3600)
+            minutes, secs = divmod(remainder, 60)
+            elapsed = f"{hours:02d}:{minutes:02d}:{secs:02d}"
+            self._lecture_btn.setIcon(
+                QIcon(str(BASE_DIR / "assets" / "icons" / "stop.svg"))
+            )
+            self._lecture_btn.setToolTip(f"Stop lecture recording · {elapsed}")
+            self._lecture_btn.setStyleSheet(
+                f"QPushButton {{ background:{C.PRI_GHO}; border:1px solid {C.MUTED_C}; "
+                f"border-radius:8px; }}"
+            )
+        else:
+            self._lecture_btn.setIcon(
+                QIcon(str(BASE_DIR / "assets" / "icons" / "record.svg"))
+            )
+            self._lecture_btn.setToolTip("Start an unlimited lecture recording")
+            self._lecture_btn.setStyleSheet(
+                f"QPushButton {{ background:{C.PANEL2}; border:1px solid {C.BORDER}; "
+                f"border-radius:8px; }} QPushButton:hover {{ border-color:{C.PRI}; }}"
+            )
+
     def _set_muted(self, muted: bool, note: str = ""):
         muted = bool(muted)
         if muted == self._muted:
@@ -11318,14 +12847,20 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         self._style_mute_btn()
         if muted:
             self._apply_state("MUTED")
-            self._log.append_log("SYS: Microphone muted." + (f" {note}" if note else ""))
+            self._log.append_log(
+                "SYS: Microphone muted." + (f" {note}" if note else "")
+            )
         else:
             self._apply_state("LISTENING")
-            self._log.append_log("SYS: Microphone active." + (f" {note}" if note else ""))
+            self._log.append_log(
+                "SYS: Microphone active." + (f" {note}" if note else "")
+            )
 
     def _style_mute_btn(self):
         if self._muted:
-            self._mute_btn.setIcon(QIcon(str(BASE_DIR / "assets" / "icons" / "microphone-muted.svg")))
+            self._mute_btn.setIcon(
+                QIcon(str(BASE_DIR / "assets" / "icons" / "microphone-muted.svg"))
+            )
             self._mute_btn.setText("")
             self._mute_btn.setToolTip("Microphone muted · click to unmute · F4")
             self._mute_btn.setStyleSheet(f"""
@@ -11335,7 +12870,9 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                 }}
             """)
         else:
-            self._mute_btn.setIcon(QIcon(str(BASE_DIR / "assets" / "icons" / "microphone.svg")))
+            self._mute_btn.setIcon(
+                QIcon(str(BASE_DIR / "assets" / "icons" / "microphone.svg"))
+            )
             self._mute_btn.setText("")
             self._mute_btn.setToolTip("Microphone active · click to mute · F4")
             self._mute_btn.setStyleSheet(f"""
@@ -11378,20 +12915,27 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             return
         self._append_activity(f"You: {txt}")
         if self.on_text_command:
-            threading.Thread(target=self.on_text_command, args=(txt,), daemon=True).start()
+            threading.Thread(
+                target=self.on_text_command, args=(txt,), daemon=True
+            ).start()
 
     def _refresh_dev_mode_btn(self):
         if not hasattr(self, "_dev_mode_btn"):
             return
         state = "ON" if self._development_mode else "OFF"
         color = C.GREEN if self._development_mode else C.TEXT_DIM
-        self._dev_mode_btn.setText(self._tr(
-            "Developer mode: On" if self._development_mode
-            else "Developer mode: Off"))
+        self._dev_mode_btn.setText(
+            self._tr(
+                "Developer mode: On"
+                if self._development_mode
+                else "Developer mode: Off"
+            )
+        )
         self._dev_mode_btn.setStyleSheet(
             f"QPushButton {{ background: transparent; color: {color}; "
             f"border: 1px solid {C.BORDER}; border-radius: 3px; text-align: left; padding: 0 8px; }}"
-            f"QPushButton:hover {{ border-color: {C.PRI_DIM}; color: {C.PRI}; }}")
+            f"QPushButton:hover {{ border-color: {C.PRI_DIM}; color: {C.PRI}; }}"
+        )
 
     def _toggle_development_mode(self):
         self._development_mode = not self._development_mode
@@ -11399,7 +12943,9 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         self._work_tabs.setTabVisible(4, self._development_mode)
         if self._development_mode:
             self._work_tabs.setCurrentIndex(4)
-            self._append_activity("SYS: Development mode enabled — activity is mirrored to the terminal.")
+            self._append_activity(
+                "SYS: Development mode enabled — activity is mirrored to the terminal."
+            )
         elif self._work_tabs.currentIndex() == 4:
             self._work_tabs.setCurrentIndex(0)
         self._refresh_dev_mode_btn()
@@ -11426,14 +12972,28 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         chat_rows = _chat_turns()
         if low.startswith("you:"):
             request = line.split(":", 1)[1].strip()[:4000]
-            if rows and rows[-1].get("request", "").casefold() == request.casefold() and not rows[-1].get("result"):
+            if (
+                rows
+                and rows[-1].get("request", "").casefold() == request.casefold()
+                and not rows[-1].get("result")
+            ):
                 return
-            turn = {"id": uuid.uuid4().hex, "request": request, "result": "",
-                    "time": time.strftime("%Y-%m-%d %H:%M"), "status": "pending"}
+            turn = {
+                "id": uuid.uuid4().hex,
+                "request": request,
+                "result": "",
+                "time": time.strftime("%Y-%m-%d %H:%M"),
+                "status": "pending",
+            }
             rows.append(turn.copy())
             chat_rows.append(turn.copy())
-        elif (low.startswith((self._assistant_name.lower() + ":", "jarvis:", "j.a.r.v.i.s:"))
-              and rows and rows[-1].get("status") == "pending"):
+        elif (
+            low.startswith(
+                (self._assistant_name.lower() + ":", "jarvis:", "j.a.r.v.i.s:")
+            )
+            and rows
+            and rows[-1].get("status") == "pending"
+        ):
             result = line.split(":", 1)[1].strip()[:4000]
             rows[-1]["result"] = result
             rows[-1]["status"] = "complete"
@@ -11443,9 +13003,24 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                     chat_turn["result"] = result
                     chat_turn["status"] = "complete"
                     break
-        elif (rows and rows[-1].get("status") == "pending"
-              and (low.startswith(("err:", "[stderr]"))
-                   or any(word in low for word in ("failed", "failure", "unavailable", "timed out", "could not", "exception")))):
+        elif (
+            rows
+            and rows[-1].get("status") == "pending"
+            and (
+                low.startswith(("err:", "[stderr]"))
+                or any(
+                    word in low
+                    for word in (
+                        "failed",
+                        "failure",
+                        "unavailable",
+                        "timed out",
+                        "could not",
+                        "exception",
+                    )
+                )
+            )
+        ):
             rows[-1]["result"] = line[:4000]
             rows[-1]["status"] = "error"
             turn_id = rows[-1].get("id")
@@ -11472,8 +13047,11 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             result = _html.escape(str(row.get("result", ""))).replace("\n", "<br>")
             turn_id = _html.escape(str(row.get("id", "")), quote=True)
             status = _html.escape(str(row.get("status", "pending")).upper())
-            status_label = ("WAITING" if status == "PENDING" else
-                            "ERROR" if status == "ERROR" else "")
+            status_label = (
+                "WAITING"
+                if status == "PENDING"
+                else "ERROR" if status == "ERROR" else ""
+            )
             if result:
                 answer, answer_color = result, C.TEXT
             elif status == "PENDING":
@@ -11500,11 +13078,14 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                 f'</td></tr></table></td></tr><tr><td height="6"></td></tr></table>'
             )
         if not cards:
-            cards.append(f'<p style="color:{C.TEXT_DIM};">Chat is empty. The archive and saved memory are unchanged.</p>')
+            cards.append(
+                f'<p style="color:{C.TEXT_DIM};">Chat is empty. The archive and saved memory are unchanged.</p>'
+            )
         self._chat_view.setHtml(
             f'<html><body style="font-family:Segoe UI;font-size:9pt;color:{C.TEXT};'
             f'background-color:{C.PANEL2};margin:0;">'
-            + "".join(cards) + "</body></html>"
+            + "".join(cards)
+            + "</body></html>"
         )
         bar = self._chat_view.verticalScrollBar()
         bar.setValue(bar.maximum())
@@ -11530,7 +13111,8 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
 
     def _clear_history(self):
         choice = QMessageBox.question(
-            self, "Clear conversation history",
+            self,
+            "Clear conversation history",
             "Delete the archive and clear the current chat? Saved memory facts will remain.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
@@ -11558,7 +13140,9 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             row_lay = QHBoxLayout(holder)
             row_lay.setContentsMargins(5, 4, 3, 4)
             row_lay.setSpacing(5)
-            copy = QLabel(f"{stamp} · {status.upper()}\nYou: {request}\nJARVIS: {result}")
+            copy = QLabel(
+                f"{stamp} · {status.upper()}\nYou: {request}\nJARVIS: {result}"
+            )
             copy.setWordWrap(True)
             copy.setTextFormat(Qt.TextFormat.PlainText)
             copy.setFont(QFont(FONT_UI, 8))
@@ -11566,9 +13150,15 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             row_lay.addWidget(copy, 1)
             remove = QPushButton("×")
             remove.setFixedSize(20, 20)
-            remove.setToolTip("Delete this turn from chat and archive; saved memory is unchanged")
-            remove.setStyleSheet(f"QPushButton {{color:{C.TEXT_DIM}; background:transparent; border:1px solid {C.BORDER}; border-radius:4px;}} QPushButton:hover {{color:{C.RED}; border-color:{C.RED};}}")
-            remove.clicked.connect(lambda _=False, tid=str(row.get("id", "")): self._delete_chat_turn(tid))
+            remove.setToolTip(
+                "Delete this turn from chat and archive; saved memory is unchanged"
+            )
+            remove.setStyleSheet(
+                f"QPushButton {{color:{C.TEXT_DIM}; background:transparent; border:1px solid {C.BORDER}; border-radius:4px;}} QPushButton:hover {{color:{C.RED}; border-color:{C.RED};}}"
+            )
+            remove.clicked.connect(
+                lambda _=False, tid=str(row.get("id", "")): self._delete_chat_turn(tid)
+            )
             row_lay.addWidget(remove)
             item.setSizeHint(holder.sizeHint())
             item.setToolTip(f"You: {request}\nJARVIS: {result}")
@@ -11596,7 +13186,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         for reminder in reminders:
             try:
                 due = float(reminder.get("due", 0))
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 continue
             if due <= now:
                 continue
@@ -11604,7 +13194,9 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             item = QListWidgetItem(
                 f"REMINDER  |  {stamp}  |  {reminder.get('message', 'Reminder')}"
             )
-            item.setData(Qt.ItemDataRole.UserRole, ("reminder", str(reminder.get("id", ""))))
+            item.setData(
+                Qt.ItemDataRole.UserRole, ("reminder", str(reminder.get("id", "")))
+            )
             item.setToolTip("Scheduled reminder")
             self._task_list.addItem(item)
         if self._task_list.count() == 0:
@@ -11685,18 +13277,24 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             "Ctrl+Shift+X": (0x11, 0x10, 0x58),
         }
         shortcuts = (
-            (self._cursor_settings.get("hotkey", "Ctrl+Shift+Space"),
-             self._cursor_key_down),
-            (self._cursor_settings.get("region_hotkey", "Ctrl+Alt+R"),
-             self._region_key_down),
+            (
+                self._cursor_settings.get("hotkey", "Ctrl+Shift+Space"),
+                self._cursor_key_down,
+            ),
+            (
+                self._cursor_settings.get("region_hotkey", "Ctrl+Alt+R"),
+                self._region_key_down,
+            ),
         )
         try:
             import ctypes
+
             user32 = ctypes.windll.user32
             states = [
-                all(user32.GetAsyncKeyState(code) & 0x8000
-                    for code in key_codes.get(
-                        hotkey, key_codes["Ctrl+Alt+R"]))
+                all(
+                    user32.GetAsyncKeyState(code) & 0x8000
+                    for code in key_codes.get(hotkey, key_codes["Ctrl+Alt+R"])
+                )
                 for hotkey, _was_down in shortcuts
             ]
         except Exception as exc:
@@ -11735,11 +13333,12 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         self.activateWindow()
 
     def _apply_state(self, state: str):
-        self.hud.state    = state
-        self.hud.speaking = (state == "SPEAKING")
+        self.hud.state = state
+        self.hud.speaking = state == "SPEAKING"
 
     def _check_config(self) -> bool:
-        if not API_FILE.exists(): return False
+        if not API_FILE.exists():
+            return False
         try:
             d = json.loads(API_FILE.read_text(encoding="utf-8"))
             return bool(d.get("gemini_api_key")) and bool(d.get("os_system"))
@@ -11751,9 +13350,10 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         cw = self.centralWidget()
         ow, oh = min(660, cw.width() - 20), min(470, cw.height() - 20)
         ov.setGeometry(
-            (cw.width()  - ow) // 2,
+            (cw.width() - ow) // 2,
             (cw.height() - oh) // 2,
-            ow, oh,
+            ow,
+            oh,
         )
         ov.done.connect(self._on_setup_done)
         ov.show()
@@ -11762,11 +13362,13 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
     def _on_setup_done(self, key: str, os_name: str, language: str):
         os.makedirs(CONFIG_DIR, exist_ok=True)
         config = _read_full_config()
-        config.update({
-            "gemini_api_key": key,
-            "os_system": os_name,
-            "ui_language": language if language in LANGUAGES else "en",
-        })
+        config.update(
+            {
+                "gemini_api_key": key,
+                "os_system": os_name,
+                "ui_language": language if language in LANGUAGES else "en",
+            }
+        )
         API_FILE.write_text(json.dumps(config, indent=4), encoding="utf-8")
         self._ui_language = config["ui_language"]
         self._language_missing = False
@@ -11775,10 +13377,23 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             self._overlay.hide()
             self._overlay = None
         self._apply_state("LISTENING")
-        self._assistant_name = _read_full_config().get("assistant_name", "JARVIS") or "JARVIS"
-        self._log.append_log(f"SYS: Initialised. OS={os_name.upper()}. {self._assistant_name} online.")
+        self._assistant_name = (
+            _read_full_config().get("assistant_name", "JARVIS") or "JARVIS"
+        )
+        self._log.append_log(
+            f"SYS: Initialised. OS={os_name.upper()}. {self._assistant_name} online."
+        )
 
     def closeEvent(self, event):
+        if self._lecture_recorder is not None:
+            try:
+                path = self._lecture_recorder.stop()
+                if path:
+                    print(f"[Lecture] Saved active recording on exit: {path}")
+            except Exception as exc:
+                print(f"[Lecture] Could not stop active recording cleanly: {exc}")
+            self._lecture_recorder = None
+            self._lecture_timer.stop()
         self._terminal_poll_timer.stop()
         if hasattr(self, "_cursor_hotkey_timer"):
             self._cursor_hotkey_timer.stop()
@@ -11807,6 +13422,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
 
 class _ConsoleMirror:
     """Keep the real console output and mirror complete lines into Activity in dev mode."""
+
     def __init__(self, stream, window, label: str):
         self._stream = stream
         self._window = window
@@ -11863,8 +13479,10 @@ class _ConsoleMirror:
 class _RootShim:
     def __init__(self, app: QApplication):
         self._app = app
+
     def mainloop(self):
         self._app.exec()
+
     def protocol(self, *_):
         pass
 
@@ -12079,8 +13697,12 @@ class JarvisUI:
         severity is one of 'serious' / 'caution' / 'note' and decides colour and
         order here, so the caller supplies no styling of its own.
         """
-        self._win._review_sig.emit(str(title or ""), str(summary or ""),
-                                   list(findings or []), list(unclear or []))
+        self._win._review_sig.emit(
+            str(title or ""),
+            str(summary or ""),
+            list(findings or []),
+            list(unclear or []),
+        )
 
     def prompt_reconfig(self):
         """Thread-safe: show the API key setup overlay (e.g. after an auth error)."""
@@ -12091,8 +13713,9 @@ class JarvisUI:
         """Thread-safe: show a webcam frame in the small overlay (screen captures)."""
         self._win._camera_sig.emit(img_bytes)
 
-    def show_video(self, source: str, title: str = "", muted: bool = True,
-                   audio_source: str = "") -> None:
+    def show_video(
+        self, source: str, title: str = "", muted: bool = True, audio_source: str = ""
+    ) -> None:
         """Thread-safe: play a video where the avatar normally is.
 
         `source` is a local path or a direct media URL. `audio_source` is for
@@ -12105,8 +13728,9 @@ class JarvisUI:
         assistant worse. The user turns sound on from the header button or by
         asking, and closes it the same two ways.
         """
-        self._win._video_open_sig.emit(str(source or ""), str(title or ""),
-                                       bool(muted), str(audio_source or ""))
+        self._win._video_open_sig.emit(
+            str(source or ""), str(title or ""), bool(muted), str(audio_source or "")
+        )
 
     def stop_video(self) -> None:
         """Thread-safe: close the video and give the HUD back to the avatar."""

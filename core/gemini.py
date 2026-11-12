@@ -62,6 +62,7 @@ THE LADDER, MEASURED
     touched twice: `plugins/_whatsapp_core.py` is the worked example — one
     request per WhatsApp language for the lifetime of the install.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -80,10 +81,12 @@ else:
 _KEY_FILE = _BASE / "config" / "api_keys.json"
 
 # Ladders, tried left to right. Change a model HERE and the whole app follows.
-FAST = "fast"      # short classification, extraction, one-line decisions
-SMART = "smart"    # reasoning, generation, long documents, images
+FAST = "fast"  # short classification, extraction, one-line decisions
+SMART = "smart"  # reasoning, generation, long documents, images
 SEARCH = "search"  # grounded search — REST only, see below
-VISION_FAST = "vision_fast"  # explicit image analysis, Flash Lite before other REST models
+VISION_FAST = (
+    "vision_fast"  # explicit image analysis, Flash Lite before other REST models
+)
 
 # A rung that means "ask the Live model instead", through a short throwaway
 # session rather than the REST text API.
@@ -155,23 +158,43 @@ PROVIDER_PREFIX = "prov:"
 # real quota when they are healthy, and a rung that is down is set aside by the
 # cooldown after one attempt instead of being paid for on every call.
 _LADDERS = {
-    FAST: (LIVE,
-           "gemini-2.5-flash-lite", "gemini-3.5-flash-lite",
-           "gemini-3.1-flash-lite", "gemini-flash-lite-latest",
-           "gemini-2.5-flash", "gemini-3.5-flash",
-           "gemini-3.6-flash", "gemini-3-flash-preview"),
-    SMART: (LIVE,
-            "gemini-2.5-flash", "gemini-3.5-flash",
-            "gemini-2.5-flash-lite", "gemini-3.5-flash-lite",
-            "gemini-3.1-flash-lite",
-            "gemini-3.6-flash", "gemini-3-flash-preview", "gemini-flash-latest"),
+    FAST: (
+        LIVE,
+        "gemini-2.5-flash-lite",
+        "gemini-3.5-flash-lite",
+        "gemini-3.1-flash-lite",
+        "gemini-flash-lite-latest",
+        "gemini-2.5-flash",
+        "gemini-3.5-flash",
+        "gemini-3.6-flash",
+        "gemini-3-flash-preview",
+    ),
+    SMART: (
+        LIVE,
+        "gemini-2.5-flash",
+        "gemini-3.5-flash",
+        "gemini-2.5-flash-lite",
+        "gemini-3.5-flash-lite",
+        "gemini-3.1-flash-lite",
+        "gemini-3.6-flash",
+        "gemini-3-flash-preview",
+        "gemini-flash-latest",
+    ),
     # Grounded search needs response.candidates[...].grounding_metadata, which a
     # Live turn does not produce. REST only, and it says so rather than silently
     # returning an answer with no sources behind it.
-    SEARCH: ("gemini-2.5-flash", "gemini-3.5-flash", "gemini-2.5-flash-lite",
-             "gemini-flash-latest"),
-    VISION_FAST: ("gemini-3.5-flash-lite", "gemini-2.5-flash-lite",
-                  "gemini-3.1-flash-lite", "gemini-2.5-flash"),
+    SEARCH: (
+        "gemini-2.5-flash",
+        "gemini-3.5-flash",
+        "gemini-2.5-flash-lite",
+        "gemini-flash-latest",
+    ),
+    VISION_FAST: (
+        "gemini-3.5-flash-lite",
+        "gemini-2.5-flash-lite",
+        "gemini-3.1-flash-lite",
+        "gemini-2.5-flash",
+    ),
 }
 
 # The conversation's own model, and ONE careful fallback behind it.
@@ -274,15 +297,24 @@ def is_unavailable_error(err: str) -> bool:
     like an exhausted one — for less long, since it is usually passing.
     """
     low = err.lower()
-    return ("503" in err or "504" in err
-            or "unavailable" in low or "deadline_exceeded" in low)
+    return (
+        "503" in err
+        or "504" in err
+        or "unavailable" in low
+        or "deadline_exceeded" in low
+    )
 
 
 def is_gone_error(err: str) -> bool:
     """The model is not there, or not ours to use — a different thing from busy."""
     low = err.lower()
-    return ("404" in err or "not found" in low or "is not supported" in low
-            or "permission" in low or "403" in err)
+    return (
+        "404" in err
+        or "not found" in low
+        or "is not supported" in low
+        or "permission" in low
+        or "403" in err
+    )
 
 
 def live_model() -> str:
@@ -304,13 +336,17 @@ def note_live_failure(model: str, err: str) -> bool:
     """
     if is_quota_error(err):
         _cool(model, _COOLDOWN_SECONDS)
-        print(f"[Gemini] Live model {model} is out of quota — "
-              f"switching for {_COOLDOWN_SECONDS // 60} minutes.")
+        print(
+            f"[Gemini] Live model {model} is out of quota — "
+            f"switching for {_COOLDOWN_SECONDS // 60} minutes."
+        )
         return True
     if is_gone_error(err):
         _cool(model, _GONE_SECONDS)
-        print(f"[Gemini] Live model {model} is unavailable to this key — "
-              f"setting it aside.")
+        print(
+            f"[Gemini] Live model {model} is unavailable to this key — "
+            f"setting it aside."
+        )
         return True
     return False
 
@@ -463,12 +499,14 @@ async def _live_turn(parts: list, system: str, key: str, timeout_s: float) -> st
         "system_instruction": _ONE_SHOT_SYSTEM + (f"\n\n{system}" if system else ""),
     }
 
-    cm = cl.aio.live.connect(model=_live_model(),
-                             config=gtypes.LiveConnectConfig(**kwargs))
+    cm = cl.aio.live.connect(
+        model=_live_model(), config=gtypes.LiveConnectConfig(**kwargs)
+    )
     session = await asyncio.wait_for(cm.__aenter__(), 30)
     try:
         await session.send_client_content(
-            turns={"role": "user", "parts": parts}, turn_complete=True)
+            turns={"role": "user", "parts": parts}, turn_complete=True
+        )
         chunks: list[str] = []
 
         async def drain():
@@ -507,8 +545,11 @@ def _live_call(contents, config, timeout_ms: int, key: str):
     """
     system = ""
     if config is not None:
-        system = getattr(config, "system_instruction", None) or \
-            (config.get("system_instruction") if isinstance(config, dict) else "") or ""
+        system = (
+            getattr(config, "system_instruction", None)
+            or (config.get("system_instruction") if isinstance(config, dict) else "")
+            or ""
+        )
 
     parts = _to_live_parts(contents)
     if not parts:
@@ -524,8 +565,9 @@ def _live_call(contents, config, timeout_ms: int, key: str):
     def runner():
         try:
             box["text"] = asyncio.run(
-                _live_turn(parts, str(system), key, max(10.0, timeout_ms / 1000.0)))
-        except BaseException as e:                     # noqa: BLE001
+                _live_turn(parts, str(system), key, max(10.0, timeout_ms / 1000.0))
+            )
+        except BaseException as e:  # noqa: BLE001
             box["error"] = e
 
     try:
@@ -572,6 +614,7 @@ def _provider_settings() -> tuple[str, bool]:
 
     try:
         from memory.config_manager import get_sidecar_first, get_sidecar_provider
+
         pid, first = get_sidecar_provider(), get_sidecar_first()
     except Exception:
         pid, first = "", False
@@ -615,11 +658,15 @@ def _to_openai_messages(contents, config) -> tuple[list[dict], Optional[float]]:
     temperature = None
     if config is not None:
         si = getattr(config, "system_instruction", None) or (
-            config.get("system_instruction") if isinstance(config, dict) else None)
+            config.get("system_instruction") if isinstance(config, dict) else None
+        )
         if si:
             system = si if isinstance(si, str) else str(si)
-        t = getattr(config, "temperature", None) if not isinstance(config, dict) \
+        t = (
+            getattr(config, "temperature", None)
+            if not isinstance(config, dict)
             else config.get("temperature")
+        )
         if t is not None:
             temperature = float(t)
 
@@ -637,7 +684,7 @@ def _provider_call(model: str, contents, config, timeout_ms: int):
     from memory.config_manager import get_provider_config
     from providers import registry
 
-    pid = model[len(PROVIDER_PREFIX):]
+    pid = model[len(PROVIDER_PREFIX) :]
     cfg = get_provider_config(pid)
     missing = registry.missing_fields(pid, cfg)
     if missing:
@@ -646,16 +693,23 @@ def _provider_call(model: str, contents, config, timeout_ms: int):
     llm = registry.build(pid, cfg)
     messages, temperature = _to_openai_messages(contents, config)
     text_out, _calls = llm.complete(
-        messages, tools=None,
+        messages,
+        tools=None,
         timeout=max(MIN_TIMEOUT_MS, int(timeout_ms)) / 1000.0,
-        temperature=temperature)
+        temperature=temperature,
+    )
     if not (text_out or "").strip():
         raise RuntimeError("the provider returned an empty answer")
     return _Reply(text_out)
 
 
-def call(contents, tier: str = FAST, config=None,
-         timeout_ms: int = DEFAULT_TIMEOUT_MS, key: str = ""):
+def call(
+    contents,
+    tier: str = FAST,
+    config=None,
+    timeout_ms: int = DEFAULT_TIMEOUT_MS,
+    key: str = "",
+):
     """Run one generation, walking the ladder until one answers.
 
     Returns the SDK's own response object, so callers that need more than the
@@ -678,8 +732,9 @@ def call(contents, tier: str = FAST, config=None,
     # install with no provider this is an empty tuple and nothing changes.
     rungs = () if tier == VISION_FAST else _provider_rungs(tier)
     if rungs:
-        ladder = (rungs + tuple(ladder)) if _provider_first() \
-            else (tuple(ladder) + rungs)
+        ladder = (
+            (rungs + tuple(ladder)) if _provider_first() else (tuple(ladder) + rungs)
+        )
 
     resolved_key = key or api_key()
     if not resolved_key:
@@ -697,8 +752,9 @@ def call(contents, tier: str = FAST, config=None,
     # afterwards. Text and images are untouched by this: `_carries_recording`
     # returns False for every call site that existed before it.
     if _carries_recording(contents):
-        ladder = tuple(m for m in ladder
-                       if m != LIVE and not m.startswith(PROVIDER_PREFIX))
+        ladder = tuple(
+            m for m in ladder if m != LIVE and not m.startswith(PROVIDER_PREFIX)
+        )
         if not ladder:
             print("[Gemini] nothing on this ladder can read a recording")
             return None
@@ -724,41 +780,56 @@ def call(contents, tier: str = FAST, config=None,
             msg = str(e)
             if is_quota_error(msg):
                 _cool(model)
-                print(f"[Gemini] {model}: out of quota — skipping it for "
-                      f"{_COOLDOWN_SECONDS // 60} minutes")
+                print(
+                    f"[Gemini] {model}: out of quota — skipping it for "
+                    f"{_COOLDOWN_SECONDS // 60} minutes"
+                )
             elif is_gone_error(msg):
                 _cool(model, _GONE_SECONDS)
                 print(f"[Gemini] {model}: unavailable to this key — set aside")
             elif is_unavailable_error(msg):
                 _cool(model, _UNAVAILABLE_SECONDS)
-                print(f"[Gemini] {model}: not answering — resting it for "
-                      f"{_UNAVAILABLE_SECONDS // 60} minutes")
+                print(
+                    f"[Gemini] {model}: not answering — resting it for "
+                    f"{_UNAVAILABLE_SECONDS // 60} minutes"
+                )
             else:
                 print(f"[Gemini] {model}: {type(e).__name__}: {msg[:140]}")
     return None
 
 
-def text(contents, tier: str = FAST, config=None,
-         timeout_ms: int = DEFAULT_TIMEOUT_MS, key: str = "", default: str = "") -> str:
+def text(
+    contents,
+    tier: str = FAST,
+    config=None,
+    timeout_ms: int = DEFAULT_TIMEOUT_MS,
+    key: str = "",
+    default: str = "",
+) -> str:
     """`call`, reduced to the reply text. `default` when nothing answered."""
-    resp = call(contents, tier=tier, config=config,
-                timeout_ms=timeout_ms, key=key)
+    resp = call(contents, tier=tier, config=config, timeout_ms=timeout_ms, key=key)
     if resp is None:
         return default
     return (getattr(resp, "text", None) or "").strip() or default
 
 
-def as_json(contents, tier: str = FAST, config=None,
-            timeout_ms: int = DEFAULT_TIMEOUT_MS, key: str = "", default=None):
+def as_json(
+    contents,
+    tier: str = FAST,
+    config=None,
+    timeout_ms: int = DEFAULT_TIMEOUT_MS,
+    key: str = "",
+    default=None,
+):
     """`text`, parsed as JSON, tolerating the fences and prose a model wraps it
     in. `default` when nothing answered or the answer would not parse."""
     raw = text(contents, tier=tier, config=config, timeout_ms=timeout_ms, key=key)
     if not raw:
         return default
     if "{" in raw and "}" in raw:
-        raw = raw[raw.find("{"): raw.rfind("}") + 1]
+        raw = raw[raw.find("{") : raw.rfind("}") + 1]
     elif "[" in raw and "]" in raw:
-        raw = raw[raw.find("["): raw.rfind("]") + 1]
+        raw = raw[raw.find("[") : raw.rfind("]") + 1]
     try:
         return json.loads(raw)
     except Exception as e:

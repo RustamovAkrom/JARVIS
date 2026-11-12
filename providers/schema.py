@@ -56,6 +56,7 @@ WHY THERE ARE TWO BUDGETS AND NOT ONE
     between, and how much of its context the choosing costs — so `budget()`
     takes a limit for each and applies whichever bites first.
 """
+
 from __future__ import annotations
 
 from typing import Any, Iterable, Sequence
@@ -144,8 +145,10 @@ def _parts(decl: Any) -> tuple[str, str, dict]:
     else:
         name = getattr(decl, "name", "") or ""
         desc = getattr(decl, "description", "") or ""
-        params = getattr(decl, "parameters", None) or {"type": "OBJECT",
-                                                       "properties": {}}
+        params = getattr(decl, "parameters", None) or {
+            "type": "OBJECT",
+            "properties": {},
+        }
         if hasattr(params, "to_json_dict"):
             params = params.to_json_dict()
     if not isinstance(params, dict):
@@ -161,14 +164,16 @@ def to_openai(decls: Iterable[Any]) -> list[dict]:
         name, desc, params = _parts(d)
         if not name:
             continue
-        out.append({
-            "type": "function",
-            "function": {
-                "name": name,
-                "description": desc,
-                "parameters": _json_schema(params),
-            },
-        })
+        out.append(
+            {
+                "type": "function",
+                "function": {
+                    "name": name,
+                    "description": desc,
+                    "parameters": _json_schema(params),
+                },
+            }
+        )
     return out
 
 
@@ -179,11 +184,13 @@ def to_anthropic(decls: Iterable[Any]) -> list[dict]:
         name, desc, params = _parts(d)
         if not name:
             continue
-        out.append({
-            "name": name,
-            "description": desc,
-            "input_schema": _json_schema(params),
-        })
+        out.append(
+            {
+                "name": name,
+                "description": desc,
+                "input_schema": _json_schema(params),
+            }
+        )
     return out
 
 
@@ -215,13 +222,16 @@ def to_prompt(decls: Iterable[Any]) -> str:
         name, desc, params = _parts(d)
         if not name:
             continue
-        props = (params.get("properties") or {})
+        props = params.get("properties") or {}
         required = set(params.get("required") or ())
-        args = ", ".join(
-            f"{k}{'' if k in required else '?'}: "
-            f"{str((v or {}).get('type', 'string')).lower()}"
-            for k, v in props.items()
-        ) or "no arguments"
+        args = (
+            ", ".join(
+                f"{k}{'' if k in required else '?'}: "
+                f"{str((v or {}).get('type', 'string')).lower()}"
+                for k, v in props.items()
+            )
+            or "no arguments"
+        )
         one_line = " ".join(str(desc).split())
         if len(one_line) > 160:
             one_line = one_line[:157].rstrip() + "..."
@@ -244,8 +254,9 @@ def convert(decls: Iterable[Any], fmt: str | None):
         return None
     conv = CONVERTERS.get(fmt)
     if conv is None:
-        raise ValueError(f"unknown tool_format {fmt!r}; "
-                         f"expected one of {tuple(CONVERTERS)}")
+        raise ValueError(
+            f"unknown tool_format {fmt!r}; " f"expected one of {tuple(CONVERTERS)}"
+        )
     return conv(decls)
 
 
@@ -269,9 +280,12 @@ def _tier_of(decl: Any, core_names: Sequence[str]) -> int:
     return 0 if name in core_names else 1
 
 
-def budget(decls: Sequence[Any], max_tools: int | None = None,
-           max_chars: int | None = None,
-           core_names: Sequence[str] = CORE_TOOLS) -> list[Any]:
+def budget(
+    decls: Sequence[Any],
+    max_tools: int | None = None,
+    max_chars: int | None = None,
+    core_names: Sequence[str] = CORE_TOOLS,
+) -> list[Any]:
     """The declarations an engine should actually be given.
 
     Both limits `None` returns the input unchanged — same objects, same order.
@@ -303,8 +317,9 @@ def budget(decls: Sequence[Any], max_tools: int | None = None,
 
     def sort_key(item):
         i, d = item
-        name = (d.get("name", "") if isinstance(d, dict)
-                else (getattr(d, "name", "") or ""))
+        name = (
+            d.get("name", "") if isinstance(d, dict) else (getattr(d, "name", "") or "")
+        )
         return (_tier_of(d, core_names), order.get(name, 10_000), i)
 
     # Compact BEFORE fitting, so a brief that halves a declaration buys room
@@ -331,7 +346,7 @@ def budget(decls: Sequence[Any], max_tools: int | None = None,
 
 # The canonical definition lives in core/action_loader.py — see the note there
 # on why main.py must be able to strip these without importing this package.
-from core.action_loader import META_KEYS as _META_ONLY, strip_meta   # noqa: E402
+from core.action_loader import META_KEYS as _META_ONLY, strip_meta  # noqa: E402
 
 
 def compact(decl: Any) -> Any:
@@ -381,6 +396,7 @@ def payload_size(decls: Iterable[Any]) -> int:
     """Characters a set of declarations costs on the wire. Used by the settings
     panel so a budget is a number the user can see rather than a promise."""
     import json
+
     total = 0
     for d in decls:
         name, desc, params = _parts(d)
@@ -407,11 +423,13 @@ if __name__ == "__main__":
     # The inline ones, read out of main.py's source rather than by importing it:
     # importing main.py starts an assistant.
     import ast
+
     src = Path(__file__).resolve().parent.parent / "main.py"
     tree = ast.parse(src.read_text(encoding="utf-8", errors="ignore"))
     for node in ast.walk(tree):
         if isinstance(node, ast.Assign) and any(
-                getattr(t, "id", "") == "TOOL_DECLARATIONS" for t in node.targets):
+            getattr(t, "id", "") == "TOOL_DECLARATIONS" for t in node.targets
+        ):
             decls.extend(ast.literal_eval(node.value))
             break
 
@@ -419,6 +437,7 @@ if __name__ == "__main__":
     root = Path(__file__).resolve().parent.parent
     try:
         from core.action_loader import discover_actions
+
         reg = discover_actions(root / "actions", logger=lambda m: None)
         decls.extend(reg.get_tool_declarations())
     except Exception as e:
@@ -433,25 +452,29 @@ if __name__ == "__main__":
     # any depth. A single one is a request llama.cpp rejects.
     blob = json.dumps(openai) + json.dumps(anthropic)
     import re
+
     bad = sorted(set(re.findall(r'"type":\s*"([A-Z_]+)"', blob)))
     print(f"OpenAI     {len(openai)} tools, {len(json.dumps(openai)):,} chars")
     print(f"Anthropic  {len(anthropic)} tools, {len(json.dumps(anthropic)):,} chars")
     print(f"upper-case types left behind: {bad or 'none'}")
 
-    names = [d.get('name') for d in decls if isinstance(d, dict)]
+    names = [d.get("name") for d in decls if isinstance(d, dict)]
     print(f"\nnames preserved: {names == [t['function']['name'] for t in openai]}")
 
     for cap in (None, 12, 8):
         kept = budget(decls, cap)
-        core = [d.get('name') for d in kept if _tier_of(d, CORE_TOOLS) == 0]
-        print(f"\nmax_tools={str(cap):<5} -> {len(kept):>2} tools, "
-              f"{payload_size(kept):>6,} chars   core kept: {len(core)}")
+        core = [d.get("name") for d in kept if _tier_of(d, CORE_TOOLS) == 0]
+        print(
+            f"\nmax_tools={str(cap):<5} -> {len(kept):>2} tools, "
+            f"{payload_size(kept):>6,} chars   core kept: {len(core)}"
+        )
         if cap:
             print(f"   {', '.join(d.get('name', '?') for d in kept)}")
 
     print("\n--- one converted declaration, in full ---")
-    sample = next((t for t in openai
-                   if t["function"]["name"] == "screen_process"), openai[0])
+    sample = next(
+        (t for t in openai if t["function"]["name"] == "screen_process"), openai[0]
+    )
     print(json.dumps(sample, indent=2)[:1200])
 
     print("\n--- prompt-mode fallback, first 6 lines ---")

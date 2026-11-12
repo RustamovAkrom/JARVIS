@@ -27,6 +27,7 @@ WHAT IS DELIBERATELY NOT HERE
     would work in the languages its author happened to speak and quietly fail in
     every other one.
 """
+
 from __future__ import annotations
 
 import json
@@ -46,19 +47,19 @@ from .base import DEFAULT_CAPS, Field, FunctionCall
 # order it the other way, which is exactly why it gets shipped broken — it works
 # on the developer's machine.
 PRESETS: dict[str, str] = {
-    "Ollama":               "http://127.0.0.1:11434/v1",
-    "LM Studio":            "http://127.0.0.1:1234/v1",
-    "llama.cpp server":     "http://127.0.0.1:8080/v1",
-    "vLLM":                 "http://127.0.0.1:8000/v1",
-    "Jan":                  "http://127.0.0.1:1337/v1",
-    "OpenAI":               "https://api.openai.com/v1",
-    "Groq":                 "https://api.groq.com/openai/v1",
-    "DeepSeek":             "https://api.deepseek.com/v1",
-    "Mistral":              "https://api.mistral.ai/v1",
-    "xAI":                  "https://api.x.ai/v1",
-    "OpenRouter":           "https://openrouter.ai/api/v1",
-    "Together":             "https://api.together.xyz/v1",
-    "Cerebras":             "https://api.cerebras.ai/v1",
+    "Ollama": "http://127.0.0.1:11434/v1",
+    "LM Studio": "http://127.0.0.1:1234/v1",
+    "llama.cpp server": "http://127.0.0.1:8080/v1",
+    "vLLM": "http://127.0.0.1:8000/v1",
+    "Jan": "http://127.0.0.1:1337/v1",
+    "OpenAI": "https://api.openai.com/v1",
+    "Groq": "https://api.groq.com/openai/v1",
+    "DeepSeek": "https://api.deepseek.com/v1",
+    "Mistral": "https://api.mistral.ai/v1",
+    "xAI": "https://api.x.ai/v1",
+    "OpenRouter": "https://openrouter.ai/api/v1",
+    "Together": "https://api.together.xyz/v1",
+    "Cerebras": "https://api.cerebras.ai/v1",
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -100,48 +101,104 @@ PRESETS: dict[str, str] = {
 _LOCAL_BUDGET = {"max_tools": "14", "max_tool_chars": "12000"}
 
 CATALOG = (
-    {"id": "ollama",     "label": "Ollama",
-     "note": "on this computer · free", "local": True,
-     "values": {"base_url": PRESETS["Ollama"], **_LOCAL_BUDGET}},
-    {"id": "lmstudio",   "label": "LM Studio",
-     "note": "on this computer · free", "local": True,
-     "values": {"base_url": PRESETS["LM Studio"], **_LOCAL_BUDGET}},
-    {"id": "llamacpp",   "label": "llama.cpp",
-     "note": "on this computer · free", "local": True,
-     "values": {"base_url": PRESETS["llama.cpp server"], **_LOCAL_BUDGET}},
-    {"id": "vllm",       "label": "vLLM",
-     "note": "on this computer · free", "local": True,
-     "values": {"base_url": PRESETS["vLLM"], **_LOCAL_BUDGET}},
-    {"id": "jan",        "label": "Jan",
-     "note": "on this computer · free", "local": True,
-     "values": {"base_url": PRESETS["Jan"], **_LOCAL_BUDGET}},
-    {"id": "groq",       "label": "Groq",
-     "note": "cloud · very fast · free tier", "local": False,
-     "values": {"base_url": PRESETS["Groq"]}},
-    {"id": "openai",     "label": "OpenAI",
-     "note": "cloud · needs a key", "local": False,
-     "values": {"base_url": PRESETS["OpenAI"]}},
-    {"id": "deepseek",   "label": "DeepSeek",
-     "note": "cloud · needs a key", "local": False,
-     "values": {"base_url": PRESETS["DeepSeek"]}},
-    {"id": "mistral",    "label": "Mistral",
-     "note": "cloud · needs a key", "local": False,
-     "values": {"base_url": PRESETS["Mistral"]}},
-    {"id": "xai",        "label": "xAI (Grok)",
-     "note": "cloud · needs a key", "local": False,
-     "values": {"base_url": PRESETS["xAI"]}},
-    {"id": "openrouter", "label": "OpenRouter",
-     "note": "cloud · many models behind one key", "local": False,
-     "values": {"base_url": PRESETS["OpenRouter"]}},
-    {"id": "together",   "label": "Together",
-     "note": "cloud · needs a key", "local": False,
-     "values": {"base_url": PRESETS["Together"]}},
-    {"id": "cerebras",   "label": "Cerebras",
-     "note": "cloud · needs a key", "local": False,
-     "values": {"base_url": PRESETS["Cerebras"]}},
-    {"id": "custom",     "label": "Something else",
-     "note": "type the address yourself", "local": None,
-     "values": {}},
+    {
+        "id": "ollama",
+        "label": "Ollama",
+        "note": "on this computer · free",
+        "local": True,
+        "values": {"base_url": PRESETS["Ollama"], **_LOCAL_BUDGET},
+    },
+    {
+        "id": "lmstudio",
+        "label": "LM Studio",
+        "note": "on this computer · free",
+        "local": True,
+        "values": {"base_url": PRESETS["LM Studio"], **_LOCAL_BUDGET},
+    },
+    {
+        "id": "llamacpp",
+        "label": "llama.cpp",
+        "note": "on this computer · free",
+        "local": True,
+        "values": {"base_url": PRESETS["llama.cpp server"], **_LOCAL_BUDGET},
+    },
+    {
+        "id": "vllm",
+        "label": "vLLM",
+        "note": "on this computer · free",
+        "local": True,
+        "values": {"base_url": PRESETS["vLLM"], **_LOCAL_BUDGET},
+    },
+    {
+        "id": "jan",
+        "label": "Jan",
+        "note": "on this computer · free",
+        "local": True,
+        "values": {"base_url": PRESETS["Jan"], **_LOCAL_BUDGET},
+    },
+    {
+        "id": "groq",
+        "label": "Groq",
+        "note": "cloud · very fast · free tier",
+        "local": False,
+        "values": {"base_url": PRESETS["Groq"]},
+    },
+    {
+        "id": "openai",
+        "label": "OpenAI",
+        "note": "cloud · needs a key",
+        "local": False,
+        "values": {"base_url": PRESETS["OpenAI"]},
+    },
+    {
+        "id": "deepseek",
+        "label": "DeepSeek",
+        "note": "cloud · needs a key",
+        "local": False,
+        "values": {"base_url": PRESETS["DeepSeek"]},
+    },
+    {
+        "id": "mistral",
+        "label": "Mistral",
+        "note": "cloud · needs a key",
+        "local": False,
+        "values": {"base_url": PRESETS["Mistral"]},
+    },
+    {
+        "id": "xai",
+        "label": "xAI (Grok)",
+        "note": "cloud · needs a key",
+        "local": False,
+        "values": {"base_url": PRESETS["xAI"]},
+    },
+    {
+        "id": "openrouter",
+        "label": "OpenRouter",
+        "note": "cloud · many models behind one key",
+        "local": False,
+        "values": {"base_url": PRESETS["OpenRouter"]},
+    },
+    {
+        "id": "together",
+        "label": "Together",
+        "note": "cloud · needs a key",
+        "local": False,
+        "values": {"base_url": PRESETS["Together"]},
+    },
+    {
+        "id": "cerebras",
+        "label": "Cerebras",
+        "note": "cloud · needs a key",
+        "local": False,
+        "values": {"base_url": PRESETS["Cerebras"]},
+    },
+    {
+        "id": "custom",
+        "label": "Something else",
+        "note": "type the address yourself",
+        "local": None,
+        "values": {},
+    },
 )
 
 
@@ -183,7 +240,7 @@ def _int_or(value, default):
     thing they can see they did."""
     try:
         n = int(str(value).strip())
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return default
     return n if n > 0 else default
 
@@ -243,9 +300,14 @@ def parts_to_openai(parts: list) -> Any:
                 mime = getattr(blob, "mime_type", None) or "image/png"
                 if isinstance(data, bytes):
                     import base64
+
                     data = base64.b64encode(data).decode("ascii")
-                out.append({"type": "image_url",
-                            "image_url": {"url": f"data:{mime};base64,{data}"}})
+                out.append(
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:{mime};base64,{data}"},
+                    }
+                )
                 continue
             txt = getattr(p, "text", None)
             if txt:
@@ -261,9 +323,14 @@ def parts_to_openai(parts: list) -> Any:
             mime = blob.get("mime_type") or "image/png"
             if isinstance(data, bytes):
                 import base64
+
                 data = base64.b64encode(data).decode("ascii")
-            out.append({"type": "image_url",
-                        "image_url": {"url": f"data:{mime};base64,{data}"}})
+            out.append(
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:{mime};base64,{data}"},
+                }
+            )
 
     if len(out) == len(texts):
         return "\n".join(texts)
@@ -312,13 +379,16 @@ class _ToolCallBuffer:
                 args = {}
                 if "{" in raw and "}" in raw:
                     try:
-                        args = json.loads(raw[raw.find("{"):raw.rfind("}") + 1])
+                        args = json.loads(raw[raw.find("{") : raw.rfind("}") + 1])
                     except Exception:
                         args = {}
             if not isinstance(args, dict):
                 args = {"value": args}
-            calls.append(FunctionCall(id=slot["id"] or f"call_{idx}",
-                                      name=slot["name"], args=args))
+            calls.append(
+                FunctionCall(
+                    id=slot["id"] or f"call_{idx}", name=slot["name"], args=args
+                )
+            )
         self._slots.clear()
         return calls
 
@@ -358,13 +428,15 @@ class OpenAICompatLLM:
             max_chars = int(_LOCAL_BUDGET["max_tool_chars"])
 
         self.caps = dict(DEFAULT_CAPS)
-        self.caps.update({
-            "tools": bool(cfg.get("tools", True)),
-            "tool_format": "openai",
-            "vision": bool(cfg.get("vision", False)),
-            "max_tools": max_tools,
-            "max_tool_chars": max_chars,
-        })
+        self.caps.update(
+            {
+                "tools": bool(cfg.get("tools", True)),
+                "tool_format": "openai",
+                "vision": bool(cfg.get("vision", False)),
+                "max_tools": max_tools,
+                "max_tool_chars": max_chars,
+            }
+        )
 
         # A proxy configured for the whole machine must not be used to reach a
         # server on that same machine. On a corporate Windows or macOS setup
@@ -376,8 +448,11 @@ class OpenAICompatLLM:
         self._trust_env = not _is_loopback(self.base)
         # Which model the stored vision answer was measured on. A cached "no"
         # from qwen3 must not silently disable a llava the user switched to.
-        self._vision_known = (str(cfg.get("vision_model") or "").strip()
-                              if cfg.get("vision_model") else "")
+        self._vision_known = (
+            str(cfg.get("vision_model") or "").strip()
+            if cfg.get("vision_model")
+            else ""
+        )
         if self._vision_known and self._vision_known != self.model:
             self._vision_known = ""
 
@@ -388,10 +463,18 @@ class OpenAICompatLLM:
             h["Authorization"] = f"Bearer {self.key}"
         return h
 
-    def _body(self, messages: list[dict], tools: list[dict] | None,
-              stream: bool, temperature: float | None) -> dict:
-        body: dict[str, Any] = {"model": self.model, "messages": messages,
-                                "stream": stream}
+    def _body(
+        self,
+        messages: list[dict],
+        tools: list[dict] | None,
+        stream: bool,
+        temperature: float | None,
+    ) -> dict:
+        body: dict[str, Any] = {
+            "model": self.model,
+            "messages": messages,
+            "stream": stream,
+        }
         if tools and self.caps["tools"]:
             body["tools"] = tools
             body["tool_choice"] = "auto"
@@ -400,17 +483,25 @@ class OpenAICompatLLM:
         return body
 
     # -- one-shot, synchronous: this is what core/gemini.py's ladder uses ----
-    def complete(self, messages: list[dict], tools: list[dict] | None = None,
-                 *, timeout: float | None = None,
-                 temperature: float | None = None) -> tuple[str, list[FunctionCall]]:
+    def complete(
+        self,
+        messages: list[dict],
+        tools: list[dict] | None = None,
+        *,
+        timeout: float | None = None,
+        temperature: float | None = None,
+    ) -> tuple[str, list[FunctionCall]]:
         """Text and any tool calls. Raises on failure so the ladder can read the
         error, classify it and rest this rung exactly as it rests a Gemini one."""
         try:
-            with self._httpx.Client(timeout=timeout or self.timeout,
-                                    trust_env=self._trust_env) as cl:
-                r = cl.post(f"{self.base}/chat/completions",
-                            headers=self._headers(),
-                            json=self._body(messages, tools, False, temperature))
+            with self._httpx.Client(
+                timeout=timeout or self.timeout, trust_env=self._trust_env
+            ) as cl:
+                r = cl.post(
+                    f"{self.base}/chat/completions",
+                    headers=self._headers(),
+                    json=self._body(messages, tools, False, temperature),
+                )
                 if r.status_code >= 400:
                     raise RuntimeError(f"{r.status_code} {_terse(r.text)}")
                 data = r.json()
@@ -421,14 +512,20 @@ class OpenAICompatLLM:
         msg = choice.get("message") or {}
         text = msg.get("content") or ""
         buf = _ToolCallBuffer()
-        buf.feed([{"index": i, **tc} for i, tc in
-                  enumerate(msg.get("tool_calls") or [])])
+        buf.feed(
+            [{"index": i, **tc} for i, tc in enumerate(msg.get("tool_calls") or [])]
+        )
         return text, buf.drain()
 
     # -- streaming, async: this is what the pipeline engine will use ---------
-    async def chat(self, messages: list[dict], tools: list[dict] | None = None,
-                   *, stream: bool = True,
-                   temperature: float | None = None) -> AsyncIterator[dict]:
+    async def chat(
+        self,
+        messages: list[dict],
+        tools: list[dict] | None = None,
+        *,
+        stream: bool = True,
+        temperature: float | None = None,
+    ) -> AsyncIterator[dict]:
         """Yields {"text": ...} as it arrives and one {"tool_calls": [...]} at
         the end. Streaming is what lets speech start before the sentence is
         finished; a server that cannot stream still works, it just answers all
@@ -439,26 +536,33 @@ class OpenAICompatLLM:
         # the pipeline engine, which names the provider and its target itself —
         # see providers/engine_pipeline._report. `complete()` IS wrapped, because
         # its caller is core/gemini.py's ladder, which has no such context.
-        async with self._httpx.AsyncClient(timeout=self.timeout,
-                                           trust_env=self._trust_env) as cl:
+        async with self._httpx.AsyncClient(
+            timeout=self.timeout, trust_env=self._trust_env
+        ) as cl:
             if not stream:
-                r = await cl.post(f"{self.base}/chat/completions",
-                                  headers=self._headers(), json=body)
+                r = await cl.post(
+                    f"{self.base}/chat/completions", headers=self._headers(), json=body
+                )
                 if r.status_code >= 400:
                     raise RuntimeError(f"{r.status_code} {_terse(r.text)}")
-                msg = ((r.json().get("choices") or [{}])[0].get("message") or {})
+                msg = (r.json().get("choices") or [{}])[0].get("message") or {}
                 if msg.get("content"):
                     yield {"text": msg["content"]}
                 if msg.get("tool_calls"):
                     buf = _ToolCallBuffer()
-                    buf.feed([{"index": i, **tc}
-                              for i, tc in enumerate(msg["tool_calls"])])
+                    buf.feed(
+                        [{"index": i, **tc} for i, tc in enumerate(msg["tool_calls"])]
+                    )
                     yield {"tool_calls": buf.drain()}
                 return
 
             buf = _ToolCallBuffer()
-            async with cl.stream("POST", f"{self.base}/chat/completions",
-                                 headers=self._headers(), json=body) as r:
+            async with cl.stream(
+                "POST",
+                f"{self.base}/chat/completions",
+                headers=self._headers(),
+                json=body,
+            ) as r:
                 if r.status_code >= 400:
                     detail = _terse((await r.aread()).decode("utf-8", "replace"))
                     raise RuntimeError(f"{r.status_code} {detail}")
@@ -469,8 +573,9 @@ class OpenAICompatLLM:
                     if payload == "[DONE]":
                         break
                     try:
-                        delta = ((json.loads(payload).get("choices") or [{}])[0]
-                                 .get("delta") or {})
+                        delta = (json.loads(payload).get("choices") or [{}])[0].get(
+                            "delta"
+                        ) or {}
                     except Exception:
                         # One malformed frame must not end the answer. Servers
                         # do emit keepalives and comments that are not JSON.
@@ -488,8 +593,7 @@ class OpenAICompatLLM:
     def models(self, timeout: float = 8.0) -> list[str]:
         """What this endpoint offers, so the panel can present a list instead of
         asking someone to type a model name exactly right."""
-        with self._httpx.Client(timeout=timeout,
-                                trust_env=self._trust_env) as cl:
+        with self._httpx.Client(timeout=timeout, trust_env=self._trust_env) as cl:
             r = cl.get(f"{self.base}/models", headers=self._headers())
             r.raise_for_status()
             data = r.json()
@@ -497,8 +601,10 @@ class OpenAICompatLLM:
         return sorted({str(m.get("id")) for m in (rows or []) if m.get("id")})
 
     # A 1x1 transparent PNG — 68 bytes, the smallest thing that is a real image.
-    _PIXEL = ("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk"
-              "YPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==")
+    _PIXEL = (
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk"
+        "YPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
+    )
 
     def can_see(self, timeout: float = 25.0) -> bool:
         """Whether this model accepts an image. ASKED, not guessed.
@@ -520,13 +626,23 @@ class OpenAICompatLLM:
         cannot take one says so, in an error, immediately.
         """
         try:
-            self.complete([{
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": "Reply with one word: ok"},
-                    {"type": "image_url",
-                     "image_url": {"url": f"data:image/png;base64,{self._PIXEL}"}},
-                ]}], timeout=timeout)
+            self.complete(
+                [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": "Reply with one word: ok"},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/png;base64,{self._PIXEL}"
+                                },
+                            },
+                        ],
+                    }
+                ],
+                timeout=timeout,
+            )
             return True
         except Exception:
             return False
@@ -557,8 +673,7 @@ class OpenAICompatLLM:
         self._vision_known = self.model
         if save is not None:
             try:
-                save({"vision": "1" if seen else "",
-                      "vision_model": self.model})
+                save({"vision": "1" if seen else "", "vision_model": self.model})
             except Exception:
                 pass
         return seen
@@ -574,11 +689,13 @@ class OpenAICompatLLM:
         if not self.model:
             return False, "No model chosen."
         import time
+
         t0 = time.monotonic()
         try:
             text, _ = self.complete(
                 [{"role": "user", "content": "Reply with the single word: ok"}],
-                timeout=20.0)
+                timeout=20.0,
+            )
         except Exception as e:
             msg = str(e)
             if "401" in msg or "403" in msg:
@@ -586,14 +703,15 @@ class OpenAICompatLLM:
             if "404" in msg:
                 return False, f"No model called '{self.model}' at that address."
             if "Connect" in msg or "connect" in msg or "timed out" in msg:
-                return False, ("Nothing answered at that address — is the "
-                               "server running?")
+                return False, (
+                    "Nothing answered at that address — is the " "server running?"
+                )
             return False, _terse(msg, 90)
 
         took = time.monotonic() - t0
         note = ""
         if check_vision:
-            self._vision_known = ""          # TEST always re-measures
+            self._vision_known = ""  # TEST always re-measures
             seen = self.ensure_vision_known()
             note = "  |  can see images" if seen else "  |  text only"
         return True, f"Answered in {took:.2f}s{note}"
@@ -652,31 +770,63 @@ PROVIDER = {
     # What the panel lists instead of this provider's own name. See CATALOG.
     "catalog": CATALOG,
     "needs": (
-        Field("base_url", "Address", kind="choice",
-              choices=tuple(PRESETS.values()),
-              default=PRESETS["Ollama"],
-              hint="A preset, or any address serving /v1/chat/completions"),
+        Field(
+            "base_url",
+            "Address",
+            kind="choice",
+            choices=tuple(PRESETS.values()),
+            default=PRESETS["Ollama"],
+            hint="A preset, or any address serving /v1/chat/completions",
+        ),
         # A choice rather than free text, even though the list starts empty:
         # LIST fills it from the endpoint itself, and the panel keeps a choice
         # field typeable so an unlisted model can still be entered. Declared as
         # plain text it rendered as a box LIST had nothing to populate.
-        Field("model", "Model", kind="choice", choices=(),
-              hint="Press LIST to read the models this server offers"),
-        Field("api_key", "API key", kind="secret", required=False,
-              hint="Local servers usually need none"),
+        Field(
+            "model",
+            "Model",
+            kind="choice",
+            choices=(),
+            hint="Press LIST to read the models this server offers",
+        ),
+        Field(
+            "api_key",
+            "API key",
+            kind="secret",
+            required=False,
+            hint="Local servers usually need none",
+        ),
         # Filled in by TEST, not asked. The user is the wrong person to ask
         # whether a model is multimodal — see OpenAICompatLLM.can_see. Kept as a
         # field so the answer is stored and so somebody who knows better can
         # override it under MORE.
-        Field("vision", "Can see images", kind="bool",
-              default=False, required=False, advanced=True,
-              hint="Set automatically when you press TEST"),
-        Field("max_tools", "Tool limit", kind="number", default=0,
-              required=False, advanced=True,
-              hint="0 = no limit. Small models choose badly past about 12"),
-        Field("max_tool_chars", "Tool prompt limit", kind="number", default=0,
-              required=False, advanced=True,
-              hint="0 = no limit. Characters of tool descriptions sent each  turn"),
+        Field(
+            "vision",
+            "Can see images",
+            kind="bool",
+            default=False,
+            required=False,
+            advanced=True,
+            hint="Set automatically when you press TEST",
+        ),
+        Field(
+            "max_tools",
+            "Tool limit",
+            kind="number",
+            default=0,
+            required=False,
+            advanced=True,
+            hint="0 = no limit. Small models choose badly past about 12",
+        ),
+        Field(
+            "max_tool_chars",
+            "Tool prompt limit",
+            kind="number",
+            default=0,
+            required=False,
+            advanced=True,
+            hint="0 = no limit. Characters of tool descriptions sent each  turn",
+        ),
     ),
     "caps": {"tools": True, "tool_format": "openai"},
     "factory": _make,

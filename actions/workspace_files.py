@@ -1,13 +1,25 @@
 """Read-only access to the folder selected in JARVIS' PROJECT panel."""
+
 from __future__ import annotations
 
 from pathlib import Path
 from pathlib import PurePosixPath, PureWindowsPath
 
 _IGNORED_DIRS = {
-    ".git", ".hg", ".svn", ".venv", "venv", "env", "node_modules",
-    "__pycache__", ".mypy_cache", ".pytest_cache", ".ruff_cache",
-    "dist", "build", "target",
+    ".git",
+    ".hg",
+    ".svn",
+    ".venv",
+    "venv",
+    "env",
+    "node_modules",
+    "__pycache__",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    "dist",
+    "build",
+    "target",
 }
 _MAX_LIST_ITEMS = 120
 _MAX_READ_CHARS = 24_000
@@ -68,9 +80,7 @@ def list_project_files() -> str:
     return (
         f"Selected project: {root.name}\n"
         f"Project root: {root}\n"
-        "Project files (paths relative to the root):\n"
-        + "\n".join(items)
-        + suffix
+        "Project files (paths relative to the root):\n" + "\n".join(items) + suffix
     )
 
 

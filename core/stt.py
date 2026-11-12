@@ -4,6 +4,7 @@ Speech-to-Text engines for MARK XL.
 Whisper  – offline transcription via faster-whisper (VAD-buffered)
 Vosk     – offline streaming transcription (lighter)
 """
+
 import json
 import numpy as np
 
@@ -14,10 +15,12 @@ class WhisperSTT:
     def __init__(self, model_name: str = "base", language: str | None = None):
         import os
         from faster_whisper import WhisperModel
+
         print(f"[STT] Loading Whisper '{model_name}'…")
         try:
             import torch
-            device  = "cuda" if torch.cuda.is_available() else "cpu"
+
+            device = "cuda" if torch.cuda.is_available() else "cpu"
             compute = "float16" if device == "cuda" else "int8"
         except Exception:
             device, compute = "cpu", "int8"
@@ -29,16 +32,25 @@ class WhisperSTT:
             # Keywords cover multiple huggingface_hub error message variants across versions.
             _e = str(_first_err).lower()
             _offline_keywords = (
-                "offline", "not found", "cache", "localentry",
-                "does not exist", "outgoing", "local_files_only",
+                "offline",
+                "not found",
+                "cache",
+                "localentry",
+                "does not exist",
+                "outgoing",
+                "local_files_only",
             )
             if any(k in _e for k in _offline_keywords):
-                print(f"[STT] Whisper '{model_name}' not in local cache — downloading (one-time, internet required)…")
-                os.environ.pop("HF_HUB_OFFLINE",      None)
+                print(
+                    f"[STT] Whisper '{model_name}' not in local cache — downloading (one-time, internet required)…"
+                )
+                os.environ.pop("HF_HUB_OFFLINE", None)
                 os.environ.pop("TRANSFORMERS_OFFLINE", None)
-                os.environ.pop("HF_DATASETS_OFFLINE",  None)
+                os.environ.pop("HF_DATASETS_OFFLINE", None)
                 try:
-                    self._model = WhisperModel(model_name, device=device, compute_type=compute)
+                    self._model = WhisperModel(
+                        model_name, device=device, compute_type=compute
+                    )
                 except Exception as _dl_err:
                     raise RuntimeError(
                         f"Whisper '{model_name}' model download failed.\n"
@@ -49,7 +61,11 @@ class WhisperSTT:
             else:
                 raise
 
-        self._language = None if (not language or language.strip().lower() == "auto") else language.strip().lower()
+        self._language = (
+            None
+            if (not language or language.strip().lower() == "auto")
+            else language.strip().lower()
+        )
         print(f"[STT] Whisper '{model_name}' ready ({device})")
 
     def transcribe(self, audio: np.ndarray) -> str:
@@ -58,7 +74,7 @@ class WhisperSTT:
             segments, _ = self._model.transcribe(
                 audio,
                 language=self._language,
-                beam_size=1,                       # greedy — 2-3x faster
+                beam_size=1,  # greedy — 2-3x faster
                 best_of=1,
                 condition_on_previous_text=False,  # no hallucinations, faster
                 vad_filter=True,
@@ -75,11 +91,16 @@ class VoskSTT:
 
     def __init__(self, model_path: str | None = None, language: str = "en-us"):
         from vosk import Model, KaldiRecognizer
+
         print("[STT] Loading Vosk model…")
         if model_path:
             model = Model(model_path)
         else:
-            lang  = language.strip().lower() if language and language.strip().lower() != "auto" else "en-us"
+            lang = (
+                language.strip().lower()
+                if language and language.strip().lower() != "auto"
+                else "en-us"
+            )
             model = Model(lang=lang)
         self._rec = KaldiRecognizer(model, 16000)
         print("[STT] Vosk ready.")

@@ -14,9 +14,7 @@ def policy_close_reason(exc: BaseException) -> str | None:
     for leaf in _exceptions(exc):
         text = str(leaf).lower()
         code = str(
-            getattr(leaf, "code", None)
-            or getattr(leaf, "status_code", None)
-            or ""
+            getattr(leaf, "code", None) or getattr(leaf, "status_code", None) or ""
         )
         if "1008" not in text and code != "1008":
             continue

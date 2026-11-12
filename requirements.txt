@@ -96,6 +96,11 @@ pdfplumber                   # file_processor — PDF text and tables
 PyPDF2                       # file_processor — PDF fallback reader
 python-docx                  # file_processor — .docx reading
 nvidia-ml-py                 # system_monitor + the HUD's GPU meter (NVIDIA)
+pandas
+pydub
+audioop-lts
+soundfile
+imageio-ffmpeg
 holehe>=1.61                 # osint_toolkit — email account discovery
 phoneinfoga>=0.1             # osint_toolkit — optional phone lookup CLI
 phonenumbers>=9.0.41         # osint_toolkit — phone number metadata
