@@ -37,6 +37,7 @@ RECOGNITION IS BLOCKING WORK AND IS KEPT OFF THE EVENT LOOP
     the receive loop for the whole of the recognition. It runs in a worker
     thread here, and the model is loaded in one too.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -102,6 +103,7 @@ class WhisperSTT:
 
     def _load_blocking(self):
         from faster_whisper import WhisperModel
+
         t0 = time.monotonic()
         model = WhisperModel(
             self.model_name,
@@ -121,31 +123,36 @@ class WhisperSTT:
             if find_spec("faster_whisper") is None:
                 raise RuntimeError(
                     "faster-whisper is not installed — install it from the "
-                    "providers panel, or with: pip install faster-whisper")
+                    "providers panel, or with: pip install faster-whisper"
+                )
             if log:
-                log(f"SYS: loading the {self.model_name} speech model "
-                    f"(the first time also downloads it)")
+                log(
+                    f"SYS: loading the {self.model_name} speech model "
+                    f"(the first time also downloads it)"
+                )
             # Loading is slow the first time — it downloads the model — and
             # blocking, so it happens in a thread like the recognition itself.
             self._model, took = await asyncio.to_thread(self._load_blocking)
             if log:
-                log(f"SYS: speech model ready in {took:.1f}s "
+                log(
+                    f"SYS: speech model ready in {took:.1f}s "
                     f"({self.device}, {self._compute_type()}, "
-                    f"{_threads()} threads)")
+                    f"{_threads()} threads)"
+                )
             return self._model
 
     def _transcribe_blocking(self, samples) -> str:
         segments, info = self._model.transcribe(
             samples,
-            language=self.language or None,     # None = detect it
-            beam_size=1,          # greedy: a voice command is short and beam
-                                  # search costs multiples of the time for an
-                                  # accuracy gain that does not show up here
-            vad_filter=True,      # drops the silence a push-to-talk release
-                                  # leaves at both ends, which Whisper otherwise
-                                  # fills with an invented sentence
-            condition_on_previous_text=False,   # stops one bad transcript from
-                                                # steering every one after it
+            language=self.language or None,  # None = detect it
+            beam_size=1,  # greedy: a voice command is short and beam
+            # search costs multiples of the time for an
+            # accuracy gain that does not show up here
+            vad_filter=True,  # drops the silence a push-to-talk release
+            # leaves at both ends, which Whisper otherwise
+            # fills with an invented sentence
+            condition_on_previous_text=False,  # stops one bad transcript from
+            # steering every one after it
         )
         # The work happens HERE — `segments` is a generator.
         text = " ".join(s.text.strip() for s in segments).strip()
@@ -193,13 +200,20 @@ class WhisperSTT:
             return
         if code == self.detected_language:
             return
-        if confidence >= self._LANG_MIN_CONFIDENCE and len(text) >= self._LANG_MIN_CHARS:
-            print(f"[STT] language {self.detected_language} -> {code} "
-                  f"({confidence:.0%}, {len(text)} chars)")
+        if (
+            confidence >= self._LANG_MIN_CONFIDENCE
+            and len(text) >= self._LANG_MIN_CHARS
+        ):
+            print(
+                f"[STT] language {self.detected_language} -> {code} "
+                f"({confidence:.0%}, {len(text)} chars)"
+            )
             self.detected_language = code
             return
-        print(f"[STT] ignoring language guess {code} ({confidence:.0%}, "
-              f"{len(text)} chars) - keeping {self.detected_language}")
+        print(
+            f"[STT] ignoring language guess {code} ({confidence:.0%}, "
+            f"{len(text)} chars) - keeping {self.detected_language}"
+        )
 
     # ── hosted ───────────────────────────────────────────────────────────────
     def _api_blocking(self, pcm: bytes, sample_rate: int) -> str:
@@ -213,9 +227,12 @@ class WhisperSTT:
         if self.language:
             data["language"] = self.language
         with httpx.Client(timeout=60.0, trust_env=not _is_loopback(base)) as cl:
-            r = cl.post(f"{base}/audio/transcriptions", headers=headers,
-                        data=data,
-                        files={"file": ("speech.wav", wav, "audio/wav")})
+            r = cl.post(
+                f"{base}/audio/transcriptions",
+                headers=headers,
+                data=data,
+                files={"file": ("speech.wav", wav, "audio/wav")},
+            )
             if r.status_code >= 400:
                 raise RuntimeError(f"{r.status_code} {_terse(r.text)}")
             payload = r.json()
@@ -223,12 +240,18 @@ class WhisperSTT:
         # taken as it always was — but through the same door, so the first-vs-
         # switch rules stay in one place.
         self._accept_language(
-            str(payload.get("language") or self.language or ""), 1.0, "x" * 99)
+            str(payload.get("language") or self.language or ""), 1.0, "x" * 99
+        )
         return (payload.get("text") or "").strip()
 
     # ── the contract ─────────────────────────────────────────────────────────
-    async def transcribe(self, pcm: bytes, sample_rate: int = audio.MIC_RATE,
-                         language: str = "", log=None) -> str:
+    async def transcribe(
+        self,
+        pcm: bytes,
+        sample_rate: int = audio.MIC_RATE,
+        language: str = "",
+        log=None,
+    ) -> str:
         if not pcm:
             return ""
         # Whisper invents sentences out of silence — the well-known artefact
@@ -245,7 +268,8 @@ class WhisperSTT:
 
         await self._ensure_model(log)
         samples = audio.to_float32(
-            audio.resample(pcm, sample_rate, 16_000))    # Whisper is a 16 kHz model
+            audio.resample(pcm, sample_rate, 16_000)
+        )  # Whisper is a 16 kHz model
         return await asyncio.to_thread(self._transcribe_blocking, samples)
 
     async def warmup(self, log=None) -> None:
@@ -273,15 +297,19 @@ class WhisperSTT:
         try:
             await self._ensure_model(log)
             t0 = time.monotonic()
-            silence = audio.to_float32(b"\x00" * 3200)   # 0.1s at 16 kHz
+            silence = audio.to_float32(b"\x00" * 3200)  # 0.1s at 16 kHz
             await asyncio.to_thread(self._transcribe_blocking, silence)
             if log:
-                log(f"SYS: speech recognition warm "
-                    f"({time.monotonic() - t0:.1f}s, paid once)")
+                log(
+                    f"SYS: speech recognition warm "
+                    f"({time.monotonic() - t0:.1f}s, paid once)"
+                )
         except Exception as e:
             if log:
-                log(f"SYS: speech model not ready — {type(e).__name__}: "
-                    f"{str(e)[:100]}")
+                log(
+                    f"SYS: speech model not ready — {type(e).__name__}: "
+                    f"{str(e)[:100]}"
+                )
 
     def probe(self) -> tuple[bool, str]:
         if self.backend == "api":
@@ -290,8 +318,10 @@ class WhisperSTT:
             return True, "Will be checked on first use."
         if find_spec("faster_whisper") is None:
             return False, "faster-whisper is not installed."
-        return True, (f"{self.model_name} on {self.device} "
-                      f"({self._compute_type()}, {_threads()} threads)")
+        return True, (
+            f"{self.model_name} on {self.device} "
+            f"({self._compute_type()}, {_threads()} threads)"
+        )
 
 
 def _make(cfg: dict) -> WhisperSTT:
@@ -312,37 +342,89 @@ PROVIDER = {
     # Hearing, named the way somebody choosing it would name it. The local entry
     # is first and is the one that needs no account, no key and no connection.
     "catalog": (
-        {"id": "local", "label": "Whisper on this computer",
-         "note": "free · private · runs on the CPU", "local": True,
-         "values": {"backend": "local", "base_url": "", "api_key": ""}},
-        {"id": "groq", "label": "Groq Whisper",
-         "note": "cloud · very fast · free tier", "local": False,
-         "values": {"backend": "api", "model": "whisper-large-v3-turbo",
-                    "base_url": "https://api.groq.com/openai/v1"}},
-        {"id": "openai", "label": "OpenAI Whisper",
-         "note": "cloud · needs a key", "local": False,
-         "values": {"backend": "api", "model": "whisper-1",
-                    "base_url": "https://api.openai.com/v1"}},
+        {
+            "id": "local",
+            "label": "Whisper on this computer",
+            "note": "free · private · runs on the CPU",
+            "local": True,
+            "values": {"backend": "local", "base_url": "", "api_key": ""},
+        },
+        {
+            "id": "groq",
+            "label": "Groq Whisper",
+            "note": "cloud · very fast · free tier",
+            "local": False,
+            "values": {
+                "backend": "api",
+                "model": "whisper-large-v3-turbo",
+                "base_url": "https://api.groq.com/openai/v1",
+            },
+        },
+        {
+            "id": "openai",
+            "label": "OpenAI Whisper",
+            "note": "cloud · needs a key",
+            "local": False,
+            "values": {
+                "backend": "api",
+                "model": "whisper-1",
+                "base_url": "https://api.openai.com/v1",
+            },
+        },
     ),
     "needs": (
-        Field("backend", "Where it runs", kind="choice",
-              choices=("local", "api"), default="local",
-              hint="local = on this machine, nothing leaves it"),
-        Field("model", "Model", kind="choice", choices=MODELS,
-              default=DEFAULT_MODEL,
-              hint="base is the fast default; small is more accurate and slower"),
-        Field("device", "Processor", kind="choice", choices=("cpu", "cuda"),
-              default="cpu", required=False, advanced=True,
-              hint="CPU is the default and needs no graphics card"),
-        Field("language", "Language", default="", required=False, advanced=True,
-              hint="Leave empty to detect it every time — the right setting "
-                   "unless you only ever speak one language"),
-        Field("base_url", "API address", default="", required=False,
-              hint="Only for the api backend, e.g. https://api.groq.com/openai/v1"),
+        Field(
+            "backend",
+            "Where it runs",
+            kind="choice",
+            choices=("local", "api"),
+            default="local",
+            hint="local = on this machine, nothing leaves it",
+        ),
+        Field(
+            "model",
+            "Model",
+            kind="choice",
+            choices=MODELS,
+            default=DEFAULT_MODEL,
+            hint="base is the fast default; small is more accurate and slower",
+        ),
+        Field(
+            "device",
+            "Processor",
+            kind="choice",
+            choices=("cpu", "cuda"),
+            default="cpu",
+            required=False,
+            advanced=True,
+            hint="CPU is the default and needs no graphics card",
+        ),
+        Field(
+            "language",
+            "Language",
+            default="",
+            required=False,
+            advanced=True,
+            hint="Leave empty to detect it every time — the right setting "
+            "unless you only ever speak one language",
+        ),
+        Field(
+            "base_url",
+            "API address",
+            default="",
+            required=False,
+            hint="Only for the api backend, e.g. https://api.groq.com/openai/v1",
+        ),
         Field("api_key", "API key", kind="secret", default="", required=False),
-        Field("download_root", "Model folder", kind="path", default="",
-              required=False, advanced=True,
-              hint="Leave empty for the usual cache in your home folder"),
+        Field(
+            "download_root",
+            "Model folder",
+            kind="path",
+            default="",
+            required=False,
+            advanced=True,
+            hint="Leave empty for the usual cache in your home folder",
+        ),
     ),
     "caps": {},
     "factory": _make,

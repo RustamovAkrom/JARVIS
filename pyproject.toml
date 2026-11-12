@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
     "av>=19.0.0",
+    "audioop-lts>=0.2.2",
     "beautifulsoup4>=4.12,<5",
     "black>=26.10.0",
     "comtypes>=1.4.17 ; sys_platform == 'win32'",
@@ -18,6 +19,7 @@ dependencies = [
     "google-genai>=2.8.0,<3",
     "holehe>=1.61",
     "httpx>=0.27,<1",
+    "imageio-ffmpeg>=0.6",
     "mediapipe>=1.0.1",
     "mss>=9,<11",
     "numpy>=1.24,<3",
@@ -50,6 +52,7 @@ dependencies = [
     "requests>=2.31,<3",
     "send2trash>=2.1.0",
     "sherlock-project>=0.14.4",
+    "soundfile>=0.14",
     "sounddevice>=0.4,<1",
     "spotipy>=2.26.0",
     "tinytuya>=1.20.0",

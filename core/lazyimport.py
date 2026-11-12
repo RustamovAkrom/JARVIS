@@ -46,6 +46,7 @@ WHAT DOES NOT CHANGE
     `find_spec` reads metadata without executing the package. Every guard
     written against those flags behaves as it always did.
 """
+
 from __future__ import annotations
 
 import importlib
@@ -67,7 +68,7 @@ def installed(name: str) -> bool:
     """
     try:
         return importlib.util.find_spec(name) is not None
-    except (ImportError, ValueError):
+    except ImportError, ValueError:
         return False
 
 

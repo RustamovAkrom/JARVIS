@@ -23,7 +23,9 @@ class SetupTests(unittest.TestCase):
         missing_pip = setup.subprocess.CompletedProcess([], 1)
         with (
             patch.object(
-                setup.subprocess, "run", side_effect=[
+                setup.subprocess,
+                "run",
+                side_effect=[
                     missing_pip,
                     setup.subprocess.CalledProcessError(1, "ensurepip"),
                 ],
@@ -49,8 +51,7 @@ class SetupTests(unittest.TestCase):
         with patch.object(setup.subprocess, "run") as run:
             setup._run("install", ["python", "-m", "pip"])
 
-        run.assert_called_once_with(
-            ["python", "-m", "pip"], check=True, cwd=setup.HERE)
+        run.assert_called_once_with(["python", "-m", "pip"], check=True, cwd=setup.HERE)
 
     def test_deprecated_pynvml_is_removed_from_existing_installations(self):
         with (
@@ -75,9 +76,7 @@ class SetupTests(unittest.TestCase):
         run.assert_not_called()
 
     def test_requirements_manifest_is_resolved_from_project_directory(self):
-        self.assertEqual(
-            setup.REQUIREMENTS_FILE,
-            setup.HERE / "requirements.txt")
+        self.assertEqual(setup.REQUIREMENTS_FILE, setup.HERE / "requirements.txt")
         self.assertTrue(setup.REQUIREMENTS_FILE.is_file())
 
 

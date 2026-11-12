@@ -39,6 +39,7 @@ IT FOLLOWS THE LANGUAGE BEING SPOKEN, WITHOUT GUESSING AT IT
     Only voices already on disk are considered. Downloading 63 MB in the middle
     of a sentence would be a worse failure than answering in the wrong voice.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -51,6 +52,7 @@ from typing import AsyncIterator, Optional
 
 from . import audio
 from .base import DEFAULT_CAPS, Field
+
 
 def _voice_dir() -> Path:
     """Where downloaded voices live.
@@ -81,13 +83,11 @@ def _voice_dir() -> Path:
 
     system = platform.system()
     if system == "Windows":
-        root = Path(os.environ.get("LOCALAPPDATA")
-                    or Path.home() / "AppData" / "Local")
+        root = Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local")
     elif system == "Darwin":
         root = Path.home() / "Library" / "Application Support"
     else:
-        root = Path(os.environ.get("XDG_DATA_HOME")
-                    or Path.home() / ".local" / "share")
+        root = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share")
     fallback = root / "MarkAssistant" / "piper-voices"
     try:
         fallback.mkdir(parents=True, exist_ok=True)
@@ -98,8 +98,10 @@ def _voice_dir() -> Path:
 
 _VOICE_DIR = _voice_dir()
 
-_CATALOG_URL = ("https://huggingface.co/rhasspy/piper-voices/resolve/main/"
-                "voices.json?download=true")
+_CATALOG_URL = (
+    "https://huggingface.co/rhasspy/piper-voices/resolve/main/"
+    "voices.json?download=true"
+)
 
 # Piper builds most voices at 22.05 kHz; the speaker is open at 24 kHz. The
 # model reports its own rate and that is what gets used - assuming 22050 would
@@ -107,7 +109,7 @@ _CATALOG_URL = ("https://huggingface.co/rhasspy/piper-voices/resolve/main/"
 # a bug.
 _catalog: Optional[dict] = None
 _catalog_lock = threading.Lock()
-_voices: dict = {}          # model path -> loaded PiperVoice
+_voices: dict = {}  # model path -> loaded PiperVoice
 _voice_lock = threading.Lock()
 
 
@@ -126,6 +128,7 @@ def catalog(refresh: bool = False) -> dict:
     found: dict = {}
     try:
         import httpx
+
         # follow_redirects, because the catalog lives behind a HuggingFace
         # `resolve` URL that 302s to a CDN. httpx does NOT follow redirects by
         # default, so without this the request "succeeds" with a redirect body
@@ -134,7 +137,7 @@ def catalog(refresh: bool = False) -> dict:
         with httpx.Client(timeout=20.0, follow_redirects=True) as cl:
             data = cl.get(_CATALOG_URL).json()
         for key, entry in (data or {}).items():
-            lang = (entry.get("language") or {})
+            lang = entry.get("language") or {}
             found[key] = {
                 "language": lang.get("code", "") or key.split("-")[0],
                 "family": lang.get("family", ""),
@@ -178,7 +181,7 @@ def installed() -> list[str]:
 
 
 def language_of(voice: str) -> str:
-    """"tr_TR-dfki-medium" -> "tr". The catalog is authoritative when it has
+    """ "tr_TR-dfki-medium" -> "tr". The catalog is authoritative when it has
     been fetched; the name is enough when it has not, and it is right for every
     voice Piper publishes."""
     entry = (_catalog or {}).get(voice) or {}
@@ -212,9 +215,12 @@ class PiperTTS:
     def __init__(self, cfg: dict):
         self.voice = (cfg.get("voice") or "").strip()
         # Follow the language the user spoke, when a voice for it is on disk.
-        self.follow = str(cfg.get("follow_language", "1")) not in ("", "0",
-                                                                   "False",
-                                                                   "false")
+        self.follow = str(cfg.get("follow_language", "1")) not in (
+            "",
+            "0",
+            "False",
+            "false",
+        )
         self.speed = _num(cfg.get("speed"), 1.0)
         self.caps = dict(DEFAULT_CAPS)
         self.caps["audio_out"] = True
@@ -310,14 +316,17 @@ class PiperTTS:
             # One tiny synthesis: the first call also builds ONNX's internal
             # buffers, and paying that here is the whole point of a warm-up.
             await asyncio.to_thread(self._synth, model, "ok")
-            self._log(f"SYS: voice ready in {time.monotonic() - t0:.1f}s "
-                      f"({self.voice}, {rate} Hz)")
+            self._log(
+                f"SYS: voice ready in {time.monotonic() - t0:.1f}s "
+                f"({self.voice}, {rate} Hz)"
+            )
         except Exception as e:
             self._log(f"SYS: voice not ready - {type(e).__name__}: {str(e)[:100]}")
 
     # -- the contract -------------------------------------------------------
-    async def speak(self, text: str, voice: str = "",
-                    language: str = "") -> AsyncIterator[bytes]:
+    async def speak(
+        self, text: str, voice: str = "", language: str = ""
+    ) -> AsyncIterator[bytes]:
         """24 kHz mono PCM, a sentence at a time.
 
         Sentence by sentence so speech starts before the whole answer has been
@@ -332,8 +341,7 @@ class PiperTTS:
 
         for sentence in _split(text):
             pcm = await asyncio.to_thread(self._synth, model, sentence)
-            for piece in audio.chunk(audio.resample(pcm, rate,
-                                                    audio.SPEAKER_RATE)):
+            for piece in audio.chunk(audio.resample(pcm, rate, audio.SPEAKER_RATE)):
                 yield piece
 
     def _synth(self, model, sentence: str) -> bytes:
@@ -348,8 +356,9 @@ class PiperTTS:
             except Exception:
                 cfg = None
         out = []
-        for chunk in (model.synthesize(sentence, cfg) if cfg
-                      else model.synthesize(sentence)):
+        for chunk in (
+            model.synthesize(sentence, cfg) if cfg else model.synthesize(sentence)
+        ):
             out.append(chunk.audio_int16_bytes)
         return b"".join(out)
 
@@ -365,8 +374,9 @@ class PiperTTS:
             meta = (cat or {}).get(name, {})
             native = meta.get("name_native") or meta.get("name_english") or ""
             mark = "* " if name in here else "  "
-            rows.append((name, f"{mark}{name}"
-                               f"{'   (' + native + ')' if native else ''}"))
+            rows.append(
+                (name, f"{mark}{name}" f"{'   (' + native + ')' if native else ''}")
+            )
         for name in sorted(here):
             if not any(n == name for n, _ in rows):
                 rows.append((name, f"* {name}"))
@@ -377,9 +387,12 @@ class PiperTTS:
             return False, "Piper is not installed."
         if not self.voice:
             n = len(catalog())
-            return False, (f"Choose a voice - {n} available in about "
-                           f"{len({language_of(v) for v in catalog()})} languages."
-                           if n else "Choose a voice.")
+            return False, (
+                f"Choose a voice - {n} available in about "
+                f"{len({language_of(v) for v in catalog()})} languages."
+                if n
+                else "Choose a voice."
+            )
         try:
             path = download(self.voice)
             if not path.exists():
@@ -395,16 +408,20 @@ class PiperTTS:
         extra = ""
         if self.follow:
             others = [v for v in installed() if v != self.voice]
-            extra = (f"  |  also here: {', '.join(sorted(language_of(v) for v in others))}"
-                     if others else "  |  download more voices to follow other languages")
-        return True, (f"Ready in {took:.1f}s, {secs:.1f}s of test audio, "
-                      f"{rate} Hz{extra}")
+            extra = (
+                f"  |  also here: {', '.join(sorted(language_of(v) for v in others))}"
+                if others
+                else "  |  download more voices to follow other languages"
+            )
+        return True, (
+            f"Ready in {took:.1f}s, {secs:.1f}s of test audio, " f"{rate} Hz{extra}"
+        )
 
 
 def _num(value, default: float) -> float:
     try:
         return float(value)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return default
 
 
@@ -413,6 +430,7 @@ def _split(text: str, max_chars: int = 300) -> list[str]:
     voice: a space is required after `.!?` so version numbers survive, and not
     after the CJK, Arabic and Devanagari stops, which are not written with one."""
     from .tts_system import _split as _shared
+
     return _shared(text, max_chars)
 
 
@@ -459,18 +477,39 @@ PROVIDER = {
     "requires": ("piper",),
     "install": "piper-tts",
     "catalog": (
-        {"id": "piper", "label": "Piper (on this computer)",
-         "note": "free - private - ~50 languages - downloads once",
-         "local": True, "values": {}},
+        {
+            "id": "piper",
+            "label": "Piper (on this computer)",
+            "note": "free - private - ~50 languages - downloads once",
+            "local": True,
+            "values": {},
+        },
     ),
     "needs": (
-        Field("voice", "Voice", kind="choice", choices=(),
-              hint="A star means it is already downloaded; TEST fetches the rest"),
-        Field("follow_language", "Follow the language you speak", kind="bool",
-              default="1", required=False,
-              hint="Uses a downloaded voice for whatever language Whisper heard"),
-        Field("speed", "Speed", kind="number", default=1.0, required=False,
-              advanced=True, hint="1.0 is normal"),
+        Field(
+            "voice",
+            "Voice",
+            kind="choice",
+            choices=(),
+            hint="A star means it is already downloaded; TEST fetches the rest",
+        ),
+        Field(
+            "follow_language",
+            "Follow the language you speak",
+            kind="bool",
+            default="1",
+            required=False,
+            hint="Uses a downloaded voice for whatever language Whisper heard",
+        ),
+        Field(
+            "speed",
+            "Speed",
+            kind="number",
+            default=1.0,
+            required=False,
+            advanced=True,
+            hint="1.0 is normal",
+        ),
     ),
     "caps": {"audio_out": True},
     "factory": _make,

@@ -1,4 +1,4 @@
-#computer_control.py
+# computer_control.py
 import io
 import json
 import platform
@@ -28,11 +28,12 @@ _PYPERCLIP = installed("pyperclip")
 def _configure_pyautogui(module) -> None:
     """Settings that used to sit beside the import, run once when it happens."""
     module.FAILSAFE = True
-    module.PAUSE    = 0.05
+    module.PAUSE = 0.05
 
 
 pyautogui = LazyModule("pyautogui", _configure_pyautogui)
 pyperclip = LazyModule("pyperclip")
+
 
 def _base_dir() -> Path:
     if getattr(sys, "frozen", False):
@@ -40,9 +41,10 @@ def _base_dir() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
-_BASE         = _base_dir()
-_CONFIG_PATH  = _BASE / "config" / "api_keys.json"
-_MEMORY_PATH  = _BASE / "memory" / "long_term.json"
+_BASE = _base_dir()
+_CONFIG_PATH = _BASE / "config" / "api_keys.json"
+_MEMORY_PATH = _BASE / "memory" / "long_term.json"
+
 
 def _load_config() -> dict:
     try:
@@ -50,10 +52,12 @@ def _load_config() -> dict:
     except Exception:
         return {}
 
+
 def _platform_os() -> str:
     return {"Windows": "windows", "Darwin": "mac", "Linux": "linux"}.get(
         platform.system(), "linux"
     )
+
 
 def _get_os() -> str:
     return _load_config().get("os_system", _platform_os()).lower()
@@ -62,9 +66,9 @@ def _get_os() -> str:
 def _get_api_key() -> str:
     return _load_config().get("gemini_api_key", "")
 
-_SAFE_SCREENSHOT_ROOTS = (
-    Path.home(),
-)
+
+_SAFE_SCREENSHOT_ROOTS = (Path.home(),)
+
 
 def _safe_screenshot_path(requested: str | None) -> Path:
     fallback = Path.home() / "Desktop" / "jarvis_screenshot.png"
@@ -79,6 +83,7 @@ def _safe_screenshot_path(requested: str | None) -> Path:
     except Exception:
         pass
     return fallback
+
 
 def _require_pyautogui():
     """Refuse early, with the sentence that says what to install.
@@ -98,13 +103,39 @@ def _require_pyperclip() -> bool:
     survive it."""
     return _PYPERCLIP
 
+
 _FIRST_NAMES = [
-    "Alex", "Jordan", "Taylor", "Morgan", "Casey", "Riley", "Drew", "Quinn",
-    "Avery", "Blake", "Cameron", "Dakota", "Emerson", "Finley", "Harper",
+    "Alex",
+    "Jordan",
+    "Taylor",
+    "Morgan",
+    "Casey",
+    "Riley",
+    "Drew",
+    "Quinn",
+    "Avery",
+    "Blake",
+    "Cameron",
+    "Dakota",
+    "Emerson",
+    "Finley",
+    "Harper",
 ]
 _LAST_NAMES = [
-    "Smith", "Johnson", "Williams", "Brown", "Jones", "Garcia", "Miller",
-    "Davis", "Wilson", "Moore", "Taylor", "Anderson", "Thomas", "Jackson",
+    "Smith",
+    "Johnson",
+    "Williams",
+    "Brown",
+    "Jones",
+    "Garcia",
+    "Miller",
+    "Davis",
+    "Wilson",
+    "Moore",
+    "Taylor",
+    "Anderson",
+    "Thomas",
+    "Jackson",
 ]
 _DOMAINS = ["gmail.com", "yahoo.com", "outlook.com", "proton.me", "mail.com"]
 
@@ -123,8 +154,8 @@ def _random_data(data_type: str) -> str:
 
     if dt == "email":
         first = random.choice(_FIRST_NAMES).lower()
-        last  = random.choice(_LAST_NAMES).lower()
-        num   = random.randint(10, 999)
+        last = random.choice(_LAST_NAMES).lower()
+        num = random.randint(10, 999)
         return f"{first}.{last}{num}@{random.choice(_DOMAINS)}"
 
     if dt == "username":
@@ -132,7 +163,7 @@ def _random_data(data_type: str) -> str:
 
     if dt == "password":
         chars = string.ascii_letters + string.digits + "!@#$%"
-        raw   = (
+        raw = (
             random.choice(string.ascii_uppercase)
             + random.choice(string.digits)
             + random.choice("!@#$%")
@@ -150,28 +181,34 @@ def _random_data(data_type: str) -> str:
         return f"{m:02d}/{d:02d}/{y}"
 
     if dt == "address":
-        num    = random.randint(100, 9999)
-        street = random.choice(["Main St", "Oak Ave", "Park Blvd", "Elm St", "Cedar Ln"])
+        num = random.randint(100, 9999)
+        street = random.choice(
+            ["Main St", "Oak Ave", "Park Blvd", "Elm St", "Cedar Ln"]
+        )
         return f"{num} {street}"
 
     if dt == "zip_code":
         return str(random.randint(10000, 99999))
 
     if dt == "city":
-        return random.choice(["New York", "Los Angeles", "Chicago", "Houston", "Phoenix"])
+        return random.choice(
+            ["New York", "Los Angeles", "Chicago", "Houston", "Phoenix"]
+        )
 
     return f"random_{data_type}_{random.randint(1000, 9999)}"
+
 
 def _user_profile() -> dict:
     """Read identity fields from long-term memory."""
     try:
         if _MEMORY_PATH.exists():
-            data     = json.loads(_MEMORY_PATH.read_text(encoding="utf-8"))
+            data = json.loads(_MEMORY_PATH.read_text(encoding="utf-8"))
             identity = data.get("identity", {})
             return {k: v.get("value", "") for k, v in identity.items()}
     except Exception:
         pass
     return {}
+
 
 def _type(text: str, interval: float = 0.03) -> str:
     _require_pyautogui()
@@ -220,8 +257,8 @@ def _press(key: str) -> str:
 
 def _scroll(direction: str = "down", amount: int = 3) -> str:
     _require_pyautogui()
-    vertical   = direction in ("up", "down")
-    clicks     = amount if direction in ("up", "right") else -amount
+    vertical = direction in ("up", "down")
+    clicks = amount if direction in ("up", "right") else -amount
     pyautogui.scroll(clicks) if vertical else pyautogui.hscroll(clicks)
     return f"Scrolled {direction} ×{amount}"
 
@@ -261,7 +298,7 @@ def _clipboard_paste(text: str) -> str:
 def _screenshot(save_path: str | None = None) -> str:
     _require_pyautogui()
     path = _safe_screenshot_path(save_path)
-    img  = pyautogui.screenshot()
+    img = pyautogui.screenshot()
     img.save(str(path))
     return f"Screenshot saved: {path}"
 
@@ -274,6 +311,7 @@ def _clear_field() -> str:
     pyautogui.press("delete")
     return "Field cleared"
 
+
 def _focus_window(title: str) -> str:
     os_name = _get_os()
 
@@ -282,7 +320,9 @@ def _focus_window(title: str) -> str:
             script = f'(New-Object -ComObject WScript.Shell).AppActivate("{title}")'
             subprocess.run(
                 ["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
-                capture_output=True, timeout=5, **_WIN_HIDE,
+                capture_output=True,
+                timeout=5,
+                **_WIN_HIDE,
             )
             time.sleep(0.3)
             return f"Focused window: {title}"
@@ -297,7 +337,8 @@ def _focus_window(title: str) -> str:
         try:
             subprocess.run(
                 ["osascript", "-e", script],
-                capture_output=True, timeout=5,
+                capture_output=True,
+                timeout=5,
             )
             time.sleep(0.3)
             return f"Focused window: {title}"
@@ -308,7 +349,8 @@ def _focus_window(title: str) -> str:
         try:
             result = subprocess.run(
                 ["wmctrl", "-a", title],
-                capture_output=True, timeout=5,
+                capture_output=True,
+                timeout=5,
             )
             if result.returncode == 0:
                 time.sleep(0.3)
@@ -318,7 +360,8 @@ def _focus_window(title: str) -> str:
         try:
             result = subprocess.run(
                 ["xdotool", "search", "--name", title, "windowactivate"],
-                capture_output=True, timeout=5,
+                capture_output=True,
+                timeout=5,
             )
             time.sleep(0.3)
             return f"Focused window: {title}"
@@ -328,6 +371,7 @@ def _focus_window(title: str) -> str:
             return f"focus_window (Linux) failed: {e}"
 
     return f"focus_window: unknown OS '{os_name}'"
+
 
 def _close_app(app_name: str, confirmed_index: int | None = None) -> str:
     """Close the application the user named — that one, and never this one.
@@ -404,7 +448,7 @@ def _close_app(app_name: str, confirmed_index: int | None = None) -> str:
     for match in matches:
         by_name.setdefault(match.label, []).append(match)
 
-    ranked = list(by_name.items())          # [(name, [matches...]), ...]
+    ranked = list(by_name.items())  # [(name, [matches...]), ...]
     target_name, group = ranked[0]
 
     # Two DIFFERENT applications that answer equally well is a question, not a
@@ -419,10 +463,13 @@ def _close_app(app_name: str, confirmed_index: int | None = None) -> str:
                 "close_app",
                 f"more than one application matches '{app_name}' equally well: "
                 f"{', '.join(tied[:4])} - which one should be closed?",
-                app=app_name, candidates=len(tied),
+                app=app_name,
+                candidates=len(tied),
             )
-        print(f"[ComputerControl] close_app: '{app_name}' -> {target_name} "
-              f"(also matched: {', '.join(n for n, _ in ranked[1:5])})")
+        print(
+            f"[ComputerControl] close_app: '{app_name}' -> {target_name} "
+            f"(also matched: {', '.join(n for n, _ in ranked[1:5])})"
+        )
 
     closed, still_open, reason = 0, 0, ""
     for match in group:
@@ -435,8 +482,11 @@ def _close_app(app_name: str, confirmed_index: int | None = None) -> str:
 
     if closed and not still_open:
         return outcome.done(
-            "close_app", app=app_name, closed=target_name,
-            processes=closed, verified=True,
+            "close_app",
+            app=app_name,
+            closed=target_name,
+            processes=closed,
+            verified=True,
         )
 
     if closed and still_open:
@@ -447,12 +497,15 @@ def _close_app(app_name: str, confirmed_index: int | None = None) -> str:
             "close_app",
             f"{closed} of {closed + still_open} processes closed; the rest are "
             f"still running - {reason}",
-            app=app_name, closed=target_name,
+            app=app_name,
+            closed=target_name,
         )
 
     return outcome.failed(
-        "close_app", reason or "the application did not close",
-        app=app_name, matched=target_name,
+        "close_app",
+        reason or "the application did not close",
+        app=app_name,
+        matched=target_name,
     )
 
 
@@ -467,9 +520,9 @@ def _screen_find(description: str) -> tuple[int, int] | None:
         from google.genai import types as gtypes
 
         _require_pyautogui()
-        w, h  = pyautogui.size()
-        img   = pyautogui.screenshot()
-        buf   = io.BytesIO()
+        w, h = pyautogui.size()
+        img = pyautogui.screenshot()
+        buf = io.BytesIO()
         img.save(buf, format="PNG")
         image_bytes = buf.getvalue()
 
@@ -481,9 +534,11 @@ def _screen_find(description: str) -> tuple[int, int] | None:
         )
 
         from core import gemini
+
         response = gemini.call(
             [gtypes.Part.from_bytes(data=image_bytes, mime_type="image/png"), prompt],
-            tier=gemini.FAST, timeout_ms=20_000,
+            tier=gemini.FAST,
+            timeout_ms=20_000,
         )
         if response is None:
             return None
@@ -500,6 +555,7 @@ def _screen_find(description: str) -> tuple[int, int] | None:
         print(f"[ComputerControl] ⚠️ screen_find failed: {e}")
 
     return None
+
 
 def computer_control(
     parameters: dict,
@@ -576,9 +632,11 @@ def computer_control(
     }.get(action, ())
     if required_permissions:
         from memory.config_manager import get_computer_permissions
+
         permissions = get_computer_permissions()
-        denied = [name for name in required_permissions
-                  if not permissions.get(name, False)]
+        denied = [
+            name for name in required_permissions if not permissions.get(name, False)
+        ]
         if denied:
             return (
                 f"Permission denied: '{action}' is disabled in computer permissions. "
@@ -619,12 +677,14 @@ def computer_control(
 
         if action == "drag":
             return _drag(
-                int(params.get("x1", 0)), int(params.get("y1", 0)),
-                int(params.get("x2", 0)), int(params.get("y2", 0)),
+                int(params.get("x1", 0)),
+                int(params.get("y1", 0)),
+                int(params.get("x2", 0)),
+                int(params.get("y2", 0)),
             )
 
         if action == "hotkey":
-            raw  = params.get("keys", "")
+            raw = params.get("keys", "")
             keys = [k.strip() for k in raw.split("+")] if isinstance(raw, str) else raw
             return _hotkey(*keys)
 
@@ -651,7 +711,7 @@ def computer_control(
             return f"{coords[0]},{coords[1]}" if coords else "NOT_FOUND"
 
         if action == "screen_click":
-            desc   = params.get("description", "")
+            desc = params.get("description", "")
             coords = _screen_find(desc)
             if coords:
                 time.sleep(0.2)
@@ -678,18 +738,20 @@ def computer_control(
             )
 
         if action == "random_data":
-            dt     = params.get("type", "name")
+            dt = params.get("type", "name")
             result = _random_data(dt)
             print(f"[ComputerControl] 🎲 random {dt} → {result}")
             return result
 
         if action == "user_data":
-            field   = params.get("field", "name")
+            field = params.get("field", "name")
             profile = _user_profile()
-            value   = profile.get(field, "")
+            value = profile.get(field, "")
             if not value:
                 value = _random_data(field)
-                print(f"[ComputerControl] ⚠️ No '{field}' in memory, using random: {value}")
+                print(
+                    f"[ComputerControl] ⚠️ No '{field}' in memory, using random: {value}"
+                )
             return value
 
         return f"Unknown action: '{action}'"
@@ -725,7 +787,7 @@ TOOL = {
         "properties": {
             "action": {
                 "type": "STRING",
-                "description": "type | smart_type | click | double_click | right_click | hotkey | press | scroll | move | copy | paste | screenshot | wait | clear_field | focus_window | close_app | screen_find | screen_click | random_data | user_data"
+                "description": "type | smart_type | click | double_click | right_click | hotkey | press | scroll | move | copy | paste | screenshot | wait | clear_field | focus_window | close_app | screen_find | screen_click | random_data | user_data",
             },
             "app_name": {
                 "type": "STRING",
@@ -733,7 +795,7 @@ TOOL = {
                     "For close_app: the application to close, named as the "
                     "user said it. Any application running on the machine "
                     "works - there is no fixed list. Never leave this empty."
-                )
+                ),
             },
             "confirmed": {
                 "type": "BOOLEAN",
@@ -741,68 +803,33 @@ TOOL = {
                     "For close_app: set true only after the tool asked which "
                     "application was meant AND the user answered. Pass their "
                     "answer in 'app_name'."
-                )
+                ),
             },
-            "text": {
-                "type": "STRING",
-                "description": "Text to type or paste"
-            },
-            "x": {
-                "type": "INTEGER",
-                "description": "X coordinate"
-            },
-            "y": {
-                "type": "INTEGER",
-                "description": "Y coordinate"
-            },
-            "keys": {
-                "type": "STRING",
-                "description": "Key combination e.g. 'ctrl+c'"
-            },
-            "key": {
-                "type": "STRING",
-                "description": "Single key e.g. 'enter'"
-            },
-            "direction": {
-                "type": "STRING",
-                "description": "up | down | left | right"
-            },
-            "amount": {
-                "type": "INTEGER",
-                "description": "Scroll amount (default: 3)"
-            },
-            "seconds": {
-                "type": "NUMBER",
-                "description": "Seconds to wait"
-            },
-            "title": {
-                "type": "STRING",
-                "description": "Window title for focus_window"
-            },
+            "text": {"type": "STRING", "description": "Text to type or paste"},
+            "x": {"type": "INTEGER", "description": "X coordinate"},
+            "y": {"type": "INTEGER", "description": "Y coordinate"},
+            "keys": {"type": "STRING", "description": "Key combination e.g. 'ctrl+c'"},
+            "key": {"type": "STRING", "description": "Single key e.g. 'enter'"},
+            "direction": {"type": "STRING", "description": "up | down | left | right"},
+            "amount": {"type": "INTEGER", "description": "Scroll amount (default: 3)"},
+            "seconds": {"type": "NUMBER", "description": "Seconds to wait"},
+            "title": {"type": "STRING", "description": "Window title for focus_window"},
             "description": {
                 "type": "STRING",
-                "description": "Element description for screen_find/screen_click"
+                "description": "Element description for screen_find/screen_click",
             },
-            "type": {
-                "type": "STRING",
-                "description": "Data type for random_data"
-            },
+            "type": {"type": "STRING", "description": "Data type for random_data"},
             "field": {
                 "type": "STRING",
-                "description": "Field for user_data: name|email|city"
+                "description": "Field for user_data: name|email|city",
             },
             "clear_first": {
                 "type": "BOOLEAN",
-                "description": "Clear field before typing (default: true)"
+                "description": "Clear field before typing (default: true)",
             },
-            "path": {
-                "type": "STRING",
-                "description": "Save path for screenshot"
-            }
+            "path": {"type": "STRING", "description": "Save path for screenshot"},
         },
-        "required": [
-            "action"
-        ]
+        "required": ["action"],
     },
     "handler": computer_control,
 }

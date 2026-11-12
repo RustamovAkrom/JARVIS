@@ -124,7 +124,8 @@ def _panel(player, ml: int, goal: int) -> None:
     bar = "🟦" * filled + "⬜" * (10 - filled)
     try:
         player.show_content(
-            "💧 HYDRATION", f"{bar}  {pct}%\n{ml} / {goal} ml today",
+            "💧 HYDRATION",
+            f"{bar}  {pct}%\n{ml} / {goal} ml today",
             key="hydration",
         )
     except Exception:

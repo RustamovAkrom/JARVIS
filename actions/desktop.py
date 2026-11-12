@@ -1,4 +1,4 @@
-#desktop.py
+# desktop.py
 import os
 import sys
 import json
@@ -23,10 +23,12 @@ def _get_base_dir() -> Path:
         return Path(sys.executable).parent
     return Path(__file__).resolve().parent.parent
 
+
 def _get_api_key() -> str:
     path = _get_base_dir() / "config" / "api_keys.json"
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)["gemini_api_key"]
+
 
 def _get_desktop() -> Path:
     if _OS == "Linux":
@@ -34,6 +36,7 @@ def _get_desktop() -> Path:
         if xdg and Path(xdg).exists():
             return Path(xdg)
     return Path.home() / "Desktop"
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  REMOVED IN MARK LVI: the generated-code path
@@ -72,8 +75,15 @@ def _get_desktop() -> Path:
 #     rather than a prompt asking a model to invent something.
 
 
-_ACTIONS = ("wallpaper", "wallpaper_url", "current_wallpaper",
-            "organize", "clean", "list", "stats")
+_ACTIONS = (
+    "wallpaper",
+    "wallpaper_url",
+    "current_wallpaper",
+    "organize",
+    "clean",
+    "list",
+    "stats",
+)
 
 
 def _unknown(said: str) -> str:
@@ -86,6 +96,7 @@ def _unknown(said: str) -> str:
     written for it, this says what is available and stops.
     """
     import difflib
+
     guess = difflib.get_close_matches(said.lower().strip(), _ACTIONS, n=1, cutoff=0.6)
     if guess:
         return outcome.ask(
@@ -93,15 +104,19 @@ def _unknown(said: str) -> str:
             f"'{said}' is not a desktop action - did you mean '{guess[0]}'?",
             said=said,
         )
-    return outcome.failed(
-        "desktop_control",
-        f"'{said}' is not something this tool does. It handles only: "
-        f"{', '.join(_ACTIONS)}. For typing, clicking or keyboard shortcuts "
-        f"use computer_control; for files use file_controller",
-        said=said,
-    ) if said else outcome.failed(
-        "desktop_control",
-        f"no action was given - choose one of: {', '.join(_ACTIONS)}",
+    return (
+        outcome.failed(
+            "desktop_control",
+            f"'{said}' is not something this tool does. It handles only: "
+            f"{', '.join(_ACTIONS)}. For typing, clicking or keyboard shortcuts "
+            f"use computer_control; for files use file_controller",
+            said=said,
+        )
+        if said
+        else outcome.failed(
+            "desktop_control",
+            f"no action was given - choose one of: {', '.join(_ACTIONS)}",
+        )
     )
 
 
@@ -115,9 +130,11 @@ def _apply_wallpaper(image_path: str) -> str:
     try:
         if _OS == "Windows":
             import ctypes
+
             if path.suffix.lower() in {".webp", ".png"}:
                 try:
                     from PIL import Image
+
                     bmp_path = Path(tempfile.mktemp(suffix=".bmp"))
                     Image.open(path).convert("RGB").save(bmp_path, "BMP")
                     path = bmp_path
@@ -139,14 +156,26 @@ def _apply_wallpaper(image_path: str) -> str:
             uri = f"file://{path}"
 
             if "gnome" in desktop_env or "unity" in desktop_env:
-                subprocess.run([
-                    "gsettings", "set", "org.gnome.desktop.background",
-                    "picture-uri", uri
-                ], capture_output=True)
-                subprocess.run([
-                    "gsettings", "set", "org.gnome.desktop.background",
-                    "picture-uri-dark", uri
-                ], capture_output=True)
+                subprocess.run(
+                    [
+                        "gsettings",
+                        "set",
+                        "org.gnome.desktop.background",
+                        "picture-uri",
+                        uri,
+                    ],
+                    capture_output=True,
+                )
+                subprocess.run(
+                    [
+                        "gsettings",
+                        "set",
+                        "org.gnome.desktop.background",
+                        "picture-uri-dark",
+                        uri,
+                    ],
+                    capture_output=True,
+                )
 
             elif "kde" in desktop_env:
                 # KDE Plasma
@@ -160,22 +189,33 @@ for (var i = 0; i < allDesktops.length; i++) {{
 }}
 """
                 subprocess.run(
-                    ["qdbus", "org.kde.plasmashell", "/PlasmaShell",
-                     "org.kde.PlasmaShell.evaluateScript", script],
-                    capture_output=True
+                    [
+                        "qdbus",
+                        "org.kde.plasmashell",
+                        "/PlasmaShell",
+                        "org.kde.PlasmaShell.evaluateScript",
+                        script,
+                    ],
+                    capture_output=True,
                 )
 
             elif "xfce" in desktop_env:
-                subprocess.run([
-                    "xfconf-query", "-c", "xfce4-desktop",
-                    "-p", "/backdrop/screen0/monitor0/workspace0/last-image",
-                    "-s", str(path)
-                ], capture_output=True)
+                subprocess.run(
+                    [
+                        "xfconf-query",
+                        "-c",
+                        "xfce4-desktop",
+                        "-p",
+                        "/backdrop/screen0/monitor0/workspace0/last-image",
+                        "-s",
+                        str(path),
+                    ],
+                    capture_output=True,
+                )
 
             else:
                 result = subprocess.run(
-                    ["feh", "--bg-scale", str(path)],
-                    capture_output=True
+                    ["feh", "--bg-scale", str(path)], capture_output=True
                 )
                 if result.returncode != 0:
                     return (
@@ -224,7 +264,10 @@ def set_wallpaper(image_path: str) -> str:
         )
 
     current = reading.split(":", 1)[1].strip()
-    if Path(current).name.lower() == Path(applied.split(":", 1)[1].strip()).name.lower():
+    if (
+        Path(current).name.lower()
+        == Path(applied.split(":", 1)[1].strip()).name.lower()
+    ):
         return outcome.done("set_wallpaper", image=name, verified=True)
 
     return outcome.unverified(
@@ -238,8 +281,9 @@ def set_wallpaper(image_path: str) -> str:
 def set_wallpaper_from_url(url: str) -> str:
     try:
         import urllib.request
+
         suffix = Path(url.split("?")[0]).suffix or ".jpg"
-        tmp    = Path(tempfile.mktemp(suffix=suffix))
+        tmp = Path(tempfile.mktemp(suffix=suffix))
         urllib.request.urlretrieve(url, str(tmp))
         result = set_wallpaper(str(tmp))
         try:
@@ -248,28 +292,29 @@ def set_wallpaper_from_url(url: str) -> str:
             pass
         return result
     except Exception as e:
-        return outcome.failed("set_wallpaper",
-                              f"the image could not be downloaded: {e}", url=url)
+        return outcome.failed(
+            "set_wallpaper", f"the image could not be downloaded: {e}", url=url
+        )
 
 
 def get_current_wallpaper() -> str:
     try:
         if _OS == "Windows":
             import winreg
-            key = winreg.OpenKey(
-                winreg.HKEY_CURRENT_USER, r"Control Panel\Desktop"
-            )
+
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Control Panel\Desktop")
             val, _ = winreg.QueryValueEx(key, "Wallpaper")
             winreg.CloseKey(key)
             return f"Current wallpaper: {val}"
 
         elif _OS == "Darwin":
-            script = (
-                'tell application "System Events" to get picture of desktop 1'
-            )
+            script = 'tell application "System Events" to get picture of desktop 1'
             result = subprocess.run(
                 ["osascript", "-e", script],
-                capture_output=True, text=True, encoding="utf-8", errors="replace"
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
             )
             return f"Current wallpaper: {result.stdout.strip()}"
 
@@ -278,36 +323,78 @@ def get_current_wallpaper() -> str:
             if "gnome" in desktop_env or "unity" in desktop_env:
                 result = subprocess.run(
                     ["gsettings", "get", "org.gnome.desktop.background", "picture-uri"],
-                    capture_output=True, text=True, encoding="utf-8", errors="replace"
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
                 )
                 return f"Current wallpaper: {result.stdout.strip()}"
-            return "Wallpaper path retrieval not supported for this desktop environment."
+            return (
+                "Wallpaper path retrieval not supported for this desktop environment."
+            )
 
     except Exception as e:
         return f"Could not get wallpaper: {e}"
 
+
 FILE_TYPE_MAP = {
-    "Images":      {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".svg", ".ico", ".heic"},
-    "Documents":   {".pdf", ".doc", ".docx", ".txt", ".xls", ".xlsx",
-                    ".ppt", ".pptx", ".csv", ".odt", ".ods", ".odp"},
-    "Videos":      {".mp4", ".avi", ".mkv", ".mov", ".wmv", ".flv", ".webm", ".m4v"},
-    "Music":       {".mp3", ".wav", ".flac", ".aac", ".ogg", ".wma", ".m4a"},
-    "Archives":    {".zip", ".rar", ".7z", ".tar", ".gz", ".bz2", ".xz"},
-    "Code":        {".py", ".js", ".ts", ".html", ".css", ".json", ".xml",
-                    ".cpp", ".java", ".cs", ".go", ".rs", ".sh", ".php"},
+    "Images": {
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".gif",
+        ".bmp",
+        ".webp",
+        ".svg",
+        ".ico",
+        ".heic",
+    },
+    "Documents": {
+        ".pdf",
+        ".doc",
+        ".docx",
+        ".txt",
+        ".xls",
+        ".xlsx",
+        ".ppt",
+        ".pptx",
+        ".csv",
+        ".odt",
+        ".ods",
+        ".odp",
+    },
+    "Videos": {".mp4", ".avi", ".mkv", ".mov", ".wmv", ".flv", ".webm", ".m4v"},
+    "Music": {".mp3", ".wav", ".flac", ".aac", ".ogg", ".wma", ".m4a"},
+    "Archives": {".zip", ".rar", ".7z", ".tar", ".gz", ".bz2", ".xz"},
+    "Code": {
+        ".py",
+        ".js",
+        ".ts",
+        ".html",
+        ".css",
+        ".json",
+        ".xml",
+        ".cpp",
+        ".java",
+        ".cs",
+        ".go",
+        ".rs",
+        ".sh",
+        ".php",
+    },
     "Executables": {".exe", ".msi", ".bat", ".cmd", ".sh", ".appimage", ".deb", ".rpm"},
 }
 
 _SKIP_EXTENSIONS = {
     "Windows": {".lnk", ".url"},
-    "Darwin":  {".webloc"},
-    "Linux":   {".desktop"},
+    "Darwin": {".webloc"},
+    "Linux": {".desktop"},
 }
 
 
 def organize_desktop(mode: str = "by_type") -> str:
-    desktop       = _get_desktop()
-    skip_exts     = _SKIP_EXTENSIONS.get(_OS, set())
+    desktop = _get_desktop()
+    skip_exts = _SKIP_EXTENSIONS.get(_OS, set())
     moved, skipped = [], []
 
     for item in desktop.iterdir():
@@ -317,10 +404,10 @@ def organize_desktop(mode: str = "by_type") -> str:
             continue
 
         if mode == "by_date":
-            mtime       = datetime.fromtimestamp(item.stat().st_mtime)
+            mtime = datetime.fromtimestamp(item.stat().st_mtime)
             folder_name = mtime.strftime("%Y-%m")
         else:
-            ext         = item.suffix.lower()
+            ext = item.suffix.lower()
             folder_name = "Others"
             for folder, exts in FILE_TYPE_MAP.items():
                 if ext in exts:
@@ -350,7 +437,7 @@ def organize_desktop(mode: str = "by_type") -> str:
 
 def list_desktop() -> str:
     desktop = _get_desktop()
-    items   = []
+    items = []
     for item in sorted(desktop.iterdir()):
         if item.name.startswith("."):
             continue
@@ -361,9 +448,10 @@ def list_desktop() -> str:
                 count = "?"
             items.append(f"📁 {item.name}/ ({count} items)")
         else:
-            size     = item.stat().st_size
+            size = item.stat().st_size
             size_str = (
-                f"{size / 1024:.1f} KB" if size < 1024 * 1024
+                f"{size / 1024:.1f} KB"
+                if size < 1024 * 1024
                 else f"{size / 1024 / 1024:.1f} MB"
             )
             items.append(f"📄 {item.name} ({size_str})")
@@ -374,9 +462,9 @@ def list_desktop() -> str:
 
 
 def clean_desktop() -> str:
-    desktop     = _get_desktop()
-    skip_exts   = _SKIP_EXTENSIONS.get(_OS, set())
-    today       = datetime.now().strftime("%Y-%m-%d")
+    desktop = _get_desktop()
+    skip_exts = _SKIP_EXTENSIONS.get(_OS, set())
+    today = datetime.now().strftime("%Y-%m-%d")
     archive_dir = desktop / f"Desktop Archive {today}"
     archive_dir.mkdir(exist_ok=True)
 
@@ -395,12 +483,13 @@ def clean_desktop() -> str:
 
 
 def get_desktop_stats() -> str:
-    desktop    = _get_desktop()
-    files      = [i for i in desktop.iterdir() if i.is_file()]
-    folders    = [i for i in desktop.iterdir() if i.is_dir()]
+    desktop = _get_desktop()
+    files = [i for i in desktop.iterdir() if i.is_file()]
+    folders = [i for i in desktop.iterdir() if i.is_dir()]
     total_size = sum(f.stat().st_size for f in files if f.exists())
-    size_str   = (
-        f"{total_size / 1024:.1f} KB" if total_size < 1024 * 1024
+    size_str = (
+        f"{total_size / 1024:.1f} KB"
+        if total_size < 1024 * 1024
         else f"{total_size / 1024 / 1024:.1f} MB"
     )
     return (
@@ -410,6 +499,7 @@ def get_desktop_stats() -> str:
         f"  Size    : {size_str}\n"
         f"  Path    : {desktop}"
     )
+
 
 def desktop_control(
     parameters: dict = None,
@@ -429,24 +519,26 @@ def desktop_control(
     """
     params = parameters or {}
     action = params.get("action", "").lower().strip()
-    task   = params.get("task", "").strip()
+    task = params.get("task", "").strip()
 
     if player:
-        print(f"[Desktop] {action}")             # terminal, not the HUD
+        print(f"[Desktop] {action}")  # terminal, not the HUD
 
     try:
         if action == "wallpaper":
             path = params.get("path", "")
             if not path:
-                return outcome.failed("desktop_control",
-                                      "no image path was given", wanted=action)
+                return outcome.failed(
+                    "desktop_control", "no image path was given", wanted=action
+                )
             return set_wallpaper(path)
 
         elif action == "wallpaper_url":
             url = params.get("url", "")
             if not url:
-                return outcome.failed("desktop_control",
-                                      "no image URL was given", wanted=action)
+                return outcome.failed(
+                    "desktop_control", "no image URL was given", wanted=action
+                )
             return set_wallpaper_from_url(url)
 
         elif action == "current_wallpaper":
@@ -501,25 +593,30 @@ TOOL = {
             "action": {
                 "type": "STRING",
                 "description": "wallpaper | wallpaper_url | current_wallpaper | organize | clean | list | stats",
-                "enum": ["wallpaper", "wallpaper_url", "current_wallpaper",
-                         "organize", "clean", "list", "stats"]
+                "enum": [
+                    "wallpaper",
+                    "wallpaper_url",
+                    "current_wallpaper",
+                    "organize",
+                    "clean",
+                    "list",
+                    "stats",
+                ],
             },
             "path": {
                 "type": "STRING",
-                "description": "Image file path, for action='wallpaper'"
+                "description": "Image file path, for action='wallpaper'",
             },
             "url": {
                 "type": "STRING",
-                "description": "Image URL, for action='wallpaper_url'"
+                "description": "Image URL, for action='wallpaper_url'",
             },
             "mode": {
                 "type": "STRING",
-                "description": "by_type or by_date, for action='organize'"
-            }
+                "description": "by_type or by_date, for action='organize'",
+            },
         },
-        "required": [
-            "action"
-        ]
+        "required": ["action"],
     },
     "handler": desktop_control,
 }

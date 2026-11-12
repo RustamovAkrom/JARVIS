@@ -120,8 +120,7 @@ def main() -> None:
     )
     _check_python()
     if not REQUIREMENTS_FILE.is_file():
-        raise FileNotFoundError(
-            f"Dependency manifest not found: {REQUIREMENTS_FILE}")
+        raise FileNotFoundError(f"Dependency manifest not found: {REQUIREMENTS_FILE}")
 
     _ensure_pip()
     _remove_deprecated_pynvml()

@@ -50,6 +50,7 @@ NO LANGUAGE DETECTION HERE EITHER
     words. Splitting is only there so speech can start before the whole answer
     has been synthesised.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -85,8 +86,9 @@ _SENTENCE_END = re.compile(r"(?<=[.!?…])\s+|(?<=[。！？؟۔।])\s*")
 _NO_WINDOW = 0x08000000 if _SYS == "Windows" else 0
 
 
-def _run(args: list[str], timeout: float = 60.0,
-         stdin_data: Optional[bytes] = None) -> subprocess.CompletedProcess:
+def _run(
+    args: list[str], timeout: float = 60.0, stdin_data: Optional[bytes] = None
+) -> subprocess.CompletedProcess:
     return subprocess.run(
         args,
         input=stdin_data,
@@ -168,13 +170,24 @@ def _read_voices() -> list[str]:
             ps = _powershell()
             if not ps:
                 return []
-            out = _run([ps, "-NoProfile", "-NonInteractive", "-Command",
-                        "Add-Type -AssemblyName System.Speech; "
-                        "(New-Object System.Speech.Synthesis.SpeechSynthesizer)"
-                        ".GetInstalledVoices() | "
-                        "ForEach-Object { $_.VoiceInfo.Name }"], timeout=20)
-            return [l.strip() for l in
-                    out.stdout.decode("utf-8", "replace").splitlines() if l.strip()]
+            out = _run(
+                [
+                    ps,
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-Command",
+                    "Add-Type -AssemblyName System.Speech; "
+                    "(New-Object System.Speech.Synthesis.SpeechSynthesizer)"
+                    ".GetInstalledVoices() | "
+                    "ForEach-Object { $_.VoiceInfo.Name }",
+                ],
+                timeout=20,
+            )
+            return [
+                l.strip()
+                for l in out.stdout.decode("utf-8", "replace").splitlines()
+                if l.strip()
+            ]
 
         if _SYS == "Darwin":
             out = _run(["say", "-v", "?"], timeout=20)
@@ -218,7 +231,7 @@ def engine_name() -> str:
 class SystemTTS:
     def __init__(self, cfg: dict):
         self.voice = (cfg.get("voice") or "").strip()
-        self.rate = int(cfg.get("rate") or 0)        # -10..10 on Windows
+        self.rate = int(cfg.get("rate") or 0)  # -10..10 on Windows
         self.caps = dict(DEFAULT_CAPS)
         self.caps["audio_out"] = True
         self._engine = engine_name()
@@ -233,7 +246,7 @@ class SystemTTS:
         # substituted, and it is quoted and doubled so a name with an
         # apostrophe cannot end the string early.
         voice = self.voice.replace("'", "''")
-        select = (f"$s.SelectVoice('{voice}');" if self.voice else "")
+        select = f"$s.SelectVoice('{voice}');" if self.voice else ""
         script = (
             "Add-Type -AssemblyName System.Speech;"
             "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer;"
@@ -247,14 +260,21 @@ class SystemTTS:
         )
         r = _run([ps, "-NoProfile", "-NonInteractive", "-Command", script])
         if r.returncode != 0:
-            raise RuntimeError(r.stderr.decode("utf-8", "replace")[:200]
-                               or "the speech engine failed")
+            raise RuntimeError(
+                r.stderr.decode("utf-8", "replace")[:200] or "the speech engine failed"
+            )
 
     def _macos(self, text_file: str, wav_file: str) -> None:
-        args = ["say", "-f", text_file, "-o", wav_file,
-                # Ask for exactly what the speaker wants, so nothing is
-                # resampled on the way out.
-                "--data-format=LEI16@24000"]
+        args = [
+            "say",
+            "-f",
+            text_file,
+            "-o",
+            wav_file,
+            # Ask for exactly what the speaker wants, so nothing is
+            # resampled on the way out.
+            "--data-format=LEI16@24000",
+        ]
         if self.voice:
             args[1:1] = ["-v", self.voice]
         if self.rate:
@@ -264,8 +284,9 @@ class SystemTTS:
             args[1:1] = ["-r", str(max(90, min(400, 175 + self.rate * 15)))]
         r = _run(args)
         if r.returncode != 0:
-            raise RuntimeError(r.stderr.decode("utf-8", "replace")[:200]
-                               or "`say` failed")
+            raise RuntimeError(
+                r.stderr.decode("utf-8", "replace")[:200] or "`say` failed"
+            )
 
     def _linux(self, text_file: str, wav_file: str) -> None:
         exe = shutil.which("espeak-ng") or shutil.which("espeak")
@@ -277,12 +298,14 @@ class SystemTTS:
                 args += ["-s", str(max(80, min(450, 175 + self.rate * 15)))]
             r = _run(args)
             if r.returncode != 0:
-                raise RuntimeError(r.stderr.decode("utf-8", "replace")[:200]
-                                   or "espeak-ng failed")
+                raise RuntimeError(
+                    r.stderr.decode("utf-8", "replace")[:200] or "espeak-ng failed"
+                )
             return
         raise RuntimeError(
             "no speech engine found — install espeak-ng "
-            "(apt install espeak-ng, dnf install espeak-ng, pacman -S espeak-ng)")
+            "(apt install espeak-ng, dnf install espeak-ng, pacman -S espeak-ng)"
+        )
 
     def _synth_blocking(self, text: str) -> bytes:
         # Both files are created and closed before the engine is pointed at
@@ -355,8 +378,10 @@ class SystemTTS:
         if not pcm:
             return False, f"{self._engine} produced no audio."
         n = len(list_voices())
-        return True, (f"{self._engine}, {n} voice{'s' if n != 1 else ''} installed "
-                      f"({audio.duration_s(pcm, audio.SPEAKER_RATE):.2f}s of test audio)")
+        return True, (
+            f"{self._engine}, {n} voice{'s' if n != 1 else ''} installed "
+            f"({audio.duration_s(pcm, audio.SPEAKER_RATE):.2f}s of test audio)"
+        )
 
 
 def _split(text: str, max_chars: int = 240) -> list[str]:
@@ -396,18 +421,33 @@ PROVIDER = {
     "hint": "The voices already installed on this computer — nothing to download",
     "requires": (),
     "catalog": (
-        {"id": "system", "label": "This computer's own voices",
-         "note": "free · instant · nothing to download", "local": True,
-         "values": {}},
+        {
+            "id": "system",
+            "label": "This computer's own voices",
+            "note": "free · instant · nothing to download",
+            "local": True,
+            "values": {},
+        },
     ),
     "needs": (
-        Field("voice", "Voice", kind="choice", choices=(), default="",
-              required=False,
-              hint="Empty uses the system default; the list is read from this "
-                   "machine"),
-        Field("rate", "Speed", kind="number", default=0, required=False,
-              advanced=True,
-              hint="-10 to 10, 0 is normal"),
+        Field(
+            "voice",
+            "Voice",
+            kind="choice",
+            choices=(),
+            default="",
+            required=False,
+            hint="Empty uses the system default; the list is read from this " "machine",
+        ),
+        Field(
+            "rate",
+            "Speed",
+            kind="number",
+            default=0,
+            required=False,
+            advanced=True,
+            hint="-10 to 10, 0 is normal",
+        ),
     ),
     "caps": {"audio_out": True},
     "factory": _make,

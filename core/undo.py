@@ -48,9 +48,9 @@ MAX_DEPTH = 10
 
 @dataclass
 class _Entry:
-    label:   str                    # human sentence, spoken back to the user
-    undo:    Callable[[], str]      # returns a short result string
-    at:      float = field(default_factory=time.monotonic)
+    label: str  # human sentence, spoken back to the user
+    undo: Callable[[], str]  # returns a short result string
+    at: float = field(default_factory=time.monotonic)
 
 
 _stack: list[_Entry] = []
@@ -72,7 +72,7 @@ def push_undo(label: str, undo_fn: Callable[[], str]) -> None:
             # is what people ask to undo.
             while len(_stack) > MAX_DEPTH:
                 _stack.pop(0)
-    except Exception as e:                                  # pragma: no cover
+    except Exception as e:  # pragma: no cover
         print(f"[Undo] push failed: {e}")
 
 
@@ -103,8 +103,10 @@ def undo_last() -> str:
         entry = _stack.pop() if _stack else None
 
     if entry is None:
-        return ("There is nothing to undo. I only track things I changed myself — "
-                "files I moved or wrote, and settings I adjusted.")
+        return (
+            "There is nothing to undo. I only track things I changed myself — "
+            "files I moved or wrote, and settings I adjusted."
+        )
 
     try:
         detail = entry.undo() or ""

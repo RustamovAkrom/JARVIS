@@ -15,7 +15,8 @@ class CursorAssistantSettingsTests(unittest.TestCase):
         self.config_path = Path(self.temp_dir.name) / "api_keys.json"
         self.config_dir = Path(self.temp_dir.name)
         self.config_path.write_text(
-            json.dumps({"gemini_api_key": "preserved"}), encoding="utf-8")
+            json.dumps({"gemini_api_key": "preserved"}), encoding="utf-8"
+        )
         self.file_patch = patch.object(config_manager, "CONFIG_FILE", self.config_path)
         self.dir_patch = patch.object(config_manager, "CONFIG_DIR", self.config_dir)
         self.file_patch.start()
@@ -37,12 +38,18 @@ class CursorAssistantSettingsTests(unittest.TestCase):
 
     def test_ui_opacity_defaults_and_clamps_to_readable_range(self):
         self.assertEqual(config_manager.get_ui_opacity(), 100)
-        for value, expected in ((72.4, 72), (45, 60), (140, 100),
-                                (True, 100), ("75", 100),
-                                (float("nan"), 100)):
+        for value, expected in (
+            (72.4, 72),
+            (45, 60),
+            (140, 100),
+            (True, 100),
+            ("75", 100),
+            (float("nan"), 100),
+        ):
             with self.subTest(value=value):
                 self.config_path.write_text(
-                    json.dumps({"ui_opacity": value}), encoding="utf-8")
+                    json.dumps({"ui_opacity": value}), encoding="utf-8"
+                )
                 self.assertEqual(config_manager.get_ui_opacity(), expected)
 
     def test_ui_language_validation_and_persistence(self):
@@ -75,8 +82,7 @@ class CursorAssistantSettingsTests(unittest.TestCase):
 
     def test_active_project_file_must_be_relative_and_inside_root(self):
         config_manager.save_active_project_file("src/main.py")
-        self.assertEqual(
-            config_manager.get_active_project_file(), "src/main.py")
+        self.assertEqual(config_manager.get_active_project_file(), "src/main.py")
         for path in (r"..\secret.txt", r"C:\secret.txt"):
             with self.subTest(path=path), self.assertRaises(ValueError):
                 config_manager.save_active_project_file(path)
@@ -89,18 +95,20 @@ class CursorAssistantSettingsTests(unittest.TestCase):
                 self.assertTrue(translate("PROJECT", language))
                 self.assertTrue(translate("COMPUTER PERMISSIONS", language))
         self.assertEqual(
-            translate("Push-to-talk  ·  {key}", "ru", key="F8"),
-            "Нажми и говори · F8")
+            translate("Push-to-talk  ·  {key}", "ru", key="F8"), "Нажми и говори · F8"
+        )
 
     def test_saves_custom_settings_and_preserves_other_config(self):
-        config_manager.save_cursor_assistant_settings({
-            "style": "reticle",
-            "size": 32,
-            "hotkey": "Ctrl+Alt+J",
-            "region_hotkey": "Ctrl+Shift+X",
-            "cursor_visible": True,
-            "menu_actions": ["ask", "fix", "ask", "not-an-action"],
-        })
+        config_manager.save_cursor_assistant_settings(
+            {
+                "style": "reticle",
+                "size": 32,
+                "hotkey": "Ctrl+Alt+J",
+                "region_hotkey": "Ctrl+Shift+X",
+                "cursor_visible": True,
+                "menu_actions": ["ask", "fix", "ask", "not-an-action"],
+            }
+        )
         settings = config_manager.get_cursor_assistant_settings()
         saved = json.loads(self.config_path.read_text(encoding="utf-8"))
         self.assertEqual(settings["style"], "reticle")
@@ -112,13 +120,15 @@ class CursorAssistantSettingsTests(unittest.TestCase):
         self.assertEqual(saved["gemini_api_key"], "preserved")
 
     def test_invalid_settings_fall_back_to_supported_values(self):
-        config_manager.save_cursor_assistant_settings({
-            "style": "unknown",
-            "size": 999,
-            "hotkey": "Ctrl+Alt+Delete",
-            "region_hotkey": "F12",
-            "menu_actions": "invalid",
-        })
+        config_manager.save_cursor_assistant_settings(
+            {
+                "style": "unknown",
+                "size": 999,
+                "hotkey": "Ctrl+Alt+Delete",
+                "region_hotkey": "F12",
+                "menu_actions": "invalid",
+            }
+        )
         settings = config_manager.get_cursor_assistant_settings()
         self.assertEqual(settings["style"], "halo")
         self.assertEqual(settings["size"], 24)
@@ -152,13 +162,18 @@ class CursorAssistantSettingsTests(unittest.TestCase):
         self.assertEqual(saved["gemini_api_key"], "preserved")
 
     def test_malformed_permission_values_never_enable_actions(self):
-        self.config_path.write_text(json.dumps({
-            "computer_permissions": {
-                "observe_screen": "false",
-                "click": "true",
-                "type": 1,
-            },
-        }), encoding="utf-8")
+        self.config_path.write_text(
+            json.dumps(
+                {
+                    "computer_permissions": {
+                        "observe_screen": "false",
+                        "click": "true",
+                        "type": 1,
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
         permissions = config_manager.get_computer_permissions()
         self.assertTrue(permissions["observe_screen"])
         self.assertFalse(permissions["click"])

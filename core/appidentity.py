@@ -44,6 +44,7 @@ THE ASSISTANT IS NEVER A TARGET
     dead as closing us directly. Callers are told a match is `is_self` and
     refuse rather than guess.
 """
+
 from __future__ import annotations
 
 import os
@@ -61,7 +62,7 @@ from core.lazyimport import LazyModule, installed
 _PSUTIL = installed("psutil")
 psutil = LazyModule("psutil")
 
-_OS = platform.system()          # "Windows" | "Darwin" | "Linux"
+_OS = platform.system()  # "Windows" | "Darwin" | "Linux"
 
 # Everything that is not a letter or a digit, in any script. Spaces, dots,
 # hyphens and underscores all vanish, so "Visual Studio Code", "visual-studio
@@ -101,55 +102,111 @@ def fold(text: str) -> str:
 # that genuinely differ between operating systems. A name that is the same
 # everywhere does not belong here — it already works without an entry.
 ALIASES: dict[str, dict[str, str]] = {
-    "chrome":             {"Windows": "chrome",            "Darwin": "Google Chrome",        "Linux": "google-chrome"},
-    "google chrome":      {"Windows": "chrome",            "Darwin": "Google Chrome",        "Linux": "google-chrome"},
-    "firefox":            {"Windows": "firefox",           "Darwin": "Firefox",              "Linux": "firefox"},
-    "edge":               {"Windows": "msedge",            "Darwin": "Microsoft Edge",       "Linux": "microsoft-edge"},
-    "brave":              {"Windows": "brave",             "Darwin": "Brave Browser",        "Linux": "brave-browser"},
-    "safari":             {"Windows": "msedge",            "Darwin": "Safari",               "Linux": "firefox"},
-    "opera":              {"Windows": "opera",             "Darwin": "Opera",                "Linux": "opera"},
-    "whatsapp":           {"Windows": "WhatsApp",          "Darwin": "WhatsApp",             "Linux": "whatsapp"},
-    "telegram":           {"Windows": "Telegram",          "Darwin": "Telegram",             "Linux": "telegram"},
-    "discord":            {"Windows": "Discord",           "Darwin": "Discord",              "Linux": "discord"},
-    "slack":              {"Windows": "Slack",             "Darwin": "Slack",                "Linux": "slack"},
-    "zoom":               {"Windows": "Zoom",              "Darwin": "zoom.us",              "Linux": "zoom"},
-    "teams":              {"Windows": "msteams",           "Darwin": "Microsoft Teams",      "Linux": "teams"},
-    "skype":              {"Windows": "skype",             "Darwin": "Skype",                "Linux": "skype"},
-    "signal":             {"Windows": "signal",            "Darwin": "Signal",               "Linux": "signal"},
-    "spotify":            {"Windows": "Spotify",           "Darwin": "Spotify",              "Linux": "spotify"},
-    "vlc":                {"Windows": "vlc",               "Darwin": "VLC",                  "Linux": "vlc"},
-    "netflix":            {"Windows": "Netflix",           "Darwin": "Netflix",              "Linux": "firefox"},
-    "vscode":             {"Windows": "code",              "Darwin": "Visual Studio Code",   "Linux": "code"},
-    "visual studio code": {"Windows": "code",              "Darwin": "Visual Studio Code",   "Linux": "code"},
-    "code":               {"Windows": "code",              "Darwin": "Visual Studio Code",   "Linux": "code"},
-    "terminal":           {"Windows": "wt",                "Darwin": "Terminal",             "Linux": "x-terminal-emulator"},
-    "cmd":                {"Windows": "cmd.exe",           "Darwin": "Terminal",             "Linux": "bash"},
-    "powershell":         {"Windows": "powershell.exe",    "Darwin": "Terminal",             "Linux": "bash"},
-    "postman":            {"Windows": "Postman",           "Darwin": "Postman",              "Linux": "postman"},
-    "git":                {"Windows": "git-bash",          "Darwin": "Terminal",             "Linux": "bash"},
-    "figma":              {"Windows": "Figma",             "Darwin": "Figma",                "Linux": "figma"},
-    "blender":            {"Windows": "blender",           "Darwin": "Blender",              "Linux": "blender"},
-    "word":               {"Windows": "winword",           "Darwin": "Microsoft Word",       "Linux": "libreoffice --writer"},
-    "excel":              {"Windows": "excel",             "Darwin": "Microsoft Excel",      "Linux": "libreoffice --calc"},
-    "powerpoint":         {"Windows": "powerpnt",          "Darwin": "Microsoft PowerPoint", "Linux": "libreoffice --impress"},
-    "libreoffice":        {"Windows": "soffice",           "Darwin": "LibreOffice",          "Linux": "libreoffice"},
-    "notepad":            {"Windows": "notepad.exe",       "Darwin": "TextEdit",             "Linux": "gedit"},
-    "textedit":           {"Windows": "notepad.exe",       "Darwin": "TextEdit",             "Linux": "gedit"},
-    "explorer":           {"Windows": "explorer.exe",      "Darwin": "Finder",               "Linux": "nautilus"},
-    "file explorer":      {"Windows": "explorer.exe",      "Darwin": "Finder",               "Linux": "nautilus"},
-    "finder":             {"Windows": "explorer.exe",      "Darwin": "Finder",               "Linux": "nautilus"},
-    "task manager":       {"Windows": "taskmgr.exe",       "Darwin": "Activity Monitor",     "Linux": "gnome-system-monitor"},
-    "settings":           {"Windows": "ms-settings:",      "Darwin": "System Preferences",   "Linux": "gnome-control-center"},
-    "calculator":         {"Windows": "calc.exe",          "Darwin": "Calculator",           "Linux": "gnome-calculator"},
-    "paint":              {"Windows": "mspaint.exe",       "Darwin": "Preview",              "Linux": "gimp"},
-    "instagram":          {"Windows": "Instagram",         "Darwin": "Instagram",            "Linux": "firefox"},
-    "tiktok":             {"Windows": "TikTok",            "Darwin": "TikTok",               "Linux": "firefox"},
-    "notion":             {"Windows": "Notion",            "Darwin": "Notion",               "Linux": "notion"},
-    "obsidian":           {"Windows": "Obsidian",          "Darwin": "Obsidian",             "Linux": "obsidian"},
-    "capcut":             {"Windows": "CapCut",            "Darwin": "CapCut",               "Linux": "capcut"},
-    "steam":              {"Windows": "steam",             "Darwin": "Steam",                "Linux": "steam"},
-    "epic":               {"Windows": "EpicGamesLauncher", "Darwin": "Epic Games Launcher",  "Linux": "legendary"},
-    "epic games":         {"Windows": "EpicGamesLauncher", "Darwin": "Epic Games Launcher",  "Linux": "legendary"},
+    "chrome": {
+        "Windows": "chrome",
+        "Darwin": "Google Chrome",
+        "Linux": "google-chrome",
+    },
+    "google chrome": {
+        "Windows": "chrome",
+        "Darwin": "Google Chrome",
+        "Linux": "google-chrome",
+    },
+    "firefox": {"Windows": "firefox", "Darwin": "Firefox", "Linux": "firefox"},
+    "edge": {
+        "Windows": "msedge",
+        "Darwin": "Microsoft Edge",
+        "Linux": "microsoft-edge",
+    },
+    "brave": {"Windows": "brave", "Darwin": "Brave Browser", "Linux": "brave-browser"},
+    "safari": {"Windows": "msedge", "Darwin": "Safari", "Linux": "firefox"},
+    "opera": {"Windows": "opera", "Darwin": "Opera", "Linux": "opera"},
+    "whatsapp": {"Windows": "WhatsApp", "Darwin": "WhatsApp", "Linux": "whatsapp"},
+    "telegram": {"Windows": "Telegram", "Darwin": "Telegram", "Linux": "telegram"},
+    "discord": {"Windows": "Discord", "Darwin": "Discord", "Linux": "discord"},
+    "slack": {"Windows": "Slack", "Darwin": "Slack", "Linux": "slack"},
+    "zoom": {"Windows": "Zoom", "Darwin": "zoom.us", "Linux": "zoom"},
+    "teams": {"Windows": "msteams", "Darwin": "Microsoft Teams", "Linux": "teams"},
+    "skype": {"Windows": "skype", "Darwin": "Skype", "Linux": "skype"},
+    "signal": {"Windows": "signal", "Darwin": "Signal", "Linux": "signal"},
+    "spotify": {"Windows": "Spotify", "Darwin": "Spotify", "Linux": "spotify"},
+    "vlc": {"Windows": "vlc", "Darwin": "VLC", "Linux": "vlc"},
+    "netflix": {"Windows": "Netflix", "Darwin": "Netflix", "Linux": "firefox"},
+    "vscode": {"Windows": "code", "Darwin": "Visual Studio Code", "Linux": "code"},
+    "visual studio code": {
+        "Windows": "code",
+        "Darwin": "Visual Studio Code",
+        "Linux": "code",
+    },
+    "code": {"Windows": "code", "Darwin": "Visual Studio Code", "Linux": "code"},
+    "terminal": {"Windows": "wt", "Darwin": "Terminal", "Linux": "x-terminal-emulator"},
+    "cmd": {"Windows": "cmd.exe", "Darwin": "Terminal", "Linux": "bash"},
+    "powershell": {"Windows": "powershell.exe", "Darwin": "Terminal", "Linux": "bash"},
+    "postman": {"Windows": "Postman", "Darwin": "Postman", "Linux": "postman"},
+    "git": {"Windows": "git-bash", "Darwin": "Terminal", "Linux": "bash"},
+    "figma": {"Windows": "Figma", "Darwin": "Figma", "Linux": "figma"},
+    "blender": {"Windows": "blender", "Darwin": "Blender", "Linux": "blender"},
+    "word": {
+        "Windows": "winword",
+        "Darwin": "Microsoft Word",
+        "Linux": "libreoffice --writer",
+    },
+    "excel": {
+        "Windows": "excel",
+        "Darwin": "Microsoft Excel",
+        "Linux": "libreoffice --calc",
+    },
+    "powerpoint": {
+        "Windows": "powerpnt",
+        "Darwin": "Microsoft PowerPoint",
+        "Linux": "libreoffice --impress",
+    },
+    "libreoffice": {
+        "Windows": "soffice",
+        "Darwin": "LibreOffice",
+        "Linux": "libreoffice",
+    },
+    "notepad": {"Windows": "notepad.exe", "Darwin": "TextEdit", "Linux": "gedit"},
+    "textedit": {"Windows": "notepad.exe", "Darwin": "TextEdit", "Linux": "gedit"},
+    "explorer": {"Windows": "explorer.exe", "Darwin": "Finder", "Linux": "nautilus"},
+    "file explorer": {
+        "Windows": "explorer.exe",
+        "Darwin": "Finder",
+        "Linux": "nautilus",
+    },
+    "finder": {"Windows": "explorer.exe", "Darwin": "Finder", "Linux": "nautilus"},
+    "task manager": {
+        "Windows": "taskmgr.exe",
+        "Darwin": "Activity Monitor",
+        "Linux": "gnome-system-monitor",
+    },
+    "settings": {
+        "Windows": "ms-settings:",
+        "Darwin": "System Preferences",
+        "Linux": "gnome-control-center",
+    },
+    "calculator": {
+        "Windows": "calc.exe",
+        "Darwin": "Calculator",
+        "Linux": "gnome-calculator",
+    },
+    "paint": {"Windows": "mspaint.exe", "Darwin": "Preview", "Linux": "gimp"},
+    "instagram": {"Windows": "Instagram", "Darwin": "Instagram", "Linux": "firefox"},
+    "tiktok": {"Windows": "TikTok", "Darwin": "TikTok", "Linux": "firefox"},
+    "notion": {"Windows": "Notion", "Darwin": "Notion", "Linux": "notion"},
+    "obsidian": {"Windows": "Obsidian", "Darwin": "Obsidian", "Linux": "obsidian"},
+    "capcut": {"Windows": "CapCut", "Darwin": "CapCut", "Linux": "capcut"},
+    "steam": {"Windows": "steam", "Darwin": "Steam", "Linux": "steam"},
+    "epic": {
+        "Windows": "EpicGamesLauncher",
+        "Darwin": "Epic Games Launcher",
+        "Linux": "legendary",
+    },
+    "epic games": {
+        "Windows": "EpicGamesLauncher",
+        "Darwin": "Epic Games Launcher",
+        "Linux": "legendary",
+    },
 }
 
 
@@ -258,7 +315,7 @@ def own_exes(chain: Optional[set[int]] = None) -> set[str]:
     found: set[str] = set()
     if sys.executable:
         found.add(os.path.normcase(sys.executable))
-    for pid in (chain or _chain_pids()):
+    for pid in chain or _chain_pids():
         try:
             exe = psutil.Process(pid).exe()
             if exe:
@@ -383,9 +440,7 @@ def _windows_by_pid() -> dict[int, list[str]]:
         user32 = ctypes.WinDLL("user32", use_last_error=True)
         titles: dict[int, list[str]] = {}
 
-        WNDENUMPROC = ctypes.WINFUNCTYPE(
-            wintypes.BOOL, wintypes.HWND, wintypes.LPARAM
-        )
+        WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
 
         def _collect(hwnd, _lparam):
             if not user32.IsWindowVisible(hwnd):
@@ -415,9 +470,9 @@ class Match:
     """One running application that could be what the user meant."""
 
     pid: int
-    name: str                              # process name, as the OS reports it
-    score: int                             # bigger is a better match
-    is_self: bool                          # part of the assistant's own tree
+    name: str  # process name, as the OS reports it
+    score: int  # bigger is a better match
+    is_self: bool  # part of the assistant's own tree
     titles: list[str] = field(default_factory=list)
 
     @property
@@ -443,11 +498,11 @@ class Match:
 
 # Scores. Named rather than inline so the ordering is a statement about intent
 # instead of three magic numbers.
-_EXACT = 100        # the process IS the word, ignoring case and punctuation
-_PREFIX = 60        # the process name starts with it — "code" vs "code.exe"
-_CONTAINS = 30      # it appears somewhere inside
-_TITLE_ONLY = 20    # nothing in the process name; a window is titled that way
-_HAS_WINDOW = 5     # tie-breaker: something the user can actually see
+_EXACT = 100  # the process IS the word, ignoring case and punctuation
+_PREFIX = 60  # the process name starts with it — "code" vs "code.exe"
+_CONTAINS = 30  # it appears somewhere inside
+_TITLE_ONLY = 20  # nothing in the process name; a window is titled that way
+_HAS_WINDOW = 5  # tie-breaker: something the user can actually see
 
 
 # Below this many characters, only an EXACT match counts.
@@ -551,8 +606,9 @@ def running(spoken: str, include_self: bool = False) -> list[Match]:
             is_self = pid in chain or is_own_binary
             if is_self and not include_self:
                 continue
-            out.append(Match(pid=pid, name=name, score=best,
-                             is_self=is_self, titles=titles))
+            out.append(
+                Match(pid=pid, name=name, score=best, is_self=is_self, titles=titles)
+            )
         except Exception:
             # A process that exited between listing and reading is normal and
             # is not worth a line in the log.
@@ -585,8 +641,9 @@ def snapshot() -> set[int]:
         return set()
 
 
-def wait_for_launch(spoken: str, before: set[int],
-                    timeout: float = 12.0, poll: float = 0.25) -> Optional[Match]:
+def wait_for_launch(
+    spoken: str, before: set[int], timeout: float = 12.0, poll: float = 0.25
+) -> Optional[Match]:
     """Wait for a NEW process answering to `spoken`, and return it.
 
     This is what turns "the launcher returned" into "the application exists" —
@@ -631,9 +688,7 @@ def _post_close_windows(pid: int) -> int:
         WM_CLOSE = 0x0010
         asked = 0
 
-        WNDENUMPROC = ctypes.WINFUNCTYPE(
-            wintypes.BOOL, wintypes.HWND, wintypes.LPARAM
-        )
+        WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
 
         def _maybe_close(hwnd, _lparam):
             nonlocal asked
@@ -687,32 +742,40 @@ def request_close(match: Match, timeout: float = 6.0) -> tuple[bool, str]:
     # be tidied away later. A false negative here closes the assistant, or the
     # user's editor, and there is no undo for that.
     if match.is_self or match.pid == os.getpid():
-        return False, ("that is the assistant's own process, so nothing was "
-                       "closed")
+        return False, ("that is the assistant's own process, so nothing was " "closed")
     if match.pid in own_pids():
-        return False, ("that process belongs to the assistant, so nothing was "
-                       "closed")
+        return False, (
+            "that process belongs to the assistant, so nothing was " "closed"
+        )
     try:
         target_exe = psutil.Process(match.pid).exe()
         if target_exe and os.path.normcase(target_exe) in own_exes():
-            return False, ("that is running the same program as the assistant "
-                           "itself, so nothing was closed")
+            return False, (
+                "that is running the same program as the assistant "
+                "itself, so nothing was closed"
+            )
     except psutil.NoSuchProcess:
         # Gone before we could look at it. That is NOT the same as this
         # function having closed it, and reporting it as closed is how a
         # transient process turned into `status=done closed=python` — a
         # sentence that reads as the self-protection having failed.
-        return False, ("that process had already exited before it could be "
-                       "closed, so nothing was done to it")
+        return False, (
+            "that process had already exited before it could be "
+            "closed, so nothing was done to it"
+        )
     except Exception:
         # Cannot read the executable. Refuse: an unknown target is not a
         # target, and the cost of being wrong is one sentence rather than a
         # process nobody meant to end.
-        return False, ("this process cannot be inspected, so it was left "
-                       "alone rather than closed on a guess")
+        return False, (
+            "this process cannot be inspected, so it was left "
+            "alone rather than closed on a guess"
+        )
     if not _PSUTIL:
-        return False, ("psutil is not installed, so applications cannot be "
-                       "found or closed - run: pip install psutil")
+        return False, (
+            "psutil is not installed, so applications cannot be "
+            "found or closed - run: pip install psutil"
+        )
 
     asked = _post_close_windows(match.pid)
     if asked == 0:
@@ -721,8 +784,10 @@ def request_close(match: Match, timeout: float = 6.0) -> tuple[bool, str]:
         except psutil.NoSuchProcess:
             return True, "it had already exited"
         except psutil.AccessDenied:
-            return False, ("the system refused - it is running with higher "
-                           "privileges than the assistant")
+            return False, (
+                "the system refused - it is running with higher "
+                "privileges than the assistant"
+            )
         except Exception as exc:
             return False, f"the close request failed ({exc})"
 
@@ -736,8 +801,10 @@ def request_close(match: Match, timeout: float = 6.0) -> tuple[bool, str]:
     # is waiting on screen, which is worth saying because the user can answer
     # it — telling them "could not close" and nothing else sends them looking
     # for a fault that is really a prompt.
-    return False, ("it is still running after being asked to close - it may be "
-                   "showing a dialog, such as asking whether to save changes")
+    return False, (
+        "it is still running after being asked to close - it may be "
+        "showing a dialog, such as asking whether to save changes"
+    )
 
 
 def _hwnds_for(pid: int) -> list[int]:
@@ -750,8 +817,7 @@ def _hwnds_for(pid: int) -> list[int]:
 
         user32 = ctypes.WinDLL("user32", use_last_error=True)
         found: list[int] = []
-        WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND,
-                                         wintypes.LPARAM)
+        WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
 
         def _collect(hwnd, _lparam):
             if user32.IsWindowVisible(hwnd):
@@ -845,10 +911,15 @@ def focus(match: "Match") -> bool:
     if _OS == "Darwin":
         try:
             r = subprocess.run(
-                ["osascript", "-e",
-                 f'tell application "System Events" to set frontmost of the '
-                 f'first process whose unix id is {match.pid} to true'],
-                capture_output=True, timeout=5)
+                [
+                    "osascript",
+                    "-e",
+                    f'tell application "System Events" to set frontmost of the '
+                    f"first process whose unix id is {match.pid} to true",
+                ],
+                capture_output=True,
+                timeout=5,
+            )
             return r.returncode == 0
         except Exception:
             return False
@@ -866,7 +937,9 @@ def focus(match: "Match") -> bool:
     try:
         r = subprocess.run(
             ["xdotool", "search", "--pid", str(match.pid), "windowactivate"],
-            capture_output=True, timeout=5)
+            capture_output=True,
+            timeout=5,
+        )
         if r.returncode == 0:
             return True
     except FileNotFoundError:
@@ -874,16 +947,15 @@ def focus(match: "Match") -> bool:
     except Exception:
         pass
 
-    for title in (match.titles or [match.label]):
+    for title in match.titles or [match.label]:
         if not title:
             continue
         try:
-            r = subprocess.run(["wmctrl", "-a", title],
-                               capture_output=True, timeout=5)
+            r = subprocess.run(["wmctrl", "-a", title], capture_output=True, timeout=5)
             if r.returncode == 0:
                 return True
         except FileNotFoundError:
-            return False        # not installed; no point trying other titles
+            return False  # not installed; no point trying other titles
         except Exception:
             continue
     return False

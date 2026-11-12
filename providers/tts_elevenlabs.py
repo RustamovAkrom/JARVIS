@@ -29,6 +29,7 @@ NO LANGUAGE PARAMETER IS SENT
     mean this file deciding what language the assistant is speaking, which is a
     decision it has no business making — the model and the system prompt own it.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -46,9 +47,9 @@ API = "https://api.elevenlabs.io/v1"
 # models are multilingual too. The higher-quality models stay available for
 # anybody who would rather have them.
 MODELS = (
-    "eleven_flash_v2_5",        # fastest, multilingual
-    "eleven_turbo_v2_5",        # a little richer, still quick
-    "eleven_multilingual_v2",   # best quality, slowest
+    "eleven_flash_v2_5",  # fastest, multilingual
+    "eleven_turbo_v2_5",  # a little richer, still quick
+    "eleven_multilingual_v2",  # best quality, slowest
 )
 DEFAULT_MODEL = MODELS[0]
 
@@ -80,15 +81,21 @@ class ElevenLabsTTS:
             "text": text,
             "model_id": self.model,
             # No `language_code`: the model detects it. See the module docstring.
-            "voice_settings": {"stability": self.stability,
-                               "similarity_boost": self.similarity},
+            "voice_settings": {
+                "stability": self.stability,
+                "similarity_boost": self.similarity,
+            },
         }
 
     async def _stream_once(self, cl, text: str, fmt: str) -> AsyncIterator[bytes]:
         url = f"{API}/text-to-speech/{self.voice_id}/stream"
-        async with cl.stream("POST", url, headers=self._headers(),
-                             params={"output_format": fmt},
-                             json=self._payload(text)) as r:
+        async with cl.stream(
+            "POST",
+            url,
+            headers=self._headers(),
+            params={"output_format": fmt},
+            json=self._payload(text),
+        ) as r:
             if r.status_code >= 400:
                 body = (await r.aread()).decode("utf-8", "replace")
                 raise _HttpError(r.status_code, body)
@@ -152,12 +159,15 @@ class ElevenLabsTTS:
     def voices(self) -> list[tuple[str, str]]:
         """(id, name) for every voice on the account."""
         import httpx
+
         with httpx.Client(timeout=15.0) as cl:
             r = cl.get(f"{API}/voices", headers={"xi-api-key": self.key})
             if r.status_code >= 400:
                 raise RuntimeError(f"{r.status_code} {_message(r.text)}")
-            return [(v.get("voice_id", ""), v.get("name", ""))
-                    for v in (r.json().get("voices") or [])]
+            return [
+                (v.get("voice_id", ""), v.get("name", ""))
+                for v in (r.json().get("voices") or [])
+            ]
 
     def probe(self) -> tuple[bool, str]:
         if not self.key:
@@ -173,8 +183,11 @@ class ElevenLabsTTS:
             names = ", ".join(n for _, n in vs[:4])
             return False, f"Key works. Choose a voice — {len(vs)} available: {names}"
         name = next((n for i, n in vs if i == self.voice_id), self.voice_id)
-        note = "" if find_spec("av") else \
-            "  (MP3 fallback would need PyAV — only matters on a free tier)"
+        note = (
+            ""
+            if find_spec("av")
+            else "  (MP3 fallback would need PyAV — only matters on a free tier)"
+        )
         return True, f"Ready: {name}, {self.model}{note}"
 
 
@@ -188,7 +201,7 @@ class _HttpError(Exception):
 def _num(value, default: float) -> float:
     try:
         return float(value)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return default
 
 
@@ -216,7 +229,8 @@ def _decode_mp3(data: bytes) -> bytes:
         raise RuntimeError(
             "this account cannot receive raw PCM, so the audio arrives as MP3 "
             "and needs a decoder: pip install av — or use a paid ElevenLabs "
-            "tier, or the system voice")
+            "tier, or the system voice"
+        )
     import io
 
     import av
@@ -224,12 +238,13 @@ def _decode_mp3(data: bytes) -> bytes:
 
     out = []
     with av.open(io.BytesIO(data)) as container:
-        resampler = av.AudioResampler(format="s16", layout="mono",
-                                      rate=audio.SPEAKER_RATE)
+        resampler = av.AudioResampler(
+            format="s16", layout="mono", rate=audio.SPEAKER_RATE
+        )
         for frame in container.decode(audio=0):
             for res in resampler.resample(frame):
                 out.append(res.to_ndarray().reshape(-1))
-        for res in resampler.resample(None):        # flush
+        for res in resampler.resample(None):  # flush
             out.append(res.to_ndarray().reshape(-1))
     if not out:
         return b""
@@ -247,22 +262,55 @@ PROVIDER = {
     "hint": "One voice that speaks every language — needs a key and a connection",
     "requires": ("httpx",),
     "catalog": (
-        {"id": "elevenlabs", "label": "ElevenLabs",
-         "note": "cloud · one voice speaks every language", "local": False,
-         "values": {}},
+        {
+            "id": "elevenlabs",
+            "label": "ElevenLabs",
+            "note": "cloud · one voice speaks every language",
+            "local": False,
+            "values": {},
+        },
     ),
     "needs": (
-        Field("api_key", "API key", kind="secret",
-              hint="elevenlabs.io -> Profile -> API key"),
-        Field("voice_id", "Voice", kind="choice", choices=(),
-              hint="Press LIST to read the voices on your account"),
-        Field("model", "Model", kind="choice", choices=MODELS,
-              default=DEFAULT_MODEL, required=False,
-              hint="flash is the quickest and still multilingual"),
-        Field("stability", "Stability", kind="number", default=0.5,
-              required=False, advanced=True, hint="0 to 1"),
-        Field("similarity", "Similarity", kind="number", default=0.75,
-              required=False, advanced=True, hint="0 to 1"),
+        Field(
+            "api_key",
+            "API key",
+            kind="secret",
+            hint="elevenlabs.io -> Profile -> API key",
+        ),
+        Field(
+            "voice_id",
+            "Voice",
+            kind="choice",
+            choices=(),
+            hint="Press LIST to read the voices on your account",
+        ),
+        Field(
+            "model",
+            "Model",
+            kind="choice",
+            choices=MODELS,
+            default=DEFAULT_MODEL,
+            required=False,
+            hint="flash is the quickest and still multilingual",
+        ),
+        Field(
+            "stability",
+            "Stability",
+            kind="number",
+            default=0.5,
+            required=False,
+            advanced=True,
+            hint="0 to 1",
+        ),
+        Field(
+            "similarity",
+            "Similarity",
+            kind="number",
+            default=0.75,
+            required=False,
+            advanced=True,
+            hint="0 to 1",
+        ),
     ),
     "caps": {"audio_out": True},
     "factory": _make,

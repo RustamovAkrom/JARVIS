@@ -48,11 +48,11 @@ TIMEOUT_SECONDS = 90.0
 
 @dataclass
 class _Pending:
-    key:     str
-    title:   str
-    detail:  str
-    run:     Callable[[], str]
-    at:      float
+    key: str
+    title: str
+    detail: str
+    run: Callable[[], str]
+    at: float
     on_cancel: Optional[Callable[[], None]] = None
 
 
@@ -63,7 +63,7 @@ _lock = threading.Lock()
 # and () -> None for hide. Both are marshalled onto the Qt thread by the UI.
 _show_cb: Optional[Callable[[str, str], None]] = None
 _hide_cb: Optional[Callable[[], None]] = None
-_log_cb:  Optional[Callable[[str], None]] = None
+_log_cb: Optional[Callable[[str], None]] = None
 
 
 def bind(show, hide, log=None) -> None:
@@ -80,8 +80,13 @@ def _log(msg: str) -> None:
             pass
 
 
-def request(key: str, title: str, detail: str, run: Callable[[], str],
-            on_cancel: Optional[Callable[[], None]] = None) -> str:
+def request(
+    key: str,
+    title: str,
+    detail: str,
+    run: Callable[[], str],
+    on_cancel: Optional[Callable[[], None]] = None,
+) -> str:
     """Park an irreversible action behind the on-screen gate.
 
     Returns the sentence the tool should hand back to the model — phrased as an
@@ -92,8 +97,10 @@ def request(key: str, title: str, detail: str, run: Callable[[], str],
     if _show_cb is None:
         # No interface bound (headless, or a very early call). Refuse rather
         # than silently performing something irreversible.
-        return (f"I cannot confirm '{title}' right now because the interface is "
-                f"not available, so I have not done it.")
+        return (
+            f"I cannot confirm '{title}' right now because the interface is "
+            f"not available, so I have not done it."
+        )
 
     with _lock:
         if _pending is not None and time.monotonic() - _pending.at <= TIMEOUT_SECONDS:
@@ -102,8 +109,14 @@ def request(key: str, title: str, detail: str, run: Callable[[], str],
                 "is already waiting for confirmation."
             )
         expired, _pending = _pending, None
-        _pending = _Pending(key=key, title=title, detail=detail,
-                            run=run, at=time.monotonic(), on_cancel=on_cancel)
+        _pending = _Pending(
+            key=key,
+            title=title,
+            detail=detail,
+            run=run,
+            at=time.monotonic(),
+            on_cancel=on_cancel,
+        )
 
     if expired is not None:
         _cancel(expired)
@@ -114,8 +127,16 @@ def request(key: str, title: str, detail: str, run: Callable[[], str],
         with _lock:
             if _pending is not None and _pending.key == key:
                 _pending = None
-        _cancel(_Pending(key=key, title=title, detail=detail,
-                         run=run, at=time.monotonic(), on_cancel=on_cancel))
+        _cancel(
+            _Pending(
+                key=key,
+                title=title,
+                detail=detail,
+                run=run,
+                at=time.monotonic(),
+                on_cancel=on_cancel,
+            )
+        )
         return f"Could not ask for confirmation: {e}. Nothing was done."
 
     _log(f"SYS: Awaiting confirmation — {title}")
@@ -175,8 +196,7 @@ def resolve(accepted: bool, key: Optional[str] = None) -> None:
         except Exception as e:
             _log(f"ERR: {p.title} failed — {e}")
 
-    threading.Thread(target=_worker, daemon=True,
-                     name=f"confirm-{p.key}").start()
+    threading.Thread(target=_worker, daemon=True, name=f"confirm-{p.key}").start()
 
 
 def pending_title() -> str:

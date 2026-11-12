@@ -1,4 +1,5 @@
 import os
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import tempfile
@@ -12,14 +13,28 @@ from PyQt6.QtCore import QEvent, QPoint, QPointF, Qt
 from PyQt6.QtGui import QColor, QImage, QMouseEvent
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import (
-    QApplication, QCheckBox, QComboBox, QMainWindow, QScrollArea, QWidget,
+    QApplication,
+    QCheckBox,
+    QComboBox,
+    QMainWindow,
+    QScrollArea,
+    QWidget,
 )
 
 from memory import config_manager
 from ui import (
-    ChatInput, ClipboardPanel, CursorRadialMenu, CustomizeOverlay, HudCanvas,
-    MetricGauge, MetricTrendChart, _SysMetrics,
-    LanguagePickerOverlay, MainWindow, SetupOverlay, _ProjectEditorDialog,
+    ChatInput,
+    ClipboardPanel,
+    CursorRadialMenu,
+    CustomizeOverlay,
+    HudCanvas,
+    MetricGauge,
+    MetricTrendChart,
+    _SysMetrics,
+    LanguagePickerOverlay,
+    MainWindow,
+    SetupOverlay,
+    _ProjectEditorDialog,
     _WindowHeader,
     _cursor_style_pixmap,
 )
@@ -83,9 +98,12 @@ class CursorAssistantUiTests(unittest.TestCase):
         try:
             canvas.resize(300, 300)
             event = QMouseEvent(
-                QEvent.Type.MouseMove, QPointF(290, 20),
-                Qt.MouseButton.NoButton, Qt.MouseButton.NoButton,
-                Qt.KeyboardModifier.NoModifier)
+                QEvent.Type.MouseMove,
+                QPointF(290, 20),
+                Qt.MouseButton.NoButton,
+                Qt.MouseButton.NoButton,
+                Qt.KeyboardModifier.NoModifier,
+            )
             canvas.mouseMoveEvent(event)
             self.assertGreater(canvas._pointer_target_x, 0)
             self.assertLess(canvas._pointer_target_y, 0)
@@ -174,8 +192,7 @@ class CursorAssistantUiTests(unittest.TestCase):
         event = Mock()
         event.type.return_value = QEvent.Type.MouseButtonPress
         event.button.return_value = Qt.MouseButton.LeftButton
-        event.globalPosition.return_value = QPointF(
-            owner.mapToGlobal(QPoint(2, 100)))
+        event.globalPosition.return_value = QPointF(owner.mapToGlobal(QPoint(2, 100)))
         try:
             with patch.object(owner, "windowHandle", return_value=handle):
                 consumed = MainWindow.eventFilter(owner, child, event)
@@ -186,8 +203,7 @@ class CursorAssistantUiTests(unittest.TestCase):
 
     def test_windows_gpu_probe_is_disabled_to_keep_monitor_thread_safe(self):
         metrics = _SysMetrics.__new__(_SysMetrics)
-        with patch("ui._OS", "Windows"), patch(
-            "ui.subprocess.run") as run:
+        with patch("ui._OS", "Windows"), patch("ui.subprocess.run") as run:
             self.assertEqual(metrics._get_gpu(), -1.0)
         run.assert_not_called()
 
@@ -196,8 +212,7 @@ class CursorAssistantUiTests(unittest.TestCase):
             def __init__(self):
                 self._cursor_visible_check = QCheckBox()
                 self.saved = 0
-                self._cursor_visible_check.toggled.connect(
-                    self._save_cursor_controls)
+                self._cursor_visible_check.toggled.connect(self._save_cursor_controls)
 
             def _save_cursor_controls(self):
                 self.saved += 1
@@ -300,6 +315,7 @@ class CursorAssistantUiTests(unittest.TestCase):
             class Question:
                 def setText(self, text):
                     self.text = text
+
             _question = Question()
 
         class Sender:
@@ -321,8 +337,9 @@ class CursorAssistantUiTests(unittest.TestCase):
         self.assertIsNone(sender._pending_chat_image)
         self.assertEqual(sender.captured, b"jpeg")
         self.assertEqual(sender.analyzed, "What does this dialog say?")
-        self.assertEqual(sender._cursor_answer._question.text,
-                         "What does this dialog say?")
+        self.assertEqual(
+            sender._cursor_answer._question.text, "What does this dialog say?"
+        )
 
     def test_controls_drawer_groups_controls_in_a_scrollable_panel(self):
         class PreviewWindow(QMainWindow):
@@ -439,13 +456,10 @@ class CursorAssistantUiTests(unittest.TestCase):
 
     def test_terminal_start_directory_uses_selected_project_or_home_fallback(self):
         project = r"E:\work\demo"
-        with patch(
-            "memory.config_manager.get_workspace_path", return_value=project
-        ):
+        with patch("memory.config_manager.get_workspace_path", return_value=project):
             self.assertEqual(MainWindow._terminal_start_directory(), project)
         with patch("memory.config_manager.get_workspace_path", return_value=""):
-            self.assertEqual(
-                MainWindow._terminal_start_directory(), str(Path.home()))
+            self.assertEqual(MainWindow._terminal_start_directory(), str(Path.home()))
 
     def test_closing_terminal_tab_interrupts_and_schedules_forced_cleanup(self):
         class View:
@@ -456,19 +470,22 @@ class CursorAssistantUiTests(unittest.TestCase):
             def widget(self, index):
                 return View() if index == 0 else None
 
-        session = type(
-            "Session", (), {"pty": object(), "closing": False})()
+        session = type("Session", (), {"pty": object(), "closing": False})()
         owner = type(
-            "TerminalOwner", (), {
+            "TerminalOwner",
+            (),
+            {
                 "_terminal_tabs": Tabs(),
                 "_terminal_sessions": {"terminal-1": session},
                 "_terminal_write": Mock(),
-            })()
+            },
+        )()
         with patch("ui.QTimer.singleShot") as single_shot:
             MainWindow._close_terminal_session(owner, 0)
         self.assertTrue(session.closing)
         owner._terminal_write.assert_called_once_with(
-            "\x03", "terminal-1", allow_closing=True)
+            "\x03", "terminal-1", allow_closing=True
+        )
         self.assertEqual(single_shot.call_count, 2)
         self.assertEqual(single_shot.call_args_list[0].args[0], 180)
         self.assertEqual(single_shot.call_args_list[1].args[0], 1500)
@@ -477,16 +494,18 @@ class CursorAssistantUiTests(unittest.TestCase):
         session = type("Session", (), {"view": QWidget()})()
         terminal_panel = QWidget()
         toggle = QCheckBox()
-        tabs = type(
-            "Tabs", (), {"indexOf": lambda self, view: 0})()
+        tabs = type("Tabs", (), {"indexOf": lambda self, view: 0})()
         owner = type(
-            "TerminalOwner", (), {
+            "TerminalOwner",
+            (),
+            {
                 "_terminal_panel": terminal_panel,
                 "_terminal_toggle_btn": toggle,
                 "_terminal_sessions": {"terminal-1": session},
                 "_terminal_tabs": tabs,
                 "_close_terminal_session": Mock(),
-            })()
+            },
+        )()
         MainWindow._close_terminal_panel(owner)
         self.assertFalse(terminal_panel.isVisible())
         self.assertFalse(toggle.isChecked())
@@ -503,24 +522,29 @@ class CursorAssistantUiTests(unittest.TestCase):
                 return self.alive
 
         pty = Pty()
-        session = type(
-            "Session", (), {"pty": pty, "closing": True})()
+        session = type("Session", (), {"pty": pty, "closing": True})()
         owner = type(
-            "TerminalOwner", (), {
+            "TerminalOwner",
+            (),
+            {
                 "_terminal_sessions": {"terminal-1": session},
                 "_append_activity": Mock(),
                 "_remove_terminal_session": Mock(),
-            })()
+            },
+        )()
 
         def terminate_process(*_args, **_kwargs):
             pty.alive = False
             return Mock(stderr="")
 
-        with patch("ui.os.name", "nt"), patch(
-            "ui.subprocess.run", side_effect=terminate_process) as run:
+        with (
+            patch("ui.os.name", "nt"),
+            patch("ui.subprocess.run", side_effect=terminate_process) as run,
+        ):
             MainWindow._force_close_terminal_session(owner, "terminal-1")
-        self.assertEqual(run.call_args.args[0], [
-            "taskkill", "/PID", "12345", "/T", "/F"])
+        self.assertEqual(
+            run.call_args.args[0], ["taskkill", "/PID", "12345", "/T", "/F"]
+        )
         self.assertIsNone(session.pty)
         owner._remove_terminal_session.assert_called_once_with("terminal-1")
 

@@ -1,4 +1,5 @@
 import os
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import unittest
@@ -47,7 +48,8 @@ class ScreenRegionSelectorTests(unittest.TestCase):
         captured = []
         cancelled = []
         selector = ScreenRegionSelector(
-            screenshot, QRect(0, 0, 200, 100), captured.append, cancelled.append)
+            screenshot, QRect(0, 0, 200, 100), captured.append, cancelled.append
+        )
 
         selector.mousePressEvent(_MouseEvent(20, 10))
         selector.mouseMoveEvent(_MouseEvent(120, 60))
@@ -63,8 +65,11 @@ class ScreenRegionSelectorTests(unittest.TestCase):
         screenshot = QPixmap(64, 64)
         cancelled = []
         selector = ScreenRegionSelector(
-            screenshot, QRect(0, 0, 64, 64), lambda data: self.fail("unexpected crop"),
-            cancelled.append)
+            screenshot,
+            QRect(0, 0, 64, 64),
+            lambda data: self.fail("unexpected crop"),
+            cancelled.append,
+        )
         selector.keyPressEvent(_KeyEvent())
         self.assertEqual(cancelled, [""])
 
@@ -72,7 +77,8 @@ class ScreenRegionSelectorTests(unittest.TestCase):
         screenshot = QPixmap(160, 100)
         screenshot.fill(QColor(180, 180, 180))
         selector = ScreenRegionSelector(
-            screenshot, QRect(0, 0, 160, 100), lambda _data: None, lambda _msg: None)
+            screenshot, QRect(0, 0, 160, 100), lambda _data: None, lambda _msg: None
+        )
         selector._selection = QRect(60, 40, 50, 35)
         rendered = QPixmap(selector.size())
         rendered.fill(Qt.GlobalColor.transparent)

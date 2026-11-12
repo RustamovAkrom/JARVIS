@@ -23,6 +23,7 @@ NO NEW DEPENDENCY
     synthesiser's own artefacts, and it costs no library, no build step and no
     platform-specific wheel.
 """
+
 from __future__ import annotations
 
 import io
@@ -35,13 +36,14 @@ from typing import Iterator
 # single edit rather than a hunt.
 MIC_RATE = 16_000
 SPEAKER_RATE = 24_000
-SAMPLE_WIDTH = 2          # 16-bit signed little-endian
+SAMPLE_WIDTH = 2  # 16-bit signed little-endian
 CHANNELS = 1
 
 
 def to_float32(pcm: bytes):
     """16-bit PCM -> float32 in [-1, 1], which is what speech models take."""
     import numpy as np
+
     if not pcm:
         return np.zeros(0, dtype=np.float32)
     # An odd byte count means a chunk was cut mid-sample. Dropping the stray
@@ -59,6 +61,7 @@ def to_pcm16(samples) -> bytes:
     of loudness into a burst of white noise — much worse than the clipping it
     replaces."""
     import numpy as np
+
     arr = np.asarray(samples, dtype=np.float32)
     return (np.clip(arr, -1.0, 1.0) * 32767.0).astype("<i2").tobytes()
 
@@ -69,6 +72,7 @@ def resample(pcm: bytes, src_rate: int, dst_rate: int) -> bytes:
     if src_rate == dst_rate or not pcm:
         return pcm
     import numpy as np
+
     src = to_float32(pcm)
     if src.size == 0:
         return b""
@@ -88,6 +92,7 @@ def to_mono(pcm: bytes, channels: int) -> bytes:
     if channels <= 1 or not pcm:
         return pcm
     import numpy as np
+
     arr = to_float32(pcm)
     usable = (arr.size // channels) * channels
     return to_pcm16(arr[:usable].reshape(-1, channels).mean(axis=1))
@@ -125,13 +130,14 @@ def _requantise(frames: bytes, width: int) -> bytes:
     """8-, 24- or 32-bit PCM down to 16-bit. Rare, but a voice that reports 32
     is not a reason to play silence."""
     import numpy as np
-    if width == 1:                                   # unsigned 8-bit
+
+    if width == 1:  # unsigned 8-bit
         arr = (np.frombuffer(frames, dtype=np.uint8).astype(np.float32) - 128) / 128.0
-    elif width == 3:                                 # packed 24-bit
+    elif width == 3:  # packed 24-bit
         raw = np.frombuffer(frames, dtype=np.uint8)
         usable = (raw.size // 3) * 3
         b = raw[:usable].reshape(-1, 3).astype(np.int32)
-        val = (b[:, 0] | (b[:, 1] << 8) | (b[:, 2] << 16))
+        val = b[:, 0] | (b[:, 1] << 8) | (b[:, 2] << 16)
         val = np.where(val & 0x800000, val - 0x1000000, val)
         arr = val.astype(np.float32) / 8388608.0
     elif width == 4:
@@ -151,7 +157,7 @@ def _salvage(data: bytes, want_rate: int) -> bytes:
         channels = struct.unpack_from("<H", data, data.find(b"fmt ") + 10)[0]
     except Exception:
         rate, channels = want_rate, 1
-    body = data[i + 8:]
+    body = data[i + 8 :]
     return resample(to_mono(body, channels or 1), rate or want_rate, want_rate)
 
 
@@ -167,7 +173,7 @@ def chunk(pcm: bytes, ms: int = 50, rate: int = SPEAKER_RATE) -> Iterator[bytes]
     step = max(2, int(rate * (ms / 1000.0)) * SAMPLE_WIDTH)
     step -= step % SAMPLE_WIDTH
     for i in range(0, len(pcm), step):
-        piece = pcm[i:i + step]
+        piece = pcm[i : i + step]
         if piece:
             yield piece
 
