@@ -48,11 +48,9 @@ import re
 import threading
 import time
 import json
-import sys
 import traceback
 from contextlib import asynccontextmanager
 from datetime import datetime
-from pathlib import Path
 from core.runtime_paths import PATHS, initialize_user_data
 
 import numpy as np
