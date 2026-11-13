@@ -1,20 +1,12 @@
+import os
+import shutil
 import subprocess
 import sys
 import json
 import re
 import time
-from pathlib import Path
-from core.runtime_paths import PATHS
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
-
-def get_base_dir():
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent.parent
-
-
-BASE_DIR = get_base_dir()
-API_CONFIG_PATH = PATHS.api_config_file
 PROJECTS_DIR = Path.home() / "Desktop" / "JarvisProjects"
 MAX_FIX_ATTEMPTS = 5
 # Model choice, timeout and fallback ladder all live in core/gemini.py.
@@ -22,11 +14,6 @@ from core import gemini
 
 MODEL_PLANNER = gemini.SMART
 MODEL_WRITER = gemini.SMART
-
-
-def _get_api_key() -> str:
-    with open(API_CONFIG_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)["gemini_api_key"]
 
 
 def _get_model(model_name: str = gemini.SMART):
@@ -250,7 +237,7 @@ Code for {file_path}:"""
         response = model.generate_content(prompt)
         code = _strip_fences(response.text)
 
-        full_path = project_dir / file_path
+        full_path = _resolve_project_file(project_dir, file_path)
         full_path.parent.mkdir(parents=True, exist_ok=True)
         full_path.write_text(code, encoding="utf-8")
 
@@ -261,6 +248,28 @@ Code for {file_path}:"""
         if _is_rate_limit(e):
             raise RateLimitError(str(e))
         raise
+
+
+def _resolve_project_file(project_dir: Path, relative_path: str) -> Path:
+    """Resolve a generated project path without allowing writes outside it."""
+    value = str(relative_path or "").strip()
+    posix_path = PurePosixPath(value.replace("\\", "/"))
+    windows_path = PureWindowsPath(value)
+    if (
+        not value
+        or posix_path.is_absolute()
+        or windows_path.is_absolute()
+        or windows_path.drive
+        or ".." in posix_path.parts
+        or ".." in windows_path.parts
+    ):
+        raise ValueError(f"Project file path must be relative and contained: {value!r}")
+
+    root = project_dir.resolve()
+    target = root.joinpath(*posix_path.parts).resolve()
+    if target != root and root not in target.parents:
+        raise ValueError(f"Project file path escapes the project folder: {value!r}")
+    return target
 
 
 def _install_dependencies(dependencies: list[str], project_dir: Path) -> str:
@@ -304,16 +313,37 @@ def _install_dependencies(dependencies: list[str], project_dir: Path) -> str:
 
 
 def _open_vscode(project_dir: Path) -> bool:
-    vscode_candidates = [
-        "code",
-        rf"C:\Users\{Path.home().name}\AppData\Local\Programs\Microsoft VS Code\bin\code.cmd",
-        r"C:\Program Files\Microsoft VS Code\bin\code.cmd",
-    ]
-    for cmd in vscode_candidates:
+    if os.name == "nt":
+        vscode_candidates = [
+            Path(os.environ.get("LOCALAPPDATA", ""))
+            / "Programs"
+            / "Microsoft VS Code"
+            / "Code.exe",
+            Path(os.environ.get("PROGRAMFILES", r"C:\Program Files"))
+            / "Microsoft VS Code"
+            / "Code.exe",
+            Path(os.environ.get("PROGRAMFILES(X86)", r"C:\Program Files (x86)"))
+            / "Microsoft VS Code"
+            / "Code.exe",
+        ]
+        commands = [
+            [str(path), str(project_dir)]
+            for path in vscode_candidates
+            if path.is_file()
+        ]
+    elif sys.platform == "darwin":
+        commands = [["open", "-a", "Visual Studio Code", "--args", str(project_dir)]]
+    else:
+        commands = [
+            [command, str(project_dir)]
+            for command in ("code", "code-insiders")
+            if shutil.which(command)
+        ]
+
+    for command in commands:
         try:
             subprocess.Popen(
-                [cmd, str(project_dir)],
-                shell=True,
+                command,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
@@ -466,7 +496,7 @@ Fixed code for {fix_path}:"""
             response = model.generate_content(prompt)
             fixed = _strip_fences(response.text)
 
-            full_path = project_dir / fix_path
+            full_path = _resolve_project_file(project_dir, fix_path)
             full_path.parent.mkdir(parents=True, exist_ok=True)
             full_path.write_text(fixed, encoding="utf-8")
 

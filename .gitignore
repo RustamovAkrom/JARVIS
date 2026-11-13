@@ -42,6 +42,7 @@ dist/
 
 # ── Virtual environments ──────────────────────────────────────────────────────
 .venv/
+.venv_kali/
 venv/
 env/
 ENV/

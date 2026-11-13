@@ -25,6 +25,7 @@ Plugins run with the current user's permissions. They are not sandboxed: importi
 | `disk_dashboard.py` | Disk usage and maintenance | Check the target before clearing a cache. |
 | `document_review.py` | Document explanation and structured review | Contents may be sent to the selected AI. |
 | `excel_writer.py` | Create/edit Excel workbooks | Check the path and output before replacing important files. |
+| `face_activation.py` | Local JARVIS lock overlay and optional face matching | PIN/passphrase recovery is required for startup lock. Face images and templates remain in JARVIS user data; the full-screen option is a user-space overlay, not an OS lock. |
 | `game_updater.py` | Steam/Epic game management | Requires the clients; installation and updates change files. |
 | `gods_eye_plugin.py` | Visual assistance tools | Screen features depend on enabled permissions and the selected AI. |
 | `network_dashboard.py` | Network status and diagnostics | Depends on OS support and system utilities. |
@@ -62,7 +63,7 @@ def run(parameters, player=None, session_memory=None):
 
 `name` must be a unique Python identifier of at most 64 characters; `description` must be non-empty; `parameters` must be an `OBJECT` schema understood by the selected engine. `run` must be synchronous and return a concise result. The loader passes `player` and `session_memory` only when declared in the signature (or both with `**kwargs`). Exceptions are caught and logged. Avoid blocking the conversation loop; use project background mechanisms and timeouts for long operations.
 
-Optional `PLUGIN` fields: `behavior` (`BLOCKING` or `NON_BLOCKING`), `scheduling` (`WHEN_IDLE`, `SILENT`, `INTERRUPT`), `tier` (`core`/`extra`), and a short `brief`. The loader validates these values; unknown values may be ignored.
+Optional `PLUGIN` fields: `behavior` (`BLOCKING` or `NON_BLOCKING`), `scheduling` (`WHEN_IDLE`, `SILENT`, `INTERRUPT`), `tier` (`core`/`extra`), a short `brief`, and `on_app_start(player=...)` for non-blocking startup setup. The loader validates declared values; unknown metadata may be ignored.
 
 ## Settings form
 

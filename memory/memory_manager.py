@@ -6,7 +6,6 @@ from pathlib import Path
 from core.runtime_paths import PATHS
 from core.user_data import atomic_write_text, file_lock
 
-
 BASE_DIR = PATHS.user_data_root
 MEMORY_PATH = PATHS.long_term_memory_file
 _lock = Lock()

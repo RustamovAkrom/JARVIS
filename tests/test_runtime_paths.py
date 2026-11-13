@@ -28,7 +28,10 @@ class RuntimePathTests(unittest.TestCase):
                     source_root=root / "source",
                     executable=root / "installed" / "JARVIS.exe",
                     frozen=frozen,
-                    env={"LOCALAPPDATA": str(root / "local"), "JARVIS_PROFILE": "shared"},
+                    env={
+                        "LOCALAPPDATA": str(root / "local"),
+                        "JARVIS_PROFILE": "shared",
+                    },
                     system="win32",
                 )
                 self.assertEqual(paths.user_data_root, root / "local" / "JARVIS")
@@ -91,9 +94,7 @@ class RuntimePathTests(unittest.TestCase):
             copied = migrate_legacy_user_data(paths, home=root / "empty-home")
 
             self.assertEqual(paths.api_config_file.read_text(), '{"key":"new"}')
-            self.assertEqual(
-                (paths.long_term_memory_file).read_text(), '{"notes":{}}'
-            )
+            self.assertEqual((paths.long_term_memory_file).read_text(), '{"notes":{}}')
             self.assertEqual(len(copied), 1)
             self.assertTrue((source / "config" / "api_keys.json").exists())
 

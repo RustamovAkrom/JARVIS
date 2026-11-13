@@ -3,9 +3,9 @@ import io
 import json
 import platform
 import re
+import secrets
 import string
 import subprocess
-import sys
 
 if platform.system() == "Windows":
     _WIN_HIDE: dict = {"creationflags": subprocess.CREATE_NO_WINDOW}
@@ -36,13 +36,6 @@ pyautogui = LazyModule("pyautogui", _configure_pyautogui)
 pyperclip = LazyModule("pyperclip")
 
 
-def _base_dir() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent.parent
-
-
-_BASE = _base_dir()
 _CONFIG_PATH = PATHS.api_config_file
 _MEMORY_PATH = PATHS.long_term_memory_file
 
@@ -164,13 +157,14 @@ def _random_data(data_type: str) -> str:
 
     if dt == "password":
         chars = string.ascii_letters + string.digits + "!@#$%"
-        raw = (
-            random.choice(string.ascii_uppercase)
-            + random.choice(string.digits)
-            + random.choice("!@#$%")
-            + "".join(random.choices(chars, k=9))
-        )
-        return "".join(random.sample(raw, len(raw)))
+        password = [
+            secrets.choice(string.ascii_uppercase),
+            secrets.choice(string.digits),
+            secrets.choice("!@#$%"),
+            *(secrets.choice(chars) for _ in range(9)),
+        ]
+        secrets.SystemRandom().shuffle(password)
+        return "".join(password)
 
     if dt == "phone":
         return f"+1{random.randint(200,999)}{random.randint(1_000_000, 9_999_999)}"

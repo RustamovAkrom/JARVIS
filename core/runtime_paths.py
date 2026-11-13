@@ -15,7 +15,6 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-
 APP_ID = "JARVIS"
 
 
@@ -123,7 +122,10 @@ def _resolve_paths(
         resource_root = Path(getattr(sys, "_MEIPASS", app_root)).resolve()
         # Velopack's installed layout keeps the mutable execution stub beside
         # Update.exe and runs the versioned application from a `current` folder.
-        if app_root.name.casefold() == "current" and (app_root.parent / "Update.exe").exists():
+        if (
+            app_root.name.casefold() == "current"
+            and (app_root.parent / "Update.exe").exists()
+        ):
             mode = "installed"
         else:
             mode = "portable"
@@ -134,8 +136,10 @@ def _resolve_paths(
     else:
         base = _local_data_root(env, system) / APP_ID
         profile = env.get("JARVIS_PROFILE", "").strip()
-        if profile and profile.casefold() != "shared" and not re.fullmatch(
-            r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", profile
+        if (
+            profile
+            and profile.casefold() != "shared"
+            and not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", profile)
         ):
             raise ValueError("JARVIS_PROFILE must be a simple profile name.")
         if profile.casefold() == "shared":
@@ -163,21 +167,32 @@ def configure_logging(paths: RuntimePaths = PATHS) -> logging.Logger:
     """Configure a small rotating application log in persistent user data."""
     paths.logs_dir.mkdir(parents=True, exist_ok=True)
     logger = logging.getLogger("jarvis")
-    if not any(getattr(handler, "baseFilename", "").casefold() == str(
-        paths.logs_dir / "jarvis.log"
-    ).casefold() for handler in logger.handlers):
-        handler = RotatingFileHandler(
-            paths.logs_dir / "jarvis.log",
-            maxBytes=4 * 1024 * 1024,
-            backupCount=5,
-            encoding="utf-8",
-        )
+    fallback_message = None
+    if not any(
+        getattr(handler, "baseFilename", "").casefold()
+        == str(paths.logs_dir / "jarvis.log").casefold()
+        for handler in logger.handlers
+    ):
+        try:
+            handler = RotatingFileHandler(
+                paths.logs_dir / "jarvis.log",
+                maxBytes=4 * 1024 * 1024,
+                backupCount=5,
+                encoding="utf-8",
+            )
+        except OSError as exc:
+            # Logging is helpful, but a stale read-only/locked profile log must
+            # not prevent the application window from starting.
+            handler = logging.StreamHandler(sys.stderr)
+            fallback_message = f"Could not open profile log; using stderr: {exc}"
         handler.setFormatter(
             logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
         )
         logger.addHandler(handler)
     logger.setLevel(logging.INFO)
     logger.propagate = False
+    if fallback_message:
+        logger.warning(fallback_message)
     return logger
 
 
@@ -292,4 +307,8 @@ def initialize_user_data(paths: RuntimePaths = PATHS) -> None:
     logger = configure_logging(paths)
     migrated = migrate_legacy_user_data(paths)
     if migrated:
-        logger.info("Copied %d legacy user-data file(s) to %s", len(migrated), paths.user_data_root)
+        logger.info(
+            "Copied %d legacy user-data file(s) to %s",
+            len(migrated),
+            paths.user_data_root,
+        )

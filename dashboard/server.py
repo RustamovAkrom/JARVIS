@@ -540,10 +540,11 @@ def _ensure_network_access(*ports: int) -> None:
             timeout=5,
         )
         if "active" in r.stdout.lower():
-            if _privileged(["ufw", "allow", f"{port}/tcp"]):
-                print(f"[Dashboard] ufw: port {port} allowed.")
-            else:
-                print(f"[Dashboard] Run manually:  sudo ufw allow {port}/tcp")
+            for port in ports:
+                if _privileged(["ufw", "allow", f"{port}/tcp"]):
+                    print(f"[Dashboard] ufw: port {port} allowed.")
+                else:
+                    print(f"[Dashboard] Run manually:  sudo ufw allow {port}/tcp")
             return
     except FileNotFoundError:
         pass
@@ -558,15 +559,19 @@ def _ensure_network_access(*ports: int) -> None:
             timeout=5,
         )
         if "running" in r.stdout.lower():
-            ok = _privileged(
-                ["firewall-cmd", "--add-port", f"{port}/tcp", "--permanent"]
-            ) and _privileged(["firewall-cmd", "--reload"])
-            if ok:
-                print(f"[Dashboard] firewalld: port {port} allowed.")
-            else:
-                print(
-                    f"[Dashboard] Run manually:  sudo firewall-cmd --add-port={port}/tcp --permanent && sudo firewall-cmd --reload"
-                )
+            allowed = []
+            for port in ports:
+                if _privileged(
+                    ["firewall-cmd", "--add-port", f"{port}/tcp", "--permanent"]
+                ):
+                    allowed.append(port)
+                    print(f"[Dashboard] firewalld: port {port} allowed.")
+                else:
+                    print(
+                        f"[Dashboard] Run manually:  sudo firewall-cmd --add-port={port}/tcp --permanent"
+                    )
+            if allowed and not _privileged(["firewall-cmd", "--reload"]):
+                print("[Dashboard] Run manually: sudo firewall-cmd --reload")
             return
     except FileNotFoundError:
         pass
@@ -576,24 +581,25 @@ def _ensure_network_access(*ports: int) -> None:
             ["iptables", "-L", "INPUT", "-n"], capture_output=True, timeout=5
         )
         if r.returncode == 0:
-            if _privileged(
-                [
-                    "iptables",
-                    "-A",
-                    "INPUT",
-                    "-p",
-                    "tcp",
-                    "--dport",
-                    str(port),
-                    "-j",
-                    "ACCEPT",
-                ]
-            ):
-                print(f"[Dashboard] iptables: port {port} opened.")
-            else:
-                print(
-                    f"[Dashboard] Run manually:  sudo iptables -A INPUT -p tcp --dport {port} -j ACCEPT"
-                )
+            for port in ports:
+                if _privileged(
+                    [
+                        "iptables",
+                        "-A",
+                        "INPUT",
+                        "-p",
+                        "tcp",
+                        "--dport",
+                        str(port),
+                        "-j",
+                        "ACCEPT",
+                    ]
+                ):
+                    print(f"[Dashboard] iptables: port {port} opened.")
+                else:
+                    print(
+                        f"[Dashboard] Run manually:  sudo iptables -A INPUT -p tcp --dport {port} -j ACCEPT"
+                    )
     except FileNotFoundError:
         pass  # no iptables means firewall is probably off — nothing to do
 

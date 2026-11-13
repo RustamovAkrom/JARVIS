@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
-import atexit
 import html as _html
+import atexit
+import hashlib
+import secrets
 import math
 import os
 import platform
@@ -759,8 +761,7 @@ class HudCanvas(QWidget):
         # Small, fixed particle budget for the Matrix backdrop. Each stream is
         # just a few numbers and glyphs; it reuses the HUD timer and painter.
         self._matrix_streams = [
-            self._new_matrix_stream(random.uniform(-0.25, 1.0))
-            for _ in range(28)
+            self._new_matrix_stream(random.uniform(-0.25, 1.0)) for _ in range(28)
         ]
         self._pointer_target_x = 0.0
         self._pointer_target_y = 0.0
@@ -1126,9 +1127,7 @@ class HudCanvas(QWidget):
                     continue
                 # Keep the code rain atmospheric behind the reactor and text.
                 alpha = (
-                    145
-                    if index == len(chars) - 1
-                    else 28 + 58 * index // len(chars)
+                    145 if index == len(chars) - 1 else 28 + 58 * index // len(chars)
                 )
                 color.setAlpha(alpha)
                 painter.setPen(color)
@@ -3855,7 +3854,9 @@ class MemoryOverlay(_HudOverlay):
                 """)
                 memory_text = f"{r['key'].replace('_', ' ')}: {r['value']}"
                 copy_btn.clicked.connect(
-                    lambda _=False, value=memory_text: QApplication.clipboard().setText(value)
+                    lambda _=False, value=memory_text: QApplication.clipboard().setText(
+                        value
+                    )
                 )
                 top.addWidget(copy_btn)
                 rm = QPushButton("×")
@@ -3876,7 +3877,9 @@ class MemoryOverlay(_HudOverlay):
                 txt = QLabel(_html.escape(str(r["value"])))
                 txt.setWordWrap(True)
                 txt.setFont(QFont(FONT_UI, 9))
-                txt.setStyleSheet(f"color:{C.TEXT}; background:transparent; line-height:145%;")
+                txt.setStyleSheet(
+                    f"color:{C.TEXT}; background:transparent; line-height:145%;"
+                )
                 card_lay.addWidget(txt)
                 ilay.addWidget(card)
 
@@ -6136,8 +6139,11 @@ class PluginSettingsOverlay(QWidget):
                 w.setStyleSheet(self._fs)
                 if field.get("placeholder"):
                     w.setPlaceholderText(str(field["placeholder"]))
-                if ftype == "password":
+                if ftype in ("password", "passcode"):
                     w.setEchoMode(QLineEdit.EchoMode.Password)
+                    if ftype == "passcode" and stored:
+                        w.setText("")
+                        w.setPlaceholderText("Leave blank to keep the saved passcode")
 
             self._widgets[(ns, key)] = w
             self._types[(ns, key)] = ftype
@@ -6194,7 +6200,16 @@ class PluginSettingsOverlay(QWidget):
             elif t == "toggle":
                 out[key] = w.isChecked()
             else:
-                out[key] = w.text().strip()
+                value = w.text().strip()
+                if t == "passcode":
+                    if value:
+                        salt = secrets.token_hex(16)
+                        digest = hashlib.pbkdf2_hmac(
+                            "sha256", value.encode("utf-8"), bytes.fromhex(salt), 310_000
+                        ).hex()
+                        out[key] = f"pbkdf2_sha256${salt}${digest}"
+                else:
+                    out[key] = value
         return out
 
     def _save_ns(self, ns: str):
@@ -7287,7 +7302,11 @@ class UpdatePanel(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        from core.update_service import APP_RELEASE_VERSION, RELEASE_CHANNEL, UpdateService
+        from core.update_service import (
+            APP_RELEASE_VERSION,
+            RELEASE_CHANNEL,
+            UpdateService,
+        )
         from memory.config_manager import get_update_settings
 
         self._service = UpdateService()
@@ -7304,13 +7323,21 @@ class UpdatePanel(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(8)
-        self._version = QLabel(f"JARVIS {APP_RELEASE_VERSION}  В·  {RELEASE_CHANNEL} channel")
-        self._version.setStyleSheet(f"color:{C.TEXT}; background:transparent; font-weight:600;")
+        self._version = QLabel(
+            f"JARVIS {APP_RELEASE_VERSION}  В·  {RELEASE_CHANNEL} channel"
+        )
+        self._version.setStyleSheet(
+            f"color:{C.TEXT}; background:transparent; font-weight:600;"
+        )
         layout.addWidget(self._version)
         self._install_state = QLabel(
-            "Installed application" if self._installable else "Source / portable mode — install is disabled"
+            "Installed application"
+            if self._installable
+            else "Source / portable mode — install is disabled"
         )
-        self._install_state.setStyleSheet(f"color:{C.TEXT_DIM}; background:transparent;")
+        self._install_state.setStyleSheet(
+            f"color:{C.TEXT_DIM}; background:transparent;"
+        )
         layout.addWidget(self._install_state)
         self._status = QLabel("Not checked yet")
         self._status.setStyleSheet(f"color:{C.PRI}; background:transparent;")
@@ -7334,7 +7361,9 @@ class UpdatePanel(QWidget):
         self._signals.state.connect(self._status.setText)
         self._signals.progress.connect(self._progress.setValue)
 
-        self._auto_check = QCheckBox("Check for stable updates on startup and every 6 hours")
+        self._auto_check = QCheckBox(
+            "Check for stable updates on startup and every 6 hours"
+        )
         self._auto_check.setChecked(self._settings["auto_check"])
         self._auto_download = QCheckBox("Download available updates automatically")
         self._auto_download.setChecked(self._settings["auto_download"])
@@ -7399,15 +7428,24 @@ class UpdatePanel(QWidget):
         self._check_button.setEnabled(False)
         self._status.setText("Checking the latest stable GitHub release…")
         threading.Thread(
-            target=self._check_worker, args=(automatic,), daemon=True, name="jarvis-update-check"
+            target=self._check_worker,
+            args=(automatic,),
+            daemon=True,
+            name="jarvis-update-check",
         ).start()
 
     def _check_worker(self, automatic):
         try:
             result = self._service.check_for_updates()
             self._signals.checked.emit(result)
-            if result.update_available and result.install_supported and self._settings.get("auto_download"):
-                self._signals.state.emit("Update available — downloading in the background…")
+            if (
+                result.update_available
+                and result.install_supported
+                and self._settings.get("auto_download")
+            ):
+                self._signals.state.emit(
+                    "Update available — downloading in the background…"
+                )
                 self._service.download_update(self._signals.progress.emit)
                 self._signals.downloaded.emit()
         except Exception as exc:
@@ -7425,16 +7463,24 @@ class UpdatePanel(QWidget):
         self._downloaded = False
         date = result.release.published_at or "date unavailable"
         size = result.release.size_bytes
-        size_text = f"{size / (1024 * 1024):.1f} MB of release assets" if size else "size unavailable"
+        size_text = (
+            f"{size / (1024 * 1024):.1f} MB of release assets"
+            if size
+            else "size unavailable"
+        )
         self._release.setText(
             f"Latest stable: {result.release.version}  В·  Published: {date}  В·  {size_text}\n{result.release.url}"
         )
         self._notes.setPlainText(result.release.notes)
         if result.update_available:
-            self._status.setText(f"Update available: {result.current_version} → {result.release.version}")
+            self._status.setText(
+                f"Update available: {result.current_version} → {result.release.version}"
+            )
             self._download_button.setEnabled(result.install_supported)
         else:
-            self._status.setText(f"Up to date — latest stable is {result.release.version}")
+            self._status.setText(
+                f"Up to date — latest stable is {result.release.version}"
+            )
             self._download_button.setEnabled(False)
         self._install_button.setEnabled(False)
         if auto_downloading:
@@ -7454,7 +7500,9 @@ class UpdatePanel(QWidget):
         self._progress.setValue(0)
         self._progress.show()
         self._status.setText("Downloading and verifying update package…")
-        threading.Thread(target=self._download_worker, daemon=True, name="jarvis-update-download").start()
+        threading.Thread(
+            target=self._download_worker, daemon=True, name="jarvis-update-download"
+        ).start()
 
     def _download_worker(self):
         try:
@@ -7468,7 +7516,9 @@ class UpdatePanel(QWidget):
         self._downloaded = True
         self._progress.setValue(100)
         self._progress.show()
-        self._status.setText("Update downloaded and verified. Restart when you are ready.")
+        self._status.setText(
+            "Update downloaded and verified. Restart when you are ready."
+        )
         self._install_button.setEnabled(True)
 
     def install_now(self):
@@ -7478,7 +7528,9 @@ class UpdatePanel(QWidget):
         recorder = getattr(owner, "_lecture_recorder", None)
         if recorder is not None and recorder.recording:
             QMessageBox.information(
-                self, "Recording in progress", "Stop and save the lecture recording before updating JARVIS."
+                self,
+                "Recording in progress",
+                "Stop and save the lecture recording before updating JARVIS.",
             )
             return
         answer = QMessageBox.question(
@@ -7514,6 +7566,8 @@ class MainWindow(QMainWindow):
     _quiz_sig = pyqtSignal(str, object, object)  # (topic, questions, grader)
     _quiz_hide_sig = pyqtSignal()
     _review_sig = pyqtSignal(str, str, object, object)  # document review payload
+    _auth_lock_sig = pyqtSignal(object, str)
+    _auth_face_result_sig = pyqtSignal(object, bool)
 
     def __init__(self, face_path: str):
         super().__init__()
@@ -7594,6 +7648,8 @@ class MainWindow(QMainWindow):
         self.ptt_hold = None  # callable: (held: bool) -> None — windowed chord
         self.wake_get_state = None  # callable: () -> dict {enabled, awake, ready}
         self._muted = False
+        self._auth_lock_active = False
+        self.on_auth_lock = None
         self._lecture_recorder = None
         self._lecture_started_monotonic = 0.0
         self._lecture_timer = QTimer(self)
@@ -7996,6 +8052,8 @@ class MainWindow(QMainWindow):
         self._quiz_sig.connect(self._show_quiz)
         self._quiz_hide_sig.connect(self._hide_quiz)
         self._review_sig.connect(self._show_review)
+        self._auth_lock_sig.connect(self._show_auth_lock)
+        self._auth_face_result_sig.connect(self._finish_face_auth)
         self._cam_stop = threading.Event()
 
         # Camera preview overlay (child of central widget, positioned in resizeEvent)
@@ -9326,9 +9384,7 @@ class MainWindow(QMainWindow):
             # have the bundled brand artwork.
             self._title_lbl.setText(_disp)
             self._title_lbl.setFont(QFont(FONT_MONO, 17, QFont.Weight.Bold))
-            self._title_lbl.setStyleSheet(
-                f"color: {C.PRI}; background: transparent;"
-            )
+            self._title_lbl.setStyleSheet(f"color: {C.PRI}; background: transparent;")
         brand.addWidget(self._title_lbl)
         _sub_text = (
             "Just A Rather Very Intelligent System · V2"
@@ -11026,11 +11082,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         )
         self._terminal_toggle_btn.setChecked(True)
         session = self._active_terminal_session()
-        if (
-            session is not None
-            and session.client_is_ready
-            and session.pty is None
-        ):
+        if session is not None and session.client_is_ready and session.pty is None:
             self._start_terminal_process(session.session_id)
         if session is not None:
             session.view.setFocus()
@@ -12790,7 +12842,10 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         self._assistant_name = name.strip() or "JARVIS"
         display = self._assistant_name.upper()
         self.setWindowTitle(f"{display} — {APP_VERSION}")
-        if self._title_lbl.pixmap() is not None and not self._title_lbl.pixmap().isNull():
+        if (
+            self._title_lbl.pixmap() is not None
+            and not self._title_lbl.pixmap().isNull()
+        ):
             self._title_lbl.setToolTip(display)
         else:
             self._title_lbl.setText(display)
@@ -13532,7 +13587,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                 f'<td style="color:{answer_color};margin-top:2px;">{answer}</td>'
                 f'<td align="right" valign="top"><a href="copy-answer:{turn_id}" title="Copy response" '
                 f'style="color:{C.TEXT_MED};text-decoration:none;font-size:8pt;">Copy</a></td>'
-                f'</tr></table>'
+                f"</tr></table>"
                 f'</td></tr></table></td></tr><tr><td height="6"></td></tr></table>'
             )
         if not cards:
@@ -13856,6 +13911,9 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         )
 
     def closeEvent(self, event):
+        if getattr(self, "_auth_lock_dialog", None) is not None:
+            event.ignore()
+            return
         if self._lecture_recorder is not None:
             try:
                 path = self._lecture_recorder.stop()
@@ -13888,7 +13946,184 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                 continue
             session.closing = True
             self._force_close_terminal_session(session_id)
+        restore_console = getattr(self, "_console_restore_callback", None)
+        if callable(restore_console):
+            restore_console()
         super().closeEvent(event)
+
+    def _show_auth_lock(self, verifier, mode="jarvis"):
+        if getattr(self, "_auth_lock_dialog", None) is not None:
+            return
+        self._auth_lock_active = True
+        if callable(self.on_auth_lock):
+            self.on_auth_lock()
+        class _LockDialog(QDialog):
+            verified = False
+
+            def reject(self):
+                return  # Escape and window-manager close must not dismiss the lock.
+
+            def closeEvent(self, event):
+                if self.verified:
+                    event.accept()
+                else:
+                    event.ignore()
+
+        dialog = _LockDialog(self)
+        dialog.setWindowTitle("JARVIS — Locked")
+        flags = Qt.WindowType.Dialog | Qt.WindowType.FramelessWindowHint
+        if mode == "system" or platform.system() == "Windows":
+            flags |= Qt.WindowType.WindowStaysOnTopHint
+        dialog.setWindowFlags(flags)
+        dialog.setModal(True)
+        dialog.setWindowOpacity(1.0)
+        dialog.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, False)
+        dialog.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        dialog.setStyleSheet(
+            f"QDialog {{ background-color: {C.DARK}; color: {C.TEXT}; }}"
+            f"QFrame#authCard {{ background: {C.PANEL}; border: 1px solid {C.BORDER}; border-radius: 16px; }}"
+            f"QLineEdit {{ background: {C.PANEL2}; color: {C.TEXT}; border: 1px solid {C.BORDER}; "
+            f"border-radius: 8px; padding: 13px 14px; selection-background-color: {C.PRI}; }}"
+            f"QLineEdit:focus {{ border: 1px solid {C.PRI}; }}"
+            f"QPushButton {{ min-height: 42px; border-radius: 8px; font-weight: 600; }}"
+        )
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(24, 24, 24, 24)
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        card = QFrame()
+        card.setObjectName("authCard")
+        card.setMaximumWidth(460)
+        card.setMinimumWidth(360)
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(36, 34, 36, 30)
+        card_layout.setSpacing(16)
+        brand = QLabel("J.A.R.V.I.S.")
+        brand.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        brand.setStyleSheet(f"color: {C.PRI}; font-size: 13px; font-weight: bold; letter-spacing: 2px;")
+        card_layout.addWidget(brand)
+        title = QLabel("Please verify your identity")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title.setStyleSheet(f"color: {C.TEXT}; font-size: 25px; font-weight: 600; border: none;")
+        card_layout.addWidget(title)
+        subtitle = QLabel("Enter your PIN or passphrase to continue")
+        subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        subtitle.setStyleSheet(f"color: {C.TEXT_DIM}; font-size: 12px; border: none;")
+        card_layout.addWidget(subtitle)
+        entry = QLineEdit()
+        entry.setEchoMode(QLineEdit.EchoMode.Password)
+        entry.setPlaceholderText("PIN or passphrase")
+        entry.setMinimumHeight(46)
+        card_layout.addWidget(entry)
+        status = QLabel("Authentication is required to continue.")
+        dialog._auth_status_label = status
+        status.setStyleSheet(f"color: {C.TEXT_DIM};")
+        status.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        status.setWordWrap(True)
+        status.setMinimumHeight(34)
+        status.setStyleSheet(f"color: {C.TEXT_DIM}; font-size: 11px; border: none;")
+        card_layout.addWidget(status)
+        unlock = QPushButton("UNLOCK")
+        unlock.setMinimumHeight(46)
+        unlock.setStyleSheet(f"QPushButton {{ background: {C.PRI}; color: {C.DARK}; border: none; }} QPushButton:hover {{ background: {C.WHITE}; }} QPushButton:disabled {{ background: {C.PANEL2}; color: {C.TEXT_DIM}; }}")
+        card_layout.addWidget(unlock)
+
+        face_verifier = getattr(verifier, "verify_face", None)
+        face_btn = None
+        if callable(face_verifier):
+            face_btn = QPushButton("VERIFY FACE")
+            face_btn.setMinimumHeight(42)
+            face_btn.setStyleSheet(f"QPushButton {{ background: transparent; color: {C.PRI}; border: 1px solid {C.BORDER}; }} QPushButton:hover {{ background: {C.PRI_GHO}; border-color: {C.PRI}; }} QPushButton:disabled {{ color: {C.TEXT_DIM}; }}")
+            card_layout.addWidget(face_btn)
+        layout.addWidget(card, 0, Qt.AlignmentFlag.AlignCenter)
+
+        attempts = {"count": 0, "remaining": 0}
+        retry_timer = QTimer(dialog)
+        retry_timer.setInterval(1000)
+
+        def retry_tick():
+            if attempts["remaining"] <= 0:
+                retry_timer.stop()
+                unlock.setEnabled(True)
+                status.setText("Authentication is required to continue.")
+                return
+            status.setText(f"Too many attempts. Try again in {attempts['remaining']} seconds.")
+            attempts["remaining"] -= 1
+
+        retry_timer.timeout.connect(retry_tick)
+
+        def attempt():
+            if attempts["remaining"]:
+                return
+            try:
+                accepted = bool(verifier(entry.text()))
+            except Exception:
+                accepted = False
+            if accepted:
+                self._auth_lock_active = False
+                dialog.verified = True
+                self._auth_lock_dialog = None
+                dialog.accept()
+            else:
+                entry.clear()
+                attempts["count"] += 1
+                if attempts["count"] >= 3:
+                    attempts["count"] = 0
+                    attempts["remaining"] = 10
+                    unlock.setEnabled(False)
+                    retry_tick()
+                    retry_timer.start()
+                else:
+                    status.setText("Incorrect passcode. Try again.")
+                entry.setFocus()
+
+        unlock.clicked.connect(attempt)
+        entry.returnPressed.connect(attempt)
+        if face_btn is not None:
+            dialog._auth_face_button = face_btn
+            def attempt_face():
+                face_btn.setEnabled(False)
+                status.setText("Looking for your face… PIN/password remains available.")
+
+                def worker():
+                    try:
+                        ok = bool(face_verifier())
+                    except Exception:
+                        ok = False
+                    self._auth_face_result_sig.emit(dialog, ok)
+
+                threading.Thread(target=worker, daemon=True, name="jarvis-face-check").start()
+
+            face_btn.clicked.connect(attempt_face)
+        dialog.setMinimumSize(520, 250)
+        self._auth_lock_dialog = dialog
+        # Keep the login overlay inside JARVIS. Do not install system-wide
+        # keyboard hooks or change Windows touchpad settings from this app.
+        if mode == "system" or platform.system() == "Windows":
+            dialog.showFullScreen()
+        else:
+            dialog.setWindowModality(Qt.WindowModality.ApplicationModal)
+            dialog.show()
+        entry.setFocus()
+
+    def show_auth_lock(self, verifier, mode="jarvis"):
+        """Thread-safe entry point used by plugin startup hooks."""
+        self._auth_lock_sig.emit(verifier, str(mode or "jarvis"))
+
+    def _finish_face_auth(self, dialog, accepted):
+        if dialog is not getattr(self, "_auth_lock_dialog", None):
+            return
+        if accepted:
+            self._auth_lock_active = False
+            dialog.verified = True
+            self._auth_lock_dialog = None
+            dialog.accept()
+        else:
+            label = getattr(dialog, "_auth_status_label", None)
+            if label:
+                label.setText("Face not recognized. Try again or enter your PIN/password.")
+            button = getattr(dialog, "_auth_face_button", None)
+            if button:
+                button.setEnabled(True)
 
 
 class _ConsoleMirror:
@@ -13911,12 +14146,12 @@ class _ConsoleMirror:
                     written = result
         except Exception:
             pass
-        if not self._window._development_mode:
-            with self._lock:
-                self._buffer = ""
-            return written
-        lines = []
         with self._lock:
+            window = self._window
+            if window is None or not window._development_mode:
+                self._buffer = ""
+                return written
+            lines = []
             self._buffer += text
             while "\n" in self._buffer:
                 line, self._buffer = self._buffer.split("\n", 1)
@@ -13927,7 +14162,7 @@ class _ConsoleMirror:
                 self._buffer = ""
         for line in lines:
             prefix = "[stderr] " if self._label == "stderr" else ""
-            self._window._log.append_console(prefix + line)
+            self._append_console(prefix + line)
         return written
 
     def flush(self):
@@ -13936,12 +14171,34 @@ class _ConsoleMirror:
                 self._stream.flush()
         except Exception:
             pass
-        if self._window._development_mode:
-            with self._lock:
+        with self._lock:
+            window = self._window
+            if window is not None and window._development_mode:
                 line, self._buffer = self._buffer, ""
-            if line.strip():
-                prefix = "[stderr] " if self._label == "stderr" else ""
-                self._window._log.append_console(prefix + line[:2000])
+            else:
+                line = ""
+                self._buffer = ""
+        if line.strip():
+            prefix = "[stderr] " if self._label == "stderr" else ""
+            self._append_console(prefix + line[:2000])
+
+    def _append_console(self, text):
+        with self._lock:
+            window = self._window
+            if window is None:
+                return
+            try:
+                window._log.append_console(text)
+            except RuntimeError:
+                # Qt may already have destroyed the log widget during shutdown.
+                self._window = None
+                self._buffer = ""
+
+    def detach(self):
+        """Stop mirroring to Qt before its widgets are destroyed."""
+        with self._lock:
+            self._window = None
+            self._buffer = ""
 
     def __getattr__(self, name):
         return getattr(self._stream, name)
@@ -13968,11 +14225,14 @@ class JarvisUI:
         self._stdout_mirror = _ConsoleMirror(sys.stdout, self._win, "stdout")
         self._stderr_mirror = _ConsoleMirror(sys.stderr, self._win, "stderr")
         sys.stdout, sys.stderr = self._stdout_mirror, self._stderr_mirror
+        self._win._console_restore_callback = self._restore_console
         self._app.aboutToQuit.connect(self._restore_console)
         self.root = _RootShim(self._app)
         self._win.show()
 
     def _restore_console(self):
+        self._stdout_mirror.detach()
+        self._stderr_mirror.detach()
         if sys.stdout is self._stdout_mirror:
             sys.stdout = self._console_streams[0]
         if sys.stderr is self._stderr_mirror:
@@ -13981,6 +14241,10 @@ class JarvisUI:
     @property
     def muted(self) -> bool:
         return self._win._muted
+
+    @property
+    def auth_locked(self) -> bool:
+        return bool(self._win._auth_lock_active)
 
     @muted.setter
     def muted(self, v: bool):
@@ -13998,6 +14262,14 @@ class JarvisUI:
     @on_text_command.setter
     def on_text_command(self, cb):
         self._win.on_text_command = cb
+
+    @property
+    def on_auth_lock(self):
+        return self._win.on_auth_lock
+
+    @on_auth_lock.setter
+    def on_auth_lock(self, cb):
+        self._win.on_auth_lock = cb
 
     @property
     def on_remote_clicked(self):
@@ -14202,6 +14474,10 @@ class JarvisUI:
         self._win._video_open_sig.emit(
             str(source or ""), str(title or ""), bool(muted), str(audio_source or "")
         )
+
+    def show_auth_lock(self, verifier, mode="jarvis") -> None:
+        """Show the plugin lock screen on the Qt thread."""
+        self._win.show_auth_lock(verifier, mode)
 
     def stop_video(self) -> None:
         """Thread-safe: close the video and give the HUD back to the avatar."""

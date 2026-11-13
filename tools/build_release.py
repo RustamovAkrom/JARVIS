@@ -28,7 +28,9 @@ def main() -> int:
 
     if sys.platform != "win32":
         raise SystemExit("The production Windows installer must be built on Windows.")
-    version = tomllib.loads((ROOT / "pyproject.toml").read_text("utf-8"))["project"]["version"]
+    version = tomllib.loads((ROOT / "pyproject.toml").read_text("utf-8"))["project"][
+        "version"
+    ]
     if not re.fullmatch(r"\d+\.\d+\.\d+", version):
         raise SystemExit(f"Release version must be MAJOR.MINOR.PATCH, got {version!r}")
     if not shutil.which("vpk"):
@@ -44,13 +46,30 @@ def main() -> int:
     run([sys.executable, "-m", "PyInstaller", "--noconfirm", "JARVIS.spec"])
     smoke = dist / "JARVIS.exe"
     run([str(smoke), "--smoke-test"])
-    run([
-        "vpk", "pack", "--packId", "JARVIS", "--packVersion", version,
-        "--packDir", str(dist), "--mainExe", "JARVIS.exe",
-        "--packTitle", "JARVIS", "--channel", args.channel,
-        "--icon", str(ROOT / "config" / "jarvis.ico"),
-        "--outputDir", str(output), "--packAuthors", "JARVIS",
-    ])
+    run(
+        [
+            "vpk",
+            "pack",
+            "--packId",
+            "JARVIS",
+            "--packVersion",
+            version,
+            "--packDir",
+            str(dist),
+            "--mainExe",
+            "JARVIS.exe",
+            "--packTitle",
+            "JARVIS",
+            "--channel",
+            args.channel,
+            "--icon",
+            str(ROOT / "config" / "jarvis.ico"),
+            "--outputDir",
+            str(output),
+            "--packAuthors",
+            "JARVIS",
+        ]
+    )
     return 0
 
 

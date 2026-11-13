@@ -104,7 +104,9 @@ def install_for_config(config: dict, log: Callable | None = None) -> None:
     """
     if getattr(sys, "frozen", False):
         if log:
-            log("ERR: This installed build is immutable. Use the JARVIS installer to update it.")
+            log(
+                "ERR: This installed build is immutable. Use the JARVIS installer to update it."
+            )
         return
     stt = config.get("stt_engine", "whisper").lower()
     tts = config.get("tts_engine", "edgetts").lower()

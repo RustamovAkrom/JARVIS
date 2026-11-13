@@ -3,6 +3,9 @@
 ![JARVIS](assets/images/banner.png)
 
 [![Tests](https://github.com/RustamovAkrom/JARVIS/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/RustamovAkrom/JARVIS/actions/workflows/tests.yml?query=branch%3Amain)
+[![Windows release](https://img.shields.io/badge/Windows-Download-0078D4?logo=windows&logoColor=white)](https://github.com/RustamovAkrom/JARVIS/releases/latest)
+[![macOS install](https://img.shields.io/badge/macOS-Install-000000?logo=apple&logoColor=white)](#install)
+[![Linux install](https://img.shields.io/badge/Linux-Install-FCC624?logo=linux&logoColor=black)](#install)
 
 JARVIS is a desktop AI assistant built around voice, a customizable HUD, and practical tools for everyday computer work. It combines Gemini Live with an optional, configurable speech and model pipeline, local memory, project-aware file access, and extensions that can be enabled when needed.
 
@@ -229,7 +232,9 @@ Set `JARVIS_PROFILE=shared` to make a source run use the installed profile. Set 
 
 ## Windows installer and updates
 
-Stable Windows releases are built on GitHub Actions from tags matching the version in `pyproject.toml` (for example, `v0.1.0`). The workflow uses a PyInstaller `onedir` bundle and Velopack to produce a per-user `Setup.exe`, portable package, and update feed. Install the setup package to receive the **Updates** panel and in-app verified updates. Source and portable runs can check release notes but cannot replace their own files. Updates are only published from tags; pushes to `main` and `v2` run the test workflow.
+Stable Windows releases are built on GitHub Actions from tags matching the version in `pyproject.toml` (for example, `v0.1.0`). Open [the latest release](https://github.com/RustamovAkrom/JARVIS/releases/latest) and choose the Windows download that suits you: the per-user `Setup.exe` installer or the portable package. The release also includes an update feed. Install the setup package to receive the **Updates** panel and in-app verified updates. Source and portable runs can check release notes but cannot replace their own files. Updates are only published from tags; pushes to `main` and `v2` run the test workflow.
+
+Prebuilt release packages are currently published for Windows. macOS and Linux users can install from source using the platform instructions in [Quick start](#install); the setup script installs Python dependencies and browser runtimes.
 
 To create a release locally on Windows, install the project plus build extra, install the Velopack CLI, then run:
 

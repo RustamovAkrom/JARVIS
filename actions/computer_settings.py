@@ -1,14 +1,11 @@
 # computer_settings.py
-import json
 import re
-import sys
 import time
 import subprocess
 import platform
 from pathlib import Path
 
 from core.lazyimport import LazyModule, installed
-from core.runtime_paths import PATHS
 
 # Imported on first USE, not at launch. This file has eighty-six `pyautogui.`
 # call sites; not one of them changes — see core/lazyimport.py.
@@ -33,18 +30,6 @@ if _OS == "Windows":
     _WIN_HIDE: dict = {"creationflags": subprocess.CREATE_NO_WINDOW}
 else:
     _WIN_HIDE: dict = {}
-
-
-def _get_base_dir() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent.parent
-
-
-def _get_api_key() -> str:
-    path = PATHS.api_config_file
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)["gemini_api_key"]
 
 
 def _get_macos_wifi_interface() -> str:

@@ -7,23 +7,6 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from config import is_windows, is_mac, is_linux
-from core.runtime_paths import PATHS
-
-
-def _get_base_dir() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent.parent
-
-
-BASE_DIR = _get_base_dir()
-API_CONFIG_PATH = PATHS.api_config_file
-
-
-def _get_api_key() -> str:
-    with open(API_CONFIG_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)["gemini_api_key"]
-
 
 _MONTH_MAP: dict[str, int] = {
     "january": 1,

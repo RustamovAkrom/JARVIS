@@ -16,24 +16,15 @@ Supported types:
   pptx    → summarize, extract_text, to_pdf
 """
 
-import os
 import re
 import json
 import shutil
 import subprocess
 import tempfile
 from pathlib import Path
-from datetime import datetime
-from core.runtime_paths import PATHS
 
 # Model choice, timeout and fallback ladder all live in core/gemini.py.
 from core import gemini
-
-
-def _get_api_key() -> str:
-    config_path = PATHS.api_config_file
-    with open(config_path, "r", encoding="utf-8") as f:
-        return json.load(f)["gemini_api_key"]
 
 
 def _gemini_client(tier: str = gemini.SMART):
@@ -894,7 +885,8 @@ def _process_video(path: Path, action: str, params: dict, speak=None) -> str:
     if action == "transcribe":
         if not _ffmpeg_available():
             return "ffmpeg not found. Needed for video transcription."
-        tmp_audio = Path(tempfile.mktemp(suffix=".mp3"))
+        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as temp:
+            tmp_audio = Path(temp.name)
         try:
             subprocess.run(
                 [
