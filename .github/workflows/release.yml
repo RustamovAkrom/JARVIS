@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
     paths: ["pyproject.toml"]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -50,7 +51,7 @@ jobs:
         shell: pwsh
         run: Get-ChildItem release -File | Get-FileHash -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $((Split-Path $_.Path -Leaf))" } | Set-Content release/SHA256SUMS.txt
       - name: Publish GitHub release
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
