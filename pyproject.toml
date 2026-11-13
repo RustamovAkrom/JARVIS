@@ -1,6 +1,6 @@
 [project]
 name = "new-jarvis"
-version = "1.0.7"
+version = "1.0.8"
 description = "Cross-platform desktop AI assistant with voice, a customizable HUD, and computer tools."
 readme = "README.md"
 requires-python = ">=3.14"
