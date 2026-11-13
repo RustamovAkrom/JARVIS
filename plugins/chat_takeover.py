@@ -158,9 +158,7 @@ _LIVE_SYSTEM = (
 
 def _config() -> dict:
     try:
-        return json.loads(
-            PATHS.api_config_file.read_text(encoding="utf-8")
-        )
+        return json.loads(PATHS.api_config_file.read_text(encoding="utf-8"))
     except Exception:
         return {}
 

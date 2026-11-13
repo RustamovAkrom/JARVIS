@@ -54,11 +54,16 @@ def is_ready() -> bool:
     if not is_installed():
         return False
     try:
-        import openwakeword
+        import importlib.util
 
-        models_dir = (
-            Path(openwakeword.__file__).resolve().parent / "resources" / "models"
-        )
+        spec = importlib.util.find_spec("openwakeword")
+        locations = tuple(spec.submodule_search_locations or ()) if spec else ()
+        if not locations:
+            return False
+        # Do not import the package just to inspect its model files. Importing
+        # openwakeword.model can race this check during startup and observe the
+        # partially initialized package namespace.
+        models_dir = Path(locations[0]).resolve() / "resources" / "models"
         if not models_dir.is_dir():
             return False
         has_wake = any(models_dir.glob(f"{WAKE_MODEL}*.onnx")) or any(
@@ -87,7 +92,10 @@ def install_and_download(
     try:
         if not is_installed():
             if getattr(sys, "frozen", False):
-                return False, "Wake word support is not included in this build. Install an updated JARVIS release."
+                return (
+                    False,
+                    "Wake word support is not included in this build. Install an updated JARVIS release.",
+                )
             logger("Wake word: installing openwakeword (one-time)…")
             _tell("Wake word: installing openwakeword (one-time)…")
             r = subprocess.run(

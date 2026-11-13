@@ -516,6 +516,7 @@ def get_plugin_setting(namespace: str, key: str, default=None):
 def save_plugin_config(namespace: str, values: dict) -> None:
     """Merge `values` into a namespace's stored config (read-modify-write, like
     every other helper here). Only the provided keys are touched."""
+
     def merge(data: dict) -> None:
         pc = data.get("plugin_config")
         pc = dict(pc) if isinstance(pc, dict) else {}
@@ -681,6 +682,7 @@ def save_providers(
     `None` leaves a section alone; `creds` is merged per provider so a panel
     that only edited one does not have to send the others.
     """
+
     def merge(data: dict) -> None:
         block = data.get("providers")
         block = dict(block) if isinstance(block, dict) else {}
@@ -727,7 +729,8 @@ def get_update_settings() -> dict:
 
 
 def save_update_settings(
-    *, auto_check: bool | None = None,
+    *,
+    auto_check: bool | None = None,
     auto_download: bool | None = None,
     auto_install: bool | None = None,
 ) -> None:

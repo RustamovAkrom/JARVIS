@@ -15,12 +15,6 @@ _CNW: dict = (
 )
 
 
-def _base_dir() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent.parent
-
-
 def _get_os() -> str:
     _sys = platform.system()
     if _sys == "Darwin":

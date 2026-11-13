@@ -84,9 +84,7 @@ _errors: set = set()
 def accent() -> tuple[int, int, int]:
     """The accent the user picked for the HUD (⚙ → colour), cyan otherwise."""
     try:
-        cfg = json.loads(
-            PATHS.api_config_file.read_text(encoding="utf-8")
-        )
+        cfg = json.loads(PATHS.api_config_file.read_text(encoding="utf-8"))
         colour = str(cfg.get("ui_color") or "")
         if re.fullmatch(r"#[0-9a-fA-F]{6}", colour):
             return tuple(int(colour[i : i + 2], 16) for i in (1, 3, 5))

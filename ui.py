@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
-import atexit
 import html as _html
+import atexit
+import hashlib
+import secrets
 import math
 import os
 import platform
@@ -574,6 +576,7 @@ class _SysMetrics:
         self.net = 0.0
         self.gpu = -1.0
         self.tmp = -1.0
+        self.process_count = 0
         self._lock = threading.Lock()
         self._last_net = psutil.net_io_counters()
         self._last_net_t = time.time()
@@ -581,6 +584,7 @@ class _SysMetrics:
         # Probe caches — GPU and temperature are refreshed less often than
         # CPU/memory/network metrics to keep the monitor lightweight.
         self._slow_tick = 0  # gpu/temp refreshed every 3rd cycle
+        self._process_tick = 0
         self._pynvml = None  # cached pynvml module + device handle
         self._pynvml_h = None
         self._pynvml_ok = None  # None=untested, False=unavailable here
@@ -612,6 +616,17 @@ class _SysMetrics:
         self._last_net = nc
         self._last_net_t = now
 
+        # Process enumeration can briefly block on Windows. Keep it off the UI
+        # thread and refresh it every 10 seconds; the dashboard does not need a
+        # fresh count on every telemetry frame.
+        self._process_tick = (self._process_tick + 1) % 5
+        process_count = self.process_count
+        if self._process_tick == 1:
+            try:
+                process_count = len(psutil.pids())
+            except Exception:
+                pass
+
         # GPU and temperature change slowly and are the most expensive probes
         # (NVML / WMI) — refresh them every 3rd cycle (~6 s) instead of every
         # cycle, reusing the previous reading in between.
@@ -629,6 +644,7 @@ class _SysMetrics:
             self.net = net
             self.gpu = gpu
             self.tmp = tmp
+            self.process_count = process_count
 
     def _get_gpu(self) -> float:
         if _OS == "Windows":
@@ -712,6 +728,7 @@ class _SysMetrics:
                 "net": self.net,
                 "gpu": self.gpu,
                 "tmp": self.tmp,
+                "process_count": self.process_count,
             }
 
 
@@ -719,6 +736,8 @@ _metrics = _SysMetrics()
 
 
 class HudCanvas(QWidget):
+    muteToggleRequested = pyqtSignal()
+
     def __init__(
         self, face_path: str, assistant_name: str = "J.A.R.V.I.S", parent=None
     ):
@@ -739,10 +758,20 @@ class HudCanvas(QWidget):
         self._orb_pts, self._orb_edges = self._make_orb_points(320)
         self._orb_ph = [random.uniform(0.0, 6.2832) for _ in self._orb_pts]
         self._orb_rot = 0.0
+        # Small, fixed particle budget for the Matrix backdrop. Each stream is
+        # just a few numbers and glyphs; it reuses the HUD timer and painter.
+        self._matrix_streams = [
+            self._new_matrix_stream(random.uniform(-0.25, 1.0)) for _ in range(28)
+        ]
         self._pointer_target_x = 0.0
         self._pointer_target_y = 0.0
         self._pointer_tilt_x = 0.0
         self._pointer_tilt_y = 0.0
+        self._orb_pointer_pos = None
+        self._orb_hit_center = None
+        self._orb_hit_radius = 0.0
+        self._orb_target_strength = 0.0
+        self._orb_interaction = 0.0
         self.setMouseTracking(True)
         self._sats = [
             (1.35, 0.5, 0.9, 0.0),
@@ -859,6 +888,12 @@ class HudCanvas(QWidget):
 
     def mouseMoveEvent(self, event):
         pos = event.position()
+        self._orb_pointer_pos = (pos.x(), pos.y())
+        if self._orb_hit_center is not None:
+            hx, hy = self._orb_hit_center
+            self._orb_target_strength = float(
+                math.hypot(pos.x() - hx, pos.y() - hy) <= self._orb_hit_radius
+            )
         nx = max(-1.0, min(1.0, (pos.x() / max(1, self.width()) - 0.5) * 2))
         ny = max(-1.0, min(1.0, (pos.y() / max(1, self.height()) - 0.5) * 2))
         self._pointer_target_x = nx * 0.28
@@ -868,9 +903,38 @@ class HudCanvas(QWidget):
     def leaveEvent(self, event):
         self._pointer_target_x = 0.0
         self._pointer_target_y = 0.0
+        self._orb_target_strength = 0.0
         super().leaveEvent(event)
 
+    def mouseDoubleClickEvent(self, event):
+        pos = event.position()
+        if self._orb_hit_center is not None:
+            hx, hy = self._orb_hit_center
+            if math.hypot(pos.x() - hx, pos.y() - hy) <= self._orb_hit_radius:
+                self.muteToggleRequested.emit()
+                event.accept()
+                return
+        super().mouseDoubleClickEvent(event)
+
     def _step(self):
+        # Keep the widget responsive when it returns, but avoid running all
+        # avatar/orbit/matrix calculations at 60 Hz while the window is hidden
+        # or minimized.
+        visible = self._on_screen()
+        target_interval = 16 if visible else 250
+        if self._tmr.interval() != target_interval:
+            self._tmr.setInterval(target_interval)
+        pointer_animating = (
+            abs(self._pointer_target_x) > 0.001
+            or abs(self._pointer_target_y) > 0.001
+            or abs(self._pointer_tilt_x) > 0.001
+            or abs(self._pointer_tilt_y) > 0.001
+            or self._orb_target_strength > 0.001
+            or self._orb_interaction > 0.001
+        )
+        if not visible and not pointer_animating:
+            return
+
         self._tick += 1
         now = time.time()
 
@@ -913,6 +977,11 @@ class HudCanvas(QWidget):
         # uses — one audio source, so the mouth can never drift out of sync.
         dt = now - self._step_t
         self._step_t = now
+        self._advance_matrix(dt)
+        interaction_lerp = 1.0 - math.exp(-min(0.1, max(0.0, dt)) * 8.0)
+        self._orb_interaction += (
+            self._orb_target_strength - self._orb_interaction
+        ) * interaction_lerp
         pointer_lerp = 1.0 - math.exp(-min(0.1, max(0.0, dt)) * 7.0)
         self._pointer_tilt_x += (
             self._pointer_target_x - self._pointer_tilt_x
@@ -993,6 +1062,8 @@ class HudCanvas(QWidget):
             self.speaking
             or amp > 0.02
             or pointer_active
+            or self._orb_interaction > 0.008
+            or self._orb_target_strength > 0.0
             or self.state in ("THINKING", "PROCESSING")
         )
         if _blinked or (
@@ -1014,6 +1085,54 @@ class HudCanvas(QWidget):
             return not (win.isMinimized() or win.isHidden())
         except Exception:
             return True  # never let a visibility check stop the HUD drawing
+
+    @staticmethod
+    def _new_matrix_stream(y: float) -> dict:
+        alphabet = "0123456789ABCDEF" if random.random() < 0.72 else "01"
+        length = random.randint(4, 8)
+        return {
+            "x": random.random(),
+            "y": y,
+            "speed": random.uniform(0.16, 0.34),
+            "length": length,
+            "chars": [random.choice(alphabet) for _ in range(length)],
+            "alphabet": alphabet,
+        }
+
+    def _advance_matrix(self, dt: float) -> None:
+        height = max(1, self.height())
+        step = min(0.1, max(0.0, dt))
+        for stream in self._matrix_streams:
+            stream["y"] += stream["speed"] * step
+            if stream["y"] - stream["length"] * 14 / height > 1.0:
+                stream.update(self._new_matrix_stream(-random.uniform(0.04, 0.3)))
+            elif self._tick % 9 == 0:
+                chars = stream["chars"]
+                chars[random.randrange(len(chars))] = random.choice(stream["alphabet"])
+
+    def _paint_matrix(self, painter: QPainter, width: int, height: int) -> None:
+        if width < 1 or height < 1:
+            return
+        painter.save()
+        painter.setFont(QFont(FONT_MONO, 9))
+        color = QColor(C.GREEN)
+        line_height = 14
+        for stream in self._matrix_streams:
+            x = int(stream["x"] * max(1, width - 12))
+            head_y = int(stream["y"] * height)
+            chars = stream["chars"]
+            for index, char in enumerate(chars):
+                y = head_y - (len(chars) - index - 1) * line_height
+                if y < 8 or y > height:
+                    continue
+                # Keep the code rain atmospheric behind the reactor and text.
+                alpha = (
+                    145 if index == len(chars) - 1 else 28 + 58 * index // len(chars)
+                )
+                color.setAlpha(alpha)
+                painter.setPen(color)
+                painter.drawText(x, y, char)
+        painter.restore()
 
     # ── reactor core ─────────────────────────────────────────────────────────
     # The centrepiece for anyone who did not want a face looking back at them.
@@ -1243,6 +1362,8 @@ class HudCanvas(QWidget):
         t = self._core_phase
         live = (self.speaking or amp > 0.04) and not self.muted
         R = r * 0.60
+        self._orb_hit_center = (cx, cy)
+        self._orb_hit_radius = R * 1.48
         glow_x = cx + self._pointer_tilt_x * r * 0.55
         glow_y = cy + self._pointer_tilt_y * r * 0.55
 
@@ -1273,7 +1394,24 @@ class HudCanvas(QWidget):
             x1, z1 = x * cyw + z * syw, -x * syw + z * cyw
             y1, z2 = y * cxw - z1 * sxw, y * sxw + z1 * cxw
             scale = 3.2 / (3.2 - z2)
-            proj.append((cx + x1 * R * scale, cy + y1 * R * scale, z2))
+            px, py = cx + x1 * R * scale, cy + y1 * R * scale
+            if self._orb_pointer_pos is not None and self._orb_interaction > 0.001:
+                mx, my = self._orb_pointer_pos
+                dx, dy = px - mx, py - my
+                distance = math.hypot(dx, dy)
+                reach = R * 0.56
+                if distance < reach:
+                    proximity = 1.0 - distance / reach
+                    falloff = proximity * proximity * (3.0 - 2.0 * proximity)
+                    wave = 0.72 + 0.28 * math.sin(t * 4.2 + ph * 2.4)
+                    force = R * 0.34 * falloff * wave * self._orb_interaction
+                    inv_distance = 1.0 / max(1.0, distance)
+                    angle = ph * 1.7 + t * 1.5
+                    chaos_x, chaos_y = math.cos(angle), math.sin(angle)
+                    px += (dx * inv_distance * 0.76 + chaos_x * 0.58) * force
+                    py += (dy * inv_distance * 0.76 + chaos_y * 0.58) * force
+                    z2 += math.sin(angle * 1.3) * falloff * 0.12 * self._orb_interaction
+            proj.append((px, py, z2))
         layers = ([], [], [])
         for i, j in self._orb_edges:
             a, b = proj[i], proj[j]
@@ -1337,6 +1475,7 @@ class HudCanvas(QWidget):
         p.fillRect(self.rect(), qcol(C.PANEL))
 
         W, H = self.width(), self.height()
+        self._paint_matrix(p, W, H)
         cx, cy = W / 2, H / 2
         fw = min(W, H)
 
@@ -3493,7 +3632,10 @@ class AudioDeviceOverlay(_HudOverlay):
                     res = audio_devices.measure_input(
                         name, on_level=lambda f: self._level_seen.emit(int(f * 100))
                     )
-                    text = f"peak {res['peak']}  —  {res['verdict']}"
+                    text = (
+                        f"peak {res['peak']}  —  {res['verdict']}  "
+                        f"[device: {res.get('device', 'unknown')}]"
+                    )
                 else:
                     res = audio_devices.play_tone(name)
                     text = res["verdict"]
@@ -3525,22 +3667,19 @@ class AudioDeviceOverlay(_HudOverlay):
 
     def _apply(self):
         from memory.config_manager import (
-            get_input_device,
-            get_output_device,
             save_input_device,
             save_output_device,
         )
 
         new_in = self._in_box.currentData() or ""
         new_out = self._out_box.currentData() or ""
-        changed = (new_in != get_input_device()) or (new_out != get_output_device())
         save_input_device(new_in)
         save_output_device(new_out)
         self.hide()
-        # Only rebuild the session if something actually moved — a no-op Apply
-        # should not cost a reconnect.
-        if changed:
-            self.picked.emit()
+        # Applying also reopens the audio streams. That matters when the OS
+        # default endpoint changed after a headset was unplugged, even though
+        # the saved choice remains "System default".
+        self.picked.emit()
 
 
 class MemoryOverlay(_HudOverlay):
@@ -3551,7 +3690,7 @@ class MemoryOverlay(_HudOverlay):
     the other half of that change — a memory you cannot inspect is a memory you
     cannot trust, and 'delete' has to be something the person can do."""
 
-    _OW = 520
+    _OW = 560
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -3670,51 +3809,79 @@ class MemoryOverlay(_HudOverlay):
         else:
             scroll = QScrollArea()
             scroll.setWidgetResizable(True)
-            scroll.setFixedHeight(min(420, 34 * len(rows) + 10))
+            scroll.setFixedHeight(min(440, 82 * len(rows) + 10))
             scroll.setStyleSheet(
-                f"QScrollArea {{ border: 1px solid {C.BORDER}; border-radius: 3px; "
-                f"background: transparent; }}"
+                f"QScrollArea {{ border: 1px solid {C.BORDER}; border-radius: 7px; "
+                f"background: {C.DARK}; }}"
             )
             inner = QWidget()
             ilay = QVBoxLayout(inner)
-            ilay.setContentsMargins(6, 6, 6, 6)
-            ilay.setSpacing(3)
+            ilay.setContentsMargins(8, 8, 8, 8)
+            ilay.setSpacing(8)
 
             for r in rows:
-                line = QHBoxLayout()
-                line.setSpacing(6)
-                txt = QLabel(
-                    f"<b>{r['key'].replace('_', ' ')}</b> "
-                    f"<span style='color:{C.TEXT_MED}'>— {r['value']}</span>"
+                card = QFrame()
+                card.setObjectName("MemoryCard")
+                card.setStyleSheet(
+                    f"QFrame#MemoryCard {{ background:{C.PANEL}; "
+                    f"border:1px solid {C.BORDER}; border-radius:7px; }}"
                 )
-                txt.setWordWrap(True)
-                txt.setFont(QFont(FONT_MONO, 8))
-                txt.setStyleSheet(f"color: {C.TEXT}; background: transparent;")
-                line.addWidget(txt, 1)
-
-                meta = QLabel(f"{r['category'][:4]} · {r['updated'] or '—'}")
+                card_lay = QVBoxLayout(card)
+                card_lay.setContentsMargins(11, 9, 9, 9)
+                card_lay.setSpacing(5)
+                top = QHBoxLayout()
+                top.setSpacing(6)
+                key = QLabel(_html.escape(str(r["key"]).replace("_", " ")).title())
+                key.setFont(QFont(FONT_UI, 9, QFont.Weight.DemiBold))
+                key.setStyleSheet(f"color:{C.PRI}; background:transparent;")
+                top.addWidget(key, 1)
+                meta_text = (
+                    f"{_html.escape(str(r['category'][:4]).upper())}  ·  "
+                    f"{_html.escape(str(r['updated'] or '—'))}"
+                )
+                meta = QLabel(meta_text)
                 meta.setFont(QFont(FONT_MONO, 7))
-                meta.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
-                line.addWidget(meta)
-
-                rm = QPushButton("✕")
-                rm.setFixedSize(20, 20)
-                rm.setFont(QFont(FONT_MONO, 8, QFont.Weight.Bold))
+                meta.setStyleSheet(f"color:{C.TEXT_DIM}; background:transparent;")
+                top.addWidget(meta)
+                copy_btn = QPushButton("Copy")
+                copy_btn.setFixedHeight(22)
+                copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+                copy_btn.setToolTip("Copy this memory")
+                copy_btn.setStyleSheet(f"""
+                    QPushButton {{ color:{C.TEXT_MED}; background:{C.PANEL2};
+                        border:1px solid {C.BORDER}; border-radius:4px; padding:0 7px; }}
+                    QPushButton:hover {{ color:{C.PRI}; border-color:{C.PRI_DIM}; }}
+                """)
+                memory_text = f"{r['key'].replace('_', ' ')}: {r['value']}"
+                copy_btn.clicked.connect(
+                    lambda _=False, value=memory_text: QApplication.clipboard().setText(
+                        value
+                    )
+                )
+                top.addWidget(copy_btn)
+                rm = QPushButton("×")
+                rm.setFixedSize(22, 22)
+                rm.setFont(QFont(FONT_UI, 11))
                 rm.setCursor(Qt.CursorShape.PointingHandCursor)
-                rm.setToolTip("Forget this")
+                rm.setToolTip("Forget this memory")
                 rm.setStyleSheet(f"""
-                    QPushButton {{ background: transparent; color: {C.TEXT_DIM};
-                        border: 1px solid {C.BORDER}; border-radius: 3px; }}
-                    QPushButton:hover {{ color: {C.RED}; border-color: {C.RED}; }}
+                    QPushButton {{ color:{C.TEXT_DIM}; background:transparent;
+                        border:1px solid {C.BORDER}; border-radius:4px; }}
+                    QPushButton:hover {{ color:{C.RED}; border-color:{C.RED}; }}
                 """)
                 rm.clicked.connect(
                     lambda _=False, c=r["category"], k=r["key"]: self._forget(c, k)
                 )
-                line.addWidget(rm)
-
-                holder = QWidget()
-                holder.setLayout(line)
-                ilay.addWidget(holder)
+                top.addWidget(rm)
+                card_lay.addLayout(top)
+                txt = QLabel(_html.escape(str(r["value"])))
+                txt.setWordWrap(True)
+                txt.setFont(QFont(FONT_UI, 9))
+                txt.setStyleSheet(
+                    f"color:{C.TEXT}; background:transparent; line-height:145%;"
+                )
+                card_lay.addWidget(txt)
+                ilay.addWidget(card)
 
             ilay.addStretch()
             scroll.setWidget(inner)
@@ -5972,8 +6139,11 @@ class PluginSettingsOverlay(QWidget):
                 w.setStyleSheet(self._fs)
                 if field.get("placeholder"):
                     w.setPlaceholderText(str(field["placeholder"]))
-                if ftype == "password":
+                if ftype in ("password", "passcode"):
                     w.setEchoMode(QLineEdit.EchoMode.Password)
+                    if ftype == "passcode" and stored:
+                        w.setText("")
+                        w.setPlaceholderText("Leave blank to keep the saved passcode")
 
             self._widgets[(ns, key)] = w
             self._types[(ns, key)] = ftype
@@ -6030,7 +6200,16 @@ class PluginSettingsOverlay(QWidget):
             elif t == "toggle":
                 out[key] = w.isChecked()
             else:
-                out[key] = w.text().strip()
+                value = w.text().strip()
+                if t == "passcode":
+                    if value:
+                        salt = secrets.token_hex(16)
+                        digest = hashlib.pbkdf2_hmac(
+                            "sha256", value.encode("utf-8"), bytes.fromhex(salt), 310_000
+                        ).hex()
+                        out[key] = f"pbkdf2_sha256${salt}${digest}"
+                else:
+                    out[key] = value
         return out
 
     def _save_ns(self, ns: str):
@@ -7123,7 +7302,11 @@ class UpdatePanel(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        from core.update_service import APP_RELEASE_VERSION, RELEASE_CHANNEL, UpdateService
+        from core.update_service import (
+            APP_RELEASE_VERSION,
+            RELEASE_CHANNEL,
+            UpdateService,
+        )
         from memory.config_manager import get_update_settings
 
         self._service = UpdateService()
@@ -7140,13 +7323,21 @@ class UpdatePanel(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(8)
-        self._version = QLabel(f"JARVIS {APP_RELEASE_VERSION}  В·  {RELEASE_CHANNEL} channel")
-        self._version.setStyleSheet(f"color:{C.TEXT}; background:transparent; font-weight:600;")
+        self._version = QLabel(
+            f"JARVIS {APP_RELEASE_VERSION}  В·  {RELEASE_CHANNEL} channel"
+        )
+        self._version.setStyleSheet(
+            f"color:{C.TEXT}; background:transparent; font-weight:600;"
+        )
         layout.addWidget(self._version)
         self._install_state = QLabel(
-            "Installed application" if self._installable else "Source / portable mode — install is disabled"
+            "Installed application"
+            if self._installable
+            else "Source / portable mode — install is disabled"
         )
-        self._install_state.setStyleSheet(f"color:{C.TEXT_DIM}; background:transparent;")
+        self._install_state.setStyleSheet(
+            f"color:{C.TEXT_DIM}; background:transparent;"
+        )
         layout.addWidget(self._install_state)
         self._status = QLabel("Not checked yet")
         self._status.setStyleSheet(f"color:{C.PRI}; background:transparent;")
@@ -7170,7 +7361,9 @@ class UpdatePanel(QWidget):
         self._signals.state.connect(self._status.setText)
         self._signals.progress.connect(self._progress.setValue)
 
-        self._auto_check = QCheckBox("Check for stable updates on startup and every 6 hours")
+        self._auto_check = QCheckBox(
+            "Check for stable updates on startup and every 6 hours"
+        )
         self._auto_check.setChecked(self._settings["auto_check"])
         self._auto_download = QCheckBox("Download available updates automatically")
         self._auto_download.setChecked(self._settings["auto_download"])
@@ -7235,15 +7428,24 @@ class UpdatePanel(QWidget):
         self._check_button.setEnabled(False)
         self._status.setText("Checking the latest stable GitHub release…")
         threading.Thread(
-            target=self._check_worker, args=(automatic,), daemon=True, name="jarvis-update-check"
+            target=self._check_worker,
+            args=(automatic,),
+            daemon=True,
+            name="jarvis-update-check",
         ).start()
 
     def _check_worker(self, automatic):
         try:
             result = self._service.check_for_updates()
             self._signals.checked.emit(result)
-            if result.update_available and result.install_supported and self._settings.get("auto_download"):
-                self._signals.state.emit("Update available — downloading in the background…")
+            if (
+                result.update_available
+                and result.install_supported
+                and self._settings.get("auto_download")
+            ):
+                self._signals.state.emit(
+                    "Update available — downloading in the background…"
+                )
                 self._service.download_update(self._signals.progress.emit)
                 self._signals.downloaded.emit()
         except Exception as exc:
@@ -7261,16 +7463,24 @@ class UpdatePanel(QWidget):
         self._downloaded = False
         date = result.release.published_at or "date unavailable"
         size = result.release.size_bytes
-        size_text = f"{size / (1024 * 1024):.1f} MB of release assets" if size else "size unavailable"
+        size_text = (
+            f"{size / (1024 * 1024):.1f} MB of release assets"
+            if size
+            else "size unavailable"
+        )
         self._release.setText(
             f"Latest stable: {result.release.version}  В·  Published: {date}  В·  {size_text}\n{result.release.url}"
         )
         self._notes.setPlainText(result.release.notes)
         if result.update_available:
-            self._status.setText(f"Update available: {result.current_version} → {result.release.version}")
+            self._status.setText(
+                f"Update available: {result.current_version} → {result.release.version}"
+            )
             self._download_button.setEnabled(result.install_supported)
         else:
-            self._status.setText(f"Up to date — latest stable is {result.release.version}")
+            self._status.setText(
+                f"Up to date — latest stable is {result.release.version}"
+            )
             self._download_button.setEnabled(False)
         self._install_button.setEnabled(False)
         if auto_downloading:
@@ -7290,7 +7500,9 @@ class UpdatePanel(QWidget):
         self._progress.setValue(0)
         self._progress.show()
         self._status.setText("Downloading and verifying update package…")
-        threading.Thread(target=self._download_worker, daemon=True, name="jarvis-update-download").start()
+        threading.Thread(
+            target=self._download_worker, daemon=True, name="jarvis-update-download"
+        ).start()
 
     def _download_worker(self):
         try:
@@ -7304,7 +7516,9 @@ class UpdatePanel(QWidget):
         self._downloaded = True
         self._progress.setValue(100)
         self._progress.show()
-        self._status.setText("Update downloaded and verified. Restart when you are ready.")
+        self._status.setText(
+            "Update downloaded and verified. Restart when you are ready."
+        )
         self._install_button.setEnabled(True)
 
     def install_now(self):
@@ -7314,7 +7528,9 @@ class UpdatePanel(QWidget):
         recorder = getattr(owner, "_lecture_recorder", None)
         if recorder is not None and recorder.recording:
             QMessageBox.information(
-                self, "Recording in progress", "Stop and save the lecture recording before updating JARVIS."
+                self,
+                "Recording in progress",
+                "Stop and save the lecture recording before updating JARVIS.",
             )
             return
         answer = QMessageBox.question(
@@ -7350,6 +7566,8 @@ class MainWindow(QMainWindow):
     _quiz_sig = pyqtSignal(str, object, object)  # (topic, questions, grader)
     _quiz_hide_sig = pyqtSignal()
     _review_sig = pyqtSignal(str, str, object, object)  # document review payload
+    _auth_lock_sig = pyqtSignal(object, str)
+    _auth_face_result_sig = pyqtSignal(object, bool)
 
     def __init__(self, face_path: str):
         super().__init__()
@@ -7386,7 +7604,9 @@ class MainWindow(QMainWindow):
         self._terminal_active_id = ""
         self._terminal_sequence = 0
         self._terminal_poll_timer = QTimer(self)
-        self._terminal_poll_timer.setInterval(50)
+        # Drain terminal output frequently enough that large listings do not
+        # appear in visibly delayed 8 KB increments.
+        self._terminal_poll_timer.setInterval(25)
         self._terminal_poll_timer.timeout.connect(self._poll_terminal_output)
 
         # Apply the saved UI colour BEFORE panels/stylesheets are built
@@ -7428,6 +7648,8 @@ class MainWindow(QMainWindow):
         self.ptt_hold = None  # callable: (held: bool) -> None — windowed chord
         self.wake_get_state = None  # callable: () -> dict {enabled, awake, ready}
         self._muted = False
+        self._auth_lock_active = False
+        self.on_auth_lock = None
         self._lecture_recorder = None
         self._lecture_started_monotonic = 0.0
         self._lecture_timer = QTimer(self)
@@ -7471,6 +7693,7 @@ class MainWindow(QMainWindow):
 
         # Center column: HUD + resizable content panel via QSplitter
         self.hud = HudCanvas(face_path, _display)
+        self.hud.muteToggleRequested.connect(self._toggle_mute)
         self.hud.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
@@ -7829,6 +8052,8 @@ class MainWindow(QMainWindow):
         self._quiz_sig.connect(self._show_quiz)
         self._quiz_hide_sig.connect(self._hide_quiz)
         self._review_sig.connect(self._show_review)
+        self._auth_lock_sig.connect(self._show_auth_lock)
+        self._auth_face_result_sig.connect(self._finish_face_auth)
         self._cam_stop = threading.Event()
 
         # Camera preview overlay (child of central widget, positioned in resizeEvent)
@@ -9030,11 +9255,9 @@ class MainWindow(QMainWindow):
         except Exception:
             self._uptime_lbl.setText(f"{self._tr('UPTIME')}  --:--:--")
 
-        try:
-            proc_count = len(psutil.pids())
-            self._proc_lbl.setText(f"{self._tr('PROCESSES')}  {proc_count}")
-        except Exception:
-            self._proc_lbl.setText(f"{self._tr('PROCESSES')}  --")
+        proc_count = snap.get("process_count", 0)
+        value = str(proc_count) if proc_count else "--"
+        self._proc_lbl.setText(f"{self._tr('PROCESSES')}  {value}")
 
     def _build_header(self) -> QWidget:
         w = _WindowHeader(self)
@@ -9135,17 +9358,33 @@ class MainWindow(QMainWindow):
         nav.addWidget(self._terminal_toggle_btn)
 
         brand = QVBoxLayout()
-        brand.setSpacing(1)
+        brand.setSpacing(0)
         _disp = self._assistant_name.upper()
-        self._title_lbl = QLabel(_disp)
+        self._title_lbl = QLabel()
         self._title_lbl.setAttribute(
             Qt.WidgetAttribute.WA_TransparentForMouseEvents, True
         )
         self._title_lbl.setAlignment(
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
         )
-        self._title_lbl.setFont(QFont(FONT_MONO, 17, QFont.Weight.Bold))
-        self._title_lbl.setStyleSheet(f"color: {C.PRI}; background: transparent;")
+        logo_path = BASE_DIR / "assets" / "desktop" / "interfays_icon.png"
+        logo = QPixmap(str(logo_path))
+        if not logo.isNull():
+            self._title_lbl.setPixmap(
+                logo.scaled(
+                    QSize(150, 50),
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
+            )
+            self._title_lbl.setToolTip(_disp)
+            self._title_lbl.setStyleSheet("background: transparent;")
+        else:
+            # Keep a readable fallback for development copies that do not yet
+            # have the bundled brand artwork.
+            self._title_lbl.setText(_disp)
+            self._title_lbl.setFont(QFont(FONT_MONO, 17, QFont.Weight.Bold))
+            self._title_lbl.setStyleSheet(f"color: {C.PRI}; background: transparent;")
         brand.addWidget(self._title_lbl)
         _sub_text = (
             "Just A Rather Very Intelligent System · V2"
@@ -9161,7 +9400,12 @@ class MainWindow(QMainWindow):
         )
         self._sub_lbl.setFont(QFont(FONT_MONO, 7))
         self._sub_lbl.setStyleSheet(f"color: {C.PRI_DIM}; background: transparent;")
-        brand.addWidget(self._sub_lbl)
+        # The supplied wordmark already contains the product descriptor.
+        # Retain this label for custom assistant-name updates when falling
+        # back to plain text, but do not duplicate the branding under the logo.
+        self._sub_lbl.setVisible(logo.isNull())
+        if logo.isNull():
+            brand.addWidget(self._sub_lbl)
 
         right_col = QVBoxLayout()
         right_col.setSpacing(2)
@@ -10565,9 +10809,10 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
 
     def _new_terminal(self):
         session = self._add_terminal_session()
-        self._start_terminal_process(session.session_id)
         self._terminal_panel.show()
         self._terminal_toggle_btn.setChecked(True)
+        if session.client_is_ready:
+            self._start_terminal_process(session.session_id)
         self._terminal_tabs.currentWidget().setFocus()
 
     def _close_terminal_session(self, index: int):
@@ -10837,7 +11082,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         )
         self._terminal_toggle_btn.setChecked(True)
         session = self._active_terminal_session()
-        if session is not None and session.pty is None:
+        if session is not None and session.client_is_ready and session.pty is None:
             self._start_terminal_process(session.session_id)
         if session is not None:
             session.view.setFocus()
@@ -10943,29 +11188,48 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             return
         pty = session.pty
         try:
-            if isinstance(pty, dict):
-                try:
-                    # Small reads keep the UI event loop responsive during very
-                    # chatty commands such as `tree`, so Ctrl+C can be handled.
-                    raw = os.read(pty["fd"], 8192)
-                except BlockingIOError:
-                    raw = b""
-                output = raw.decode("utf-8", errors="replace")
-                ended = pty["process"].poll() is not None
-            else:
-                # pywinpty's PTY.read accepts only `blocking`; chunk the result
-                # below so large commands do not flood the GUI event loop.
-                output = pty.read(blocking=False)
-                ended = not pty.isalive()
+            output_parts = []
+            output_size = 0
+            # Drain multiple small PTY reads per event-loop turn, then send one
+            # combined update to xterm.js. The cap keeps a very chatty command
+            # from monopolizing the UI thread while removing the old 8 KB / 50 ms
+            # bottleneck (about 160 KB/s) for ordinary command output.
+            while output_size < 65_536:
+                if isinstance(pty, dict):
+                    try:
+                        raw = os.read(pty["fd"], min(8192, 65_536 - output_size))
+                    except BlockingIOError:
+                        raw = b""
+                    except OSError as exc:
+                        if getattr(exc, "errno", None) in (5, 9):
+                            raw = b""
+                        else:
+                            raise
+                    piece = raw.decode("utf-8", errors="replace")
+                else:
+                    # winpty reports no available data as an empty string when
+                    # called in nonblocking mode.
+                    piece = pty.read(blocking=False) or ""
+                if not piece:
+                    break
+                piece = str(piece)
+                output_parts.append(piece)
+                output_size += len(piece)
+            output = "".join(output_parts)
+            ended = (
+                pty["process"].poll() is not None
+                if isinstance(pty, dict)
+                else not pty.isalive()
+            )
             if output:
                 session.pending_output += str(output)
-                # Bound memory if a command produces output faster than the UI
+                # Bound memory if a command produces output faster than xterm.js
                 # can render it; the terminal view itself keeps a short scrollback.
                 if len(session.pending_output) > 1_000_000:
                     session.pending_output = session.pending_output[-1_000_000:]
             if session.pending_output:
-                chunk = session.pending_output[:8192]
-                session.pending_output = session.pending_output[8192:]
+                chunk = session.pending_output[:65_536]
+                session.pending_output = session.pending_output[65_536:]
                 self._append_terminal_output(chunk, session_id=session_id)
             if ended and not session.pending_output:
                 self._append_terminal_output(
@@ -11037,6 +11301,16 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         if session is None:
             return
         session.client_is_ready = True
+        # Wait for xterm.js and its WebChannel bridge before starting the shell.
+        # On Windows, creating the PTY while the embedded page is still loading
+        # can race WebEngine initialization when the terminal is opened.
+        if (
+            self._terminal_panel.isVisible()
+            and session_id == self._terminal_active_id
+            and session.pty is None
+            and not session.closing
+        ):
+            self._start_terminal_process(session_id)
         if session.output_buffer:
             session.bridge.output.emit(session.output_buffer)
             session.output_buffer = ""
@@ -12568,11 +12842,17 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         self._assistant_name = name.strip() or "JARVIS"
         display = self._assistant_name.upper()
         self.setWindowTitle(f"{display} — {APP_VERSION}")
-        self._title_lbl.setText(display)
-        if display in ("JARVIS", "J.A.R.V.I.S"):
-            self._sub_lbl.setText("Just A Rather Very Intelligent System · V2")
+        if (
+            self._title_lbl.pixmap() is not None
+            and not self._title_lbl.pixmap().isNull()
+        ):
+            self._title_lbl.setToolTip(display)
         else:
-            self._sub_lbl.setText("Personal AI Assistant · V2")
+            self._title_lbl.setText(display)
+            if display in ("JARVIS", "J.A.R.V.I.S"):
+                self._sub_lbl.setText("Just A Rather Very Intelligent System · V2")
+            else:
+                self._sub_lbl.setText("Personal AI Assistant · V2")
         self._log._ai_name_lc = self._assistant_name.lower()
         self.hud._assistant_name = display
         ui_opacity = max(60, min(100, int(ui_opacity)))
@@ -13292,7 +13572,9 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                 f'border-right:2px solid {C.ACC};border-radius:10px;">'
                 f'<table width="100%" cellspacing="0" cellpadding="0"><tr>'
                 f'<td style="color:{C.TEXT_DIM};font-size:8pt;">You</td>'
-                f'<td align="right"><a href="delete-turn:{turn_id}" title="Delete this turn" '
+                f'<td align="right"><a href="copy-user:{turn_id}" title="Copy message" '
+                f'style="color:{C.TEXT_MED};text-decoration:none;font-size:8pt;">Copy</a>'
+                f'&nbsp;&nbsp;<a href="delete-turn:{turn_id}" title="Delete this turn" '
                 f'style="color:{C.TEXT_DIM};text-decoration:none;font-size:8pt;">×</a></td>'
                 f'</tr></table><div style="color:{C.TEXT};margin-top:2px;">{request}</div>'
                 f'</td></tr></table></td></tr><tr><td height="3"></td></tr>'
@@ -13301,7 +13583,11 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                 f'border-left:2px solid {C.PRI};border-radius:2px 9px 9px 2px;">'
                 f'<div style="color:{C.PRI_DIM};font-size:8pt;font-weight:bold;">JARVIS'
                 f'{(" · " + status_label) if status_label else ""}</div>'
-                f'<div style="color:{answer_color};margin-top:2px;">{answer}</div>'
+                f'<table width="100%" cellspacing="0" cellpadding="0"><tr>'
+                f'<td style="color:{answer_color};margin-top:2px;">{answer}</td>'
+                f'<td align="right" valign="top"><a href="copy-answer:{turn_id}" title="Copy response" '
+                f'style="color:{C.TEXT_MED};text-decoration:none;font-size:8pt;">Copy</a></td>'
+                f"</tr></table>"
                 f'</td></tr></table></td></tr><tr><td height="6"></td></tr></table>'
             )
         if not cards:
@@ -13321,6 +13607,19 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         link = url.toString()
         if link.startswith("delete-turn:"):
             self._delete_chat_turn(link.split(":", 1)[1])
+        elif link.startswith(("copy-user:", "copy-answer:")):
+            kind, turn_id = link.split(":", 1)
+            row = next(
+                (r for r in _chat_turns() if str(r.get("id", "")) == turn_id),
+                None,
+            )
+            if row is not None:
+                text = (
+                    row.get("request", "")
+                    if kind == "copy-user"
+                    else row.get("result", "")
+                )
+                QApplication.clipboard().setText(str(text))
 
     def _delete_chat_turn(self, turn_id: str):
         if not turn_id:
@@ -13612,6 +13911,9 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         )
 
     def closeEvent(self, event):
+        if getattr(self, "_auth_lock_dialog", None) is not None:
+            event.ignore()
+            return
         if self._lecture_recorder is not None:
             try:
                 path = self._lecture_recorder.stop()
@@ -13644,7 +13946,184 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                 continue
             session.closing = True
             self._force_close_terminal_session(session_id)
+        restore_console = getattr(self, "_console_restore_callback", None)
+        if callable(restore_console):
+            restore_console()
         super().closeEvent(event)
+
+    def _show_auth_lock(self, verifier, mode="jarvis"):
+        if getattr(self, "_auth_lock_dialog", None) is not None:
+            return
+        self._auth_lock_active = True
+        if callable(self.on_auth_lock):
+            self.on_auth_lock()
+        class _LockDialog(QDialog):
+            verified = False
+
+            def reject(self):
+                return  # Escape and window-manager close must not dismiss the lock.
+
+            def closeEvent(self, event):
+                if self.verified:
+                    event.accept()
+                else:
+                    event.ignore()
+
+        dialog = _LockDialog(self)
+        dialog.setWindowTitle("JARVIS — Locked")
+        flags = Qt.WindowType.Dialog | Qt.WindowType.FramelessWindowHint
+        if mode == "system" or platform.system() == "Windows":
+            flags |= Qt.WindowType.WindowStaysOnTopHint
+        dialog.setWindowFlags(flags)
+        dialog.setModal(True)
+        dialog.setWindowOpacity(1.0)
+        dialog.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, False)
+        dialog.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        dialog.setStyleSheet(
+            f"QDialog {{ background-color: {C.DARK}; color: {C.TEXT}; }}"
+            f"QFrame#authCard {{ background: {C.PANEL}; border: 1px solid {C.BORDER}; border-radius: 16px; }}"
+            f"QLineEdit {{ background: {C.PANEL2}; color: {C.TEXT}; border: 1px solid {C.BORDER}; "
+            f"border-radius: 8px; padding: 13px 14px; selection-background-color: {C.PRI}; }}"
+            f"QLineEdit:focus {{ border: 1px solid {C.PRI}; }}"
+            f"QPushButton {{ min-height: 42px; border-radius: 8px; font-weight: 600; }}"
+        )
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(24, 24, 24, 24)
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        card = QFrame()
+        card.setObjectName("authCard")
+        card.setMaximumWidth(460)
+        card.setMinimumWidth(360)
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(36, 34, 36, 30)
+        card_layout.setSpacing(16)
+        brand = QLabel("J.A.R.V.I.S.")
+        brand.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        brand.setStyleSheet(f"color: {C.PRI}; font-size: 13px; font-weight: bold; letter-spacing: 2px;")
+        card_layout.addWidget(brand)
+        title = QLabel("Please verify your identity")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title.setStyleSheet(f"color: {C.TEXT}; font-size: 25px; font-weight: 600; border: none;")
+        card_layout.addWidget(title)
+        subtitle = QLabel("Enter your PIN or passphrase to continue")
+        subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        subtitle.setStyleSheet(f"color: {C.TEXT_DIM}; font-size: 12px; border: none;")
+        card_layout.addWidget(subtitle)
+        entry = QLineEdit()
+        entry.setEchoMode(QLineEdit.EchoMode.Password)
+        entry.setPlaceholderText("PIN or passphrase")
+        entry.setMinimumHeight(46)
+        card_layout.addWidget(entry)
+        status = QLabel("Authentication is required to continue.")
+        dialog._auth_status_label = status
+        status.setStyleSheet(f"color: {C.TEXT_DIM};")
+        status.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        status.setWordWrap(True)
+        status.setMinimumHeight(34)
+        status.setStyleSheet(f"color: {C.TEXT_DIM}; font-size: 11px; border: none;")
+        card_layout.addWidget(status)
+        unlock = QPushButton("UNLOCK")
+        unlock.setMinimumHeight(46)
+        unlock.setStyleSheet(f"QPushButton {{ background: {C.PRI}; color: {C.DARK}; border: none; }} QPushButton:hover {{ background: {C.WHITE}; }} QPushButton:disabled {{ background: {C.PANEL2}; color: {C.TEXT_DIM}; }}")
+        card_layout.addWidget(unlock)
+
+        face_verifier = getattr(verifier, "verify_face", None)
+        face_btn = None
+        if callable(face_verifier):
+            face_btn = QPushButton("VERIFY FACE")
+            face_btn.setMinimumHeight(42)
+            face_btn.setStyleSheet(f"QPushButton {{ background: transparent; color: {C.PRI}; border: 1px solid {C.BORDER}; }} QPushButton:hover {{ background: {C.PRI_GHO}; border-color: {C.PRI}; }} QPushButton:disabled {{ color: {C.TEXT_DIM}; }}")
+            card_layout.addWidget(face_btn)
+        layout.addWidget(card, 0, Qt.AlignmentFlag.AlignCenter)
+
+        attempts = {"count": 0, "remaining": 0}
+        retry_timer = QTimer(dialog)
+        retry_timer.setInterval(1000)
+
+        def retry_tick():
+            if attempts["remaining"] <= 0:
+                retry_timer.stop()
+                unlock.setEnabled(True)
+                status.setText("Authentication is required to continue.")
+                return
+            status.setText(f"Too many attempts. Try again in {attempts['remaining']} seconds.")
+            attempts["remaining"] -= 1
+
+        retry_timer.timeout.connect(retry_tick)
+
+        def attempt():
+            if attempts["remaining"]:
+                return
+            try:
+                accepted = bool(verifier(entry.text()))
+            except Exception:
+                accepted = False
+            if accepted:
+                self._auth_lock_active = False
+                dialog.verified = True
+                self._auth_lock_dialog = None
+                dialog.accept()
+            else:
+                entry.clear()
+                attempts["count"] += 1
+                if attempts["count"] >= 3:
+                    attempts["count"] = 0
+                    attempts["remaining"] = 10
+                    unlock.setEnabled(False)
+                    retry_tick()
+                    retry_timer.start()
+                else:
+                    status.setText("Incorrect passcode. Try again.")
+                entry.setFocus()
+
+        unlock.clicked.connect(attempt)
+        entry.returnPressed.connect(attempt)
+        if face_btn is not None:
+            dialog._auth_face_button = face_btn
+            def attempt_face():
+                face_btn.setEnabled(False)
+                status.setText("Looking for your face… PIN/password remains available.")
+
+                def worker():
+                    try:
+                        ok = bool(face_verifier())
+                    except Exception:
+                        ok = False
+                    self._auth_face_result_sig.emit(dialog, ok)
+
+                threading.Thread(target=worker, daemon=True, name="jarvis-face-check").start()
+
+            face_btn.clicked.connect(attempt_face)
+        dialog.setMinimumSize(520, 250)
+        self._auth_lock_dialog = dialog
+        # Keep the login overlay inside JARVIS. Do not install system-wide
+        # keyboard hooks or change Windows touchpad settings from this app.
+        if mode == "system" or platform.system() == "Windows":
+            dialog.showFullScreen()
+        else:
+            dialog.setWindowModality(Qt.WindowModality.ApplicationModal)
+            dialog.show()
+        entry.setFocus()
+
+    def show_auth_lock(self, verifier, mode="jarvis"):
+        """Thread-safe entry point used by plugin startup hooks."""
+        self._auth_lock_sig.emit(verifier, str(mode or "jarvis"))
+
+    def _finish_face_auth(self, dialog, accepted):
+        if dialog is not getattr(self, "_auth_lock_dialog", None):
+            return
+        if accepted:
+            self._auth_lock_active = False
+            dialog.verified = True
+            self._auth_lock_dialog = None
+            dialog.accept()
+        else:
+            label = getattr(dialog, "_auth_status_label", None)
+            if label:
+                label.setText("Face not recognized. Try again or enter your PIN/password.")
+            button = getattr(dialog, "_auth_face_button", None)
+            if button:
+                button.setEnabled(True)
 
 
 class _ConsoleMirror:
@@ -13667,12 +14146,12 @@ class _ConsoleMirror:
                     written = result
         except Exception:
             pass
-        if not self._window._development_mode:
-            with self._lock:
-                self._buffer = ""
-            return written
-        lines = []
         with self._lock:
+            window = self._window
+            if window is None or not window._development_mode:
+                self._buffer = ""
+                return written
+            lines = []
             self._buffer += text
             while "\n" in self._buffer:
                 line, self._buffer = self._buffer.split("\n", 1)
@@ -13683,7 +14162,7 @@ class _ConsoleMirror:
                 self._buffer = ""
         for line in lines:
             prefix = "[stderr] " if self._label == "stderr" else ""
-            self._window._log.append_console(prefix + line)
+            self._append_console(prefix + line)
         return written
 
     def flush(self):
@@ -13692,12 +14171,34 @@ class _ConsoleMirror:
                 self._stream.flush()
         except Exception:
             pass
-        if self._window._development_mode:
-            with self._lock:
+        with self._lock:
+            window = self._window
+            if window is not None and window._development_mode:
                 line, self._buffer = self._buffer, ""
-            if line.strip():
-                prefix = "[stderr] " if self._label == "stderr" else ""
-                self._window._log.append_console(prefix + line[:2000])
+            else:
+                line = ""
+                self._buffer = ""
+        if line.strip():
+            prefix = "[stderr] " if self._label == "stderr" else ""
+            self._append_console(prefix + line[:2000])
+
+    def _append_console(self, text):
+        with self._lock:
+            window = self._window
+            if window is None:
+                return
+            try:
+                window._log.append_console(text)
+            except RuntimeError:
+                # Qt may already have destroyed the log widget during shutdown.
+                self._window = None
+                self._buffer = ""
+
+    def detach(self):
+        """Stop mirroring to Qt before its widgets are destroyed."""
+        with self._lock:
+            self._window = None
+            self._buffer = ""
 
     def __getattr__(self, name):
         return getattr(self._stream, name)
@@ -13724,11 +14225,14 @@ class JarvisUI:
         self._stdout_mirror = _ConsoleMirror(sys.stdout, self._win, "stdout")
         self._stderr_mirror = _ConsoleMirror(sys.stderr, self._win, "stderr")
         sys.stdout, sys.stderr = self._stdout_mirror, self._stderr_mirror
+        self._win._console_restore_callback = self._restore_console
         self._app.aboutToQuit.connect(self._restore_console)
         self.root = _RootShim(self._app)
         self._win.show()
 
     def _restore_console(self):
+        self._stdout_mirror.detach()
+        self._stderr_mirror.detach()
         if sys.stdout is self._stdout_mirror:
             sys.stdout = self._console_streams[0]
         if sys.stderr is self._stderr_mirror:
@@ -13737,6 +14241,10 @@ class JarvisUI:
     @property
     def muted(self) -> bool:
         return self._win._muted
+
+    @property
+    def auth_locked(self) -> bool:
+        return bool(self._win._auth_lock_active)
 
     @muted.setter
     def muted(self, v: bool):
@@ -13754,6 +14262,14 @@ class JarvisUI:
     @on_text_command.setter
     def on_text_command(self, cb):
         self._win.on_text_command = cb
+
+    @property
+    def on_auth_lock(self):
+        return self._win.on_auth_lock
+
+    @on_auth_lock.setter
+    def on_auth_lock(self, cb):
+        self._win.on_auth_lock = cb
 
     @property
     def on_remote_clicked(self):
@@ -13958,6 +14474,10 @@ class JarvisUI:
         self._win._video_open_sig.emit(
             str(source or ""), str(title or ""), bool(muted), str(audio_source or "")
         )
+
+    def show_auth_lock(self, verifier, mode="jarvis") -> None:
+        """Show the plugin lock screen on the Qt thread."""
+        self._win.show_auth_lock(verifier, mode)
 
     def stop_video(self) -> None:
         """Thread-safe: close the video and give the HUD back to the avatar."""

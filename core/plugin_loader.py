@@ -62,6 +62,7 @@ class PluginRecord:
     settings: Optional[dict] = None  # optional PLUGIN_SETTINGS schema (config fields)
     behavior: Optional[str] = None  # None = the API's default (blocking)
     scheduling: Optional[str] = None  # None = the API's default (WHEN_IDLE)
+    on_app_start: Optional[Callable] = None
     # Read by providers/schema.py when a small model gets a tool budget; never
     # sent to any API — main.py strips both before the Gemini config is built.
     #   tier   "core" | "extra" — this file's own opinion of whether it should
@@ -180,6 +181,16 @@ class PluginRegistry:
             )
         return out
 
+    def start_enabled_plugins(self, player=None) -> None:
+        """Run optional startup hooks declared by enabled plugins."""
+        for rec in self._plugins.values():
+            if not get_plugin_enabled(rec.name) or not rec.on_app_start:
+                continue
+            try:
+                rec.on_app_start(player=player)
+            except Exception as exc:
+                self._logger(f"Plugin '{rec.name}' startup hook failed: {exc}")
+
 
 def _call_run(run_fn, parameters, player, session_memory):
     """Invoke run() passing only the kwargs it actually declares (or all of them
@@ -242,6 +253,9 @@ def _validate(module, filename: str) -> PluginRecord:
     settings = getattr(module, "PLUGIN_SETTINGS", None)
     if not (isinstance(settings, dict) and isinstance(settings.get("fields"), list)):
         settings = None
+    startup = getattr(module, "on_app_start", None)
+    if not callable(startup):
+        startup = None
 
     return PluginRecord(
         name=name,
@@ -252,6 +266,7 @@ def _validate(module, filename: str) -> PluginRecord:
         valid=True,
         error="",
         settings=settings,
+        on_app_start=startup,
         behavior=_opt_upper(plugin_meta.get("behavior"), _BEHAVIORS),
         scheduling=_opt_upper(plugin_meta.get("scheduling"), _SCHEDULING),
         tier=_opt_tier(plugin_meta.get("tier")),

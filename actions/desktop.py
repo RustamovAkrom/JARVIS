@@ -1,7 +1,5 @@
 # desktop.py
 import os
-import sys
-import json
 import shutil
 import subprocess
 import tempfile
@@ -10,25 +8,12 @@ from pathlib import Path
 from datetime import datetime
 
 from core import outcome
-from core.runtime_paths import PATHS
 
 # pyautogui is gone from this file along with the generated-code sandbox that
 # was the only thing using it — see the note below. Nothing here drives the
 # mouse or the keyboard any more; that is computer_control's job.
 
 _OS = platform.system()  # "Windows" | "Darwin" | "Linux"
-
-
-def _get_base_dir() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent.parent
-
-
-def _get_api_key() -> str:
-    path = PATHS.api_config_file
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)["gemini_api_key"]
 
 
 def _get_desktop() -> Path:
@@ -136,7 +121,10 @@ def _apply_wallpaper(image_path: str) -> str:
                 try:
                     from PIL import Image
 
-                    bmp_path = Path(tempfile.mktemp(suffix=".bmp"))
+                    with tempfile.NamedTemporaryFile(
+                        suffix=".bmp", delete=False
+                    ) as temp:
+                        bmp_path = Path(temp.name)
                     Image.open(path).convert("RGB").save(bmp_path, "BMP")
                     path = bmp_path
                 except ImportError:
@@ -284,7 +272,8 @@ def set_wallpaper_from_url(url: str) -> str:
         import urllib.request
 
         suffix = Path(url.split("?")[0]).suffix or ".jpg"
-        tmp = Path(tempfile.mktemp(suffix=suffix))
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as temp:
+            tmp = Path(temp.name)
         urllib.request.urlretrieve(url, str(tmp))
         result = set_wallpaper(str(tmp))
         try:
@@ -520,8 +509,6 @@ def desktop_control(
     """
     params = parameters or {}
     action = params.get("action", "").lower().strip()
-    task = params.get("task", "").strip()
-
     if player:
         print(f"[Desktop] {action}")  # terminal, not the HUD
 

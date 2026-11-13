@@ -13,7 +13,7 @@ def get_app_version() -> str:
     try:
         project = tomllib.loads(project_file.read_text(encoding="utf-8"))
         return str(project["project"]["version"])
-    except (OSError, KeyError, TypeError, tomllib.TOMLDecodeError):
+    except OSError, KeyError, TypeError, tomllib.TOMLDecodeError:
         try:
             return importlib.metadata.version("new-jarvis")
         except importlib.metadata.PackageNotFoundError:

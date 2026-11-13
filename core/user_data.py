@@ -88,7 +88,9 @@ def update_json(path: Path, update: Callable[[dict], None]) -> dict:
             try:
                 data = json.loads(path.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError) as exc:
-                raise RuntimeError(f"Refusing to overwrite unreadable {path.name}") from exc
+                raise RuntimeError(
+                    f"Refusing to overwrite unreadable {path.name}"
+                ) from exc
             if not isinstance(data, dict):
                 raise RuntimeError(f"Refusing to overwrite invalid {path.name}")
         else:

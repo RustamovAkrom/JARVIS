@@ -1,31 +1,15 @@
 import subprocess
 import sys
-import json
 import re
 import time
 from pathlib import Path
-from core.runtime_paths import PATHS
 
-
-def get_base_dir():
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent.parent
-
-
-BASE_DIR = get_base_dir()
-API_CONFIG_PATH = PATHS.api_config_file
 DESKTOP = Path.home() / "Desktop"
 MAX_BUILD_ATTEMPTS = 3
 # Model choice lives in core/gemini.py, and so does the timeout and the
 # fallback ladder. Writing a model name here is what left this file hanging
 # forever whenever that one alias was unwell.
 from core import gemini
-
-
-def _get_api_key() -> str:
-    with open(API_CONFIG_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)["gemini_api_key"]
 
 
 def _get_gemini(tier: str = gemini.SMART):
@@ -136,12 +120,6 @@ def _take_screenshot() -> Path | None:
     except Exception as e:
         print(f"[Code] ⚠️ Screenshot failed: {e}")
         return None
-
-
-def _image_to_base64(path: Path) -> str:
-    import base64
-
-    return base64.b64encode(path.read_bytes()).decode("utf-8")
 
 
 _VALID_INTENTS = {
@@ -516,8 +494,6 @@ def _screen_debug_action(description, file_path, player, speak=None) -> str:
         from google.genai import types
 
         image_bytes = screenshot_path.read_bytes()
-        image_base64 = _image_to_base64(screenshot_path)
-
         user_question = (
             description
             or "What error or problem do you see on the screen? How can it be fixed?"

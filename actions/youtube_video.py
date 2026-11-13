@@ -6,7 +6,6 @@ import time
 import subprocess
 import shutil
 from pathlib import Path
-from core.runtime_paths import PATHS
 from datetime import datetime
 from urllib.parse import quote_plus
 
@@ -40,16 +39,6 @@ except ImportError:
 
 from config import get_os, is_windows, is_mac, is_linux
 
-
-def _get_base_dir() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent.parent
-
-
-BASE_DIR = _get_base_dir()
-API_CONFIG_PATH = PATHS.api_config_file
-
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (X11; Linux x86_64) "
@@ -60,11 +49,6 @@ HEADERS = {
 }
 
 _YT_VIDEO_FILTER = "EgIQAQ%3D%3D"
-
-
-def _get_api_key() -> str:
-    with open(API_CONFIG_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)["gemini_api_key"]
 
 
 def _open_url(url: str) -> None:

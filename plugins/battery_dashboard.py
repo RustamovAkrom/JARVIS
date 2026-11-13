@@ -12,10 +12,7 @@ import psutil
 from PyQt6.QtCore import QPointF, QRectF, Qt
 from PyQt6.QtGui import (
     QBrush,
-    QColor,
-    QLinearGradient,
     QPainter,
-    QPainterPath,
     QPen,
     QRadialGradient,
 )
@@ -465,5 +462,5 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
         if not ok:
             return "I couldn't open the battery dashboard."
         return "Battery dashboard opened."
-    except Exception as exp:
+    except Exception as exc:
         return f"I couldn't open the battery dashboard: {exc}"

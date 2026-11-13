@@ -27,7 +27,13 @@ def latest_recording_file() -> Path | None:
     """Find the last saved audio part, including recordings from earlier runs."""
     roots = [recordings_dir(), Path.home() / "Documents" / "JARVIS" / "Lectures"]
     sessions = sorted(
-        (p for root in roots if root.is_dir() for p in root.glob("Lecture_*") if p.is_dir()),
+        (
+            p
+            for root in roots
+            if root.is_dir()
+            for p in root.glob("Lecture_*")
+            if p.is_dir()
+        ),
         key=lambda p: p.stat().st_mtime,
         reverse=True,
     )

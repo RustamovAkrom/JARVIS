@@ -36,7 +36,9 @@ class UpdateServiceTests(unittest.TestCase):
         self.assertEqual(result.version, "1.2.3")
         self.assertEqual(result.size_bytes, 100)
         self.assertEqual(result.notes, "Release notes")
-        self.assertEqual(result.url, "https://github.com/RustamovAkrom/JARVIS/releases/tag/v1.2.3")
+        self.assertEqual(
+            result.url, "https://github.com/RustamovAkrom/JARVIS/releases/tag/v1.2.3"
+        )
 
     def test_rejects_prerelease_draft_and_non_semver(self):
         for payload in (

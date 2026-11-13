@@ -50,7 +50,9 @@ def parse_release_metadata(payload: object) -> ReleaseInfo:
         raise ValueError("Only published stable releases are supported.")
     tag = payload.get("tag_name")
     if not isinstance(tag, str) or not _STABLE_TAG.fullmatch(tag):
-        raise ValueError("The latest release does not use a stable vMAJOR.MINOR.PATCH tag.")
+        raise ValueError(
+            "The latest release does not use a stable vMAJOR.MINOR.PATCH tag."
+        )
     try:
         version = Version(tag[1:])
     except InvalidVersion as exc:
@@ -87,7 +89,10 @@ def is_newer_version(current: str, available: str) -> bool:
 def fetch_latest_release(timeout: float = 12.0) -> ReleaseInfo:
     response = httpx.get(
         LATEST_RELEASE_API,
-        headers={"Accept": "application/vnd.github+json", "User-Agent": "JARVIS-Updater"},
+        headers={
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "JARVIS-Updater",
+        },
         timeout=timeout,
         follow_redirects=False,
     )
@@ -95,7 +100,9 @@ def fetch_latest_release(timeout: float = 12.0) -> ReleaseInfo:
     try:
         payload = response.json()
     except ValueError as exc:
-        raise ValueError("GitHub returned malformed JSON for the latest release.") from exc
+        raise ValueError(
+            "GitHub returned malformed JSON for the latest release."
+        ) from exc
     return parse_release_metadata(payload)
 
 
@@ -127,7 +134,9 @@ def _velopack_source():
 class UpdateService:
     """Background-friendly service; callers must run blocking methods off-UI."""
 
-    def __init__(self, release_fetcher: Callable[[], ReleaseInfo] = fetch_latest_release):
+    def __init__(
+        self, release_fetcher: Callable[[], ReleaseInfo] = fetch_latest_release
+    ):
         self._release_fetcher = release_fetcher
         self._manager = None
         self._pending_info = None
@@ -175,7 +184,9 @@ class UpdateService:
 
     def download_update(self, progress: Callable[[int], None] | None = None):
         if not self.install_supported:
-            raise RuntimeError("Update installation is available only in an installed JARVIS copy.")
+            raise RuntimeError(
+                "Update installation is available only in an installed JARVIS copy."
+            )
         if self._pending_info is None:
             raise RuntimeError("Check for updates before starting a download.")
         if not self._operation_lock.acquire(blocking=False):
@@ -187,7 +198,9 @@ class UpdateService:
 
     def apply_and_restart(self):
         if not self.install_supported:
-            raise RuntimeError("Update installation is available only in an installed JARVIS copy.")
+            raise RuntimeError(
+                "Update installation is available only in an installed JARVIS copy."
+            )
         if self._pending_info is None:
             raise RuntimeError("Check for updates and download the package first.")
         self._manager_instance().apply_updates_and_restart(self._pending_info)
@@ -195,8 +208,12 @@ class UpdateService:
 
 def format_release_date(value: str) -> str:
     try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone().strftime("%Y-%m-%d %H:%M %Z")
-    except (ValueError, TypeError):
+        return (
+            datetime.fromisoformat(value.replace("Z", "+00:00"))
+            .astimezone()
+            .strftime("%Y-%m-%d %H:%M %Z")
+        )
+    except ValueError, TypeError:
         return value or "Unknown"
 
 
