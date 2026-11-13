@@ -33,10 +33,9 @@ jobs:
           $version = (python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
           $tag = "v$version"
           if ($env:GITHUB_REF -ne "refs/heads/main") { throw "Automatic releases are allowed only from main." }
-          $existingTag = git ls-remote --exit-code --tags origin "refs/tags/$tag" 2>$null
-          $tagLookupExit = $LASTEXITCODE
-          if ($tagLookupExit -eq 0) { throw "Release tag $tag already exists. Bump the project version before merging another release to main." }
-          if ($tagLookupExit -ne 2) { throw "Could not check whether release tag $tag already exists." }
+          $existingTag = git ls-remote --tags origin "refs/tags/$tag"
+          if ($LASTEXITCODE -ne 0) { throw "Could not check whether release tag $tag already exists." }
+          if ($existingTag) { throw "Release tag $tag already exists. Bump the project version before merging another release to main." }
           "tag=$tag" >> $env:GITHUB_OUTPUT
       - name: Install application and build dependencies
         run: |
