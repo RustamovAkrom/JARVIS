@@ -144,10 +144,18 @@ class UpdateService:
 
     @property
     def install_supported(self) -> bool:
-        if PATHS.mode != "installed":
+        if PATHS.mode not in {"installed", "portable"}:
             return False
         try:
-            return bool(self._manager_instance().get_is_portable() is False)
+            manager = self._manager_instance()
+            # Velopack's Windows portable package is self-updating too. Only
+            # enable updates when its detected install type matches the way
+            # this frozen app was launched; source runs remain unsupported.
+            current_version = manager.get_current_version()
+            if not current_version:
+                return False
+            manager_is_portable = bool(manager.get_is_portable())
+            return manager_is_portable == (PATHS.mode == "portable")
         except Exception:
             return False
 

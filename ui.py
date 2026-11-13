@@ -7331,9 +7331,9 @@ class UpdatePanel(QWidget):
         )
         layout.addWidget(self._version)
         self._install_state = QLabel(
-            "Installed application"
+            "Velopack-managed copy — in-app updates enabled"
             if self._installable
-            else "Source / portable mode — install is disabled"
+            else "Source / standalone copy — in-app install is disabled"
         )
         self._install_state.setStyleSheet(
             f"color:{C.TEXT_DIM}; background:transparent;"
