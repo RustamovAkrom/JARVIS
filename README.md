@@ -232,7 +232,7 @@ Set `JARVIS_PROFILE=shared` to make a source run use the installed profile. Set 
 
 ## Windows installer and updates
 
-Stable Windows releases are built on GitHub Actions from tags matching the version in `pyproject.toml` (for example, `v0.1.0`). Open [the latest release](https://github.com/RustamovAkrom/JARVIS/releases/latest) and choose the Windows download that suits you: the per-user `Setup.exe` installer or the portable package. The release also includes an update feed. Install the setup package to receive the **Updates** panel and in-app verified updates. Source and portable runs can check release notes but cannot replace their own files. Updates are only published from tags; pushes to `main` and `v2` run the test workflow.
+Stable Windows releases are built on GitHub Actions when a commit is pushed to `main` that changes `pyproject.toml`. Set a new version there (for example, `1.0.7`) in the PR; after merge, the release workflow runs the complete test workflow, builds the Windows packages, and creates the matching GitHub Release. Release creation is restricted to `main`; pushing a tag from another branch cannot publish a release. Open [the latest release](https://github.com/RustamovAkrom/JARVIS/releases/latest) and choose the Windows download that suits you: the per-user `Setup.exe` installer or the portable package. The release also includes an update feed. Install the setup package to receive the **Updates** panel and in-app verified updates. Source and portable runs can check release notes but cannot replace their own files. Pushes to `main` and `v2` run the test workflow.
 
 Prebuilt release packages are currently published for Windows. macOS and Linux users can install from source using the platform instructions in [Quick start](#install); the setup script installs Python dependencies and browser runtimes.
 
@@ -244,7 +244,7 @@ dotnet tool install --global vpk --version 1.2.161
 python tools/build_release.py
 ```
 
-To release, set the version in `pyproject.toml`, commit it, create the matching `vMAJOR.MINOR.PATCH` tag, and push the tag. The workflow validates the tag/version match before publishing assets. The installed app uses Velopack's GitHub release feed for package verification and update application.
+To release, bump the version in `pyproject.toml` in a PR to `main`. Merging that change triggers tests first; the package and GitHub Release jobs run only if the full test job succeeds. Failed tests stop the release. The installed app uses Velopack's GitHub release feed for package verification and update application.
 
 ## Development
 
