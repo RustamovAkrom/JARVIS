@@ -3006,7 +3006,7 @@ class MemoryOverlay(_HudOverlay):
 
         from memory.memory_manager import all_entries_for_ui
 
-        hdr = QLabel("SAVED MEMORIES")
+        hdr = QLabel("MEMORY · SAVED FACTS")
         hdr.setFont(QFont(FONT_MONO, 12, QFont.Weight.Bold))
         hdr.setStyleSheet(f"color: {C.PRI}; background: transparent;")
         self._lay.addWidget(hdr)
@@ -3027,6 +3027,21 @@ class MemoryOverlay(_HudOverlay):
         cap.setFont(QFont(FONT_UI, 9))
         cap.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
         self._lay.addWidget(cap)
+
+        memory_cards = []
+        memory_search = None
+        if rows:
+            memory_search = QLineEdit()
+            memory_search.setObjectName("MemorySearch")
+            memory_search.setPlaceholderText("Search saved facts")
+            memory_search.setClearButtonEnabled(True)
+            memory_search.setAccessibleName("Search saved facts")
+            memory_search.setStyleSheet(
+                f"QLineEdit {{ background:{C.PANEL2}; color:{C.TEXT}; "
+                f"border:1px solid {C.BORDER}; border-radius:7px; padding:7px 9px; }}"
+                f"QLineEdit:focus {{ border-color:{C.PRI}; }}"
+            )
+            self._lay.addWidget(memory_search)
 
         if not rows:
             empty = QLabel("Nothing stored yet.")
@@ -3164,6 +3179,23 @@ class MemoryOverlay(_HudOverlay):
                 )
                 card_lay.addWidget(txt)
                 ilay.addWidget(card)
+                searchable = " ".join(
+                    (
+                        str(r.get("key", "")),
+                        str(r.get("value", "")),
+                        str(r.get("category", "")),
+                        category_name,
+                    )
+                ).casefold()
+                memory_cards.append((card, searchable))
+
+            if memory_search is not None:
+                def _filter_memory_cards(query: str) -> None:
+                    query = query.strip().casefold()
+                    for memory_card, searchable in memory_cards:
+                        memory_card.setVisible(not query or query in searchable)
+
+                memory_search.textChanged.connect(_filter_memory_cards)
 
             ilay.addStretch()
             scroll.setWidget(inner)
@@ -3191,6 +3223,16 @@ class MemoryOverlay(_HudOverlay):
 
     def _forget(self, category: str, key: str):
         from memory.memory_manager import forget
+
+        answer = QMessageBox.question(
+            self,
+            "Forget this saved fact?",
+            f"Remove “{key.replace('_', ' ')}” from JARVIS Memory? This cannot be undone.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
 
         forget(key, category)
         # Rebuild on the NEXT event-loop turn, not inside this click handler.
