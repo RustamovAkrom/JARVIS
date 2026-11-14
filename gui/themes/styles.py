@@ -12,14 +12,15 @@ def glass_rgba(
     color: str,
     opacity: int,
     *,
-    minimum_alpha: int = 88,
-    maximum_alpha: int = 232,
+    minimum_alpha: int = 153,
+    maximum_alpha: int = 255,
 ) -> str:
-    """Return a theme colour with alpha derived from the app's Glass setting.
+    """Return a theme colour with alpha derived from the app's Glass slider.
 
-    The stored setting is shared by the main workspace and Settings Center.
+    60% is the most transparent supported surface; 100% is fully solid.
     Text is never faded independently; only panel surfaces receive alpha.
     """
+
     value = max(60, min(100, int(opacity)))
     ratio = (value - 60) / 40
     alpha = round(minimum_alpha + (maximum_alpha - minimum_alpha) * ratio)
