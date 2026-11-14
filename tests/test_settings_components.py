@@ -149,6 +149,28 @@ class SettingsComponentTests(unittest.TestCase):
         self.assertEqual(built, ["identity"])
         center.close()
 
+    def test_reopening_cached_category_refreshes_live_widget_state(self):
+        class RefreshablePage(QWidget):
+            def __init__(self):
+                super().__init__()
+                self.refresh_count = 0
+
+            def refresh_state(self):
+                self.refresh_count += 1
+
+        child = RefreshablePage()
+        page = QWidget()
+        from PyQt6.QtWidgets import QVBoxLayout
+
+        QVBoxLayout(page).addWidget(child)
+        center = SettingsCenter(page_builders={"identity": lambda: page})
+
+        self.assertTrue(center.show_category("identity"))
+        self.assertEqual(child.refresh_count, 0)
+        self.assertTrue(center.show_category("identity"))
+        self.assertEqual(child.refresh_count, 1)
+        center.close()
+
     def test_show_category_clears_search_before_resolving_category(self):
         center = SettingsCenter()
         center.search.setText("microphone")
