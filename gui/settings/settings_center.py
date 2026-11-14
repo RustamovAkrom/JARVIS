@@ -278,6 +278,26 @@ class SettingsCenter(QDialog):
         elif self.navigation.count():
             self.navigation.setCurrentRow(0)
 
+    def _show_category_page(self, category_id: str) -> None:
+        """Select a settings page and refresh its live state when revisited."""
+        was_built = category_id in self._built_categories
+        self._ensure_category_page(category_id)
+        page = self._category_pages.get(category_id)
+        if page is None:
+            return
+        self.pages.setCurrentWidget(page)
+        if was_built:
+            self._refresh_widget_state(page)
+
+    @staticmethod
+    def _refresh_widget_state(root: QWidget) -> None:
+        """Refresh cached settings widgets without reconstructing the page."""
+        widgets = [root, *root.findChildren(QWidget)]
+        for widget in widgets:
+            refresh = getattr(widget, "refresh_state", None)
+            if callable(refresh):
+                refresh()
+
     def _navigation_selected(self, row: int):
         if row < 0:
             return
@@ -287,13 +307,11 @@ class SettingsCenter(QDialog):
             return
         kind, key = value
         if kind == "category":
-            self._ensure_category_page(key)
-            self.pages.setCurrentWidget(self._category_pages[key])
+            self._show_category_page(key)
         elif kind == "result" and 0 <= key < len(self._search_entries):
             entry = self._search_entries[key]
-            self._ensure_category_page(entry.category_id)
+            self._show_category_page(entry.category_id)
             page = self._category_pages[entry.category_id]
-            self.pages.setCurrentWidget(page)
             self._focus_entry(page, entry, focus=False)
 
     def show_category(self, category_id: str) -> bool:
@@ -304,7 +322,12 @@ class SettingsCenter(QDialog):
         item = self._category_rows.get(category_id)
         if item is None:
             return False
+        # Block the list signal so this method owns exactly one page selection
+        # and can also handle a category that is already selected.
+        was_blocked = self.navigation.blockSignals(True)
         self.navigation.setCurrentItem(item)
+        self.navigation.blockSignals(was_blocked)
+        self._show_category_page(category_id)
         return True
 
     def _ensure_category_page(self, category_id: str):
