@@ -701,11 +701,19 @@ def save_provider_environment(environment: str) -> None:
 
 
 def save_provider_mode(mode: str) -> None:
-    """Save the online engine choice; Offline always uses the provider stack."""
+    """Legacy single-mode API: selecting an engine activates its Online profile.
+
+    New UI code should use save_providers(environment=..., online_mode=...)
+    when it needs to update profiles without changing the active environment.
+    """
     value = str(mode or "").strip().lower()
     if value not in (PROVIDER_MODE_GEMINI, PROVIDER_MODE_PIPELINE):
         value = PROVIDER_MODE_GEMINI
-    _patch_providers(online_mode=value)
+    _patch_providers(
+        environment="online",
+        mode=value,
+        online_mode=value,
+    )
 
 
 def save_provider_config(provider_id: str, values: dict) -> None:
