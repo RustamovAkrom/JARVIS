@@ -11299,11 +11299,39 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
 
-        diagnostics = SettingsSection(
-            "System diagnostics",
-            "Live application, environment and configuration status. Secrets are never included.",
+        developer = SettingsSection(
+            "Developer mode",
+            "Optional tools for debugging and testing JARVIS. Enabling this mode mirrors detailed activity to the terminal; prompts, file paths and command output may be sensitive.",
         )
-        self._diagnostics_value = QLabel(self._diagnostic_snapshot())
+        self._development_mode_check = QCheckBox(self._tr("Enable developer mode"))
+        self._development_mode_check.setObjectName("developer_mode")
+        self._development_mode_check.setChecked(self._development_mode)
+        self._development_mode_check.toggled.connect(
+            self._set_development_mode_from_settings
+        )
+        developer.add_row(
+            SettingRow(
+                self._tr("Developer mode"),
+                self._tr("JARVIS asks for confirmation before enabling it. You can turn it off at any time."),
+                self._development_mode_check,
+            )
+        )
+        self._debug_console_button = QPushButton(self._tr("Open debug console"))
+        self._debug_console_button.clicked.connect(self._show_debug_console)
+        developer.add_row(
+            SettingRow(
+                self._tr("Debug console"),
+                self._tr("View diagnostic output in the main workspace."),
+                self._debug_console_button,
+            )
+        )
+        layout.addWidget(developer)
+
+        diagnostics = SettingsSection(
+            "Runtime diagnostics",
+            "Detailed, current configuration for troubleshooting. Credentials and private keys are never copied.",
+        )
+        self._diagnostics_value = QLabel()
         self._diagnostics_value.setObjectName("diagnostic_snapshot")
         self._diagnostics_value.setWordWrap(True)
         self._diagnostics_value.setTextInteractionFlags(
@@ -11315,15 +11343,17 @@ class MainWindow(QMainWindow):
             f"border:1px solid {C.BORDER}; border-radius:7px; padding:10px;"
         )
         diagnostics._layout.addWidget(self._diagnostics_value)
-        copy_diagnostics = QPushButton(self._tr("Copy diagnostic report"))
-        copy_diagnostics.clicked.connect(
+        self._copy_diagnostics_button = QPushButton(
+            self._tr("Copy diagnostic report")
+        )
+        self._copy_diagnostics_button.clicked.connect(
             lambda: QApplication.clipboard().setText(self._diagnostic_snapshot())
         )
         diagnostics.add_row(
             SettingRow(
                 self._tr("Diagnostic report"),
-                self._tr("Copies non-secret runtime and configuration information."),
-                copy_diagnostics,
+                self._tr("Copies runtime paths, active AI mode, selected models and permission status. Secrets are excluded."),
+                self._copy_diagnostics_button,
             )
         )
         refresh_diagnostics = QPushButton(self._tr("Refresh"))
@@ -11331,56 +11361,55 @@ class MainWindow(QMainWindow):
         diagnostics.add_row(
             SettingRow(
                 self._tr("Current status"),
-                self._tr("Read the latest runtime values."),
+                self._tr("Re-read live application and configuration values."),
                 refresh_diagnostics,
             )
         )
         layout.addWidget(diagnostics)
 
-        developer = SettingsSection(
-            "Developer mode",
-            "For debugging and development. Detailed activity is mirrored to the terminal and may contain sensitive operational context.",
+        self._experimental_features_section = SettingsSection(
+            "Testing and preview features",
+            "This build has no external beta feed or test-plugin channel configured. When trusted preview sources are added, their opt-in controls and versions will appear here.",
         )
-        self._development_mode_check = QCheckBox(self._tr("Enable developer mode"))
-        self._development_mode_check.setObjectName("developer_mode")
-        self._development_mode_check.setChecked(self._development_mode)
-        self._development_mode_check.toggled.connect(
-            self._set_development_mode_from_settings
-        )
-        developer.add_row(
-            SettingRow(
-                self._tr("Developer mode"),
-                self._tr("Requires confirmation. You can disable it at any time."),
-                self._development_mode_check,
-            )
-        )
-        console = QPushButton(self._tr("Open debug console"))
-        console.clicked.connect(self._show_debug_console)
-        developer.add_row(
-            SettingRow(
-                self._tr("Debug console"),
-                self._tr("View diagnostic output in the main workspace."),
-                console,
-            )
-        )
-        layout.addWidget(developer)
-
-        experimental = SettingsSection(
-            "Experimental features",
-            "Preview builds, test plugins and beta tools can be introduced here. They will remain unavailable unless Developer Mode is enabled; no experimental feature is activated by this section today.",
-        )
-        layout.addWidget(experimental)
+        layout.addWidget(self._experimental_features_section)
         layout.addStretch(1)
+        self._refresh_diagnostics()
         return page
 
     def _refresh_diagnostics(self):
         label = getattr(self, "_diagnostics_value", None)
+        enabled = bool(getattr(self, "_development_mode", False))
         if label is not None:
-            label.setText(self._diagnostic_snapshot())
+            label.setText(
+                self._diagnostic_snapshot()
+                if enabled
+                else (
+                    "Detailed runtime and model configuration is hidden. "
+                    "Enable Developer Mode above to inspect and copy this report."
+                )
+            )
+        for name in ("_debug_console_button", "_copy_diagnostics_button"):
+            control = getattr(self, name, None)
+            if control is not None:
+                control.setEnabled(enabled)
+        experimental = getattr(self, "_experimental_features_section", None)
+        if experimental is not None:
+            experimental.setVisible(enabled)
 
     def _set_development_mode_from_settings(self, enabled: bool):
-        if bool(enabled) != bool(self._development_mode):
-            self._toggle_development_mode(bool(enabled))
+        enabled = bool(enabled)
+        if enabled == bool(self._development_mode):
+            return
+        changed = self._toggle_development_mode(enabled)
+        # A declined confirmation must restore the actual state in the UI.
+        # QCheckBox::toggled is synchronous, so block its signal during rollback.
+        control = getattr(self, "_development_mode_check", None)
+        if control is not None and control.isChecked() != bool(self._development_mode):
+            control.blockSignals(True)
+            control.setChecked(bool(self._development_mode))
+            control.blockSignals(False)
+        if not changed:
+            self._refresh_diagnostics()
 
 
     def _apply_appearance_settings(
