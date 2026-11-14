@@ -10556,6 +10556,10 @@ class MainWindow(QMainWindow):
         Each item is (title, description, widget), with an optional fourth
         value to preserve a meaningful first label inside the widget.
         """
+        from gui.themes.styles import glass_rgba
+
+        settings = getattr(self, "_settings_center", None)
+        glass_opacity = getattr(settings, "_glass_opacity", 100)
         host = QWidget()
         host.setObjectName("EmbeddedSettingsPanels")
         host.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
@@ -10569,7 +10573,8 @@ class MainWindow(QMainWindow):
             card = QFrame()
             card.setObjectName("SettingsEmbeddedCard")
             card.setStyleSheet(
-                f"QFrame#SettingsEmbeddedCard {{ background:{C.PANEL}; "
+                f"QFrame#SettingsEmbeddedCard {{ "
+                f"background:{glass_rgba(C.PANEL, glass_opacity)}; "
                 f"border:1px solid {C.BORDER}; border-radius:10px; }}"
                 f"QLabel {{ background:transparent; color:{C.TEXT}; border:0; }}"
             )
