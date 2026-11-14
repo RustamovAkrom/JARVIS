@@ -3278,9 +3278,9 @@ class ProvidersOverlay(_HudOverlay):
     # Which provider fills each slot, and what the slot is FOR — in the words
     # somebody configuring it would use, not the words the code uses.
     _SLOTS = (
-        ("stt", "1", "VOICE INPUT", "Converts your speech into text."),
+        ("stt", "1", "VOICE RECOGNITION", "Turns your speech into text."),
         ("llm", "2", "AI MODEL", "Understands your request, answers and uses tools."),
-        ("tts", "3", "VOICE OUTPUT", "Reads the answer aloud."),
+        ("tts", "3", "SPOKEN VOICE", "Reads JARVIS responses aloud."),
     )
 
     def __init__(self, parent=None, embedded: bool = False):
@@ -3350,15 +3350,15 @@ class ProvidersOverlay(_HudOverlay):
                                  0 if self._embedded else 22, 0 if self._embedded else 18)
         outer.setSpacing(10)
 
-        title = QLabel("AI engine and providers")
+        title = QLabel("AI setup")
         title.setFont(QFont(FONT_MONO, 13, QFont.Weight.Bold))
         title.setStyleSheet(f"color: {C.PRI}; background: transparent;")
         if not self._embedded:
             outer.addWidget(title)
 
         sub = QLabel(
-            "Choose what powers the conversation. "
-            "Gemini is the default and needs nothing set up here."
+            "Choose where JARVIS runs its AI. "
+            "Choose Online for cloud services or Offline for models on this device."
         )
         sub.setWordWrap(True)
         sub.setFont(QFont(FONT_MONO, 8))
@@ -3411,13 +3411,13 @@ class ProvidersOverlay(_HudOverlay):
         engine_row.setContentsMargins(0, 0, 0, 0)
         engine_row.setSpacing(8)
         self._gemini_mode_card = self._mode_card(
-            "Gemini Live",
-            "One integrated cloud service for voice, answers and tools.",
+            "Gemini Live (recommended)",
+            "One online service handles voice input, answers and spoken replies.",
             "gemini",
         )
         self._cloud_mode_card = self._mode_card(
-            "Custom online stack",
-            "Choose hosted AI and speech services separately.",
+            "Configure online services",
+            "Choose the cloud services used for voice recognition, answers and spoken replies.",
             "pipeline",
         )
         engine_row.addWidget(self._gemini_mode_card, 1)
@@ -3870,8 +3870,8 @@ class ProvidersOverlay(_HudOverlay):
             )
             lay.addWidget(
                 self._label(
-                    "Pick MY OWN SETUP above to run it on your own machine, or "
-                    "through another company's model.",
+                    "Choose Configure online services to select hosted models, "
+                    "or switch to Offline to use models on this device.",
                     7,
                     C.TEXT_DIM,
                 )
@@ -3893,11 +3893,11 @@ class ProvidersOverlay(_HudOverlay):
         for pid, eid, entry, decl in entries:
             label = entry["label"]
             if entry.get("local") is True:
-                label = f"🖥  {label}"
+                label = f"{label}  ·  On this device"
             elif entry.get("local") is False:
-                label = f"AI  {label}"
+                label = f"{label}  ·  Online"
             else:
-                label = f"    {label}"
+                label = str(label)
             note = entry.get("note") or ""
             if not decl.get("_available", True):
                 note = (note + " · needs install").strip(" ·")
@@ -10674,7 +10674,7 @@ class MainWindow(QMainWindow):
             panel.changed.connect(self._on_providers_applied)
         return self._embed_settings_panels((
             "AI providers",
-            "Choose the active model and configure speech and response providers.",
+            "Choose Online cloud services or Offline models on this device. Configure voice recognition, the AI model and spoken responses inside each mode.",
             panel,
         ))
 
