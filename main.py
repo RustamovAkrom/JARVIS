@@ -1715,6 +1715,28 @@ class JarvisLive:
                 }
                 r = None
                 action = str(args.get("action", "")).lower().strip().replace("-", "_").replace(" ", "_")
+                if name == "computer_settings" and not action and args.get("description"):
+                    # Resolve free-text descriptions before enforcing policy. The
+                    # handler performs this same resolution when it executes.
+                    try:
+                        from actions.computer_settings import _detect_action
+
+                        action = str(
+                            _detect_action(str(args["description"])).get("action", "")
+                        ).lower().strip().replace("-", "_").replace(" ", "_")
+                    except Exception:
+                        action = ""
+                if name == "computer_control":
+                    # The handler accepts quit_app as a close_app alias. Apply
+                    # the same safety policy to both spellings.
+                    action = {
+                        "quit_app": "close_app",
+                        "quit": "close_app",
+                        "exit": "close_app",
+                        "close_application": "close_app",
+                    }.get(action, action)
+                elif name == "workspace_files" and not action:
+                    action = "list"
                 if name in {
                     "computer_control",
                     "computer_settings",
@@ -1722,6 +1744,8 @@ class JarvisLive:
                     "open_app",
                     "browser_control",
                     "send_message",
+                    "dev_agent",
+                    "workspace_files",
                 }:
                     from memory.config_manager import (
                         get_computer_access_settings,
@@ -1737,12 +1761,16 @@ class JarvisLive:
                         read_only_actions = {
                             "volume_get", "brightness_get", "screenshot", "find_on_page"
                         }
+                    elif name == "file_controller":
+                        read_only_actions = {
+                            "list", "read", "find", "largest", "disk_usage", "info"
+                        }
+                    elif name == "workspace_files":
+                        read_only_actions = {"list", "read", "read_current"}
                     else:
-                        read_only_actions = (
-                            {"list", "read", "find", "largest", "disk_usage", "info"}
-                            if name == "file_controller"
-                            else set()
-                        )
+                        # dev_agent creates files, installs dependencies, and can
+                        # execute generated code; none of its operations is read-only.
+                        read_only_actions = set()
                     mutating = action not in read_only_actions
                     if name == "computer_settings" and action == "close_app":
                         result = (
@@ -1756,10 +1784,11 @@ class JarvisLive:
                         )
                     else:
                         settings_permissions = {
-                            "type_text": "type", "write_on_screen": "type", "type": "type",
+                            "type_text": ("type", "clipboard"),
+                            "write_on_screen": ("type", "clipboard"), "type": "type",
                             "write": "type", "press_key": "type", "enter": "type",
                             "escape": "type", "paste": ("type", "clipboard"), "cut": "type",
-                            "copy": "clipboard",
+                            "copy": "clipboard", "screenshot": "observe_screen",
                             "undo": "type", "redo": "type", "select_all": "type",
                             "save": "type", "new_tab": "type", "close_tab": "type",
                             "next_tab": "type", "prev_tab": "type", "go_back": "type",
@@ -1792,7 +1821,7 @@ class JarvisLive:
                             "screen_click": ("find_elements", "click"),
                             "copy": ("clipboard",),
                             "type": ("type",),
-                            "smart_type": ("type",),
+                            "smart_type": ("type", "clipboard"),
                             "paste": ("type", "clipboard"),
                             "hotkey": ("type",),
                             "press": ("type",),
@@ -1829,6 +1858,8 @@ class JarvisLive:
                                 (name == "computer_control" and action == "close_app")
                                 or (name == "file_controller" and action == "delete")
                                 or name == "send_message"
+                                or name == "dev_agent"
+                                or (name == "workspace_files" and action == "open")
                             )
                             approval_scope = name in {
                                 "computer_control",
@@ -1836,6 +1867,8 @@ class JarvisLive:
                                 "file_controller",
                                 "open_app",
                                 "browser_control",
+                                "dev_agent",
+                                "workspace_files",
                             }
                             needs_approval = not self_gated and (
                                 (policy["access_level"] == "ask" and approval_scope)
@@ -1886,13 +1919,42 @@ class JarvisLive:
                                         "JARVIS will perform this requested computer action "
                                         "once you approve it."
                                     )
+                                def _run_approved_action(
+                                    n=name,
+                                    a=dict(args),
+                                    c=dict(_ctx),
+                                    required=tuple(required_permissions),
+                                ):
+                                    # Approval is not a permanent permission
+                                    # grant. Re-read mode and capabilities when
+                                    # the user confirms, not when the request was
+                                    # first queued.
+                                    current_policy = get_computer_access_settings()
+                                    if current_policy.get("mode") != "agent":
+                                        return "Action cancelled: Agent mode is no longer active."
+                                    window = getattr(self.ui, "_win", None)
+                                    if self._plan_mode_active or getattr(
+                                        window, "_chat_plan_mode", False
+                                    ):
+                                        return "Action cancelled: Plan mode is active."
+                                    current_permissions = get_computer_permissions()
+                                    denied_now = [
+                                        permission
+                                        for permission in required
+                                        if not current_permissions.get(permission, False)
+                                    ]
+                                    if denied_now:
+                                        return (
+                                            "Action cancelled: permission changed while awaiting "
+                                            f"approval ({', '.join(denied_now)})."
+                                        )
+                                    return self._action_registry.run(n, a, c) or "Done."
+
                                 result = confirm_gate.request(
                                     key=f"agent:{name}:{action}:{time.monotonic_ns()}",
                                     title=title,
                                     detail=detail,
-                                    run=lambda n=name, a=dict(args), c=dict(_ctx): (
-                                        self._action_registry.run(n, a, c) or "Done."
-                                    ),
+                                    run=_run_approved_action,
                                 )
                                 r = None
                             else:
