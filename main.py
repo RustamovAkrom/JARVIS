@@ -1729,12 +1729,7 @@ class JarvisLive:
                 if name == "computer_control":
                     # The handler accepts quit_app as a close_app alias. Apply
                     # the same safety policy to both spellings.
-                    action = {
-                        "quit_app": "close_app",
-                        "quit": "close_app",
-                        "exit": "close_app",
-                        "close_application": "close_app",
-                    }.get(action, action)
+                    action = {"quit_app": "close_app"}.get(action, action)
                 elif name == "workspace_files" and not action:
                     action = "list"
                 if name in {
