@@ -90,7 +90,10 @@ class SettingsComponentTests(unittest.TestCase):
 
         self.assertTrue(center.show_category("audio"))
         self.assertEqual(center.search.text(), "")
-        self.assertIs(center.navigation.currentItem(), center._category_rows["audio"])
+        self.assertEqual(
+            center.navigation.currentItem().data(Qt.ItemDataRole.UserRole),
+            ("category", "audio"),
+        )
         center.close()
 
     def test_general_toggles_reflect_owner_state_after_handler(self):
