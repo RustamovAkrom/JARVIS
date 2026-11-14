@@ -14451,35 +14451,15 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
 
     # ── Customization ────────────────────────────────────────────────────────────
 
-    def _open_customize(self):
-        cfg = _read_full_config()
-        from memory.config_manager import get_ui_opacity
+    def _show_settings_category(self, category_id: str) -> None:
+        """Route legacy quick actions into the single Settings Center."""
+        self._open_settings_center()
+        if self._settings_center.show_category(category_id):
+            self._settings_center.raise_()
+            self._settings_center.activateWindow()
 
-        if self._customize_overlay:
-            self._customize_overlay.hide()
-        cw = self.centralWidget()
-        ov = CustomizeOverlay(
-            cfg.get("assistant_name", "JARVIS") or "JARVIS",
-            cfg.get("user_name", ""),
-            cfg.get("ui_color", "") or DEFAULT_UI_COLOR,
-            cfg.get("voice_name", ""),
-            ui_opacity=get_ui_opacity(),
-            language=self._ui_language,
-            parent=cw,
-        )
-        ow, oh = CustomizeOverlay._OW, CustomizeOverlay._OH
-        oh = min(oh, cw.height() - 16)
-        ov.setGeometry(
-            (cw.width() - ow) // 2,
-            (cw.height() - oh) // 2,
-            ow,
-            oh,
-        )
-        ov.on_preview = self._preview_ui_color
-        ov.on_opacity_preview = self._preview_ui_opacity
-        ov.saved.connect(self._apply_name_update)
-        ov.show()
-        self._customize_overlay = ov
+    def _open_customize(self):
+        self._show_settings_category("identity")
 
     def _preview_ui_color(self, hex_color: str):
         """Live preview — paints the whole interface the new colour (does NOT write to config)."""
@@ -14583,10 +14563,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
     # ── Audio devices ────────────────────────────────────────────────────────
 
     def _open_audio_devices(self):
-        ov = AudioDeviceOverlay(parent=self.centralWidget())
-        ov.picked.connect(self._on_audio_devices_applied)
-        self._centre_overlay(ov)
-        self._audio_overlay = ov  # keep a reference so it isn't GC'd
+        self._show_settings_category("audio")
 
     def _on_audio_devices_applied(self):
         self._log.append_log("SYS: Audio devices updated.")
@@ -14596,26 +14573,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
     # ── Engine & providers ───────────────────────────────────────────────────
 
     def _open_providers(self):
-        """Open the engine panel. Everything it needs is imported on this call.
-
-        A failure here must not take the drawer with it — the folder can be
-        deleted, which is the point of it being a folder, and the honest answer
-        to that is a line in the log rather than a traceback.
-        """
-        try:
-            ov = ProvidersOverlay(parent=self.centralWidget())
-        except ImportError:
-            self._log.append_log(
-                "SYS: The providers folder is not installed — "
-                "the assistant runs on Gemini Live."
-            )
-            return
-        except Exception as e:
-            self._log.append_log(f"SYS: Provider settings unavailable: {e}")
-            return
-        ov.changed.connect(self._on_providers_applied)
-        self._centre_overlay(ov)
-        self._providers_overlay = ov  # keep a reference so it isn't GC'd
+        self._show_settings_category("integrations")
 
     def _on_providers_applied(self):
         """Rebuild the session so the new engine takes over.
@@ -14631,11 +14589,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
     # ── Memory panel ─────────────────────────────────────────────────────────
 
     def _open_memory_panel(self):
-        ov = MemoryOverlay(parent=self.centralWidget())
-        self._centre_overlay(ov)
-        self._memory_overlay = ov
-
-    # ── Irreversible-action confirmation ─────────────────────────────────────
+        self._show_settings_category("memory")
 
     def _show_confirm_banner(self, title: str, detail: str):
         self._hide_confirm_banner()
@@ -14664,37 +14618,10 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             self._log.append_log(f"ERR: Confirmation failed — {e}")
 
     def _open_plugin_manager(self):
-        plugins = self.get_plugins() if self.get_plugins else []
-        cw = self.centralWidget()
-        ov = PluginManagerOverlay(plugins, parent=cw)
-        ov.adjustSize()
-        ov.setGeometry(
-            (cw.width() - ov.width()) // 2,
-            (cw.height() - ov.height()) // 2,
-            ov.width(),
-            ov.height(),
-        )
-        ov.show()
-        ov.raise_()
-        self._plugin_manager_overlay = ov  # keep a reference so it isn't GC'd
+        self._show_settings_category("plugins")
 
     def _open_plugin_settings(self):
-        sections = self.get_plugin_settings() if self.get_plugin_settings else []
-        cw = self.centralWidget()
-        ov = PluginSettingsOverlay(sections, parent=cw)
-        ow = PluginSettingsOverlay._OW
-        oh = min(560, cw.height() - 16)
-        ov.setGeometry(
-            (cw.width() - ow) // 2,
-            (cw.height() - oh) // 2,
-            ow,
-            oh,
-        )
-        ov.show()
-        ov.raise_()
-        self._plugin_settings_overlay = ov  # keep a reference so it isn't GC'd
-
-    # ── Clipboard intelligence ───────────────────────────────────────────────────
+        self._show_settings_category("plugins")
 
     def _on_clipboard_changed(self):
         try:
