@@ -81,12 +81,39 @@ class SettingsComponentTests(unittest.TestCase):
     def test_settings_window_uses_shared_glass_opacity(self):
         center = SettingsCenter()
         center.set_glass_opacity(72)
-        self.assertAlmostEqual(center.windowOpacity(), 0.72, places=2)
-        center.set_glass_opacity(140)
+        self.assertEqual(center._glass_opacity, 72)
+        self.assertIn("rgba(", center.styleSheet())
+        self.assertTrue(center.testAttribute(Qt.WidgetAttribute.WA_TranslucentBackground))
+        # Glass changes panel surfaces while keeping text and window chrome crisp.
         self.assertAlmostEqual(center.windowOpacity(), 1.0, places=2)
+        center.set_glass_opacity(140)
+        self.assertEqual(center._glass_opacity, 100)
         center.set_glass_opacity(20)
-        self.assertAlmostEqual(center.windowOpacity(), 0.6, places=2)
+        self.assertEqual(center._glass_opacity, 60)
         center.close()
+
+    def test_glass_opacity_reaches_categories_built_later(self):
+        built = []
+
+        def build_identity():
+            section = SettingsSection("Identity", "Profile settings")
+            built.append(section)
+            return section
+
+        center = SettingsCenter(page_builders={"identity": build_identity})
+        center.set_glass_opacity(76)
+        center._ensure_category_page("identity")
+        self.assertEqual(len(built), 1)
+        self.assertEqual(built[0]._glass_opacity, 76)
+        self.assertIn("rgba(", built[0].styleSheet())
+        center.close()
+
+    def test_settings_sections_follow_glass_opacity_without_fading_text(self):
+        section = SettingsSection("Appearance", "Visual preferences")
+        section.set_glass_opacity(68)
+        self.assertEqual(section._glass_opacity, 68)
+        self.assertIn("rgba(", section.styleSheet())
+        self.assertIn("color:", section.styleSheet())
 
     def test_hue_wheel_keeps_black_and_white_hex_preview(self):
         wheel = HueWheel("#000000")
