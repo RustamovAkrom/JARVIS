@@ -3472,90 +3472,89 @@ class ProvidersOverlay(_HudOverlay):
         b.setCheckable(True)
         b.setMinimumHeight(84)
         b.setCursor(Qt.CursorShape.PointingHandCursor)
-        b.setText(f"{title}\n\n{body}")
-        b.setFont(QFont(FONT_MONO, 7))
+        b.setText(f"{title}\n{body}")
+        b.setFont(QFont(FONT_UI, 9, QFont.Weight.DemiBold))
+        b.setStyleSheet(f"""
+            QPushButton {{ background:{C.PANEL}; color:{C.TEXT_MED};
+                border:1px solid {C.BORDER}; border-radius:8px;
+                padding:10px; text-align:left; }}
+            QPushButton:checked {{ background:{C.PRI_GHO}; color:{C.PRI};
+                border:1px solid {C.PRI_DIM}; }}
+            QPushButton:hover {{ border-color:{C.BORDER_B}; }}
+        """)
         b.clicked.connect(lambda _=0, v=value: self._set_mode(v))
         b.setProperty("modeValue", value)
         return b
 
     def _refresh_cards(self) -> None:
         labels = {
-            "full": "Gemini Live manages listening, reasoning, speech, and tool calls in one service.",
-            "custom": "Combine cloud AI services or connect a compatible provider with your own settings.",
-            "local": "Choose on-device speech and language providers; requests stay on this computer where supported.",
-            "claude": "Connect Claude models through OpenRouter. Select a Claude model after connecting your account.",
+            "online": "Use cloud services. Choose Gemini Live for one integrated service, or configure hosted AI and speech providers below.",
+            "offline": "Use AI and speech models running on this computer. Download the required models once; after setup, the conversation can run without a cloud AI provider.",
         }
         if hasattr(self, "_category_tabs"):
-            index = ("full", "custom", "local", "claude").index(self._provider_category)
+            index = 0 if self._environment == "online" else 1
             self._category_tabs.blockSignals(True)
             self._category_tabs.setCurrentIndex(index)
             self._category_tabs.blockSignals(False)
-            self._category_description.setText(labels[self._provider_category])
+            self._category_description.setText(labels[self._environment])
+        if hasattr(self, "_online_engine_box"):
+            self._online_engine_box.setVisible(self._environment == "online")
+            self._gemini_mode_card.setChecked(
+                self._environment == "online" and self._mode == "gemini"
+            )
+            self._cloud_mode_card.setChecked(
+                self._environment == "online" and self._mode == "pipeline"
+            )
 
     def _initial_provider_category(self) -> str:
-        if self._mode != "pipeline":
-            return "full"
-        llm = self._pipe.get("llm", "")
-        if not llm:
-            return "custom"
-
-        config = self._get_cfg(llm)
-        catalog_id = str(config.get("catalog") or "").strip().lower()
-        model = str(config.get("model") or "").lower()
-        if catalog_id == "claude_openrouter" or (
-            catalog_id == "openrouter" and "claude" in model
-        ):
-            return "claude"
-
-        selected_id = self._current_entry("llm", llm)
-        selected = next(
-            (
-                entry
-                for pid, entry_id, entry, _decl in self._catalog("llm")
-                if pid == llm and entry_id == selected_id
-            ),
-            None,
-        )
-        if selected is not None and selected.get("local") is True:
-            return "local"
-        return "custom"
+        return self._environment
 
     def _set_provider_category_index(self, index: int) -> None:
-        categories = ("full", "custom", "local", "claude")
-        if 0 <= index < len(categories):
-            self._set_provider_category(categories[index])
+        self._set_provider_category("online" if index == 0 else "offline")
 
-    def _set_provider_category(self, category: str) -> None:
-        if category == self._provider_category:
+    def _set_provider_category(self, environment: str) -> None:
+        if environment not in ("online", "offline"):
+            return
+        if environment == self._environment:
             self._refresh_cards()
             return
-        self._remember_edits()
-        self._provider_category = category
-        self._mode = "gemini" if category == "full" else "pipeline"
 
-        # A category switch must not leave an out-of-category provider active.
-        # Keep the existing selection when it is allowed; otherwise choose the
-        # first matching catalog entry for that slot (Claude constrains LLM only).
+        # Switching tabs preserves independent drafts. Nothing reaches the
+        # running assistant until Save & Apply is selected.
+        self._remember_edits()
+        self._pipeline_drafts[self._environment] = dict(self._pipe)
+        self._mode_drafts[self._environment] = self._mode
+
+        self._environment = environment
+        self._provider_category = environment
+        self._pipe = dict(self._pipeline_drafts.get(environment, {}))
+        self._mode = (
+            self._mode_drafts.get(environment, "gemini")
+            if environment == "online"
+            else "pipeline"
+        )
+        self._picked.clear()
+
         for slot, _num, _label, _purpose in self._SLOTS:
-            if category == "claude" and slot != "llm":
-                continue
             allowed = self._catalog(slot)
             current_pid = self._pipe.get(slot, "")
-            current_eid = self._picked.get(slot) or (
-                self._current_entry(slot, current_pid) if current_pid else ""
-            )
-            if any(pid == current_pid and eid == current_eid for pid, eid, _entry, _decl in allowed):
-                continue
-            same_provider = [
-                (pid, eid) for pid, eid, _entry, _decl in allowed if pid == current_pid
-            ]
-            if same_provider:
-                self._picked[slot] = same_provider[0][1]
-            elif allowed:
-                self._pipe[slot], self._picked[slot] = allowed[0][0], allowed[0][1]
-            else:
-                self._pipe[slot] = ""
-                self._picked[slot] = ""
+            current_eid = self._current_entry(slot, current_pid) if current_pid else ""
+            if current_pid and not any(
+                pid == current_pid and eid == current_eid
+                for pid, eid, _entry, _decl in allowed
+            ):
+                matches = [
+                    (pid, eid) for pid, eid, _entry, _decl in allowed if pid == current_pid
+                ]
+                if matches:
+                    self._picked[slot] = matches[0][1]
+                elif allowed:
+                    self._pipe[slot] = allowed[0][0]
+                    self._picked[slot] = allowed[0][1]
+                else:
+                    self._pipe[slot] = ""
+            elif current_pid:
+                self._picked[slot] = current_eid
 
         self._refresh_cards()
         QTimer.singleShot(0, self._rebuild_body)
@@ -3663,11 +3662,14 @@ class ProvidersOverlay(_HudOverlay):
         )
 
     def _set_mode(self, value: str) -> None:
-        if value == self._mode:
+        if self._environment != "online":
+            return
+        if value not in ("gemini", "pipeline") or value == self._mode:
             self._refresh_cards()
             return
-        self._mode = value
         self._remember_edits()
+        self._mode = value
+        self._mode_drafts["online"] = value
         self._refresh_cards()
         QTimer.singleShot(0, self._rebuild_body)
 
@@ -3757,12 +3759,10 @@ class ProvidersOverlay(_HudOverlay):
                 },
             )
             for e in entries:
-                category = getattr(self, "_provider_category", "full")
-                if category == "local" and e.get("local") is not True:
+                environment = getattr(self, "_environment", "online")
+                if environment == "offline" and e.get("local") is not True:
                     continue
-                if category == "custom" and e.get("local") is True:
-                    continue
-                if category == "claude" and kind == "llm" and e.get("id") != "openrouter":
+                if environment == "online" and e.get("local") is True:
                     continue
                 out.append((decl["id"], e["id"], e, decl))
         return out
