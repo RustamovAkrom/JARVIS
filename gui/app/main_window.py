@@ -3462,6 +3462,7 @@ class ProvidersOverlay(_HudOverlay):
         row = QHBoxLayout()
         row.setSpacing(8)
         apply_btn = QPushButton("▸  SAVE  &  APPLY")
+        self._apply_btn = apply_btn
         apply_btn.setFixedHeight(34)
         apply_btn.setFont(QFont(FONT_MONO, 9, QFont.Weight.Bold))
         apply_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -3486,6 +3487,7 @@ class ProvidersOverlay(_HudOverlay):
         row.addWidget(close, 1)
         outer.addLayout(row)
         self._refresh_cards()
+        self._update_footer()
 
     # ── pieces ───────────────────────────────────────────────────────────────
     def _mode_card(self, title: str, body: str, value: str) -> QPushButton:
@@ -4238,21 +4240,37 @@ class ProvidersOverlay(_HudOverlay):
         QTimer.singleShot(0, self._rebuild_body)
 
     def _update_footer(self) -> None:
+        ready = (
+            self._environment == "online" and self._mode == "gemini"
+        ) or bool(self._pipe.get("llm"))
+
+        apply_button = getattr(self, "_apply_btn", None)
+        if apply_button is not None:
+            apply_button.setEnabled(ready)
+
         if self._environment == "online" and self._mode == "gemini":
             self._footer.setText(
                 "Gemini Live is ready. No separate speech or model setup is required."
             )
             return
 
-        missing = [
-            name.title()
-            for slot, _number, name, _description in self._SLOTS
-            if not self._pipe.get(slot)
-        ]
-        if missing:
+        if not self._pipe.get("llm"):
             self._footer.setText(
-                "Finish setup: " + ", ".join(missing)
-                + ". Save & Apply becomes available when all three are selected."
+                "Choose an AI model before applying this setup. Voice input and output are optional."
+            )
+            return
+
+        missing_voice = []
+        if not self._pipe.get("stt"):
+            missing_voice.append("voice input")
+        if not self._pipe.get("tts"):
+            missing_voice.append("voice output")
+
+        if missing_voice:
+            self._footer.setText(
+                "AI model is selected. Missing "
+                + " and ".join(missing_voice)
+                + " is optional: you can type instead of speaking or read the answer."
             )
         elif self._environment == "offline":
             self._footer.setText(
@@ -4429,19 +4447,16 @@ class ProvidersOverlay(_HudOverlay):
 
     def _apply(self) -> None:
         from memory.config_manager import (
-            get_pipeline,
-            get_provider_environment,
-            get_provider_mode,
             get_online_provider_mode,
             save_providers,
         )
 
-        before_environment = get_provider_environment()
-        before = (
-            before_environment,
-            get_provider_mode(),
-            dict(get_pipeline(before_environment)),
-        )
+        ready = (
+            self._environment == "online" and self._mode == "gemini"
+        ) or bool(self._pipe.get("llm"))
+        if not ready:
+            self._update_footer()
+            return
 
         creds = {pid: self._values(pid) for pid in list(self._edits)}
         for slot, eid in self._picked.items():
@@ -4484,15 +4499,11 @@ class ProvidersOverlay(_HudOverlay):
         except Exception:
             pass
 
-        after_environment = get_provider_environment()
-        after = (
-            after_environment,
-            get_provider_mode(),
-            dict(get_pipeline(after_environment)),
-        )
         self.hide()
-        if before != after:
-            self.changed.emit()
+        # Apply may change only an API key, model name or endpoint while the
+        # selected provider IDs remain identical. The live session still needs
+        # to be rebuilt with the just-saved credentials.
+        self.changed.emit()
 
 
 class ClipboardPanel(QWidget):
