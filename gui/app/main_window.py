@@ -11005,17 +11005,32 @@ class MainWindow(QMainWindow):
         _voice: str,
         ui_opacity: int,
     ) -> bool:
-        """Persist appearance only, reading identity values fresh from config."""
-        config = _read_full_config()
-        return bool(
-            self._apply_name_update(
-                config.get("assistant_name", "JARVIS") or "JARVIS",
-                config.get("user_name", "") or "",
-                ui_color,
-                config.get("voice_name", "") or "",
-                ui_opacity,
-            )
-        )
+        """Persist only appearance fields; never write cached identity values."""
+        color = (ui_color or "").strip().lower()
+        opacity = max(60, min(100, int(ui_opacity)))
+        try:
+            current = _read_full_config()
+            previous_color = str(
+                current.get("ui_color", "") or DEFAULT_UI_COLOR
+            ).lower()
+            changes = {"ui_opacity": opacity}
+            if color:
+                changes["ui_color"] = color
+            update_json(API_FILE, lambda data: data.update(changes))
+        except Exception as exc:
+            self._log.append_log(f"ERR: Appearance save failed — {exc}")
+            return False
+
+        self._preview_ui_opacity(opacity)
+        if color and color != previous_color:
+            old = current_palette()
+            if apply_ui_accent(color):
+                updated = current_palette()
+                if old != updated:
+                    retheme_all_widgets(old, updated)
+                self._apply_design_system()
+        self._log.append_log("SYS: Appearance settings updated.")
+        return True
 
     def _apply_identity_settings(self, assistant_name: str, user_name: str, voice: str) -> bool:
         from memory.config_manager import get_ui_opacity
