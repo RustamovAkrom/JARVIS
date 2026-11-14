@@ -19,6 +19,7 @@ def _ghost_qss() -> str:
         f"QPushButton:hover {{ background: {C.DARK}; color: {C.PRI}; border-color: {C.PRI_DIM}; }}"
         f"QPushButton:checked {{ background: {C.PRI_GHO}; color: {C.PRI}; border-color: {C.PRI}; }}"
         f"QPushButton:pressed {{ background: {C.PRI_GHO}; }}"
+        f"QPushButton:disabled {{ background: {C.PANEL}; color: {C.TEXT_DIM}; border-color: {C.BORDER}; }}"
     )
 
 
@@ -45,9 +46,9 @@ def _scroll_qss() -> str:
     return (
         "QScrollBar:vertical { background: transparent; width: 8px; margin: 2px; }"
         "QScrollBar:horizontal { background: transparent; height: 8px; margin: 2px; }"
-        "QScrollBar::handle:vertical { background: rgba(170,220,255,70); border-radius: 3px; min-height: 28px; }"
-        "QScrollBar::handle:horizontal { background: rgba(170,220,255,70); border-radius: 3px; min-width: 28px; }"
-        "QScrollBar::handle:vertical:hover, QScrollBar::handle:horizontal:hover { background: rgba(170,220,255,130); }"
+        f"QScrollBar::handle:vertical {{ background: {C.BORDER_B}; border-radius: 4px; min-height: 28px; }}"
+        f"QScrollBar::handle:horizontal {{ background: {C.BORDER_B}; border-radius: 4px; min-width: 28px; }}"
+        f"QScrollBar::handle:vertical:hover, QScrollBar::handle:horizontal:hover {{ background: {C.PRI_DIM}; }}"
         "QScrollBar::add-line, QScrollBar::sub-line { width: 0; height: 0; border: none; background: none; }"
         "QScrollBar::add-page, QScrollBar::sub-page { background: none; }"
     )

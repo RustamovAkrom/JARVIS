@@ -34,7 +34,7 @@ from ui import (
     LanguagePickerOverlay,
     MainWindow,
     SetupOverlay,
-    _ProjectEditorDialog,
+    _ProjectEditorPage,
     _WindowHeader,
     _cursor_style_pixmap,
 )
@@ -371,11 +371,11 @@ class CursorAssistantUiTests(unittest.TestCase):
             drawer = MainWindow._build_controls_drawer(window)
             window._ctrl_drawer = drawer
             MainWindow._place_drawer(window, drawer, 12)
-            self.assertEqual(drawer.width(), 330)
+            self.assertEqual(drawer.width(), 460)
             self.assertGreaterEqual(drawer.height(), 490)
             self.assertIsNotNone(drawer.findChild(QScrollArea))
             self.assertEqual(len(drawer.findChildren(QComboBox)), 5)
-            self.assertGreaterEqual(len(drawer.findChildren(QCheckBox)), 17)
+            self.assertEqual(len(drawer.findChildren(QCheckBox)), 12)
         finally:
             window.deleteLater()
             self.app.processEvents()
@@ -415,7 +415,9 @@ class CursorAssistantUiTests(unittest.TestCase):
             path = Path(folder) / "main.py"
             path.write_text("before\n", encoding="utf-8")
             owner = QMainWindow()
-            editor = _ProjectEditorDialog(owner, path, "before\n")
+            owner._show_dashboard = Mock()
+            owner._open_external_project_file = Mock()
+            editor = _ProjectEditorPage(owner, path, "before\n")
             try:
                 editor.editor.setPlainText("after\n")
                 self.assertTrue(editor._save())
@@ -455,12 +457,24 @@ class CursorAssistantUiTests(unittest.TestCase):
         self.assertEqual(owner._terminal_cwd.value, r"C:\projects\jarvis")
 
     def test_terminal_start_directory_uses_selected_project_or_home_fallback(self):
-        project = r"E:\work\demo"
-        with patch("memory.config_manager.get_workspace_path", return_value=project):
-            self.assertEqual(MainWindow._terminal_start_directory(), project)
-        with patch("memory.config_manager.get_workspace_path", return_value=""):
-            self.assertEqual(MainWindow._terminal_start_directory(), str(Path.home()))
+        with tempfile.TemporaryDirectory() as project:
+            with patch(
+                "memory.config_manager.get_workspace_path",
+                return_value=project,
+            ):
+                self.assertEqual(
+                    MainWindow._terminal_start_directory(),
+                    project,
+                )
 
+        with patch(
+            "memory.config_manager.get_workspace_path",
+            return_value="",
+        ):
+            self.assertEqual(
+                MainWindow._terminal_start_directory(),
+                str(Path.home()),
+            )
     def test_closing_terminal_tab_interrupts_and_schedules_forced_cleanup(self):
         class View:
             def property(self, name):
@@ -492,22 +506,28 @@ class CursorAssistantUiTests(unittest.TestCase):
 
     def test_terminal_close_button_closes_sessions_instead_of_only_hiding(self):
         session = type("Session", (), {"view": QWidget()})()
-        terminal_panel = QWidget()
+
+        bottom_tabs = QWidget()
+        bottom_tabs.show()
+
         toggle = QCheckBox()
         tabs = type("Tabs", (), {"indexOf": lambda self, view: 0})()
+
         owner = type(
             "TerminalOwner",
             (),
             {
-                "_terminal_panel": terminal_panel,
+                "_bottom_tabs": bottom_tabs,
                 "_terminal_toggle_btn": toggle,
                 "_terminal_sessions": {"terminal-1": session},
                 "_terminal_tabs": tabs,
                 "_close_terminal_session": Mock(),
             },
         )()
+
         MainWindow._close_terminal_panel(owner)
-        self.assertFalse(terminal_panel.isVisible())
+
+        self.assertFalse(bottom_tabs.isVisible())
         self.assertFalse(toggle.isChecked())
         owner._close_terminal_session.assert_called_once_with(0)
 

@@ -1,9 +1,9 @@
+import re
 import unittest
-
 import gui.app.main_window as implementation
 import ui
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QApplication, QScrollArea
+from PyQt6.QtWidgets import QApplication, QCheckBox, QLineEdit, QScrollArea, QWidget, QComboBox
 from gui.components.inputs import ChatInput
 from gui.panels.debug.log_widget import LogWidget
 from gui.panels.system_monitor.metrics import _SysMetrics
@@ -26,13 +26,49 @@ class UiFacadeTests(unittest.TestCase):
         app = QApplication.instance() or QApplication([])
         window = ui.MainWindow("")
         try:
+            self.assertFalse(hasattr(window, "_ctrl_btn"))
             panel = window._left_panel
             scroll = panel.findChild(QScrollArea)
             self.assertIsNotNone(scroll)
             self.assertTrue(panel.testAttribute(Qt.WidgetAttribute.WA_StyledBackground))
-            self.assertIn(f"background: {ui.C.PANEL}", panel.styleSheet())
+            self.assertRegex(
+                panel.styleSheet(),
+                rf"background\s*:\s*{re.escape(ui.C.PANEL)}"
+            )
             self.assertIn("transparent", scroll.viewport().styleSheet())
             self.assertIn("transparent", scroll.widget().styleSheet())
+
+            routed = []
+            window._open_audio_devices = lambda: routed.append("audio")
+            window._drawer_btn.click()
+            self.assertIsNotNone(window._settings_center)
+            general_page = window._settings_center._category_pages["general"].widget()
+            self.assertIsNotNone(general_page.findChild(QCheckBox, "autostart"))
+            window._settings_center.navigation.setCurrentItem(
+                window._settings_center._category_rows["identity"]
+            )
+            identity_page = window._settings_center._category_pages["identity"].widget()
+            self.assertIsNotNone(identity_page.findChild(QLineEdit, "assistant_name"))
+            window._settings_center.action_requested.emit("audio")
+            self.assertTrue(window._settings_center.isVisible())
+            self.assertEqual(
+                window._settings_center.pages.currentWidget(),
+                window._settings_center._category_pages["audio"],
+            )
+            self.assertEqual(routed, [])
+            window._settings_center.action_requested.emit("controls")
+            self.assertTrue(window._settings_center.isVisible())
+            controls_page = window._settings_center._category_pages["cursor"].widget()
+
+            self.assertIsNotNone(
+                controls_page.findChild(QCheckBox, "cursor_quick_actions_enabled")
+            )
+            self.assertIsNotNone(
+                controls_page.findChild(QCheckBox, "cursor_custom_pointer_enabled")
+            )
+            self.assertIsNotNone(
+                controls_page.findChild(QComboBox, "cursor_pointer_style")
+            )
         finally:
             window.close()
             app.processEvents()

@@ -31,6 +31,23 @@ class C:
     BAR_BG = "#011520"
 
 
+class Space:
+    """Shared spacing scale (device-independent Qt pixels)."""
+
+    XS = 4
+    SM = 8
+    MD = 12
+    LG = 16
+    XL = 24
+    XXL = 32
+
+
+class Radius:
+    SM = 6
+    MD = 10
+    LG = 14
+
+
 # Keys tied to the accent colour — status colours (ACC, GREEN, RED…) stay fixed
 _HUE_LINKED = (
     "BG",

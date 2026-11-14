@@ -4,6 +4,7 @@ import json
 import html as _html
 import atexit
 import hashlib
+import mimetypes
 import secrets
 import math
 import os
@@ -50,6 +51,7 @@ from PyQt6.QtCore import (
     QPointF,
     QPoint,
     QPropertyAnimation,
+    QProcess,
     QRect,
     QRectF,
     QSize,
@@ -84,6 +86,7 @@ from PyQt6.QtGui import (
     QPixmap,
     QRadialGradient,
     QShortcut,
+    QActionGroup,
 )
 
 # Video playback for the HUD. Part of PyQt6, so it costs no new dependency —
@@ -115,8 +118,10 @@ from PyQt6.QtWidgets import (
     QListWidgetItem,
     QMessageBox,
     QTabWidget,
+    QTabBar,
     QInputDialog,
     QMainWindow,
+    QMenu,
     QPushButton,
     QScrollArea,
     QSizePolicy,
@@ -133,7 +138,10 @@ from PyQt6.QtWidgets import (
     QWidget,
     QProgressBar,
     QSlider,
+    QToolTip,
 )
+from PyQt6.QtWebChannel import QWebChannel
+from PyQt6.QtWebEngineWidgets import QWebEngineView
 from memory.translations import LANGUAGES, translate as _translate
 from core.runtime_paths import PATHS
 from core.user_data import update_json
@@ -1911,8 +1919,15 @@ class CustomizeOverlay(QWidget):
         ui_opacity=100,
         language="en",
         parent=None,
+        embedded: bool = False,
+        appearance_only: bool = False,
     ):
         super().__init__(parent)
+        self._embedded = bool(embedded)
+        self._appearance_only = bool(appearance_only)
+        self._initial_assistant_name = assistant_name
+        self._initial_user_name = user_name
+        self._initial_voice = voice
         self._language = language if language in LANGUAGES else "en"
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(f"""
@@ -1950,11 +1965,10 @@ class CustomizeOverlay(QWidget):
         sep.setStyleSheet(f"color: {C.BORDER}; margin: 2px 0;")
         lay.addWidget(sep)
 
-        lay.addWidget(
-            _lbl(
-                "ASSISTANT NAME", 8, color=C.TEXT_DIM, align=Qt.AlignmentFlag.AlignLeft
-            )
+        self._name_label = _lbl(
+            "ASSISTANT NAME", 8, color=C.TEXT_DIM, align=Qt.AlignmentFlag.AlignLeft
         )
+        lay.addWidget(self._name_label)
         self._name_input = QLineEdit(assistant_name)
         self._name_input.setFont(QFont(FONT_MONO, 10))
         self._name_input.setFixedHeight(32)
@@ -1962,14 +1976,13 @@ class CustomizeOverlay(QWidget):
         lay.addWidget(self._name_input)
 
         lay.addSpacing(4)
-        lay.addWidget(
-            _lbl(
-                "YOUR NAME  (leave blank for default sir / efendim)",
-                8,
-                color=C.TEXT_DIM,
-                align=Qt.AlignmentFlag.AlignLeft,
-            )
+        self._user_label = _lbl(
+            "YOUR NAME  (leave blank for default sir / efendim)",
+            8,
+            color=C.TEXT_DIM,
+            align=Qt.AlignmentFlag.AlignLeft,
         )
+        lay.addWidget(self._user_label)
         self._user_input = QLineEdit(user_name)
         self._user_input.setPlaceholderText(
             _translate("e.g.  Tony   (leave blank for auto)", self._language)
@@ -1985,17 +1998,20 @@ class CustomizeOverlay(QWidget):
         from memory.config_manager import AVAILABLE_VOICES, DEFAULT_VOICE
 
         lay.addSpacing(4)
-        lay.addWidget(
-            _lbl(
-                "ASSISTANT VOICE", 8, color=C.TEXT_DIM, align=Qt.AlignmentFlag.AlignLeft
-            )
+        self._voice_label = _lbl(
+            "ASSISTANT VOICE", 8, color=C.TEXT_DIM, align=Qt.AlignmentFlag.AlignLeft
         )
+        lay.addWidget(self._voice_label)
         self._sel_voice = voice or DEFAULT_VOICE
         if self._sel_voice not in AVAILABLE_VOICES:
             self._sel_voice = DEFAULT_VOICE
+        self._initial_voice = self._sel_voice
         self._voice_btns: dict[str, QPushButton] = {}
         voice_row = QHBoxLayout()
         voice_row.setSpacing(4)
+        self._voice_controls = QWidget()
+        self._voice_controls.setStyleSheet("background:transparent;")
+        self._voice_controls.setLayout(voice_row)
         for _v in AVAILABLE_VOICES:
             b = QPushButton(_v)
             b.setCheckable(True)
@@ -2005,8 +2021,18 @@ class CustomizeOverlay(QWidget):
             b.clicked.connect(lambda _=False, name=_v: self._on_voice_pick(name))
             self._voice_btns[_v] = b
             voice_row.addWidget(b)
-        lay.addLayout(voice_row)
+        lay.addWidget(self._voice_controls)
         self._refresh_voice_btns()
+        if self._appearance_only:
+            for widget in (
+                self._name_label,
+                self._name_input,
+                self._user_label,
+                self._user_input,
+                self._voice_label,
+                self._voice_controls,
+            ):
+                widget.hide()
 
         # ── UI colour — colour wheel ─────────────────────────────────────────
         lay.addSpacing(4)
@@ -2228,7 +2254,15 @@ class CustomizeOverlay(QWidget):
             self.on_preview(self._initial_color)
         if self.on_opacity_preview:
             self.on_opacity_preview(self._initial_opacity)
-        self.hide()
+        if self._embedded:
+            self._set_color(self._initial_color, update_wheel=True, preview=False)
+            self._name_input.setText(self._initial_assistant_name)
+            self._user_input.setText(self._initial_user_name)
+            self._sel_voice = self._initial_voice
+            self._refresh_voice_btns()
+            self._opacity_slider.setValue(self._initial_opacity)
+        else:
+            self.hide()
 
     def _save(self):
         name = self._name_input.text().strip() or "JARVIS"
@@ -2240,7 +2274,14 @@ class CustomizeOverlay(QWidget):
             self._sel_voice,
             self._opacity_slider.value(),
         )
-        self.hide()
+        if self._embedded:
+            self._initial_assistant_name = name
+            self._initial_user_name = user
+            self._initial_voice = self._sel_voice
+            self._initial_color = self._sel_color
+            self._initial_opacity = self._opacity_slider.value()
+        else:
+            self.hide()
 
 
 class PluginManagerOverlay(QWidget):
@@ -2490,8 +2531,9 @@ class AudioDeviceOverlay(_HudOverlay):
 
     _OW = 460
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, embedded: bool = False):
         super().__init__(parent)
+        self._embedded = bool(embedded)
         from core.audio_devices import list_devices, DEFAULT_LABEL
         from memory.config_manager import get_input_device, get_output_device
 
@@ -2621,10 +2663,12 @@ class AudioDeviceOverlay(_HudOverlay):
         self._in_box = _row(
             "MICROPHONE — what JARVIS hears you with", "input", get_input_device()
         )
+        self._in_box.setObjectName("microphone")
         lay.addSpacing(4)
         self._out_box = _row(
             "SPEAKERS — what JARVIS talks through", "output", get_output_device()
         )
+        self._out_box.setObjectName("speaker")
 
         # ── Output volume, beside the output device ──────────────────────────
         #
@@ -2654,6 +2698,7 @@ class AudioDeviceOverlay(_HudOverlay):
             vrow = QHBoxLayout()
             vrow.setSpacing(8)
             self._vol = QSlider(Qt.Orientation.Horizontal)
+            self._vol.setObjectName("output_volume")
             self._vol.setRange(0, 100)
             self._vol.setValue(int(_vol_now))
             self._vol.setFixedHeight(22)
@@ -2693,6 +2738,7 @@ class AudioDeviceOverlay(_HudOverlay):
         row = QHBoxLayout()
         row.setSpacing(8)
         ok = QPushButton("▸  APPLY")
+        ok.setObjectName("apply_audio_devices")
         ok.setFixedHeight(32)
         ok.setFont(QFont(FONT_MONO, 9, QFont.Weight.Bold))
         ok.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -2704,17 +2750,19 @@ class AudioDeviceOverlay(_HudOverlay):
         ok.clicked.connect(self._apply)
         row.addWidget(ok)
 
-        cancel = QPushButton("CLOSE")
-        cancel.setFixedHeight(32)
-        cancel.setFont(QFont(FONT_MONO, 9))
-        cancel.setCursor(Qt.CursorShape.PointingHandCursor)
-        cancel.setStyleSheet(f"""
-            QPushButton {{ background: transparent; color: {C.TEXT_MED};
-                border: 1px solid {C.BORDER}; border-radius: 3px; }}
-            QPushButton:hover {{ color: {C.TEXT}; border-color: {C.BORDER_B}; }}
-        """)
-        cancel.clicked.connect(self.hide)
-        row.addWidget(cancel)
+        if not self._embedded:
+            cancel = QPushButton("CLOSE")
+            cancel.setObjectName("close_audio_devices")
+            cancel.setFixedHeight(32)
+            cancel.setFont(QFont(FONT_MONO, 9))
+            cancel.setCursor(Qt.CursorShape.PointingHandCursor)
+            cancel.setStyleSheet(f"""
+                QPushButton {{ background: transparent; color: {C.TEXT_MED};
+                    border: 1px solid {C.BORDER}; border-radius: 3px; }}
+                QPushButton:hover {{ color: {C.TEXT}; border-color: {C.BORDER_B}; }}
+            """)
+            cancel.clicked.connect(self.hide)
+            row.addWidget(cancel)
         lay.addLayout(row)
 
     def _apply_volume(self):
@@ -2835,7 +2883,8 @@ class AudioDeviceOverlay(_HudOverlay):
         new_out = self._out_box.currentData() or ""
         save_input_device(new_in)
         save_output_device(new_out)
-        self.hide()
+        if not self._embedded:
+            self.hide()
         # Applying also reopens the audio streams. That matters when the OS
         # default endpoint changed after a headset was unplugged, even though
         # the saved choice remains "System default".
@@ -2852,8 +2901,9 @@ class MemoryOverlay(_HudOverlay):
 
     _OW = 560
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, embedded: bool = False):
         super().__init__(parent)
+        self._embedded = bool(embedded)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(f"""
             MemoryOverlay {{
@@ -2862,10 +2912,14 @@ class MemoryOverlay(_HudOverlay):
                 border-radius: 6px;
             }}
         """)
-        self.setFixedWidth(self._OW)
+        if not self._embedded:
+            self.setFixedWidth(self._OW)
 
         self._lay = QVBoxLayout(self)
-        self._lay.setContentsMargins(20, 16, 20, 16)
+        if self._embedded:
+            self._lay.setContentsMargins(12, 8, 12, 8)
+        else:
+            self._lay.setContentsMargins(20, 16, 20, 16)
         self._lay.setSpacing(5)
         self._rebuild()
 
@@ -2923,6 +2977,9 @@ class MemoryOverlay(_HudOverlay):
         self.adjustSize()
 
         p = self.parentWidget()
+        if self._embedded:
+            self.update()
+            return
         if p is None:
             self.update()
             return
@@ -2957,7 +3014,7 @@ class MemoryOverlay(_HudOverlay):
             f"memory/long_term.json on this machine."
         )
         cap.setWordWrap(True)
-        cap.setFont(QFont(FONT_MONO, 7))
+        cap.setFont(QFont(FONT_UI, 9))
         cap.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
         self._lay.addWidget(cap)
 
@@ -2969,30 +3026,74 @@ class MemoryOverlay(_HudOverlay):
         else:
             scroll = QScrollArea()
             scroll.setWidgetResizable(True)
-            scroll.setFixedHeight(min(440, 82 * len(rows) + 10))
-            scroll.setStyleSheet(
-                f"QScrollArea {{ border: 1px solid {C.BORDER}; border-radius: 7px; "
-                f"background: {C.DARK}; }}"
-            )
+            if self._embedded:
+                scroll.setFrameShape(QFrame.Shape.NoFrame)
+                scroll.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+            scroll_height = min(440, 82 * len(rows) + 10)
+            if self._embedded:
+                scroll.setMinimumHeight(min(180, scroll_height))
+                scroll.setMaximumHeight(scroll_height)
+                scroll.setSizePolicy(
+                    QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
+                )
+            else:
+                scroll.setFixedHeight(scroll_height)
+            if self._embedded:
+                # The Settings card already provides the visual container. Keep
+                # the scroll viewport transparent so the platform's default
+                # gray viewport cannot leak through behind the memory rows.
+                scroll.setStyleSheet(
+                    "QScrollArea { border:0; background:transparent; }"
+                    "QScrollArea QWidget#qt_scrollarea_viewport { border:0; background:transparent; }"
+                    f"QScrollBar:vertical {{ width:6px; background:transparent; margin:0; }}"
+                    f"QScrollBar::handle:vertical {{ background:{C.BORDER_B}; border-radius:3px; min-height:24px; }}"
+                    f"QScrollBar::handle:vertical:hover {{ background:{C.PRI_DIM}; }}"
+                    "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }"
+                    "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background:transparent; }"
+                )
+                scroll.viewport().setAttribute(
+                    Qt.WidgetAttribute.WA_StyledBackground, True
+                )
+                scroll.viewport().setStyleSheet("background:transparent; border:0;")
+            else:
+                scroll.setStyleSheet(
+                    f"QScrollArea {{ border: 1px solid {C.BORDER}; border-radius: 7px; "
+                    f"background: {C.DARK}; }}"
+                )
             inner = QWidget()
+            if self._embedded:
+                inner.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+                inner.setStyleSheet("background:transparent; border:0;")
             ilay = QVBoxLayout(inner)
-            ilay.setContentsMargins(8, 8, 8, 8)
-            ilay.setSpacing(8)
+            ilay.setContentsMargins(0 if self._embedded else 8, 0 if self._embedded else 8,
+                                    0 if self._embedded else 8, 0 if self._embedded else 8)
+            ilay.setSpacing(0 if self._embedded else 8)
 
             for r in rows:
                 card = QFrame()
                 card.setObjectName("MemoryCard")
-                card.setStyleSheet(
-                    f"QFrame#MemoryCard {{ background:{C.PANEL}; "
-                    f"border:1px solid {C.BORDER}; border-radius:7px; }}"
-                )
+                if self._embedded:
+                    card.setStyleSheet(
+                        "QFrame#MemoryCard { background:transparent; border:0; "
+                        f"border-bottom:1px solid {C.BORDER}; border-radius:0; }}"
+                    )
+                else:
+                    card.setStyleSheet(
+                        f"QFrame#MemoryCard {{ background:{C.PANEL}; "
+                        f"border:1px solid {C.BORDER}; border-radius:7px; }}"
+                    )
                 card_lay = QVBoxLayout(card)
-                card_lay.setContentsMargins(11, 9, 9, 9)
-                card_lay.setSpacing(5)
+                card_lay.setContentsMargins(
+                    0 if self._embedded else 11,
+                    10 if self._embedded else 9,
+                    0 if self._embedded else 9,
+                    10 if self._embedded else 9,
+                )
+                card_lay.setSpacing(6 if self._embedded else 5)
                 top = QHBoxLayout()
                 top.setSpacing(6)
                 key = QLabel(_html.escape(str(r["key"]).replace("_", " ")).title())
-                key.setFont(QFont(FONT_UI, 9, QFont.Weight.DemiBold))
+                key.setFont(QFont(FONT_UI, 10 if self._embedded else 9, QFont.Weight.DemiBold))
                 key.setStyleSheet(f"color:{C.PRI}; background:transparent;")
                 top.addWidget(key, 1)
                 meta_text = (
@@ -3000,7 +3101,7 @@ class MemoryOverlay(_HudOverlay):
                     f"{_html.escape(str(r['updated'] or '—'))}"
                 )
                 meta = QLabel(meta_text)
-                meta.setFont(QFont(FONT_MONO, 7))
+                meta.setFont(QFont(FONT_MONO, 8 if self._embedded else 7))
                 meta.setStyleSheet(f"color:{C.TEXT_DIM}; background:transparent;")
                 top.addWidget(meta)
                 copy_btn = QPushButton("Copy")
@@ -3008,8 +3109,8 @@ class MemoryOverlay(_HudOverlay):
                 copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
                 copy_btn.setToolTip("Copy this memory")
                 copy_btn.setStyleSheet(f"""
-                    QPushButton {{ color:{C.TEXT_MED}; background:{C.PANEL2};
-                        border:1px solid {C.BORDER}; border-radius:4px; padding:0 7px; }}
+                    QPushButton {{ color:{C.TEXT_MED}; background:transparent;
+                        border:1px solid {C.BORDER}; border-radius:6px; padding:0 8px; }}
                     QPushButton:hover {{ color:{C.PRI}; border-color:{C.PRI_DIM}; }}
                 """)
                 memory_text = f"{r['key'].replace('_', ' ')}: {r['value']}"
@@ -3026,7 +3127,7 @@ class MemoryOverlay(_HudOverlay):
                 rm.setToolTip("Forget this memory")
                 rm.setStyleSheet(f"""
                     QPushButton {{ color:{C.TEXT_DIM}; background:transparent;
-                        border:1px solid {C.BORDER}; border-radius:4px; }}
+                        border:1px solid {C.BORDER}; border-radius:6px; }}
                     QPushButton:hover {{ color:{C.RED}; border-color:{C.RED}; }}
                 """)
                 rm.clicked.connect(
@@ -3057,6 +3158,8 @@ class MemoryOverlay(_HudOverlay):
             QPushButton:hover {{ color: {C.TEXT}; border-color: {C.BORDER_B}; }}
         """)
         close.clicked.connect(self.hide)
+        if self._embedded:
+            close.hide()
         self._lay.addWidget(close)
 
         self._settle(before)
@@ -3159,8 +3262,9 @@ class ProvidersOverlay(_HudOverlay):
         ("tts", "③", "SPEAKING", "reads the answer out loud"),
     )
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, embedded: bool = False):
         super().__init__(parent)
+        self._embedded = bool(embedded)
         # Imported HERE, on the click — never at startup. See the class docstring.
         from memory.config_manager import (
             get_pipeline,
@@ -3203,23 +3307,31 @@ class ProvidersOverlay(_HudOverlay):
         self._picked: dict[str, str] = {}  # slot -> catalog entry id
 
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.setStyleSheet(f"""
-            ProvidersOverlay {{
-                background: {C.PANEL};
-                border: 1px solid {C.BORDER_B};
-                border-radius: 8px;
-            }}
-        """)
-        self.setFixedWidth(self._OW)
+        if self._embedded:
+            self.setStyleSheet("ProvidersOverlay { background:transparent; border:0; }")
+            self.setMinimumWidth(0)
+            self.setMaximumWidth(16777215)
+            self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        else:
+            self.setStyleSheet(f"""
+                ProvidersOverlay {{
+                    background: {C.PANEL};
+                    border: 1px solid {C.BORDER_B};
+                    border-radius: 8px;
+                }}
+            """)
+            self.setFixedWidth(self._OW)
 
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(22, 18, 22, 18)
+        outer.setContentsMargins(0 if self._embedded else 22, 0 if self._embedded else 18,
+                                 0 if self._embedded else 22, 0 if self._embedded else 18)
         outer.setSpacing(10)
 
-        title = QLabel("🔌  ENGINE  &  PROVIDERS")
+        title = QLabel("AI engine and providers")
         title.setFont(QFont(FONT_MONO, 13, QFont.Weight.Bold))
         title.setStyleSheet(f"color: {C.PRI}; background: transparent;")
-        outer.addWidget(title)
+        if not self._embedded:
+            outer.addWidget(title)
 
         sub = QLabel(
             "Choose what powers the conversation. "
@@ -3228,31 +3340,39 @@ class ProvidersOverlay(_HudOverlay):
         sub.setWordWrap(True)
         sub.setFont(QFont(FONT_MONO, 8))
         sub.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
-        outer.addWidget(sub)
+        if not self._embedded:
+            outer.addWidget(sub)
 
         # ── Mode: two cards, not a dropdown ─────────────────────────────────
         # A dropdown hides the option you did not choose. This is the one
         # decision on the panel that changes everything below it, and both
         # answers deserve to be readable at the same time.
         self._mode = get_provider_mode()
-        cards = QHBoxLayout()
-        cards.setSpacing(10)
-        self._card_gemini = self._mode_card(
-            "AI  GEMINI LIVE",
-            "One connection carries your voice, its voice, the transcript and "
-            "the tools together. The fastest option — about half a second to "
-            "the first word.",
-            "gemini",
+        self._pipe = dict(get_pipeline())
+        self._sidecar = get_sidecar_provider()
+        self._sidecar_first = get_sidecar_first()
+        self._provider_category = self._initial_provider_category()
+        self._category_tabs = QTabBar()
+        self._category_tabs.setExpanding(True)
+        self._category_tabs.setUsesScrollButtons(True)
+        self._category_tabs.setDrawBase(False)
+        for label in ("Full control AI", "Custom AI", "Local AI", "Claude AI"):
+            self._category_tabs.addTab(label)
+        self._category_tabs.setCurrentIndex(
+            ("full", "custom", "local", "claude").index(self._provider_category)
         )
-        self._card_local = self._mode_card(
-            "🖥  MY OWN SETUP",
-            "Your choice of hearing, thinking and speaking. Can run entirely on "
-            "this computer, with nothing leaving it. Slower: 1.5 to 4 seconds.",
-            "pipeline",
-        )
-        cards.addWidget(self._card_gemini)
-        cards.addWidget(self._card_local)
-        outer.addLayout(cards)
+        self._category_tabs.setStyleSheet(f"""
+            QTabBar::tab {{ color:{C.TEXT_MED}; background:transparent; border:0;
+                border-bottom:2px solid transparent; padding:8px 9px; }}
+            QTabBar::tab:selected {{ color:{C.PRI}; border-bottom-color:{C.PRI}; }}
+            QTabBar::tab:hover {{ color:{C.TEXT}; }}
+        """)
+        self._category_tabs.currentChanged.connect(self._set_provider_category_index)
+        outer.addWidget(self._category_tabs)
+        self._category_description = QLabel("")
+        self._category_description.setWordWrap(True)
+        self._category_description.setStyleSheet(f"color:{C.TEXT_MED}; background:transparent;")
+        outer.addWidget(self._category_description)
 
         # ── Body ────────────────────────────────────────────────────────────
         self._scroll = QScrollArea()
@@ -3267,8 +3387,8 @@ class ProvidersOverlay(_HudOverlay):
             "QScrollBar::add-line, QScrollBar::sub-line { height: 0; }"
             "QScrollBar::add-page, QScrollBar::sub-page { background: none; }"
         )
-        self._scroll.setMinimumHeight(230)
-        self._scroll.setMaximumHeight(360)
+        self._scroll.setMinimumHeight(180 if self._embedded else 230)
+        self._scroll.setMaximumHeight(16777215 if self._embedded else 420)
         outer.addWidget(self._scroll, 1)
 
         self._body = QWidget()
@@ -3285,9 +3405,6 @@ class ProvidersOverlay(_HudOverlay):
         self._footer.setFont(QFont(FONT_MONO, 7))
         self._footer.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
 
-        self._pipe = dict(get_pipeline())
-        self._sidecar = get_sidecar_provider()
-        self._sidecar_first = get_sidecar_first()
         self._rebuild_body()
 
         outer.addWidget(self._footer)
@@ -3333,19 +3450,46 @@ class ProvidersOverlay(_HudOverlay):
         return b
 
     def _refresh_cards(self) -> None:
-        for card in (self._card_gemini, self._card_local):
-            on = card.property("modeValue") == self._mode
-            card.setChecked(on)
-            card.setStyleSheet(f"""
-                QPushButton {{
-                    text-align: left; padding: 10px 12px;
-                    background: {C.PRI_GHO if on else 'transparent'};
-                    color: {C.TEXT if on else C.TEXT_DIM};
-                    border: 1px solid {C.PRI_DIM if on else C.BORDER};
-                    border-radius: 5px;
-                }}
-                QPushButton:hover {{ border-color: {C.BORDER_B}; }}
-            """)
+        labels = {
+            "full": "Gemini Live manages listening, reasoning, speech, and tool calls in one service.",
+            "custom": "Combine cloud AI services or connect a compatible provider with your own settings.",
+            "local": "Choose on-device speech and language providers; requests stay on this computer where supported.",
+            "claude": "Connect Claude models through OpenRouter. Select a Claude model after connecting your account.",
+        }
+        if hasattr(self, "_category_tabs"):
+            index = ("full", "custom", "local", "claude").index(self._provider_category)
+            self._category_tabs.blockSignals(True)
+            self._category_tabs.setCurrentIndex(index)
+            self._category_tabs.blockSignals(False)
+            self._category_description.setText(labels[self._provider_category])
+
+    def _initial_provider_category(self) -> str:
+        if self._mode != "pipeline":
+            return "full"
+        llm = self._pipe.get("llm", "")
+        if llm:
+            config = self._get_cfg(llm)
+            if config.get("catalog") == "claude_openrouter":
+                return "claude"
+            for pid, _eid, entry, _decl in self._catalog("llm"):
+                if pid == llm and entry.get("local") is True:
+                    return "local"
+        return "custom"
+
+    def _set_provider_category_index(self, index: int) -> None:
+        categories = ("full", "custom", "local", "claude")
+        if 0 <= index < len(categories):
+            self._set_provider_category(categories[index])
+
+    def _set_provider_category(self, category: str) -> None:
+        if category == self._provider_category:
+            self._refresh_cards()
+            return
+        self._remember_edits()
+        self._provider_category = category
+        self._mode = "gemini" if category == "full" else "pipeline"
+        self._refresh_cards()
+        QTimer.singleShot(0, self._rebuild_body)
 
     def _on_live_ready(self) -> None:
         """A machine-supplied list has arrived — redraw once so it appears."""
@@ -6328,34 +6472,127 @@ class _WindowHeader(QWidget):
         super().mouseDoubleClickEvent(event)
 
 
-class _ProjectEditorDialog(QDialog):
+class _ChatBrowser(QTextBrowser):
+    """Rich-text chat surface with response time shown on copy-icon hover."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._response_times: dict[str, str] = {}
+        self.viewport().setMouseTracking(True)
+        self.viewport().setToolTip(" ")
+
+    def set_response_times(self, values: dict[str, str]):
+        self._response_times = values
+
+    def viewportEvent(self, event):
+        if event.type() == QEvent.Type.ToolTip:
+            anchor = self.anchorAt(event.pos())
+            if anchor.startswith("copy-answer:"):
+                turn_id = anchor.split(":", 1)[1]
+                timestamp = self._response_times.get(turn_id)
+                if timestamp:
+                    QToolTip.showText(event.globalPos(), timestamp, self.viewport())
+                    return True
+            QToolTip.hideText()
+            return True
+        return super().viewportEvent(event)
+
+
+class _HoverHintButton(QPushButton):
+    """Compact icon button that expands to a readable action label on hover."""
+
+    def __init__(self, hint: str, parent=None):
+        super().__init__(parent)
+        self._hint = hint
+        self._compact_width = 30
+        self.setText("")
+        self.setFixedHeight(30)
+        self.setMinimumWidth(self._compact_width)
+        self.setMaximumWidth(self._compact_width)
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self._width_animation = QPropertyAnimation(self, b"maximumWidth", self)
+        self._width_animation.setDuration(150)
+        self._width_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setToolTip(hint)
+        self.setAccessibleName(hint)
+
+    def setHint(self, hint: str):
+        changed = self._hint != hint
+        self._hint = hint
+        self.setToolTip(hint)
+        self.setAccessibleName(hint)
+        if self.underMouse():
+            self.setText(hint)
+            if changed:
+                self._animate_width()
+
+    def _animate_width(self, target: int | None = None):
+        self._width_animation.stop()
+        self._width_animation.setStartValue(max(self._compact_width, self.width()))
+        self._width_animation.setEndValue(
+            target if target is not None else self._compact_width + 24 + self.fontMetrics().horizontalAdvance(self._hint)
+        )
+        self._width_animation.start()
+
+    def enterEvent(self, event):
+        self.setText(self._hint)
+        self._animate_width()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self.setText("")
+        self._animate_width(self._compact_width)
+        super().leaveEvent(event)
+
+
+class _ProjectEditorPage(QWidget):
+    modified_changed = pyqtSignal(str, bool)
+
     def __init__(self, owner, path: Path, content: str):
-        super().__init__(owner, Qt.WindowType.Window)
+        super().__init__()
         self._owner = owner
         self._path = path
-        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
-        self.resize(900, 640)
+        self.setObjectName("ProjectEditorPage")
         self.setStyleSheet(
-            f"QDialog {{ background:{C.DARK}; color:{C.TEXT}; }}"
+            f"QWidget#ProjectEditorPage {{ background:{C.DARK}; color:{C.TEXT}; }}"
             f"QLabel {{ color:{C.TEXT_MED}; background:transparent; }}"
         )
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 10, 12, 12)
+        layout.setContentsMargins(12, 8, 12, 12)
         layout.setSpacing(8)
         toolbar = QHBoxLayout()
+        self._back_button = QPushButton("<  JARVIS")
+        self._back_button.setToolTip("Return to the JARVIS dashboard")
+        self._back_button.setMinimumHeight(30)
+        self._back_button.clicked.connect(owner._show_dashboard)
+        toolbar.addWidget(self._back_button)
         self._path_label = QLabel(str(path))
         self._path_label.setToolTip(str(path))
+        self._path_label.setMinimumWidth(0)
+        self._path_label.setSizePolicy(
+            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred
+        )
         self._path_label.setTextInteractionFlags(
             Qt.TextInteractionFlag.TextSelectableByMouse
         )
         toolbar.addWidget(self._path_label, 1)
-        self._save_button = QPushButton("Save  Ctrl+S")
+        self._save_button = QPushButton("Save")
+        self._save_button.setToolTip("Save changes (Ctrl+S)")
+        self._save_button.setMinimumHeight(30)
+        self._save_button.setStyleSheet(_ghost_qss())
         self._save_button.clicked.connect(self._save)
         toolbar.addWidget(self._save_button)
-        external = QPushButton("Open in external app")
-        external.clicked.connect(lambda: owner._open_external_project_file(path))
-        toolbar.addWidget(external)
+        self._external_button = QPushButton("Open externally")
+        self._external_button.setToolTip(
+            "Open this file with its default desktop application"
+        )
+        self._external_button.setMinimumHeight(30)
+        self._external_button.clicked.connect(
+            lambda: owner._open_external_project_file(path)
+        )
+        toolbar.addWidget(self._external_button)
         layout.addLayout(toolbar)
 
         self.editor = QPlainTextEdit()
@@ -6365,18 +6602,35 @@ class _ProjectEditorDialog(QDialog):
         self.editor.setStyleSheet(
             f"QPlainTextEdit {{ background:{C.PANEL2}; color:{C.TEXT}; "
             f"selection-background-color:{C.PRI_GHO}; border:1px solid "
-            f"{C.BORDER}; border-radius:5px; padding:8px; }}"
+            f"{C.BORDER}; border-radius:5px; padding:8px; }}" + _scroll_qss()
         )
         layout.addWidget(self.editor, 1)
         self._status = QLabel("Ready")
         layout.addWidget(self._status)
         self.editor.document().modificationChanged.connect(self._update_modified_state)
-        QShortcut(QKeySequence("Ctrl+S"), self).activated.connect(self._save)
+        save_shortcut = QShortcut(QKeySequence("Ctrl+S"), self)
+        save_shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        save_shortcut.activated.connect(self._save)
+        self.apply_theme()
         self._update_modified_state(False)
 
+    def apply_theme(self):
+        self.setStyleSheet(
+            f"QWidget#ProjectEditorPage {{ background:{C.DARK}; color:{C.TEXT}; }}"
+            f"QLabel {{ color:{C.TEXT_MED}; background:transparent; }}"
+        )
+        for button in (self._back_button, self._save_button, self._external_button):
+            button.setStyleSheet(_ghost_qss())
+        self.editor.setStyleSheet(
+            f"QPlainTextEdit {{ background:{C.PANEL2}; color:{C.TEXT}; "
+            f"selection-background-color:{C.PRI_GHO}; border:1px solid "
+            f"{C.BORDER}; border-radius:5px; padding:8px; }}" + _scroll_qss()
+        )
+
     def _update_modified_state(self, modified: bool):
+        self.modified_changed.emit(str(self._path), modified)
         self.setWindowTitle(
-            f"{'* ' if modified else ''}{self._path.name} — JARVIS Editor"
+            f"{'* ' if modified else ''}{self._path.name} - JARVIS Editor"
         )
         self._save_button.setEnabled(modified)
         self._status.setText("Unsaved changes" if modified else "Saved")
@@ -6391,24 +6645,21 @@ class _ProjectEditorDialog(QDialog):
         self._status.setText("Saved")
         return True
 
-    def closeEvent(self, event):
-        if self.editor.document().isModified():
-            choice = QMessageBox.question(
-                self,
-                "Unsaved changes",
-                f"Save changes to {self._path.name} before closing?",
-                QMessageBox.StandardButton.Save
-                | QMessageBox.StandardButton.Discard
-                | QMessageBox.StandardButton.Cancel,
-                QMessageBox.StandardButton.Save,
-            )
-            if choice == QMessageBox.StandardButton.Cancel:
-                event.ignore()
-                return
-            if choice == QMessageBox.StandardButton.Save and not self._save():
-                event.ignore()
-                return
-        event.accept()
+    def confirm_close(self) -> bool:
+        if not self.editor.document().isModified():
+            return True
+        choice = QMessageBox.question(
+            self,
+            "Unsaved changes",
+            f"Save changes to {self._path.name} before closing?",
+            QMessageBox.StandardButton.Save
+            | QMessageBox.StandardButton.Discard
+            | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Save,
+        )
+        if choice == QMessageBox.StandardButton.Cancel:
+            return False
+        return choice != QMessageBox.StandardButton.Save or self._save()
 
 
 class _TerminalBridge(QObject):
@@ -6441,6 +6692,8 @@ class _TerminalSession:
     bridge: _TerminalBridge
     channel: QWebChannel
     cwd: str
+    shell_kind: str = "default"
+    shell_label: str = "Terminal"
     pty: object | None = None
     restart_pending: bool = False
     closing: bool = False
@@ -6708,6 +6961,7 @@ class UpdatePanel(QWidget):
 
 class MainWindow(QMainWindow):
     _log_sig = pyqtSignal(str)
+    _project_open_sig = pyqtSignal(str, str)
     _state_sig = pyqtSignal(str)
     _content_sig = pyqtSignal(str, str, str)  # (title, text, stable update key)
     _reconfig_sig = pyqtSignal()  # trigger setup overlay from any thread
@@ -6763,6 +7017,7 @@ class MainWindow(QMainWindow):
         self._terminal_sessions: dict[str, _TerminalSession] = {}
         self._terminal_active_id = ""
         self._terminal_sequence = 0
+        self._bottom_panel_animation: QVariantAnimation | None = None
         self._terminal_poll_timer = QTimer(self)
         # Drain terminal output frequently enough that large listings do not
         # appear in visibly delayed 8 KB increments.
@@ -6789,6 +7044,7 @@ class MainWindow(QMainWindow):
         )
 
         self.on_text_command = None
+        self.on_plan_mode_change = None
         self.on_remote_clicked = None  # callable: () -> (url, key) | None
         self.on_interrupt = None  # callable: () -> None — stop JARVIS mid-speech
         self.on_voice_change = (
@@ -6816,10 +7072,11 @@ class MainWindow(QMainWindow):
         self._lecture_timer.setInterval(1000)
         self._lecture_timer.timeout.connect(self._update_lecture_button)
         self._current_file: str | None = None
-        self._project_editors: dict[str, _ProjectEditorDialog] = {}
+        self._project_editors: dict[str, _ProjectEditorPage] = {}
         self._remote_overlay: RemoteKeyOverlay | None = None
         self._customize_overlay: CustomizeOverlay | None = None
         self._pending_chat_image: bytes | None = None
+        self._expanded_chat_turns: set[str] = set()
         from memory.config_manager import get_cursor_assistant_settings
 
         self._cursor_settings = get_cursor_assistant_settings()
@@ -7144,10 +7401,21 @@ class MainWindow(QMainWindow):
         self._center_split.setCollapsible(0, True)
         self._center_split.setCollapsible(1, True)
         self._center_split.setCollapsible(2, True)
-        self._main_splitter.addWidget(self._center_split)
+        self._center_views = QStackedWidget()
+        self._center_views.addWidget(self._center_split)
+        self._editor_tabs = QTabWidget()
+        self._editor_tabs.setDocumentMode(True)
+        self._editor_tabs.setTabsClosable(True)
+        self._editor_tabs.setMovable(True)
+        self._editor_tabs.setUsesScrollButtons(True)
+        self._editor_tabs.tabBar().setExpanding(False)
+        self._editor_tabs.tabBar().setElideMode(Qt.TextElideMode.ElideRight)
+        self._editor_tabs.setStyleSheet(_tabs_qss())
+        self._editor_tabs.tabCloseRequested.connect(self._close_project_editor_tab)
+        self._center_views.addWidget(self._editor_tabs)
+        self._main_splitter.addWidget(self._center_views)
 
         self._right_panel = self._build_right_panel()
-        self._main_splitter.addWidget(self._right_panel)
         self._debug_panel = QWidget()
         self._debug_panel.setObjectName("DebugPanel")
         self._debug_panel.setMinimumHeight(0)
@@ -7155,15 +7423,8 @@ class MainWindow(QMainWindow):
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
         debug_layout = QVBoxLayout(self._debug_panel)
-        debug_layout.setContentsMargins(10, 6, 10, 8)
+        debug_layout.setContentsMargins(10, 0, 10, 8)
         debug_layout.setSpacing(5)
-        debug_header = QHBoxLayout()
-        debug_title = QLabel(self._tr("DEBUG CONSOLE"))
-        debug_title.setFont(QFont(FONT_UI, 11, QFont.Weight.DemiBold))
-        debug_title.setStyleSheet(f"color:{C.PRI}; background:transparent;")
-        debug_header.addWidget(debug_title)
-        debug_header.addStretch(1)
-        debug_layout.addLayout(debug_header)
         self._log.setMinimumHeight(0)
         self._log.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
@@ -7174,34 +7435,56 @@ class MainWindow(QMainWindow):
         self._debug_panel.hide()
         self._main_splitter.setStretchFactor(0, 0)
         self._main_splitter.setStretchFactor(1, 1)
-        self._main_splitter.setStretchFactor(2, 0)
-        self._main_splitter.setSizes([_LEFT_W, 760, _RIGHT_W])
+        self._main_splitter.setSizes([_LEFT_W, 760])
 
         self._workspace_split = QSplitter(Qt.Orientation.Vertical)
         self._workspace_split.setChildrenCollapsible(True)
         self._workspace_split.setHandleWidth(8)
         self._workspace_split.setStyleSheet(
-            f"QSplitter::handle {{ background: {C.BORDER}; }}"
-            f"QSplitter::handle:hover {{ background: {C.PRI_DIM}; }}"
+            "QSplitter::handle { background:transparent; }"
+            f"QSplitter::handle:hover {{ background:{C.PRI_DIM}; border-radius:4px; }}"
         )
         self._workspace_split.addWidget(self._main_splitter)
         self._terminal_panel = self._build_terminal_panel()
-        self._workspace_split.addWidget(self._terminal_panel)
-        # The legacy terminal remains hidden; the lower workspace is the debug console.
+        self._bottom_tabs = QTabWidget()
+        self._bottom_tabs.setObjectName("BottomPanelTabs")
+        self._bottom_tabs.setDocumentMode(True)
+        self._bottom_tabs.setStyleSheet(f"""
+            QTabWidget::pane {{ border:1px solid {C.BORDER}; border-radius:12px;
+                background:{C.PANEL}; top:-1px; }}
+            QTabBar::tab {{ color:{C.TEXT_DIM}; background:transparent; padding:5px 10px;
+                border:1px solid transparent; border-radius:8px; margin:0 3px 2px 0; }}
+            QTabBar::tab:hover {{ color:{C.TEXT}; background:{C.PANEL2}; }}
+            QTabBar::tab:selected {{ color:{C.PRI}; background:{C.PRI_GHO};
+                border:1px solid {C.BORDER}; }}
+        """)
+        self._bottom_tabs.addTab(self._debug_panel, self._tr("DEBUG CONSOLE"))
+        self._bottom_tabs.addTab(self._terminal_panel, self._tr("TERMINAL"))
+        self._bottom_tabs.currentChanged.connect(self._on_bottom_tab_changed)
+        self._bottom_tabs.hide()
+
+        self._root_splitter = QSplitter(Qt.Orientation.Horizontal)
+        self._root_splitter.setChildrenCollapsible(True)
+        self._root_splitter.setHandleWidth(5)
+        self._root_splitter.setStyleSheet(
+            "QSplitter::handle { background:transparent; width:5px; }"
+            "QSplitter::handle:hover { background:rgba(0,212,255,36); border-radius:3px; }"
+        )
+        self._root_splitter.addWidget(self._workspace_split)
+        self._root_splitter.addWidget(self._right_panel)
+        self._root_splitter.setStretchFactor(0, 1)
+        self._root_splitter.setStretchFactor(1, 0)
+        self._root_splitter.setSizes([max(500, start_w - _RIGHT_W), _RIGHT_W])
+        self._workspace_split.addWidget(self._bottom_tabs)
         self._workspace_split.setStretchFactor(0, 3)
         self._workspace_split.setStretchFactor(1, 0)
         self._workspace_split.setCollapsible(0, False)
         self._workspace_split.setCollapsible(1, True)
-        self._terminal_panel.hide()
-        self._workspace_split.addWidget(self._debug_panel)
-        self._debug_panel.hide()
-        self._workspace_split.setStretchFactor(2, 2)
-        self._workspace_split.setCollapsible(2, True)
-        root.addWidget(self._workspace_split, stretch=1)
+        self._workspace_split.setSizes([max(300, start_h - 170), 0])
+        root.addWidget(self._root_splitter, stretch=1)
         root.addWidget(self._build_footer())
 
         # Quick-access drawer (floating overlay, built after central widget layout is done)
-        self._quick_drawer = self._build_quick_drawer()
         self._ctrl_drawer = self._build_controls_drawer()
         self._warm_wake_state()
         self._update_autostart_btn(self._check_autostart())
@@ -7221,6 +7504,7 @@ class MainWindow(QMainWindow):
         self._update_metrics()
 
         self._log_sig.connect(self._append_activity)
+        self._project_open_sig.connect(self._open_project_from_assistant)
         self._state_sig.connect(self._apply_state)
         self._content_sig.connect(self._show_content)
         self._reconfig_sig.connect(self._show_setup)
@@ -7253,6 +7537,7 @@ class MainWindow(QMainWindow):
         QApplication.clipboard().dataChanged.connect(self._on_clipboard_changed)
 
         self._overlay: SetupOverlay | None = None
+        self._settings_center = None
         self._ready = self._check_config()
         if not self._ready:
             self._show_setup()
@@ -7337,14 +7622,30 @@ class MainWindow(QMainWindow):
         self._language_missing = False
 
     def _change_interface_language(self, *_):
-        language = self._ui_language_combo.currentData()
+        combo = self.sender()
+        if not isinstance(combo, QComboBox):
+            combo = self._ui_language_combo
+        language = combo.currentData()
         if not language or language == self._ui_language:
             return
         try:
             self._save_ui_language(language)
         except (ValueError, OSError) as exc:
+            combo.blockSignals(True)
+            combo.setCurrentIndex(max(0, combo.findData(self._ui_language)))
+            combo.blockSignals(False)
             QMessageBox.warning(self, "Language", str(exc))
             return
+        language_combos = [getattr(self, "_ui_language_combo", None)]
+        if self._settings_center is not None:
+            language_combos.append(
+                self._settings_center.findChild(QComboBox, "app_language")
+            )
+        for language_combo in language_combos:
+            if isinstance(language_combo, QComboBox):
+                language_combo.blockSignals(True)
+                language_combo.setCurrentIndex(max(0, language_combo.findData(language)))
+                language_combo.blockSignals(False)
         QMessageBox.information(
             self,
             _translate("Language", language),
@@ -7396,10 +7697,11 @@ class MainWindow(QMainWindow):
         """Apply the shared visual tokens to the completed main window."""
         # Keep the toolbar icon-only, with tooltips and accessible names for clarity.
         header_buttons = (
-            (self._ctrl_btn, "controls.svg", "Controls"),
+            (self._drawer_btn, "settings.svg", "Open Settings Center"),
             (self._left_toggle_btn, "layout-sidebar-left.svg", "Left panel"),
             (self._content_toggle_btn, "layout-panel.svg", "Bottom panel"),
             (self._right_toggle_btn, "layout-sidebar-right.svg", "Right panel"),
+            (self._fullscreen_toggle_btn, "fullscreen.svg", "Fullscreen"),
             (self._debug_toggle_btn, "developer.svg", "Debug console"),
         )
         for button, filename, hint in header_buttons:
@@ -7409,7 +7711,7 @@ class MainWindow(QMainWindow):
             button.setIconSize(QSize(16, 16))
             button.setToolTip(self._tr(hint))
             button.setAccessibleName(self._tr(hint))
-            button.setFixedSize(28, 28)
+            button.setFixedSize(30, 30)
 
         # Keep every icon monochrome in the white preset, including icons
         # loaded from assets whose SVG strokes use a fixed green accent.
@@ -7430,9 +7732,14 @@ class MainWindow(QMainWindow):
             except Exception:
                 pass
 
-        for panel in (self._left_panel, self._right_panel):
-            panel.setObjectName("SidePanel")
-            put(panel, _card_qss("SidePanel"))
+        side_panel_qss = lambda name: (
+            f"QWidget#{name} "
+            f"{{ background:{C.PANEL}; border:1px solid {C.BORDER}; border-radius:10px; }}"
+        )
+        self._left_panel.setObjectName("SidePanel")
+        put(self._left_panel, side_panel_qss("SidePanel"))
+        self._right_panel.setObjectName("ChatPanel")
+        put(self._right_panel, side_panel_qss("ChatPanel"))
         put(self._content_panel, _card_qss("ContentPanel"))
         put(self._quiz_panel, _card_qss("QuizPanel"))
         put(self._debug_panel, _card_qss("DebugPanel"))
@@ -7440,11 +7747,11 @@ class MainWindow(QMainWindow):
             self._terminal_panel,
             f"""
             QWidget#TerminalPanel {{
-                background: {C.PANEL}; border-top: 1px solid {C.BORDER};
+                background: {C.PANEL}; border:1px solid {C.BORDER}; border-radius:12px;
             }}
             QWidget#TerminalPanel QPushButton {{
                 color: {C.TEXT_DIM}; background: {C.PANEL2};
-                border: 1px solid {C.BORDER}; border-radius: 5px; padding: 1px;
+                border: 1px solid {C.BORDER}; border-radius: 8px; padding: 1px;
             }}
             QWidget#TerminalPanel QPushButton:hover {{
                 color: {C.PRI}; background: {C.PRI_GHO}; border-color: {C.PRI_DIM};
@@ -7467,23 +7774,28 @@ class MainWindow(QMainWindow):
                 )
         for button in (
             self._drawer_btn,
-            self._ctrl_btn,
             self._left_toggle_btn,
             self._right_toggle_btn,
             self._content_toggle_btn,
+            self._fullscreen_toggle_btn,
             self._debug_toggle_btn,
         ):
-            # These compact header buttons are only 28 px wide. The shared
-            # ghost style's 12 px side padding consumed the whole text area.
+            # Header controls share one square hit target and icon-only style.
             put(button, _ghost_qss() + "QPushButton { padding: 0px; }")
 
         for splitter in (
             self._main_splitter,
+            self._root_splitter,
             self._center_split,
             self._workspace_split,
         ):
             splitter.setHandleWidth(8 if splitter is self._workspace_split else 5)
             put(splitter, "QSplitter::handle { background: transparent; }")
+        put(
+            self._root_splitter,
+            "QSplitter::handle { background: transparent; width:5px; }"
+            "QSplitter::handle:hover { background:rgba(0,212,255,36); border-radius:3px; }",
+        )
         put(
             self._workspace_split,
             f"QSplitter::handle {{ background: transparent; }}"
@@ -7498,26 +7810,90 @@ class MainWindow(QMainWindow):
                 f"QWidget#InfoCard {{ background: {C.PANEL2}; border: 1px solid {C.BORDER};"
                 f" border-radius: 5px; }}",
             )
-        put(self._work_tabs, _tabs_qss())
+        put(self._work_tabs, _tabs_qss() + f"""
+            QTabWidget::pane {{ border:0; background:transparent; }}
+            QTabBar::tab {{ color:{C.TEXT_DIM}; background:transparent; padding:7px 11px;
+                border:1px solid transparent; border-radius:8px; margin-right:3px; }}
+            QTabBar::tab:hover {{ color:{C.TEXT}; background:{C.PANEL2}; }}
+            QTabBar::tab:selected {{ color:{C.PRI}; background:{C.PRI_GHO}; border:1px solid {C.BORDER}; }}
+        """)
         self._style_tab_scrollers(self._work_tabs)
-        put(self._chat_view, _inset_qss("QTextBrowser"))
+        put(self._bottom_tabs, _tabs_qss() + f"""
+            QTabWidget::pane {{ border:1px solid {C.BORDER}; border-radius:12px;
+                background:{C.PANEL}; top:-1px; }}
+            QTabBar::tab {{ color:{C.TEXT_DIM}; background:transparent; padding:5px 10px;
+                border:1px solid transparent; border-radius:8px; margin:0 3px 2px 0; }}
+            QTabBar::tab:hover {{ color:{C.TEXT}; background:{C.PANEL2}; }}
+            QTabBar::tab:selected {{ color:{C.PRI}; background:{C.PRI_GHO};
+                border:1px solid {C.BORDER}; }}
+        """)
+        self._style_tab_scrollers(self._bottom_tabs)
+        put(self._editor_tabs, _tabs_qss())
+        self._style_tab_scrollers(self._editor_tabs)
+        for editor in self._project_editors.values():
+            editor.apply_theme()
+        put(
+            self._chat_view,
+            f"QTextBrowser {{ background:{C.PANEL2}; color:{C.TEXT}; border:1px solid {C.BORDER}; "
+            f"border-radius:10px; padding:7px; selection-background-color:{C.PRI_GHO}; }}"
+            + _scroll_qss(),
+        )
         put(self._history_list, _inset_qss("QListWidget"))
         put(self._task_list, _inset_qss("QListWidget"))
-        put(self._log, _inset_qss("QTextEdit"))
+        put(
+            self._log,
+            _inset_qss("QTextEdit").replace("border-radius: 5px;", "border-radius: 10px;"),
+        )
         put(self._terminal_tabs, _tabs_qss())
+        self._style_tab_scrollers(self._terminal_tabs)
         terminal_theme = json.dumps(self._terminal_theme(), separators=(",", ":"))
         for session in self._terminal_sessions.values():
             session.view.setStyleSheet(
-                f"background:{C.DARK}; border:1px solid {C.BORDER}; border-radius:5px;"
+                f"background:{C.DARK}; border:1px solid {C.BORDER}; border-radius:8px;"
             )
             session.view.page().runJavaScript(
                 f"window.setTerminalTheme && window.setTerminalTheme({terminal_theme})"
             )
-        for field in (self._input, self._task_input):
-            put(field, _input_qss())
+        put(self._task_input, _input_qss())
+        put(
+            self._input,
+            f"QLineEdit {{ background:transparent; color:{C.TEXT}; border:0; padding:5px 7px; "
+            f"selection-background-color:{C.PRI_GHO}; }}"
+            f"QLineEdit:focus {{ border:0; }}",
+        )
+        put(
+            self._chat_composer,
+            f"QFrame#ChatComposer {{ background:{C.PANEL2}; border:1px solid {C.BORDER}; border-radius:14px; }}",
+        )
+        self._chat_add_button.setStyleSheet(
+            f"QToolButton {{ background:transparent; color:{C.TEXT_MED}; "
+            f"border:1px solid transparent; border-radius:10px; font-size:18px; padding-right:7px; }}"
+            f"QToolButton:hover {{ background:{C.PRI_GHO}; color:{C.PRI}; border-color:{C.BORDER}; }}"
+            f'QToolButton::menu-indicator {{ image:url("{self._chat_menu_chevron}"); '
+            f"subcontrol-origin:padding; subcontrol-position:right center; width:9px; height:9px; right:4px; }}"
+        )
+        put(
+            self._chat_send_btn,
+            f"QPushButton {{ background:{C.PRI_GHO}; color:{C.PRI}; border:1px solid {C.PRI_DIM}; "
+            f"border-radius:10px; padding:0; }}"
+            f"QPushButton:hover {{ background:{C.PRI_DIM}; border-color:{C.PRI}; }}"
+            f"QPushButton:pressed {{ background:{C.PRI}; }}",
+        )
         for button in self._right_panel.findChildren(QPushButton):
-            if button not in (self._interrupt_btn, self._mute_btn):
-                put(button, _ghost_qss() + "QPushButton { padding: 2px 7px; }")
+            if button not in (
+                self._interrupt_btn,
+                self._mute_btn,
+                self._chat_send_btn,
+                self._chat_latest_btn,
+                self._lecture_btn,
+            ):
+                put(
+                    button,
+                    f"QPushButton {{ background:transparent; color:{C.TEXT_MED}; border:1px solid transparent; "
+                    f"border-radius:9px; padding:5px 10px; }}"
+                    f"QPushButton:hover {{ background:{C.PANEL2}; color:{C.TEXT}; border-color:{C.BORDER}; }}"
+                    f"QPushButton:pressed {{ background:{C.PRI_GHO}; color:{C.PRI}; }}",
+                )
         put(
             self._interrupt_btn,
             f"QPushButton {{ background: {C.PANEL2}; color: {C.MUTED_C};"
@@ -8301,6 +8677,11 @@ class MainWindow(QMainWindow):
             self.showNormal()
         else:
             self.showFullScreen()
+        button = getattr(self, "_fullscreen_toggle_btn", None)
+        if button is not None:
+            button.setChecked(self.isFullScreen())
+            icon_name = "exit-fullscreen.svg" if self.isFullScreen() else "fullscreen.svg"
+            button.setIcon(QIcon(str(BASE_DIR / "assets" / "icons" / icon_name)))
 
     def _toggle_window_maximized(self):
         if self.isMaximized():
@@ -8312,12 +8693,21 @@ class MainWindow(QMainWindow):
     def _update_window_controls(self):
         button = getattr(self, "_maximize_window_btn", None)
         if button is not None:
-            button.setText("❐" if self.isMaximized() else "□")
+            icon_name = "window-restore.svg" if self.isMaximized() else "window-maximize.svg"
+            button.setText("")
+            button.setIcon(QIcon(str(BASE_DIR / "assets" / "icons" / icon_name)))
+            button.setIconSize(QSize(15, 15))
             button.setToolTip(
                 self._tr("Restore window")
                 if self.isMaximized()
                 else self._tr("Maximize window")
             )
+            button.setAccessibleName(button.toolTip())
+        fullscreen = getattr(self, "_fullscreen_toggle_btn", None)
+        if fullscreen is not None:
+            fullscreen.setChecked(self.isFullScreen())
+            icon_name = "exit-fullscreen.svg" if self.isFullScreen() else "fullscreen.svg"
+            fullscreen.setIcon(QIcon(str(BASE_DIR / "assets" / "icons" / icon_name)))
 
     def changeEvent(self, event):
         super().changeEvent(event)
@@ -8394,8 +8784,6 @@ class MainWindow(QMainWindow):
         # Quick drawer — reposition if open
         if hasattr(self, "_quick_drawer") and self._quick_drawer.isVisible():
             self._position_quick_drawer()
-        if hasattr(self, "_ctrl_drawer") and self._ctrl_drawer.isVisible():
-            self._position_ctrl_drawer()
         self._fit_video()
 
     def _update_metrics(self):
@@ -8450,49 +8838,34 @@ class MainWindow(QMainWindow):
 
     def _build_header(self) -> QWidget:
         w = _WindowHeader(self)
-        w.setFixedHeight(50)
+        w.setFixedHeight(52)
+        w.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         w.setStyleSheet(f"background: {C.DARK}; border-bottom: 1px solid {C.BORDER};")
         lay = QHBoxLayout(w)
-        lay.setContentsMargins(16, 0, 16, 0)
-        lay.setSpacing(5)
+        lay.setContentsMargins(14, 0, 14, 0)
+        lay.setSpacing(8)
         nav = QHBoxLayout()
+        nav.setContentsMargins(0, 0, 0, 0)
         nav.setSpacing(5)
 
-        self._drawer_btn = QPushButton("⚙")
-        self._drawer_btn.setFixedSize(28, 28)
-        self._drawer_btn.setFont(QFont(FONT_MONO, 11))
+        self._drawer_btn = QPushButton()
+        self._drawer_btn.setIcon(QIcon(str(BASE_DIR / "assets" / "icons" / "settings.svg")))
+        self._drawer_btn.setIconSize(QSize(16, 16))
+        self._drawer_btn.setFixedSize(30, 30)
         self._drawer_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._drawer_btn.setToolTip("Settings & Controls")
+        self._drawer_btn.setToolTip("Open Settings Center")
         self._drawer_btn.setStyleSheet(f"""
             QPushButton {{
                 background: transparent; color: {C.TEXT_DIM};
-                border: 1px solid {C.BORDER}; border-radius: 4px;
+                border: 1px solid {C.BORDER}; border-radius: 8px;
             }}
             QPushButton:hover {{ color: {C.PRI}; border-color: {C.PRI_DIM}; }}
             QPushButton:checked {{ color: {C.PRI}; border-color: {C.PRI}; background: {C.PRI_GHO}; }}
         """)
-        self._drawer_btn.setCheckable(True)
-        self._drawer_btn.setToolTip("Setup — things you set once")
-        self._drawer_btn.clicked.connect(self._toggle_drawer)
+        self._drawer_btn.clicked.connect(self._open_settings_center)
         nav.addWidget(self._drawer_btn)
 
-        # A SECOND drawer, and the split is by how often a thing is touched.
-        #
-        # One panel held twelve buttons: the ones you press once when you set
-        # the assistant up sitting next to the ones you flick on and off every
-        # day. Separating them by that — setup behind ⚙, everyday behind 🎛 —
-        # is what makes each list short enough to read at a glance.
-        self._ctrl_btn = QPushButton("🎛")
-        self._ctrl_btn.setFixedSize(28, 28)
-        self._ctrl_btn.setFont(QFont(FONT_MONO, 11))
-        self._ctrl_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._ctrl_btn.setToolTip("Controls — the everyday switches")
-        self._ctrl_btn.setStyleSheet(self._drawer_btn.styleSheet())
-        self._ctrl_btn.setCheckable(True)
-        self._ctrl_btn.clicked.connect(self._toggle_controls)
-        nav.addSpacing(4)
-        nav.addWidget(self._ctrl_btn)
-
+        # Workspace layout controls sit beside the single Settings entry point.
         self._left_toggle_btn = QPushButton()
         self._left_toggle_btn.setIcon(
             QIcon(str(BASE_DIR / "assets" / "icons" / "layout-sidebar-left.svg"))
@@ -8534,6 +8907,20 @@ class MainWindow(QMainWindow):
 
         nav.addWidget(self._right_toggle_btn)
 
+        self._fullscreen_toggle_btn = QPushButton()
+        self._fullscreen_toggle_btn.setCheckable(True)
+        self._fullscreen_toggle_btn.setIcon(
+            QIcon(str(BASE_DIR / "assets" / "icons" / "fullscreen.svg"))
+        )
+        self._fullscreen_toggle_btn.setIconSize(QSize(16, 16))
+        self._fullscreen_toggle_btn.setFixedSize(30, 30)
+        self._fullscreen_toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._fullscreen_toggle_btn.setToolTip(self._tr("Fullscreen (F11)"))
+        self._fullscreen_toggle_btn.setAccessibleName(self._tr("Fullscreen"))
+        self._fullscreen_toggle_btn.setStyleSheet(self._drawer_btn.styleSheet())
+        self._fullscreen_toggle_btn.clicked.connect(self._toggle_fullscreen)
+        nav.addWidget(self._fullscreen_toggle_btn)
+
         self._debug_toggle_btn = QPushButton(self._tr("Console"))
         self._debug_toggle_btn.setCheckable(True)
         self._debug_toggle_btn.setToolTip(self._tr("Show or hide the debug console"))
@@ -8556,6 +8943,10 @@ class MainWindow(QMainWindow):
         self._terminal_toggle_btn.hide()
 
         brand = QVBoxLayout()
+        # Keep the wordmark inside the 50 px header.  QBoxLayout's default
+        # margins were letting this nested layout outgrow the header and
+        # visually collide with the panel directly below it.
+        brand.setContentsMargins(0, 0, 0, 0)
         brand.setSpacing(0)
         _disp = self._assistant_name.upper()
         self._title_lbl = QLabel()
@@ -8564,6 +8955,15 @@ class MainWindow(QMainWindow):
         )
         self._title_lbl.setAlignment(
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        )
+        self._title_lbl.setFixedSize(150, 50)
+        self._title_lbl.setMargin(0)
+        self._title_lbl.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        # Paint an opaque header-colour patch behind the transparent PNG. This
+        # prevents an overlapping/translucent sibling from showing through the
+        # wordmark area, and keeps the brand above the header's other children.
+        self._title_lbl.setStyleSheet(
+            f"background: {C.DARK}; border: none; padding: 0;"
         )
         logo_path = BASE_DIR / "assets" / "desktop" / "interfays_icon.png"
         logo = QPixmap(str(logo_path))
@@ -8576,13 +8976,15 @@ class MainWindow(QMainWindow):
                 )
             )
             self._title_lbl.setToolTip(_disp)
-            self._title_lbl.setStyleSheet("background: transparent;")
         else:
             # Keep a readable fallback for development copies that do not yet
             # have the bundled brand artwork.
             self._title_lbl.setText(_disp)
             self._title_lbl.setFont(QFont(FONT_MONO, 17, QFont.Weight.Bold))
-            self._title_lbl.setStyleSheet(f"color: {C.PRI}; background: transparent;")
+            self._title_lbl.setStyleSheet(
+                f"color: {C.PRI}; background: {C.DARK}; border: none; padding: 0;"
+            )
+        self._title_lbl.raise_()
         brand.addWidget(self._title_lbl)
         _sub_text = (
             "Just A Rather Very Intelligent System · V2"
@@ -8605,12 +9007,19 @@ class MainWindow(QMainWindow):
         if logo.isNull():
             brand.addWidget(self._sub_lbl)
 
-        right_col = QVBoxLayout()
+        clock_frame = QFrame()
+        clock_frame.setObjectName("HeaderClock")
+        clock_frame.setFixedSize(112, 38)
+        clock_frame.setStyleSheet(
+            f"QFrame#HeaderClock {{ background:{C.PANEL}; border:1px solid {C.BORDER}; border-radius:8px; }}"
+        )
+        right_col = QVBoxLayout(clock_frame)
+        right_col.setContentsMargins(7, 3, 7, 3)
         right_col.setSpacing(2)
         self._clock_lbl = QLabel("00:00:00")
-        self._clock_lbl.setFont(QFont(FONT_MONO, 14, QFont.Weight.Bold))
+        self._clock_lbl.setFont(QFont(FONT_MONO, 12, QFont.Weight.Bold))
         self._clock_lbl.setStyleSheet(f"color: {C.PRI}; background: transparent;")
-        self._clock_lbl.setAlignment(Qt.AlignmentFlag.AlignRight)
+        self._clock_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         right_col.addWidget(self._clock_lbl)
         self._date_lbl = QLabel("")
         self._clock_lbl.setAttribute(
@@ -8621,14 +9030,14 @@ class MainWindow(QMainWindow):
         )
         self._date_lbl.setFont(QFont(FONT_MONO, 7))
         self._date_lbl.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
-        self._date_lbl.setAlignment(Qt.AlignmentFlag.AlignRight)
+        self._date_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         right_col.addWidget(self._date_lbl)
         # Keep the identity on the open left side and the controls grouped right.
         lay.addLayout(brand)
         lay.addStretch(1)
         lay.addLayout(nav)
         lay.addSpacing(10)
-        lay.addLayout(right_col)
+        lay.addWidget(clock_frame)
         if self._custom_chrome_enabled:
             window_controls = QHBoxLayout()
             window_controls.setContentsMargins(8, 0, 0, 0)
@@ -8636,8 +9045,8 @@ class MainWindow(QMainWindow):
             button_style = f"""
                 QPushButton {{
                     color:{C.TEXT_MED}; background:transparent;
-                    border:1px solid transparent; border-radius:5px;
-                    font-family:{FONT_UI}; font-size:14px;
+                    border:1px solid transparent; border-radius:8px;
+                    padding:0;
                 }}
                 QPushButton:hover {{
                     color:{C.PRI}; background:{C.PRI_GHO};
@@ -8650,19 +9059,22 @@ class MainWindow(QMainWindow):
                     border-color:#c94050;
                 }}
             """
-            for text, tooltip, callback in (
-                ("—", "Minimize window", self.showMinimized),
-                ("□", "Maximize window", self._toggle_window_maximized),
-                ("×", "Close JARVIS", self.close),
+            for label, icon_name, tooltip, callback in (
+                ("Minimize", "window-minimize.svg", "Minimize window", self.showMinimized),
+                ("Maximize", "window-maximize.svg", "Maximize window", self._toggle_window_maximized),
+                ("Close", "close.svg", "Close JARVIS", self.close),
             ):
-                button = QPushButton(text)
-                button.setFixedSize(30, 28)
+                button = QPushButton()
+                button.setIcon(QIcon(str(BASE_DIR / "assets" / "icons" / icon_name)))
+                button.setIconSize(QSize(15, 15))
+                button.setFixedSize(30, 30)
                 button.setCursor(Qt.CursorShape.PointingHandCursor)
-                button.setStyleSheet(close_style if text == "×" else button_style)
+                button.setStyleSheet(close_style if label == "Close" else button_style)
                 button.setToolTip(self._tr(tooltip))
+                button.setAccessibleName(self._tr(tooltip))
                 button.clicked.connect(callback)
                 window_controls.addWidget(button)
-                if text == "□":
+                if label == "Maximize":
                     self._maximize_window_btn = button
             lay.addLayout(window_controls)
             self._update_window_controls()
@@ -8678,16 +9090,29 @@ class MainWindow(QMainWindow):
         w.setObjectName("SidePanel")
         w.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         w.setStyleSheet(
-            f"QWidget#SidePanel {{ background: {C.PANEL}; border: 1px solid {C.BORDER}; border-radius: 8px; }}"
+            f"QWidget#SidePanel {{ background: {C.PANEL}; border: 1px solid {C.BORDER}; border-radius: 10px; }}"
         )
         panel_layout = QVBoxLayout(w)
         panel_layout.setContentsMargins(0, 0, 0, 0)
         panel_layout.setSpacing(0)
+        self._left_tabs = QTabWidget()
+        self._left_tabs.setDocumentMode(True)
+        self._left_tabs.setStyleSheet(f"""
+            QTabWidget::pane {{ border:0; background:{C.PANEL}; }}
+            QTabBar::tab {{ color:{C.TEXT_DIM}; background:{C.PANEL2}; padding:6px 9px;
+                border:1px solid {C.BORDER}; border-bottom:0; margin-right:2px; }}
+            QTabBar::tab:selected {{ color:{C.PRI}; background:{C.PANEL}; }}
+        """)
+        panel_layout.addWidget(self._left_tabs)
+        system_page = QWidget()
+        system_layout = QVBoxLayout(system_page)
+        system_layout.setContentsMargins(0, 0, 0, 0)
+        system_layout.setSpacing(0)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         scroll.setMinimumHeight(0)
         scroll.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
@@ -8700,7 +9125,7 @@ class MainWindow(QMainWindow):
         lay.setContentsMargins(10, 12, 10, 12)
         lay.setSpacing(7)
         scroll.setWidget(body)
-        panel_layout.addWidget(scroll)
+        system_layout.addWidget(scroll)
 
         head_row = QHBoxLayout()
         head_row.setSpacing(5)
@@ -8826,7 +9251,7 @@ class MainWindow(QMainWindow):
             try:
                 build = int(platform.version().split(".")[-1])
                 os_name = f"Windows {11 if build >= 22000 else 10}"
-            except ValueError, IndexError:
+            except (ValueError, IndexError):
                 pass
         self._os_lbl = QLabel(f"{self._tr('OS')}         {os_name}")
         self._os_lbl.setFont(QFont(FONT_MONO, 8))
@@ -8848,18 +9273,222 @@ class MainWindow(QMainWindow):
 
         lay.addWidget(info_panel)
 
+        self._left_tabs.addTab(system_page, self._tr("SYSTEM"))
+        self._build_project_explorer()
         return w
+
+    def _build_project_explorer(self):
+        from memory.config_manager import get_workspace_path
+
+        self._workspace_path = get_workspace_path()
+        page = QWidget()
+        page_layout = QVBoxLayout(page)
+        page_layout.setContentsMargins(8, 8, 8, 8)
+        page_layout.setSpacing(7)
+
+        project_row = QHBoxLayout()
+        project_row.setSpacing(4)
+        project_title = QLabel(self._tr("PROJECT FILES"))
+        project_title.setFont(QFont(FONT_MONO, 9, QFont.Weight.Bold))
+        project_title.setStyleSheet(f"color:{C.PRI}; background:transparent;")
+        project_row.addWidget(project_title, 1)
+
+        def small_tool(text, tooltip, callback, target_row=None):
+            button = QToolButton()
+            button.setText(text)
+            button.setFixedSize(23, 23)
+            button.setToolTip(tooltip)
+            button.setAccessibleName(tooltip)
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
+            button.setStyleSheet(
+                f"QToolButton {{ color:{C.TEXT_MED}; background:transparent; "
+                f"border:1px solid transparent; border-radius:7px; }}"
+                f"QToolButton:hover {{ color:{C.PRI}; background:{C.PRI_GHO}; "
+                f"border-color:{C.BORDER}; }}"
+            )
+            button.clicked.connect(callback)
+            (target_row if target_row is not None else project_row).addWidget(button)
+            return button
+
+        self._new_file_btn = small_tool("", self._tr("New file"), self._new_project_file)
+        self._new_file_btn.setIcon(
+            QIcon(str(BASE_DIR / "assets" / "icons" / "file-plus.svg"))
+        )
+        self._new_file_btn.setIconSize(QSize(16, 16))
+        self._new_folder_btn = small_tool("", self._tr("New folder"), self._new_project_folder)
+        self._new_folder_btn.setIcon(
+            QIcon(str(BASE_DIR / "assets" / "icons" / "folder-plus.svg"))
+        )
+        self._new_folder_btn.setIconSize(QSize(16, 16))
+        self._refresh_files_btn = small_tool("↻", self._tr("Refresh files"), self._refresh_project_files)
+        page_layout.addLayout(project_row)
+
+        self._workspace_label = QLabel()
+        self._workspace_label.setWordWrap(False)
+        self._workspace_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self._workspace_label.setStyleSheet(f"color:{C.TEXT_DIM}; background:transparent;")
+        self._workspace_label.setFont(QFont(FONT_MONO, 7))
+        workspace_row = QHBoxLayout()
+        workspace_row.setSpacing(4)
+        workspace_row.addWidget(self._workspace_label, 1)
+        self._close_project_btn = small_tool(
+            "", self._tr("Close project"), self._close_project, workspace_row
+        )
+        self._close_project_btn.setIcon(
+            QIcon(str(BASE_DIR / "assets" / "icons" / "close.svg"))
+        )
+        self._close_project_btn.setIconSize(QSize(14, 14))
+        page_layout.addLayout(workspace_row)
+
+        self._file_model = QFileSystemModel(self)
+        self._file_model.setFilter(
+            QDir.Filter.AllEntries | QDir.Filter.NoDotAndDotDot | QDir.Filter.Hidden
+        )
+        self._file_model.setRootPath("")
+        self._file_tree = QTreeView()
+        self._file_tree.setModel(self._file_model)
+        self._file_tree.setRootIndex(QModelIndex())
+        self._file_tree.setHeaderHidden(True)
+        self._file_tree.setAnimated(True)
+        self._file_tree.setIndentation(14)
+        self._file_tree.setUniformRowHeights(True)
+        self._file_tree.setFont(QFont(FONT_UI, 9))
+        self._file_tree.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded
+        )
+        self._file_tree.setEditTriggers(QTreeView.EditTrigger.NoEditTriggers)
+        for column in (1, 2, 3):
+            self._file_tree.hideColumn(column)
+        self._file_tree.setStyleSheet(
+            f"QTreeView {{ background:{C.PANEL2}; color:{C.TEXT}; border:1px solid {C.BORDER}; "
+            f"border-radius:9px; padding:4px; }}"
+            f"QTreeView::item {{ min-height:22px; }}"
+            f"QTreeView::item:hover {{ background:{C.PRI_GHO}; }}"
+            f"QTreeView::item:selected {{ background:{C.PRI_GHO}; color:{C.PRI}; }}"
+            + _scroll_qss()
+        )
+        self._file_tree.clicked.connect(self._open_project_file)
+        self._file_tree.doubleClicked.connect(self._open_project_file)
+        page_layout.addWidget(self._file_tree, 1)
+
+        self._empty_project = QWidget()
+        empty_layout = QVBoxLayout(self._empty_project)
+        empty_layout.setContentsMargins(6, 20, 6, 12)
+        empty_layout.setSpacing(8)
+        empty_title = QLabel(self._tr("No folder is open"))
+        empty_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        empty_title.setStyleSheet(f"color:{C.TEXT}; background:transparent;")
+        empty_layout.addWidget(empty_title)
+        empty_note = QLabel(self._tr("Open a folder to browse and edit its files in JARVIS."))
+        empty_note.setWordWrap(True)
+        empty_note.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        empty_note.setStyleSheet(f"color:{C.TEXT_DIM}; background:transparent;")
+        empty_layout.addWidget(empty_note)
+        open_folder = QPushButton(self._tr("Open Folder..."))
+        open_folder.setMinimumHeight(32)
+        open_folder.setStyleSheet(_ghost_qss())
+        open_folder.clicked.connect(self._select_workspace_folder)
+        empty_layout.addWidget(open_folder)
+        open_file = QPushButton(self._tr("Open File..."))
+        open_file.setMinimumHeight(32)
+        open_file.setStyleSheet(_ghost_qss())
+        open_file.clicked.connect(self._select_project_file)
+        empty_layout.addWidget(open_file)
+        page_layout.addWidget(self._empty_project, 1)
+
+        self._open_folder_btn = QPushButton(self._tr("Open Folder"))
+        self._open_folder_btn.setMinimumHeight(30)
+        self._open_folder_btn.setStyleSheet(_ghost_qss())
+        self._open_folder_btn.setToolTip(self._tr("Choose a project folder"))
+        self._open_folder_btn.clicked.connect(self._select_workspace_folder)
+        page_layout.addWidget(self._open_folder_btn)
+
+        self._left_tabs.addTab(page, self._tr("EXPLORER"))
+        self._update_project_explorer_state()
+
+    def _update_project_explorer_state(self):
+        root_open = bool(
+            self._workspace_path and Path(self._workspace_path).expanduser().is_dir()
+        )
+        if not root_open:
+            self._workspace_path = ""
+        self._workspace_label.setText(
+            Path(self._workspace_path).name if root_open else self._tr("No project folder")
+        )
+        self._workspace_label.setToolTip(self._workspace_path or "")
+        self._file_tree.setVisible(root_open)
+        self._empty_project.setVisible(not root_open)
+        self._open_folder_btn.setVisible(root_open)
+        self._refresh_files_btn.setEnabled(root_open)
+        self._new_file_btn.setEnabled(root_open)
+        self._new_folder_btn.setEnabled(root_open)
+        self._close_project_btn.setVisible(root_open)
+        if root_open:
+            root_index = self._file_model.setRootPath(self._workspace_path)
+            self._file_tree.setRootIndex(root_index)
+
+    def _select_project_file(self):
+        start = self._workspace_path or str(Path.home())
+        path, _ = QFileDialog.getOpenFileName(self, self._tr("Open file"), start)
+        if path:
+            self._open_file_in_editor(Path(path))
+
+    def _project_creation_directory(self) -> Path | None:
+        if not self._workspace_path:
+            return None
+        index = self._file_tree.currentIndex()
+        if index.isValid():
+            selected = Path(self._file_model.filePath(index))
+            if selected.is_dir():
+                return selected
+            return selected.parent
+        return Path(self._workspace_path)
+
+    def _new_project_file(self):
+        self._create_project_item(folder=False)
+
+    def _new_project_folder(self):
+        self._create_project_item(folder=True)
+
+    def _create_project_item(self, folder: bool):
+        base = self._project_creation_directory()
+        if base is None:
+            self._select_workspace_folder()
+            return
+        label = self._tr("Folder name") if folder else self._tr("File name")
+        name, accepted = QInputDialog.getText(self, self._tr("New project item"), label)
+        name = name.strip()
+        if not accepted or not name:
+            return
+        try:
+            root = Path(self._workspace_path).resolve(strict=True)
+            target = (base / name).resolve(strict=False)
+            target.relative_to(root)
+            if target.exists():
+                raise FileExistsError(self._tr("That file or folder already exists."))
+            if folder:
+                target.mkdir(parents=False)
+            else:
+                target.parent.mkdir(parents=False, exist_ok=True)
+                target.touch(exist_ok=False)
+        except (OSError, ValueError) as exc:
+            QMessageBox.warning(self, self._tr("Cannot create project item"), str(exc))
+            return
+        self._refresh_project_files()
+        if not folder:
+            self._open_file_in_editor(target)
 
     def _build_right_panel(self) -> QWidget:
         w = QWidget()
         w.setMinimumWidth(280)
-        w.setObjectName("SidePanel")
+        w.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
+        w.setObjectName("ChatPanel")
         w.setStyleSheet(
-            f"QWidget#SidePanel {{ background: {C.PANEL}; border: 1px solid {C.BORDER}; border-radius: 8px; }}"
+            f"QWidget#ChatPanel {{ background:{C.PANEL}; border:1px solid {C.BORDER}; border-radius:10px; }}"
         )
         lay = QVBoxLayout(w)
-        lay.setContentsMargins(6, 6, 6, 6)
-        lay.setSpacing(5)
+        lay.setContentsMargins(9, 9, 9, 9)
+        lay.setSpacing(8)
 
         def _sec(txt):
             l = QLabel(f"▸ {txt}")
@@ -8868,16 +9497,21 @@ class MainWindow(QMainWindow):
             return l
 
         self._work_tabs = QTabWidget()
+        self._work_tabs.setDocumentMode(True)
+        self._work_tabs.setUsesScrollButtons(True)
+        self._work_tabs.tabBar().setExpanding(True)
+        self._work_tabs.tabBar().setElideMode(Qt.TextElideMode.ElideNone)
         self._work_tabs.setStyleSheet(f"""
-            QTabWidget::pane {{ border: 1px solid {C.BORDER}; background: {C.PANEL}; border-radius: 5px; }}
-            QTabBar::tab {{ color: {C.TEXT_DIM}; background: {C.PANEL2}; padding: 4px 8px;
-                border: 1px solid {C.BORDER}; border-radius: 4px; margin: 1px; }}
-            QTabBar::tab:selected {{ color: {C.PRI}; background: {C.PRI_GHO}; border: 1px solid {C.PRI_DIM}; }}
+            QTabWidget::pane {{ border:0; background:transparent; }}
+            QTabBar::tab {{ color:{C.TEXT_DIM}; background:transparent; padding:7px 11px;
+                border:1px solid transparent; border-radius:8px; margin-right:3px; }}
+            QTabBar::tab:hover {{ color:{C.TEXT}; background:{C.PANEL2}; }}
+            QTabBar::tab:selected {{ color:{C.PRI}; background:{C.PRI_GHO}; border:1px solid {C.BORDER}; }}
         """)
         chat_page = QWidget()
         chat_lay = QVBoxLayout(chat_page)
-        chat_lay.setContentsMargins(4, 4, 4, 4)
-        chat_lay.setSpacing(4)
+        chat_lay.setContentsMargins(2, 4, 2, 2)
+        chat_lay.setSpacing(8)
         chat_tools = QHBoxLayout()
         chat_tools.setSpacing(5)
         chat_title = QLabel(self._tr("Recent conversation"))
@@ -8886,25 +9520,60 @@ class MainWindow(QMainWindow):
         chat_tools.addWidget(chat_title)
         chat_tools.addStretch(1)
         self._clear_chat_btn = QPushButton(self._tr("Clear chat"))
-        self._clear_chat_btn.setFixedHeight(20)
+        self._clear_chat_btn.setMinimumHeight(28)
         self._clear_chat_btn.setToolTip(
             self._tr("Clear this chat view; saved conversation stays in Archive")
         )
         self._clear_chat_btn.clicked.connect(self._clear_chat)
         chat_tools.addWidget(self._clear_chat_btn)
         chat_lay.addLayout(chat_tools)
-        self._chat_view = QTextBrowser()
+        chat_history_surface = QWidget()
+        chat_history_layout = QGridLayout(chat_history_surface)
+        chat_history_layout.setContentsMargins(0, 0, 0, 0)
+        chat_history_layout.setSpacing(0)
+        self._chat_view = _ChatBrowser()
         self._chat_view.setOpenLinks(False)
         self._chat_view.setOpenExternalLinks(False)
         self._chat_view.anchorClicked.connect(self._chat_link_clicked)
         self._chat_view.setFont(QFont(FONT_UI, 11))
         self._chat_view.setStyleSheet(
             f"QTextBrowser {{ background: {C.PANEL2}; color: {C.TEXT}; "
-            f"border: none; border-radius: 5px; padding: 4px; "
+            f"border: 1px solid {C.BORDER}; border-radius: 10px; padding: 7px; "
             f"selection-background-color: {C.PRI_GHO}; }}" + _scroll_qss()
         )
-        chat_lay.addWidget(self._chat_view)
+        chat_history_layout.addWidget(self._chat_view, 0, 0)
+        self._chat_latest_btn = _HoverHintButton(
+            self._tr("Latest"), chat_history_surface
+        )
+        self._chat_latest_btn.setIcon(
+            QIcon(str(BASE_DIR / "assets" / "icons" / "chevron-down.svg"))
+        )
+        self._chat_latest_btn.setIconSize(QSize(14, 14))
+        self._chat_latest_btn.setToolTip(self._tr("Scroll to the latest message"))
+        self._chat_latest_btn.setStyleSheet(f"""
+            QPushButton {{ background:{C.PANEL}; color:{C.PRI};
+                border:1px solid {C.BORDER_B}; border-radius:15px;
+                padding:0 8px; text-align:left; }}
+            QPushButton:hover {{ background:{C.PRI_GHO}; border-color:{C.PRI_DIM}; }}
+        """)
+        self._chat_latest_btn.clicked.connect(self._scroll_chat_to_latest)
+        self._chat_latest_btn.hide()
+        chat_history_layout.addWidget(
+            self._chat_latest_btn,
+            0,
+            0,
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom,
+        )
+        chat_lay.addWidget(chat_history_surface, 1)
+        chat_scroll_bar = self._chat_view.verticalScrollBar()
+        chat_scroll_bar.valueChanged.connect(self._update_chat_scroll_button)
+        chat_scroll_bar.rangeChanged.connect(
+            lambda *_: self._update_chat_scroll_button()
+        )
         self._work_tabs.addTab(chat_page, self._tr("CHAT"))
+        self._work_tabs.currentChanged.connect(
+            lambda *_: self._update_chat_scroll_button()
+        )
 
         history_page = QWidget()
         history_lay = QVBoxLayout(history_page)
@@ -8973,102 +9642,8 @@ class MainWindow(QMainWindow):
         task_lay.addLayout(add_row)
         self._work_tabs.addTab(task_page, self._tr("TASKS"))
 
-        files_page = QWidget()
-        files_lay = QVBoxLayout(files_page)
-        files_lay.setContentsMargins(4, 4, 4, 4)
-        files_lay.setSpacing(7)
-        project_hint = QLabel(
-            self._tr(
-                "JARVIS can inspect this folder when you ask about the project. Double-click a file to read or edit it here."
-            )
-        )
-        project_hint.setWordWrap(True)
-        project_hint.setStyleSheet(f"color:{C.TEXT_DIM}; background:transparent;")
-        files_lay.addWidget(project_hint)
-        files_tools = QHBoxLayout()
-        files_tools.setSpacing(5)
-        from memory.config_manager import get_workspace_path
-
-        self._workspace_path = get_workspace_path()
-        self._workspace_label = QLabel(
-            Path(self._workspace_path).name
-            if self._workspace_path
-            else self._tr("No project folder selected")
-        )
-        self._workspace_label.setToolTip(self._workspace_path)
-        self._workspace_label.setStyleSheet(
-            f"color:{C.TEXT_MED}; background:transparent;"
-        )
-        self._workspace_label.setFont(QFont(FONT_MONO, 8))
-        files_tools.addWidget(self._workspace_label, 1)
-        open_folder = QPushButton(self._tr("Open project folder"))
-        open_folder.setToolTip(
-            self._tr(
-                "Choose a project folder for file browsing and new terminal sessions."
-            )
-        )
-        open_folder.clicked.connect(self._select_workspace_folder)
-        files_tools.addWidget(open_folder)
-        refresh_files = QPushButton()
-        self._refresh_files_btn = refresh_files
-        refresh_files.setIcon(QIcon(str(BASE_DIR / "assets" / "icons" / "refresh.svg")))
-        refresh_files.setIconSize(QSize(14, 14))
-        refresh_files.setFixedSize(24, 24)
-        refresh_files.setToolTip(self._tr("Refresh project files"))
-        files_tools.addWidget(refresh_files)
-        files_lay.addLayout(files_tools)
-        opener_row = QHBoxLayout()
-        opener_row.addWidget(QLabel(self._tr("Open files with")))
-        opener_row.addStretch(1)
-        self._project_open_mode = QComboBox()
-        self._project_open_mode.addItem(self._tr("JARVIS editor"), "jarvis")
-        self._project_open_mode.addItem(self._tr("System default app"), "external")
-        from memory.config_manager import get_project_open_mode
-
-        self._project_open_mode.setCurrentIndex(
-            max(0, self._project_open_mode.findData(get_project_open_mode()))
-        )
-        self._project_open_mode.setToolTip(
-            self._tr(
-                "Choose whether double-click opens files in JARVIS or your default app."
-            )
-        )
-        opener_row.addWidget(self._project_open_mode)
-        self._project_open_mode.currentIndexChanged.connect(
-            self._save_project_open_mode
-        )
-        files_lay.addLayout(opener_row)
-        self._file_model = QFileSystemModel(self)
-        self._file_model.setFilter(QDir.Filter.AllEntries | QDir.Filter.NoDotAndDotDot)
-        self._file_model.setRootPath("")
-        self._file_tree = QTreeView()
-        self._file_tree.setModel(self._file_model)
-        self._file_tree.setRootIndex(QModelIndex())
-        self._file_tree.setHeaderHidden(True)
-        self._file_tree.setAnimated(True)
-        self._file_tree.setIndentation(14)
-        self._file_tree.setUniformRowHeights(True)
-        for column in (1, 2, 3):
-            self._file_tree.hideColumn(column)
-        self._file_tree.setStyleSheet(
-            f"QTreeView {{ background:{C.PANEL2}; color:{C.TEXT}; border:none; "
-            f"border-radius:5px; padding:4px; }}"
-            f"QTreeView::item {{ min-height:22px; }}"
-            f"QTreeView::item:hover {{ background:{C.PRI_GHO}; }}"
-            f"QTreeView::item:selected {{ background:{C.PRI_GHO}; color:{C.PRI}; }}"
-        )
-        self._file_tree.doubleClicked.connect(self._open_project_file)
-        self._file_tree.setVisible(bool(self._workspace_path))
-        self._refresh_files_btn.setEnabled(bool(self._workspace_path))
-        if self._workspace_path:
-            root_index = self._file_model.setRootPath(self._workspace_path)
-            self._file_tree.setRootIndex(root_index)
-        refresh_files.clicked.connect(self._refresh_project_files)
-        files_lay.addWidget(self._file_tree, 1)
-        # Project browsing is hidden from the workspace for now.
         self._log = LogWidget()
         self._update_panel = UpdatePanel(self)
-        self._work_tabs.addTab(self._update_panel, self._tr("UPDATES"))
         self._development_mode = bool(
             _read_full_config().get("development_mode", False)
         )
@@ -9096,24 +9671,41 @@ class MainWindow(QMainWindow):
         self._file_hint.setFont(QFont(FONT_MONO, 7))
         self._file_hint.setStyleSheet(f"color: {C.TEXT_MED}; background: transparent;")
         self._file_hint.setWordWrap(True)
-        lay.addLayout(self._build_input_row())
+        self._active_chat_goal = ""
+        self._chat_plan_mode = False
+        try:
+            from memory.config_manager import get_computer_access_settings
+
+            self._chat_interaction_mode = get_computer_access_settings().get("mode", "chat")
+        except Exception:
+            self._chat_interaction_mode = "chat"
+        self._composer_context = QLabel()
+        self._composer_context.setWordWrap(True)
+        self._composer_context.setStyleSheet(
+            f"QLabel {{ color:{C.PRI}; background:{C.PRI_GHO}; "
+            f"border:1px solid {C.PRI_DIM}; border-radius:7px; padding:4px 8px; }}"
+        )
+        self._composer_context.hide()
+        lay.addWidget(self._composer_context)
+        lay.addWidget(self._build_input_row())
+        self._refresh_composer_context()
         lay.addWidget(self._file_hint)
 
         self._file_hint.setMaximumHeight(20)
         action_row = QHBoxLayout()
         action_row.setSpacing(6)
-        self._interrupt_btn = QPushButton()
+        self._interrupt_btn = _HoverHintButton(self._tr("Interrupt"))
         self._interrupt_btn.setIcon(
             QIcon(str(BASE_DIR / "assets" / "icons" / "stop.svg"))
         )
         self._interrupt_btn.setIconSize(QSize(14, 14))
-        self._interrupt_btn.setToolTip("Stop JARVIS response · Esc")
-        self._interrupt_btn.setFixedSize(28, 28)
+        self._interrupt_btn.setToolTip(self._tr("Interrupt · Esc"))
         self._interrupt_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._interrupt_btn.setStyleSheet(f"""
             QPushButton {{
                 background: rgba(20,0,8,150); color: {C.MUTED_C};
-                border: 1px solid {C.MUTED_C}; border-radius: 12px;
+                border: 1px solid {C.MUTED_C}; border-radius: 9px;
+                padding: 0 7px; text-align: left;
             }}
             QPushButton:hover {{
                 background: rgba(32,0,16,180); border: 1px solid {C.MUTED_C};
@@ -9125,16 +9717,15 @@ class MainWindow(QMainWindow):
         self._interrupt_btn.clicked.connect(self._do_interrupt)
         action_row.addWidget(self._interrupt_btn)
 
-        self._mute_btn = QPushButton()
-        self._mute_btn.setToolTip("Mute microphone · F4")
-        self._mute_btn.setFixedSize(28, 28)
+        self._mute_btn = _HoverHintButton(self._tr("Mute"))
+        self._mute_btn.setToolTip(self._tr("Mute · F4"))
         self._mute_btn.setIconSize(QSize(15, 15))
         self._mute_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._mute_btn.clicked.connect(self._toggle_mute)
         self._style_mute_btn()
         action_row.addWidget(self._mute_btn)
-        self._lecture_btn = QPushButton()
-        self._lecture_btn.setFixedSize(28, 28)
+        self._lecture_btn = _HoverHintButton(self._tr("Lecture"))
+        self._lecture_btn.setFixedHeight(30)
         self._lecture_btn.setIcon(
             QIcon(str(BASE_DIR / "assets" / "icons" / "record.svg"))
         )
@@ -9142,8 +9733,9 @@ class MainWindow(QMainWindow):
         self._lecture_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._lecture_btn.setToolTip("Start an unlimited lecture recording")
         self._lecture_btn.setStyleSheet(
-            f"QPushButton {{ background:{C.PANEL2}; border:1px solid {C.BORDER}; "
-            f"border-radius:8px; }} QPushButton:hover {{ border-color:{C.PRI}; }}"
+            f"QPushButton {{ background:{C.PANEL2}; color:{C.TEXT_MED}; border:1px solid {C.BORDER}; "
+            f"border-radius:9px; padding:0 7px; text-align:left; }} "
+            f"QPushButton:hover {{ color:{C.PRI}; background:{C.PRI_GHO}; border-color:{C.PRI_DIM}; }}"
         )
         self._lecture_btn.clicked.connect(self._toggle_lecture_recording)
         action_row.addWidget(self._lecture_btn)
@@ -9607,41 +10199,6 @@ class MainWindow(QMainWindow):
             action_grid.addWidget(check, index // 2, index % 2)
         cursor.addLayout(action_grid)
 
-        permissions_section = _section(
-            "COMPUTER PERMISSIONS",
-            "Optional abilities; disabled unless you turn them on.",
-        )
-        from memory.config_manager import (
-            DEFAULT_COMPUTER_PERMISSIONS,
-            get_computer_permissions,
-        )
-
-        permissions = get_computer_permissions()
-        permission_labels = {
-            "observe_screen": "Capture screen",
-            "find_elements": "Find UI elements",
-            "move_mouse": "Move / scroll mouse",
-            "click": "Click / drag",
-            "type": "Type / keyboard",
-        }
-        permission_hints = {
-            "observe_screen": "Allow screen capture when you explicitly ask JARVIS to inspect it.",
-            "find_elements": "Allow JARVIS to locate visible interface controls.",
-            "move_mouse": "Allow JARVIS to move or scroll the mouse.",
-            "click": "Allow JARVIS to click, drag, or press interface controls.",
-            "type": "Allow JARVIS to type text or use keyboard shortcuts.",
-        }
-        self._computer_permission_checks = {}
-        for permission in DEFAULT_COMPUTER_PERMISSIONS:
-            check = QCheckBox(self._tr(permission_labels[permission]))
-            check.setFont(QFont(FONT_MONO, 8))
-            check.setStyleSheet(checkbox_style)
-            check.setToolTip(self._tr(permission_hints[permission]))
-            check.setChecked(permissions[permission])
-            check.toggled.connect(self._save_computer_permission_controls)
-            self._computer_permission_checks[permission] = check
-            permissions_section.addWidget(check)
-
         lay.addStretch(1)
         return w
 
@@ -9721,9 +10278,8 @@ class MainWindow(QMainWindow):
     def _open_cursor_settings(self):
         if not self.isVisible():
             self.showNormal()
-        if not self._ctrl_btn.isChecked():
-            self._ctrl_btn.setChecked(True)
-        self._toggle_controls(True)
+        self._open_settings_center()
+        self._settings_center.show_category("cursor")
 
     def _warm_wake_state(self) -> None:
         """Work out the wake-word state off the UI thread, once.
@@ -9745,24 +10301,748 @@ class MainWindow(QMainWindow):
 
         threading.Thread(target=work, daemon=True, name="wake-state-warm").start()
 
+    def _open_settings_center(self):
+        from gui.settings.settings_center import SettingsCenter
+
+        if self._settings_center is None:
+            self._settings_center = SettingsCenter(
+                self,
+                page_builders={
+                    "general": self._build_general_settings_page,
+                    "identity": self._build_assistant_identity_page,
+                    "audio": self._build_voice_audio_page,
+                    "appearance": self._build_appearance_settings_page,
+                    "cursor": self._build_cursor_assistant_settings_page,
+                    "permissions": self._build_permissions_settings_page,
+                    "integrations": self._build_integrations_settings_page,
+                    "plugins": self._build_plugins_settings_page,
+                    "memory": self._build_memory_settings_page,
+                    "workspace": self._build_workspace_settings_page,
+                    "security": self._build_security_settings_page,
+                    "developer": self._build_developer_settings_page,
+                    "updates": self._build_updates_settings_page,
+                },
+            )
+            self._settings_center.action_requested.connect(self._handle_settings_action)
+            self._settings_center.closed.connect(self._on_settings_center_closed)
+        self._settings_center.refresh_theme()
+        self._settings_center.show()
+        self._settings_center.raise_()
+        self._settings_center.activateWindow()
+
+    def _on_settings_center_closed(self):
+        button = getattr(self, "_drawer_btn", None)
+        if button is not None:
+            button.setChecked(False)
+
+    def _build_general_settings_page(self):
+        from gui.settings.categories.general import GeneralSettingsPage
+        from gui.components.settings import SettingRow, SettingsSection
+        from memory.config_manager import get_brief_enabled
+
+        page = GeneralSettingsPage(
+            state={
+                "autostart": self._check_autostart,
+                "morning_brief": get_brief_enabled,
+                "fullscreen": self.isFullScreen,
+            },
+            actions={
+                "autostart": self._toggle_autostart,
+                "morning_brief": self._toggle_brief,
+                "fullscreen": self._toggle_fullscreen,
+            },
+            languages=LANGUAGES,
+            current_language=lambda: self._ui_language,
+            language_changed=self._change_interface_language,
+        )
+        shortcuts = SettingsSection(
+            "Quick access",
+            "Create a shortcut or open the temporary phone control surface.",
+        )
+        remote = QPushButton(self._tr("Remote control"))
+        remote.setObjectName("remote_control")
+        remote.clicked.connect(self._open_remote)
+        shortcuts.add_row(
+            SettingRow(
+                self._tr("Phone control"),
+                self._tr("Create a temporary link for controlling JARVIS from your phone."),
+                remote,
+            )
+        )
+        desktop = QPushButton(self._tr("Create desktop shortcut"))
+        desktop.setObjectName("desktop_shortcut")
+        desktop.clicked.connect(self._create_desktop_shortcut)
+        shortcuts.add_row(
+            SettingRow(
+                self._tr("Desktop shortcut"),
+                self._tr("Add a JARVIS launch shortcut to your desktop."),
+                desktop,
+            )
+        )
+        page.layout().insertWidget(max(0, page.layout().count() - 1), shortcuts)
+        return page
+
+    def _build_assistant_identity_page(self):
+        from gui.settings.categories.identity import AssistantIdentityPage
+        from memory.config_manager import AVAILABLE_VOICES, DEFAULT_VOICE
+
+        config = _read_full_config()
+        return AssistantIdentityPage(
+            assistant_name=config.get("assistant_name", "JARVIS") or "JARVIS",
+            user_name=config.get("user_name", "") or "",
+            voice=config.get("voice_name", DEFAULT_VOICE) or DEFAULT_VOICE,
+            voices=AVAILABLE_VOICES,
+            apply_changes=self._apply_identity_settings,
+        )
+
+    def _build_voice_audio_page(self):
+        from gui.settings.categories.audio import VoiceAudioPage
+
+        device_panel = AudioDeviceOverlay(embedded=True)
+        device_panel.picked.connect(self._on_audio_devices_applied)
+        return VoiceAudioPage(
+            self._embed_settings_panels((
+                "Audio devices",
+                "Select your microphone and speaker, adjust output volume, and test each device.",
+                device_panel,
+            )),
+            open_voice_controls=lambda: self._settings_center.show_category("cursor"),
+        )
+
+    def _embed_settings_panels(self, *panels):
+        """Restyle existing settings widgets as consistent Settings cards.
+
+        Each item is (title, description, widget), with an optional fourth
+        value to preserve a meaningful first label inside the widget.
+        """
+        host = QWidget()
+        host.setObjectName("EmbeddedSettingsPanels")
+        host.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        host.setStyleSheet(f"QWidget#EmbeddedSettingsPanels {{ background:transparent; }}")
+        layout = QVBoxLayout(host)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(12)
+        for item in panels:
+            title, description, panel, *options = item
+            preserve_header = bool(options[0]) if options else False
+            card = QFrame()
+            card.setObjectName("SettingsEmbeddedCard")
+            card.setStyleSheet(
+                f"QFrame#SettingsEmbeddedCard {{ background:{C.PANEL}; "
+                f"border:1px solid {C.BORDER}; border-radius:10px; }}"
+                f"QLabel {{ background:transparent; color:{C.TEXT}; border:0; }}"
+            )
+            card_layout = QVBoxLayout(card)
+            card_layout.setContentsMargins(16, 14, 16, 14)
+            card_layout.setSpacing(6)
+            heading = QLabel(self._tr(title))
+            heading.setFont(QFont(FONT_UI, 11, QFont.Weight.DemiBold))
+            card_layout.addWidget(heading)
+            if description:
+                detail = QLabel(self._tr(description))
+                detail.setWordWrap(True)
+                detail.setFont(QFont(FONT_UI, 9))
+                detail.setStyleSheet(f"color:{C.TEXT_MED}; background:transparent;")
+                card_layout.addWidget(detail)
+
+            # Remove the old floating-window chrome while keeping each widget's
+            # form controls, callbacks, and save behavior intact.
+            for button in panel.findChildren(QPushButton):
+                if button.text().strip().upper() in {"CLOSE", "DISMISS"}:
+                    button.hide()
+            if not preserve_header and panel.layout() is not None:
+                first = panel.layout().itemAt(0)
+                first_widget = first.widget() if first is not None else None
+                if isinstance(first_widget, QLabel):
+                    first_widget.hide()
+                    second = panel.layout().itemAt(1)
+                    second_widget = second.widget() if second is not None else None
+                    if isinstance(second_widget, QFrame):
+                        second_widget.hide()
+            panel.setParent(host)
+            panel.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+            panel.setStyleSheet(
+                f"{type(panel).__name__} {{ background:transparent; border:0; }}"
+            )
+            for label in panel.findChildren(QLabel):
+                old_font = label.font()
+                label.setFont(
+                    QFont(
+                        FONT_UI,
+                        max(9, old_font.pointSize() if old_font.pointSize() > 0 else 9),
+                        old_font.weight(),
+                    )
+                )
+            for control in panel.findChildren(QWidget):
+                if isinstance(control, (QLineEdit, QComboBox, QPushButton, QCheckBox)):
+                    old_font = control.font()
+                    control.setFont(
+                        QFont(
+                            FONT_UI,
+                            max(9, old_font.pointSize() if old_font.pointSize() > 0 else 9),
+                            old_font.weight(),
+                        )
+                    )
+            panel.setMinimumWidth(0)
+            panel.setMaximumWidth(16777215)
+            panel.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+            card_layout.addWidget(panel)
+            panel.show()
+            layout.addWidget(card)
+        layout.addStretch(1)
+        return host
+
+    def _build_appearance_settings_page(self):
+        cfg = _read_full_config()
+        from memory.config_manager import get_ui_opacity
+
+        panel = CustomizeOverlay(
+            cfg.get("assistant_name", "JARVIS") or "JARVIS",
+            cfg.get("user_name", ""),
+            cfg.get("ui_color", "") or DEFAULT_UI_COLOR,
+            cfg.get("voice_name", ""),
+            ui_opacity=get_ui_opacity(),
+            language=self._ui_language,
+            embedded=True,
+            appearance_only=True,
+        )
+        panel.on_preview = self._preview_ui_color
+        panel.on_opacity_preview = self._preview_ui_opacity
+        panel.saved.connect(self._apply_name_update)
+        return self._embed_settings_panels((
+            "Personalization",
+            "Set the JARVIS accent and window opacity. Identity and voice live in their own settings category.",
+            panel,
+        ))
+
+    def _build_integrations_settings_page(self):
+        try:
+            panel = ProvidersOverlay(parent=None)
+        except ImportError:
+            panel = QLabel(self._tr("The providers package is not installed."))
+            panel.setWordWrap(True)
+        except Exception as exc:
+            panel = QLabel(self._tr("Provider settings are unavailable: {error}", error=exc))
+            panel.setWordWrap(True)
+        if isinstance(panel, ProvidersOverlay):
+            panel.changed.connect(self._on_providers_applied)
+        return self._embed_settings_panels((
+            "AI providers",
+            "Choose the active model and configure speech and response providers.",
+            panel,
+        ))
+
+    def _build_plugins_settings_page(self):
+        plugins = self.get_plugins() if self.get_plugins else []
+        sections = self.get_plugin_settings() if self.get_plugin_settings else []
+        manager = PluginManagerOverlay(plugins)
+        settings = PluginSettingsOverlay(sections)
+        return self._embed_settings_panels(
+            ("Plugin manager", "Enable installed plugins and review their status.", manager),
+            ("Plugin configuration", "Configure plugin options and run their available checks.", settings),
+        )
+
+    def _build_memory_settings_page(self):
+        return self._embed_settings_panels((
+            "Saved memories",
+            "Review and manage information stored locally by JARVIS.",
+            MemoryOverlay(embedded=True),
+        ))
+
+    def _build_updates_settings_page(self):
+        panel = self._update_panel
+        return self._embed_settings_panels((
+            "Updates and maintenance",
+            "Check releases and choose how JARVIS handles updates.",
+            panel,
+            True,
+        ))
+
+    def _build_controls_settings_page(self):
+        # Reuse the live controls widget so the Settings Center and toolbar do
+        # not create competing copies with stale checkbox state.
+        panel = self._ctrl_drawer
+        panel.setMinimumWidth(0)
+        panel.setMaximumWidth(16777215)
+        panel.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        scroll = panel.findChild(QScrollArea)
+        if scroll is not None:
+            scroll.setMinimumHeight(0)
+            scroll.setMaximumHeight(16777215)
+        return self._embed_settings_panels((
+            "Cursor assistant and quick actions",
+            "Configure pointer behavior, shortcuts, and everyday voice controls.",
+            panel,
+        ))
+
+    def _build_cursor_assistant_settings_page(self):
+        """Build Settings-owned cursor controls; never reparent the toolbar drawer."""
+        from gui.components.settings import SettingRow, SettingsSection
+        from memory.config_manager import (
+            CURSOR_HOTKEYS,
+            CURSOR_MENU_ACTIONS,
+            CURSOR_SIZES,
+            CURSOR_STYLES,
+            REGION_HOTKEYS,
+            get_cursor_assistant_settings,
+            save_cursor_assistant_settings,
+        )
+
+        config = get_cursor_assistant_settings()
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(12)
+
+        behavior = SettingsSection(
+            "Cursor assistant",
+            "Choose whether JARVIS quick actions follow the cursor and which pointer style to use.",
+        )
+        enabled = QCheckBox(self._tr("Enabled"))
+        enabled.setObjectName("cursor_quick_actions_enabled")
+        enabled.setChecked(config["enabled"])
+        visible = QCheckBox(self._tr("Use custom system cursor"))
+        visible.setObjectName("cursor_custom_pointer_enabled")
+        visible.setChecked(config["cursor_visible"])
+        behavior.add_row(SettingRow(
+            "Quick actions", "Show the compact action menu when its shortcut is pressed.", enabled
+        ))
+        behavior.add_row(SettingRow(
+            "Custom pointer", "Apply the selected JARVIS pointer to the operating system.", visible
+        ))
+        layout.addWidget(behavior)
+
+        pointer = SettingsSection("Pointer", "The style and size apply when the custom pointer is enabled.")
+        style = QComboBox()
+        style.setObjectName("cursor_pointer_style")
+        for value in CURSOR_STYLES:
+            style.addItem(value.title(), value)
+        style.setCurrentIndex(max(0, style.findData(config["style"])))
+        size = QComboBox()
+        size.setObjectName("cursor_pointer_size")
+        for value in CURSOR_SIZES:
+            size.addItem(f"{value}px", value)
+        size.setCurrentIndex(max(0, size.findData(config["size"])))
+        pointer.add_row(SettingRow("Style", "Choose the cursor appearance.", style))
+        pointer.add_row(SettingRow("Size", "Set the cursor size.", size))
+        layout.addWidget(pointer)
+
+        shortcuts = SettingsSection("Shortcuts", "Choose keyboard shortcuts for the cursor menu and area selection.")
+        menu_hotkey = QComboBox()
+        menu_hotkey.setObjectName("cursor_menu_hotkey")
+        for value in CURSOR_HOTKEYS:
+            menu_hotkey.addItem(value, value)
+        menu_hotkey.setCurrentIndex(max(0, menu_hotkey.findData(config["hotkey"])))
+        region_hotkey = QComboBox()
+        region_hotkey.setObjectName("cursor_region_hotkey")
+        for value in REGION_HOTKEYS:
+            region_hotkey.addItem(value, value)
+        region_hotkey.setCurrentIndex(max(0, region_hotkey.findData(config["region_hotkey"])))
+        shortcuts.add_row(SettingRow("Quick menu", "Open cursor actions.", menu_hotkey))
+        shortcuts.add_row(SettingRow("Select area", "Capture a screen region for JARVIS.", region_hotkey))
+        layout.addWidget(shortcuts)
+
+        actions = SettingsSection("Quick menu actions", "Choose which actions appear in the cursor menu.")
+        action_names = {
+            "microphone": "Microphone", "ask": "Ask JARVIS", "attach": "Attach file",
+            "summarize": "Summarize", "explain": "Explain", "translate": "Translate",
+            "fix": "Fix text", "screen": "Select screen area", "interrupt": "Interrupt",
+            "settings": "Open settings",
+        }
+        action_checks = {}
+        grid_host = QWidget()
+        grid = QGridLayout(grid_host)
+        grid.setContentsMargins(0, 4, 0, 0)
+        grid.setHorizontalSpacing(18)
+        grid.setVerticalSpacing(8)
+        for index, action in enumerate(CURSOR_MENU_ACTIONS):
+            check = QCheckBox(self._tr(action_names.get(action, action.replace("_", " ").title())))
+            check.setChecked(action in config["menu_actions"])
+            action_checks[action] = check
+            grid.addWidget(check, index // 2, index % 2)
+        actions._layout.addWidget(grid_host)
+        layout.addWidget(actions)
+        layout.addStretch(1)
+
+        def persist(*_):
+            save_cursor_assistant_settings({
+                "enabled": enabled.isChecked(),
+                "cursor_visible": visible.isChecked(),
+                "style": style.currentData(),
+                "size": size.currentData(),
+                "hotkey": menu_hotkey.currentData(),
+                "region_hotkey": region_hotkey.currentData(),
+                "menu_actions": [key for key, check in action_checks.items() if check.isChecked()],
+            })
+            self._refresh_cursor_assistant()
+
+        def select_style(*_):
+            if not visible.isChecked():
+                visible.setChecked(True)
+            else:
+                persist()
+
+        enabled.toggled.connect(persist)
+        visible.toggled.connect(persist)
+        style.currentIndexChanged.connect(select_style)
+        size.currentIndexChanged.connect(select_style)
+        menu_hotkey.currentIndexChanged.connect(persist)
+        region_hotkey.currentIndexChanged.connect(persist)
+        for check in action_checks.values():
+            check.toggled.connect(persist)
+        return page
+
+    def _build_permissions_settings_page(self):
+        from gui.components.settings import SettingRow, SettingsSection
+        from memory.config_manager import (
+            DEFAULT_COMPUTER_PERMISSIONS,
+            get_computer_access_settings,
+            get_computer_permissions,
+        )
+
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(12)
+        access = get_computer_access_settings()
+        current = get_computer_permissions()
+        labels = {
+            "observe_screen": ("Screen observation", "Allow screen capture only when you ask JARVIS to inspect the screen."),
+            "find_elements": ("Find interface elements", "Allow JARVIS to identify visible controls before acting."),
+            "move_mouse": ("Move and scroll", "Allow pointer movement and scrolling when requested."),
+            "click": ("Click and drag", "Allow JARVIS to click, drag, or press visible controls."),
+            "type": ("Keyboard input", "Allow JARVIS to type text or use keyboard shortcuts."),
+            "clipboard": ("Clipboard access", "Allow JARVIS to read or replace clipboard contents."),
+        }
+        mode_section = SettingsSection(
+            "Assistant mode",
+            "Chat keeps computer actions off. Agent can act within the access policy below.",
+        )
+        self._computer_mode_combo = QComboBox()
+        self._computer_mode_combo.addItem("Chat", "chat")
+        self._computer_mode_combo.addItem("Agent", "agent")
+        self._computer_mode_combo.setItemData(
+            0, "Conversational mode. Computer-changing actions stay paused.", Qt.ItemDataRole.ToolTipRole
+        )
+        self._computer_mode_combo.setItemData(
+            1, "Agent mode can use computer actions under the selected access policy.", Qt.ItemDataRole.ToolTipRole
+        )
+        self._computer_mode_combo.setObjectName("computer_mode")
+        self._computer_mode_combo.setCurrentIndex(
+            max(0, self._computer_mode_combo.findData(access["mode"]))
+        )
+        self._computer_mode_combo.currentIndexChanged.connect(
+            self._save_computer_access_controls
+        )
+        mode_section.add_row(SettingRow(
+            "Current mode",
+            "Agent mode enables computer actions. Read-only inspection remains available in Chat mode.",
+            self._computer_mode_combo,
+        ))
+        layout.addWidget(mode_section)
+
+        access_section = SettingsSection(
+            "Agent access level",
+            "Choose how JARVIS handles actions in Agent mode. Dangerous actions always keep a separate confirmation.",
+        )
+        self._computer_access_combo = QComboBox()
+        self._computer_access_combo.addItem("Ask for approval", "ask")
+        self._computer_access_combo.addItem("Approve for me", "approve")
+        self._computer_access_combo.addItem("Full access", "full")
+        self._computer_access_combo.setItemData(
+            0, "Ask before each computer action.", Qt.ItemDataRole.ToolTipRole
+        )
+        self._computer_access_combo.setItemData(
+            1, "Run actions allowed by the individual permission switches.", Qt.ItemDataRole.ToolTipRole
+        )
+        self._computer_access_combo.setItemData(
+            2, "Enable all computer permissions, including clipboard; high-impact actions still ask.", Qt.ItemDataRole.ToolTipRole
+        )
+        self._computer_access_combo.setObjectName("computer_access_level")
+        self._computer_access_combo.setCurrentIndex(
+            max(0, self._computer_access_combo.findData(access["access_level"]))
+        )
+        self._last_computer_access_level = access["access_level"]
+        self._computer_access_combo.currentIndexChanged.connect(
+            self._save_computer_access_controls
+        )
+        access_section.add_row(SettingRow(
+            "Approval policy",
+            "Ask every time; use the allowed switches; or grant all computer permissions.",
+            self._computer_access_combo,
+        ))
+        self._full_access_warning = QLabel(
+            "Full access enables screen, pointer, click, keyboard, and clipboard capabilities. "
+            "Switch to Agent mode to use them. Shutdown, restart, Wi-Fi changes, "
+            "and closing apps still require confirmation."
+        )
+        self._full_access_warning.setWordWrap(True)
+        self._full_access_warning.setStyleSheet(
+            f"color:{C.ACC2}; background:rgba(255,170,40,18); "
+            f"border:1px solid {C.ACC2}; border-radius:7px; padding:8px;"
+        )
+        self._full_access_warning.setVisible(access["access_level"] == "full")
+        access_section._layout.addWidget(self._full_access_warning)
+        layout.addWidget(access_section)
+
+        active = SettingsSection(
+            "Computer permissions",
+            "Fine-grained capabilities used by Agent mode. Full access temporarily overrides these switches.",
+        )
+        self._computer_permission_checks = {}
+        for index, permission in enumerate(DEFAULT_COMPUTER_PERMISSIONS):
+            title, description = labels[permission]
+            check = QCheckBox(self._tr("Allowed"))
+            check.setObjectName(
+                "computer_permissions" if index == 0 else permission
+            )
+            check.setChecked(current[permission])
+            check.toggled.connect(self._save_computer_permission_controls)
+            self._computer_permission_checks[permission] = check
+            active.add_row(SettingRow(self._tr(title), self._tr(description), check))
+        for check in self._computer_permission_checks.values():
+            check.setEnabled(access["access_level"] != "full")
+        layout.addWidget(active)
+
+        future = SettingsSection(
+            "High-impact actions",
+            "These actions are never covered by automatic approval or Full access.",
+        )
+        for title, description in (
+            ("Restart or shut down", "Unsaved work may be lost; JARVIS waits for your confirmation."),
+            ("Change Wi-Fi", "This can disconnect JARVIS from its live service."),
+            ("Close an application", "JARVIS asks before closing an app and never force-kills it."),
+            ("Delete a file", "The item is moved to Trash, and JARVIS asks before proceeding."),
+            ("Send an external message", "Review the recipient and message; confirmation is always required."),
+        ):
+            warning = QLabel("CONFIRM")
+            warning.setStyleSheet(f"color:{C.ACC2}; font-weight:700;")
+            future.add_row(SettingRow(self._tr(title), self._tr(description), warning))
+        layout.addWidget(future)
+
+        planned = SettingsSection(
+            "Planned safeguards · TODO",
+            "These controls are visible for planning; their enforcement is not implemented yet.",
+        )
+        for title, description in (
+            ("Microphone during screen actions", "Limit when voice input can remain active."),
+            ("Per-application rules", "Choose which apps may be inspected or controlled."),
+            ("Temporary access", "Set an automatic expiry for elevated permissions."),
+        ):
+            placeholder = QLabel("PLANNED")
+            placeholder.setStyleSheet(f"color:{C.TEXT_DIM}; font-weight:700;")
+            planned.add_row(SettingRow(self._tr(title), self._tr(description), placeholder))
+        layout.addWidget(planned)
+        layout.addStretch(1)
+        return page
+
+    def _save_computer_access_controls(self, *_):
+        from memory.config_manager import (
+            get_configured_computer_permissions,
+            save_computer_access_settings,
+        )
+
+        previous_level = self._last_computer_access_level
+        mode = self._computer_mode_combo.currentData()
+        access_level = self._computer_access_combo.currentData()
+        if access_level == "full" and self._last_computer_access_level != "full":
+            answer = QMessageBox.warning(
+                self,
+                self._tr("Enable full access?"),
+                self._tr(
+                    "This grants JARVIS screen, pointer, click, keyboard, and clipboard access. "
+                    "High-impact actions still require confirmation. Continue?"
+                ),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Cancel,
+            )
+            if answer != QMessageBox.StandardButton.Yes:
+                self._computer_access_combo.blockSignals(True)
+                self._computer_access_combo.setCurrentIndex(
+                    max(0, self._computer_access_combo.findData("approve"))
+                )
+                self._computer_access_combo.blockSignals(False)
+                access_level = "approve"
+        save_computer_access_settings(mode, access_level)
+        self._last_computer_access_level = access_level
+        if not getattr(self, "_chat_plan_mode", False):
+            self._chat_interaction_mode = mode
+            for key, action in getattr(self, "_chat_mode_actions", {}).items():
+                action.setChecked(key == mode)
+            mode_menu = getattr(self, "_chat_mode_menu", None)
+            if mode_menu is not None:
+                mode_menu.setTitle(self._tr(f"Current mode: {mode.title()}"))
+            if hasattr(self, "_chat_add_button"):
+                self._chat_add_button.setToolTip(
+                    self._tr(f"Current mode: {mode.title()} - add a file or set a goal")
+                )
+                self._refresh_composer_context()
+        is_full = access_level == "full"
+        self._full_access_warning.setVisible(is_full)
+        configured = (
+            get_configured_computer_permissions()
+            if previous_level == "full" and not is_full
+            else None
+        )
+        for permission, check in self._computer_permission_checks.items():
+            check.blockSignals(True)
+            if is_full:
+                check.setChecked(True)
+            elif configured is not None:
+                check.setChecked(configured[permission])
+            check.setEnabled(not is_full)
+            check.blockSignals(False)
+
+    def _build_workspace_settings_page(self):
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 0, 0, 0)
+        note = QLabel(self._tr(
+            "Use the layout controls in the main toolbar to show or hide workspace panels."
+        ))
+        note.setWordWrap(True)
+        layout.addWidget(note)
+        layout.addStretch(1)
+        return page
+
+    def _build_security_settings_page(self):
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 0, 0, 0)
+        note = QLabel(self._tr(
+            "Passcode management, face enrollment, and camera selection are provided by the lock integration."
+        ))
+        note.setWordWrap(True)
+        layout.addWidget(note)
+        layout.addStretch(1)
+        return page
+
+    def _build_developer_settings_page(self):
+        from gui.components.settings import SettingRow, SettingsSection
+
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(12)
+        section = SettingsSection(
+            "Diagnostics",
+            "Choose whether JARVIS mirrors activity to the diagnostic output.",
+        )
+        self._development_mode_check = QCheckBox(self._tr("Enable developer mode"))
+        self._development_mode_check.setObjectName("developer_mode")
+        self._development_mode_check.setChecked(self._development_mode)
+        self._development_mode_check.toggled.connect(
+            self._set_development_mode_from_settings
+        )
+        section.add_row(
+            SettingRow(
+                self._tr("Developer mode"),
+                self._tr("Mirror activity and diagnostic details while enabled."),
+                self._development_mode_check,
+            )
+        )
+        console = QPushButton(self._tr("Open debug console"))
+        console.clicked.connect(self._show_debug_console)
+        section.add_row(
+            SettingRow(
+                self._tr("Debug console"),
+                self._tr("Show the diagnostic console in the main workspace."),
+                console,
+            )
+        )
+        layout.addWidget(section)
+        layout.addStretch(1)
+        return page
+
+    def _set_development_mode_from_settings(self, enabled: bool):
+        if bool(enabled) != bool(self._development_mode):
+            self._toggle_development_mode()
+
+    def _apply_identity_settings(self, assistant_name: str, user_name: str, voice: str) -> bool:
+        from memory.config_manager import get_ui_opacity
+
+        config = _read_full_config()
+        return bool(
+            self._apply_name_update(
+                assistant_name,
+                user_name,
+                config.get("ui_color", "") or DEFAULT_UI_COLOR,
+                voice,
+                get_ui_opacity(),
+            )
+        )
+
+    def _handle_settings_action(self, action_id: str):
+        """Keep Settings Center open and navigate to its embedded category."""
+        # The console is a main-workspace surface. Keep Settings open while
+        # revealing it; update controls are now a Settings Center category.
+        if action_id == "console":
+            self._show_debug_console()
+            return
+        category_by_action = {
+            "setup": "general",
+            "controls": "cursor",
+            "customize": "appearance",
+            "audio": "audio",
+            "providers": "integrations",
+            "plugins": "plugins",
+            "plugin_settings": "plugins",
+            "memory": "memory",
+            "layout": "workspace",
+            "security_info": "security",
+            "updates": "updates",
+        }
+        category_id = category_by_action.get(action_id)
+        if self._settings_center is not None and category_id:
+            if self._settings_center.show_category(category_id):
+                self._settings_center.raise_()
+                self._settings_center.activateWindow()
+                return
+        if action_id == "layout":
+            self._show_layout_help()
+            return
+        if action_id == "security_info":
+            self._show_security_scope()
+            return
+        if category_id is None:
+            self._log.append_log(f"WARN: Unknown Settings Center route: {action_id}")
+
+    def _show_debug_console(self):
+        self._show_bottom_panel(0)
+
+    def _show_updates_panel(self):
+        self._open_settings_center()
+        self._settings_center.show_category("updates")
+
+    def _show_layout_help(self):
+        QMessageBox.information(
+            self,
+            "Workspace & Layout",
+            "Use the panel buttons in the main toolbar to show or hide the left, right, and lower workspace panels.",
+        )
+
+    def _show_security_scope(self):
+        QMessageBox.information(
+            self,
+            "Security & Access",
+            "JARVIS currently receives the lock verifier from its caller. Passcode management, face enrollment, and camera selection are not owned by the settings UI.",
+        )
+
     def _toggle_drawer(self, checked: bool):
         if checked:
-            self._close_controls()
-            self._position_quick_drawer()
-            self._quick_drawer.show()
-            self._quick_drawer.raise_()
+            self._open_settings_center()
+            self._settings_center.show_category("general")
         else:
-            self._quick_drawer.hide()
+            if self._settings_center is not None:
+                self._settings_center.hide()
 
     def _toggle_controls(self, checked: bool):
         if checked:
-            self._close_setup()
-            self._refresh_wake_btns()  # cheap now: the state was warmed at boot
-            self._position_ctrl_drawer()
-            self._ctrl_drawer.show()
-            self._ctrl_drawer.raise_()
+            self._open_settings_center()
+            self._settings_center.show_category("cursor")
         else:
-            self._ctrl_drawer.hide()
+            if self._settings_center is not None:
+                self._settings_center.hide()
 
     def _close_setup(self):
         if hasattr(self, "_quick_drawer"):
@@ -9773,19 +11053,21 @@ class MainWindow(QMainWindow):
     def _close_controls(self):
         if hasattr(self, "_ctrl_drawer"):
             self._ctrl_drawer.hide()
-        if hasattr(self, "_ctrl_btn"):
-            self._ctrl_btn.setChecked(False)
 
     def _place_drawer(self, drawer, left: int):
-        _W = 330 if drawer is getattr(self, "_ctrl_drawer", None) else 220
+        is_controls = drawer is getattr(self, "_ctrl_drawer", None)
+        available_width = max(260, self.centralWidget().width() - 24)
+        _W = min(460 if is_controls else 260, available_width)
         drawer.setFixedWidth(_W)
         max_height = max(200, self.centralWidget().height() - 66)
-        if drawer is getattr(self, "_ctrl_drawer", None):
+        if is_controls:
             scroll = drawer.findChild(QScrollArea)
             if scroll is not None:
-                scroll.setMinimumHeight(max(120, min(440, max_height - 76)))
+                scroll.setMinimumHeight(max(140, min(560, max_height - 76)))
+                scroll.setMaximumHeight(max(180, max_height - 76))
         drawer.adjustSize()
-        _H = min(drawer.sizeHint().height(), max_height)
+        _H = min(max(drawer.sizeHint().height(), 460 if is_controls else 0), max_height)
+        left = max(12, min(left, self.centralWidget().width() - _W - 12))
         drawer.setGeometry(left, 54, _W, _H)
 
     def _position_quick_drawer(self):
@@ -9811,9 +11093,9 @@ class MainWindow(QMainWindow):
             left = 12
             try:
                 left = max(
-                    12, self._ctrl_btn.mapTo(self.centralWidget(), QPoint(0, 0)).x() - 8
+                    12, self._drawer_btn.mapTo(self.centralWidget(), QPoint(0, 0)).x() - 8
                 )
-                left = min(left, self.centralWidget().width() - 342)
+                left = min(left, self.centralWidget().width() - 472)
                 left = max(12, left)
             except Exception:
                 pass
@@ -9829,13 +11111,9 @@ class MainWindow(QMainWindow):
             f"border-top:1px solid {C.BORDER}; }}"
         )
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(10, 6, 10, 8)
-        layout.setSpacing(5)
+        layout.setContentsMargins(8, 6, 8, 8)
+        layout.setSpacing(4)
         header = QHBoxLayout()
-        title = QLabel(self._tr("TERMINAL"))
-        title.setFont(QFont(FONT_MONO, 8, QFont.Weight.Bold))
-        title.setStyleSheet(f"color:{C.PRI}; background:transparent;")
-        header.addWidget(title)
         initial_cwd = self._terminal_start_directory()
         self._terminal_cwd = QLabel(initial_cwd)
         self._terminal_cwd.setToolTip(
@@ -9850,7 +11128,7 @@ class MainWindow(QMainWindow):
             button = QPushButton()
             button.setIcon(QIcon(str(BASE_DIR / "assets" / "icons" / icon)))
             button.setIconSize(QSize(15, 15))
-            button.setFixedSize(28, 28)
+            button.setFixedSize(26, 26)
             button.setCursor(Qt.CursorShape.PointingHandCursor)
             button.setToolTip(hint)
             button.setAccessibleName(hint)
@@ -9858,9 +11136,30 @@ class MainWindow(QMainWindow):
             header.addWidget(button)
             return button
 
-        terminal_button(
-            "terminal-new.svg", self._tr("New terminal"), self._new_terminal
+        shell_button = QToolButton()
+        shell_button.setText("+")
+        shell_button.setFixedSize(26, 26)
+        shell_button.setToolTip(self._tr("New terminal profile"))
+        shell_button.setAccessibleName(self._tr("New terminal profile"))
+        shell_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        shell_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        shell_button.setStyleSheet(
+            f"QToolButton {{ color:{C.PRI}; background:transparent; border:1px solid {C.BORDER}; border-radius:8px; }}"
+            f"QToolButton:hover {{ background:{C.PRI_GHO}; border-color:{C.PRI_DIM}; }}"
         )
+        shell_menu = QMenu(shell_button)
+
+        def populate_shell_menu():
+            shell_menu.clear()
+            for shell_kind, shell_label in self._available_terminal_shells():
+                action = shell_menu.addAction(shell_label)
+                action.triggered.connect(
+                    lambda checked=False, kind=shell_kind: self._new_terminal(kind)
+                )
+
+        shell_menu.aboutToShow.connect(populate_shell_menu)
+        shell_button.setMenu(shell_menu)
+        header.addWidget(shell_button)
         terminal_button(
             "stop.svg", self._tr("Interrupt command (Ctrl+C)"), self._interrupt_terminal
         )
@@ -9879,6 +11178,9 @@ class MainWindow(QMainWindow):
         self._terminal_tabs.setDocumentMode(True)
         self._terminal_tabs.setTabsClosable(True)
         self._terminal_tabs.setMovable(True)
+        self._terminal_tabs.setUsesScrollButtons(True)
+        self._terminal_tabs.tabBar().setExpanding(False)
+        self._terminal_tabs.tabBar().setElideMode(Qt.TextElideMode.ElideRight)
         self._terminal_tabs.currentChanged.connect(self._activate_terminal_session)
         self._terminal_tabs.tabCloseRequested.connect(self._close_terminal_session)
         layout.addWidget(self._terminal_tabs, 1)
@@ -9936,7 +11238,52 @@ class MainWindow(QMainWindow):
     def _terminal_start_directory() -> str:
         from memory.config_manager import get_workspace_path
 
-        return get_workspace_path() or str(Path.home())
+        workspace = get_workspace_path()
+        if workspace and Path(workspace).is_dir():
+            return workspace
+        return str(Path.home())
+
+    def _available_terminal_shells(self) -> list[tuple[str, str]]:
+        shells = [("default", self._tr("System default"))]
+        system = platform.system()
+        if system == "Windows":
+            if shutil.which("pwsh") or shutil.which("powershell.exe"):
+                shells.append(("powershell", "PowerShell"))
+            if shutil.which(os.environ.get("COMSPEC", "cmd.exe")):
+                shells.append(("cmd", "Command Prompt"))
+            wsl = shutil.which("wsl.exe") or shutil.which("wsl")
+            if wsl:
+                try:
+                    result = subprocess.run(
+                        [wsl, "--list", "--quiet"],
+                        capture_output=True,
+                        timeout=3,
+                        check=False,
+                        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                    )
+                    listing = result.stdout.decode("utf-16-le", errors="ignore")
+                    if "kali" in listing.lower():
+                        distro = next(
+                            (
+                                line.replace("\x00", "").strip().lstrip("*").strip()
+                                for line in listing.splitlines()
+                                if "kali" in line.lower()
+                            ),
+                            "kali-linux",
+                        )
+                        shells.append((f"kali:{distro}", "Kali Linux (WSL)"))
+                except (OSError, subprocess.SubprocessError):
+                    pass
+        else:
+            if shutil.which("pwsh"):
+                shells.append(("powershell", "PowerShell"))
+            try:
+                distro_info = Path("/etc/os-release").read_text(encoding="utf-8").lower()
+            except OSError:
+                distro_info = ""
+            if "id=kali" in distro_info and (shutil.which("bash") or shutil.which("sh")):
+                shells.append(("kali", "Kali Linux shell"))
+        return shells
 
     def _terminal_html(self) -> str:
         terminal_html = """<!doctype html><html><head><meta charset="utf-8">
@@ -9968,7 +11315,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         )
         return terminal_html
 
-    def _add_terminal_session(self):
+    def _add_terminal_session(self, shell_kind: str = "default"):
         self._terminal_sequence += 1
         session_id = uuid.uuid4().hex
         view = QWebEngineView()
@@ -9984,9 +11331,20 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         channel.registerObject("bridge", bridge)
         view.page().setWebChannel(channel)
         cwd = self._terminal_start_directory()
-        session = _TerminalSession(session_id, view, bridge, channel, cwd)
+        shell_label = self._terminal_profile_label(shell_kind)
+        session = _TerminalSession(
+            session_id,
+            view,
+            bridge,
+            channel,
+            cwd,
+            shell_kind=shell_kind,
+            shell_label=shell_label,
+        )
         self._terminal_sessions[session_id] = session
-        index = self._terminal_tabs.addTab(view, f"Terminal {self._terminal_sequence}")
+        index = self._terminal_tabs.addTab(
+            view, f"{shell_label} {self._terminal_sequence}"
+        )
         self._terminal_tabs.setCurrentIndex(index)
         asset_root = BASE_DIR / "assets" / "vendor" / "xterm"
         view.setHtml(
@@ -9994,6 +11352,19 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             QUrl.fromLocalFile(str(asset_root.resolve()) + os.sep),
         )
         return session
+
+    def _terminal_profile_label(self, shell_kind: str) -> str:
+        if shell_kind == "default":
+            return self._tr("System default")
+        if shell_kind == "powershell":
+            return "PowerShell"
+        if shell_kind == "cmd":
+            return "Command Prompt"
+        if shell_kind.startswith("kali:"):
+            return "Kali Linux (WSL)"
+        if shell_kind == "kali":
+            return "Kali Linux shell"
+        return shell_kind.replace("_", " ").title()
 
     def _active_terminal_session(self) -> _TerminalSession | None:
         return self._terminal_sessions.get(self._terminal_active_id)
@@ -10007,15 +11378,15 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         self._terminal_active_id = session_id
         self._terminal_cwd.setText(session.cwd)
         if (
-            getattr(self, "_terminal_panel", None) is not None
-            and self._terminal_panel.isVisible()
+            getattr(self, "_bottom_tabs", None) is not None
+            and self._bottom_tabs.isVisible()
+            and self._bottom_tabs.currentWidget() is self._terminal_panel
         ):
             QTimer.singleShot(0, view.setFocus)
 
-    def _new_terminal(self):
-        session = self._add_terminal_session()
-        self._terminal_panel.show()
-        self._terminal_toggle_btn.setChecked(True)
+    def _new_terminal(self, shell_kind: str = "default"):
+        session = self._add_terminal_session(shell_kind)
+        self._show_bottom_panel(1)
         if session.client_is_ready:
             self._start_terminal_process(session.session_id)
         self._terminal_tabs.currentWidget().setFocus()
@@ -10108,7 +11479,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         self._remove_terminal_session(session_id)
 
     def _close_terminal_panel(self):
-        self._terminal_panel.hide()
+        self._bottom_tabs.hide()
         self._terminal_toggle_btn.setChecked(False)
         for session_id in tuple(self._terminal_sessions):
             session = self._terminal_sessions.get(session_id)
@@ -10129,7 +11500,8 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             self._activate_terminal_session(self._terminal_tabs.currentIndex())
         if not self._terminal_sessions:
             self._terminal_active_id = ""
-            self._terminal_panel.hide()
+            if self._bottom_tabs.currentWidget() is self._terminal_panel:
+                self._bottom_tabs.hide()
             self._terminal_toggle_btn.setChecked(False)
 
     def _clear_terminal(self):
@@ -10141,80 +11513,156 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
 
     def _open_project_file(self, index):
         path = Path(self._file_model.filePath(index))
-        if not path.is_file() or not self._workspace_path:
-            return
+        if path.is_file():
+            self._open_file_in_editor(path)
+
+    def _open_file_in_editor(self, path: Path):
         try:
-            root = Path(self._workspace_path).resolve(strict=True)
-            path = path.resolve(strict=True)
-            relative_path = path.relative_to(root)
-            if path.stat().st_size > 2_000_000:
-                QMessageBox.information(
-                    self,
-                    self._tr("File too large"),
-                    self._tr("JARVIS editor supports text files up to 2 MB."),
+            path = path.expanduser().resolve(strict=True)
+            if not path.is_file():
+                return
+            size = path.stat().st_size
+            mime_type, _ = mimetypes.guess_type(path.name)
+            binary_suffixes = {
+                ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".ico", ".tif", ".tiff",
+                ".pdf", ".mp4", ".m4v", ".mov", ".mkv", ".avi", ".webm", ".mp3", ".wav",
+                ".flac", ".m4a", ".aac", ".ogg", ".opus", ".zip", ".7z", ".rar", ".gz",
+                ".tar", ".exe", ".dll", ".so", ".dylib", ".bin", ".ttf", ".otf", ".woff",
+                ".woff2", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
+            }
+            is_media = bool(
+                mime_type
+                and (mime_type.startswith(("image/", "audio/", "video/")) or mime_type == "application/pdf")
+            )
+            if path.suffix.casefold() in binary_suffixes or is_media:
+                self._open_external_project_file(path)
+                return
+            if size > 2_000_000:
+                self._offer_external_project_file(
+                    path,
+                    self._tr("This file is larger than JARVIS editor's 2 MB text limit."),
                 )
                 return
-        except (OSError, RuntimeError, ValueError) as exc:
+        except (OSError, RuntimeError) as exc:
             QMessageBox.warning(self, self._tr("Project file unavailable"), str(exc))
             return
 
-        from memory.config_manager import save_active_project_file
-
-        try:
-            save_active_project_file(str(relative_path))
-        except (ValueError, OSError) as exc:
-            QMessageBox.warning(self, self._tr("Project file unavailable"), str(exc))
-            return
-
-        if self._project_open_mode.currentData() == "external":
-            self._open_external_project_file(path)
-            return
+        relative_path = None
+        if self._workspace_path:
+            try:
+                relative_path = path.relative_to(Path(self._workspace_path).resolve())
+            except ValueError:
+                pass
         key = str(path).casefold()
         editor = self._project_editors.get(key)
         if editor is None:
             try:
                 content = path.read_text(encoding="utf-8")
-            except (OSError, UnicodeError) as exc:
-                QMessageBox.warning(
-                    self, self._tr("Cannot open project file"), str(exc)
+            except UnicodeError:
+                self._offer_external_project_file(
+                    path,
+                    self._tr("This file is not UTF-8 text and cannot be edited in the built-in editor."),
                 )
+                return
+            except OSError as exc:
+                QMessageBox.warning(self, self._tr("Cannot open project file"), str(exc))
                 return
             if "\x00" in content:
-                QMessageBox.information(
-                    self,
-                    self._tr("Not a text file"),
-                    self._tr(
-                        "This file contains binary data and cannot be edited here."
-                    ),
+                self._offer_external_project_file(
+                    path,
+                    self._tr("This file contains binary data and cannot be edited in the built-in editor."),
                 )
                 return
-            editor = _ProjectEditorDialog(self, path, content)
-            editor.finished.connect(
-                lambda _result, editor_key=key: self._project_editors.pop(
-                    editor_key, None
+            editor = _ProjectEditorPage(self, path, content)
+            self._project_editors[key] = editor
+            editor.modified_changed.connect(
+                lambda filename, modified, page=editor: self._update_editor_tab_title(
+                    filename, modified, page
                 )
             )
-            self._project_editors[key] = editor
-        editor.show()
-        editor.raise_()
-        editor.activateWindow()
+            tab_index = self._editor_tabs.addTab(editor, path.name)
+            self._style_tab_scrollers(self._editor_tabs)
+            editor.setProperty("projectEditorKey", key)
+            self._editor_tabs.setCurrentIndex(tab_index)
+        else:
+            self._editor_tabs.setCurrentWidget(editor)
+        if relative_path is not None:
+            from memory.config_manager import save_active_project_file
 
-    def _open_external_project_file(self, path: Path):
-        if not QDesktopServices.openUrl(QUrl.fromLocalFile(str(path))):
-            QMessageBox.warning(
-                self,
-                self._tr("Could not open file"),
-                self._tr("Windows could not open this file with its default app."),
+            try:
+                save_active_project_file(str(relative_path))
+            except (ValueError, OSError) as exc:
+                QMessageBox.warning(self, self._tr("Project file unavailable"), str(exc))
+                return
+        self._current_file = str(path)
+        self._center_views.setCurrentWidget(self._editor_tabs)
+        editor.editor.setFocus()
+
+    def _update_editor_tab_title(self, filename: str, modified: bool, editor):
+        index = self._editor_tabs.indexOf(editor)
+        if index >= 0:
+            self._editor_tabs.setTabText(
+                index, f"{'* ' if modified else ''}{Path(filename).name}"
             )
 
-    def _save_project_open_mode(self, *_):
-        from memory.config_manager import save_project_open_mode
+    def _close_project_editor_tab(self, index: int):
+        editor = self._editor_tabs.widget(index)
+        if not isinstance(editor, _ProjectEditorPage) or not editor.confirm_close():
+            return
+        key = str(editor.property("projectEditorKey") or "")
+        self._project_editors.pop(key, None)
+        self._editor_tabs.removeTab(index)
+        editor.deleteLater()
+        if self._editor_tabs.count() == 0:
+            self._show_dashboard()
 
-        mode = self._project_open_mode.currentData()
+    def _show_dashboard(self):
+        if hasattr(self, "_center_views"):
+            self._center_views.setCurrentWidget(self._center_split)
+
+    def _open_external_project_file(self, path: Path):
+        if QDesktopServices.openUrl(QUrl.fromLocalFile(str(path))):
+            return
+        choose = QMessageBox.question(
+            self,
+            self._tr("Choose an app"),
+            self._tr("No default app could open this file. Choose an app to open it."),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes,
+        )
+        if choose != QMessageBox.StandardButton.Yes:
+            return
         try:
-            save_project_open_mode(mode)
-        except (ValueError, OSError) as exc:
-            QMessageBox.warning(self, self._tr("File opening preference"), str(exc))
+            if platform.system() == "Darwin":
+                app = QFileDialog.getExistingDirectory(
+                    self, self._tr("Choose an app (.app)"), "/Applications"
+                )
+                if app:
+                    subprocess.Popen(["open", "-a", app, str(path)])
+                return
+            app_filter = (
+                self._tr("Applications (*.exe);;All files (*)")
+                if platform.system() == "Windows"
+                else self._tr("Applications (*)")
+            )
+            app, _ = QFileDialog.getOpenFileName(
+                self, self._tr("Choose an app"), str(Path.home()), app_filter
+            )
+            if app and not QProcess.startDetached(app, [str(path)])[0]:
+                raise OSError(self._tr("The selected app could not be started."))
+        except (OSError, RuntimeError) as exc:
+            QMessageBox.warning(self, self._tr("Could not open file"), str(exc))
+
+    def _offer_external_project_file(self, path: Path, reason: str):
+        choice = QMessageBox.question(
+            self,
+            self._tr("Open outside JARVIS?"),
+            f"{reason}\n\n{self._tr('Open this file with its default app?')}",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes,
+        )
+        if choice == QMessageBox.StandardButton.Yes:
+            self._open_external_project_file(path)
 
     def _refresh_project_files(self):
         if not self._workspace_path:
@@ -10245,12 +11693,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             save_active_project_file("")
         except OSError as exc:
             QMessageBox.warning(self, self._tr("Project file unavailable"), str(exc))
-        self._workspace_label.setText(Path(self._workspace_path).name)
-        self._workspace_label.setToolTip(self._workspace_path)
-        root_index = self._file_model.setRootPath(self._workspace_path)
-        self._file_tree.setRootIndex(root_index)
-        self._file_tree.show()
-        self._refresh_files_btn.setEnabled(True)
+        self._update_project_explorer_state()
         for session in self._terminal_sessions.values():
             if session.pty is None:
                 session.cwd = self._workspace_path
@@ -10264,28 +11707,89 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                 )
             )
 
+    def _open_project_from_assistant(self, path: str, entry_file: str = ""):
+        """Open a generated/existing project in the built-in Project Files UI."""
+        try:
+            root = Path(path).expanduser().resolve(strict=True)
+            if not root.is_dir():
+                raise ValueError(self._tr("The selected project path is not a folder."))
+        except (OSError, RuntimeError, ValueError) as exc:
+            QMessageBox.warning(self, self._tr("Project folder unavailable"), str(exc))
+            return
+        self._set_workspace_path(str(root))
+        if not self._workspace_path:
+            return
+        if not self._left_panel.isVisible():
+            self._toggle_side_panel(0)
+        self._left_tabs.setCurrentIndex(1)  # Explorer
+        if entry_file:
+            candidate = (root / entry_file).resolve()
+            try:
+                candidate.relative_to(root)
+            except ValueError:
+                return
+            if candidate.is_file():
+                self._open_file_in_editor(candidate)
+
+    def _close_project(self):
+        """Close the active workspace and its editor tabs after resolving edits."""
+        if not self._workspace_path:
+            return
+        editors = [
+            self._editor_tabs.widget(index)
+            for index in range(self._editor_tabs.count())
+            if isinstance(self._editor_tabs.widget(index), _ProjectEditorPage)
+        ]
+        for editor in editors:
+            if not editor.confirm_close():
+                return
+
+        from memory.config_manager import save_active_project_file, save_workspace_path
+
+        try:
+            save_workspace_path("")
+            save_active_project_file("")
+        except (OSError, ValueError) as exc:
+            QMessageBox.warning(self, self._tr("Project file unavailable"), str(exc))
+            return
+
+        for editor in editors:
+            key = str(editor.property("projectEditorKey") or "")
+            self._project_editors.pop(key, None)
+            index = self._editor_tabs.indexOf(editor)
+            if index >= 0:
+                self._editor_tabs.removeTab(index)
+            editor.deleteLater()
+
+        self._workspace_path = ""
+        self._current_file = None
+        self._update_project_explorer_state()
+        self._show_dashboard()
+        home = str(Path.home())
+        for session in self._terminal_sessions.values():
+            if session.pty is None:
+                session.cwd = home
+        active = self._active_terminal_session()
+        self._terminal_cwd.setText(active.cwd if active is not None else home)
+        self._terminal_cwd.setToolTip(
+            self._tr("New terminal sessions start in your home folder until a project is opened.")
+        )
+
     def _toggle_terminal_panel(self):
         if self._reading_mode:
             self._toggle_reading_mode()
-        if self._terminal_panel.isVisible():
-            self._close_terminal_panel()
+        is_active = (
+            self._bottom_tabs.isVisible()
+            and self._bottom_tabs.currentWidget() is self._terminal_panel
+        )
+        if is_active:
+            self._hide_bottom_panel()
+            self._terminal_toggle_btn.setChecked(False)
             return
         if not self._terminal_sessions:
-            self._add_terminal_session()
-        self._terminal_panel.show()
-        available = max(
-            1, self._workspace_split.height() - self._workspace_split.handleWidth()
-        )
-        # Open at a useful height while preserving room for the dashboard.
-        # The splitter remains unrestricted above this initial proportion.
-        terminal_height = min(
-            max(120, int(available * 0.34)),
-            max(96, available - 220),
-        )
-        self._workspace_split.setSizes(
-            [max(1, available - terminal_height), terminal_height]
-        )
-        self._terminal_toggle_btn.setChecked(True)
+            self._new_terminal("default")
+            return
+        self._show_bottom_panel(1)
         session = self._active_terminal_session()
         if session is not None and session.client_is_ready and session.pty is None:
             self._start_terminal_process(session.session_id)
@@ -10340,24 +11844,60 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                 from winpty import PTY
 
                 session.pty = PTY(100, 24)
-                powershell = shutil.which("pwsh") or shutil.which("powershell.exe")
-                if powershell:
+                if session.shell_kind.startswith("kali:"):
+                    wsl = shutil.which("wsl.exe") or shutil.which("wsl")
+                    distro = session.shell_kind.partition(":")[2] or "kali-linux"
+                    if not wsl:
+                        raise FileNotFoundError("WSL is not available")
+                    drive, remainder = os.path.splitdrive(session.cwd)
+                    linux_cwd = (
+                        f"/mnt/{drive.rstrip(':').lower()}/{remainder.replace(chr(92), '/').lstrip('/')}"
+                        if drive
+                        else "~"
+                    )
+                    session.pty.spawn(
+                        wsl,
+                        cmdline=f'-d {distro} --cd "{linux_cwd}"',
+                        cwd=session.cwd,
+                    )
+                elif session.shell_kind == "cmd":
+                    command_prompt = os.environ.get("COMSPEC") or shutil.which("cmd.exe")
+                    if not command_prompt:
+                        raise FileNotFoundError("Command Prompt is not available")
+                    session.pty.spawn(command_prompt, cmdline="/Q /D", cwd=session.cwd)
+                elif session.shell_kind == "powershell":
+                    powershell = shutil.which("pwsh") or shutil.which("powershell.exe")
+                    if not powershell:
+                        raise FileNotFoundError("PowerShell is not available")
                     session.pty.spawn(
                         powershell, cmdline="-NoLogo -NoProfile", cwd=session.cwd
                     )
                 else:
-                    session.pty.spawn(
-                        os.environ.get("COMSPEC", "cmd.exe"),
-                        cmdline="/Q /D",
-                        cwd=session.cwd,
-                    )
+                    powershell = shutil.which("pwsh") or shutil.which("powershell.exe")
+                    if powershell:
+                        session.pty.spawn(
+                            powershell, cmdline="-NoLogo -NoProfile", cwd=session.cwd
+                        )
+                    else:
+                        session.pty.spawn(
+                            os.environ.get("COMSPEC", "cmd.exe"),
+                            cmdline="/Q /D",
+                            cwd=session.cwd,
+                        )
             else:
                 import pty as _pty
 
                 master_fd, slave_fd = _pty.openpty()
-                shell = os.environ.get("SHELL", "/bin/sh")
+                if session.shell_kind == "powershell":
+                    shell = shutil.which("pwsh")
+                    if not shell:
+                        raise FileNotFoundError("PowerShell is not available")
+                    shell_args = [shell, "-NoLogo"]
+                else:
+                    shell = os.environ.get("SHELL") or shutil.which("bash") or "/bin/sh"
+                    shell_args = [shell, "-i"]
                 child = subprocess.Popen(
-                    [shell, "-i"],
+                    shell_args,
                     cwd=session.cwd,
                     stdin=slave_fd,
                     stdout=slave_fd,
@@ -10510,7 +12050,8 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         # On Windows, creating the PTY while the embedded page is still loading
         # can race WebEngine initialization when the terminal is opened.
         if (
-            self._terminal_panel.isVisible()
+            self._bottom_tabs.isVisible()
+            and self._bottom_tabs.currentWidget() is self._terminal_panel
             and session_id == self._terminal_active_id
             and session.pty is None
             and not session.closing
@@ -10535,13 +12076,25 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             else:
                 session.output_buffer = (session.output_buffer + text)[-100_000:]
 
-    def _build_input_row(self) -> QHBoxLayout:
-        row = QHBoxLayout()
-        row.setSpacing(5)
+    def _build_input_row(self) -> QFrame:
+        composer = QFrame()
+        self._chat_composer = composer
+        composer.setObjectName("ChatComposer")
+        composer.setStyleSheet(
+            f"QFrame#ChatComposer {{ background:{C.PANEL2}; border:1px solid {C.BORDER}; border-radius:14px; }}"
+        )
+        row = QHBoxLayout(composer)
+        row.setContentsMargins(8, 5, 7, 5)
+        row.setSpacing(6)
         self._input = ChatInput()
         self._input.setPlaceholderText(self._tr("Message or paste a screenshot..."))
-        self._input.setFont(QFont(FONT_MONO, 9))
-        self._input.setFixedHeight(27)
+        self._input.setFont(QFont(FONT_UI, 10))
+        self._input.setMinimumWidth(0)
+        self._input.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
+        )
+        self._input.setMinimumHeight(38)
+        self._input.setMaximumHeight(52)
         self._input.setStyleSheet(f"""
             QLineEdit {{
                 background: {C.PANEL2}; color: {C.WHITE};
@@ -10571,36 +12124,223 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         self._pending_image_button.hide()
         row.addWidget(self._pending_image_button)
 
-        attach = QPushButton()
-        attach.setFixedSize(26, 26)
-        attach.setIcon(QIcon(str(BASE_DIR / "assets" / "icons" / "attach.svg")))
-        attach.setIconSize(QSize(14, 14))
-        attach.setCursor(Qt.CursorShape.PointingHandCursor)
-        attach.setToolTip(self._tr("Attach a file, or drop it into the message field"))
-        attach.setStyleSheet(
-            f"QPushButton {{ background:{C.PANEL}; color:{C.PRI}; border:1px solid {C.PRI_DIM}; border-radius:8px; }} QPushButton:hover {{ background:{C.PRI_GHO}; border-color:{C.PRI}; }}"
+        self._chat_add_button = QToolButton()
+        self._chat_add_button.setText("+")
+        self._chat_add_button.setFixedSize(38, 34)
+        self._chat_add_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._chat_add_button.setToolTip(self._tr("Add a file, set a goal, or choose the current mode"))
+        menu_chevron = QUrl.fromLocalFile(
+            str(BASE_DIR / "assets" / "icons" / "chevron-down.svg")
+        ).toString()
+        self._chat_menu_chevron = menu_chevron
+        self._chat_add_button.setStyleSheet(
+            f"QToolButton {{ background:transparent; color:{C.TEXT_MED}; "
+            f"border:1px solid transparent; border-radius:10px; font-size:18px; padding-right:7px; }}"
+            f"QToolButton:hover {{ background:{C.PRI_GHO}; color:{C.PRI}; border-color:{C.BORDER}; }}"
+            f'QToolButton::menu-indicator {{ image:url("{menu_chevron}"); '
+            f"subcontrol-origin:padding; subcontrol-position:right center; width:9px; height:9px; right:4px; }}"
         )
-        attach.clicked.connect(self._drop_zone._browse)
-        row.addWidget(attach)
+        add_menu = QMenu(self._chat_add_button)
+        add_menu.setStyleSheet(
+            f"QMenu {{ background:{C.PANEL}; color:{C.TEXT}; "
+            f"border:1px solid {C.BORDER_B}; padding:5px; }}"
+            f"QMenu::item {{ padding:7px 22px 7px 25px; border-radius:5px; }}"
+            f"QMenu::item:selected {{ color:{C.PRI}; background:{C.PRI_GHO}; }}"
+            f"QMenu::separator {{ height:1px; background:{C.BORDER}; margin:4px 7px; }}"
+        )
+        file_action = add_menu.addAction(
+            QIcon(str(BASE_DIR / "assets" / "icons" / "files.svg")), self._tr("File")
+        )
+        file_action.triggered.connect(self._drop_zone._browse)
+        goal_action = add_menu.addAction(
+            QIcon(str(BASE_DIR / "assets" / "icons" / "goal.svg")), self._tr("Set a goal...")
+        )
+        goal_action.triggered.connect(self._set_chat_goal)
+        add_menu.addSeparator()
+        mode_menu = add_menu.addMenu(self._tr("Current mode"))
+        self._chat_mode_menu = mode_menu
+        mode_group = QActionGroup(mode_menu)
+        mode_group.setExclusive(True)
+        mode_specs = (
+            ("chat", "Chat", "chat.svg"),
+            ("agent", "Agent", "agent.svg"),
+            ("plan", "Plan", "plan.svg"),
+        )
+        mode_hints = {
+            "chat": "Computer-changing actions stay paused.",
+            "agent": "Actions follow your permissions and approval policy.",
+            "plan": "Prepare steps without running tools.",
+        }
+        self._chat_mode_actions = {}
+        for mode, title, icon_name in mode_specs:
+            action = mode_menu.addAction(
+                QIcon(str(BASE_DIR / "assets" / "icons" / icon_name)), self._tr(title)
+            )
+            action.setCheckable(True)
+            action.setChecked(mode == self._chat_interaction_mode)
+            action.setData(mode)
+            action.setToolTip(self._tr(mode_hints[mode]))
+            mode_group.addAction(action)
+            action.triggered.connect(
+                lambda checked=False, selected_mode=mode: self._set_chat_interaction_mode(selected_mode)
+            )
+            self._chat_mode_actions[mode] = action
+        mode_menu.setTitle(self._tr(f"Current mode: {self._chat_interaction_mode.title()}"))
+        self._chat_add_button.setToolTip(
+            self._tr(
+                f"Current mode: {self._chat_interaction_mode.title()} - add a file or set a goal"
+            )
+        )
+        self._chat_add_button.setMenu(add_menu)
+        self._chat_add_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        row.addWidget(self._chat_add_button)
         self._input.file_dropped.connect(self._drop_zone._set_file)
 
-        send = QPushButton()
-        send.setFixedSize(26, 26)
-        send.setIcon(QIcon(str(BASE_DIR / "assets" / "icons" / "send.svg")))
-        send.setIconSize(QSize(14, 14))
-        send.setCursor(Qt.CursorShape.PointingHandCursor)
-        send.setToolTip("Send message · Enter")
-        send.setStyleSheet(f"""
-            QPushButton {{
-                background: {C.PANEL}; color: {C.PRI};
-                border: 1px solid {C.PRI_DIM}; border-radius: 3px;
-            }}
-            QPushButton:hover {{ background: {C.PRI_GHO}; border: 1px solid {C.PRI}; }}
+        self._chat_send_btn = QPushButton()
+        self._chat_send_btn.setFixedSize(34, 34)
+        self._chat_send_btn.setIcon(QIcon(str(BASE_DIR / "assets" / "icons" / "send.svg")))
+        self._chat_send_btn.setIconSize(QSize(15, 15))
+        self._chat_send_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._chat_send_btn.setToolTip(self._tr("Send message · Enter"))
+        self._chat_send_btn.setStyleSheet(f"""
+            QPushButton {{ background:{C.PRI_GHO}; color:{C.PRI};
+                border:1px solid {C.PRI_DIM}; border-radius:10px; padding:0; }}
+            QPushButton:hover {{ background:{C.PRI_DIM}; border-color:{C.PRI}; }}
         """)
-        send.clicked.connect(self._send)
-        row.addWidget(send)
+        self._chat_send_btn.clicked.connect(self._send)
+        row.addWidget(self._chat_send_btn)
 
-        return row
+        return composer
+
+    def _set_chat_goal(self, *_):
+        dialog = QDialog(self)
+        dialog.setWindowTitle(self._tr("Set chat goal"))
+        dialog.setMinimumWidth(420)
+        dialog.setStyleSheet(
+            f"QDialog {{ background:{C.PANEL}; color:{C.TEXT}; }}"
+            f"QLabel {{ color:{C.TEXT}; background:transparent; }}"
+            f"QPlainTextEdit {{ background:{C.PANEL2}; color:{C.WHITE}; "
+            f"border:1px solid {C.BORDER_B}; border-radius:8px; padding:8px; }}"
+            f"QPlainTextEdit:focus {{ border-color:{C.PRI}; }}"
+        )
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(18, 16, 18, 14)
+        layout.setSpacing(10)
+        title = QLabel(self._tr("What should JARVIS help you accomplish?"))
+        title.setFont(QFont(FONT_UI, 11, QFont.Weight.DemiBold))
+        layout.addWidget(title)
+        editor = QPlainTextEdit()
+        editor.setObjectName("chat_goal_input")
+        editor.setPlaceholderText(self._tr("Describe the outcome you want..."))
+        editor.setPlainText(self._active_chat_goal)
+        editor.setMaximumBlockCount(12)
+        editor.setFixedHeight(120)
+        layout.addWidget(editor)
+        buttons = QHBoxLayout()
+        buttons.addStretch(1)
+        cancel = QPushButton(self._tr("Cancel"))
+        save = QPushButton(self._tr("Set goal"))
+        for button in (cancel, save):
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
+            button.setFixedHeight(32)
+        cancel.setStyleSheet(
+            f"QPushButton {{ color:{C.TEXT_MED}; background:transparent; "
+            f"border:1px solid {C.BORDER}; border-radius:7px; padding:0 12px; }}"
+        )
+        save.setStyleSheet(
+            f"QPushButton {{ color:{C.PRI}; background:{C.PRI_GHO}; "
+            f"border:1px solid {C.PRI_DIM}; border-radius:7px; padding:0 12px; }}"
+            f"QPushButton:hover {{ border-color:{C.PRI}; }}"
+        )
+        cancel.clicked.connect(dialog.reject)
+        save.clicked.connect(dialog.accept)
+        buttons.addWidget(cancel)
+        buttons.addWidget(save)
+        layout.addLayout(buttons)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        goal = editor.toPlainText()
+        self._active_chat_goal = goal.strip()[:1000]
+        self._refresh_composer_context()
+
+    def _set_chat_interaction_mode(self, mode: str):
+        mode = str(mode or "chat").lower()
+        if mode not in {"chat", "agent", "plan"}:
+            return
+
+        if mode in {"chat", "agent"}:
+            try:
+                from memory.config_manager import (
+                    get_computer_access_settings,
+                    save_computer_access_settings,
+                )
+
+                access = get_computer_access_settings()
+                save_computer_access_settings(mode, access.get("access_level", "ask"))
+            except Exception as exc:
+                for key, action in getattr(self, "_chat_mode_actions", {}).items():
+                    action.setChecked(key == self._chat_interaction_mode)
+                self._append_activity(f"ERR: Could not save assistant mode: {exc}")
+                return
+
+        self._chat_interaction_mode = mode
+        mode_menu = getattr(self, "_chat_mode_menu", None)
+        if mode_menu is not None:
+            mode_menu.setTitle(self._tr(f"Current mode: {mode.title()}"))
+        if hasattr(self, "_chat_add_button"):
+            self._chat_add_button.setToolTip(
+                self._tr(f"Current mode: {mode.title()} - add a file or set a goal")
+            )
+        for key, action in getattr(self, "_chat_mode_actions", {}).items():
+            action.setChecked(key == mode)
+
+        if mode == "plan":
+            self._set_chat_plan_mode(True)
+            return
+
+        self._set_chat_plan_mode(False)
+        if mode == "agent":
+            self._append_activity(
+                "SYS: Agent mode enabled. Computer actions follow the configured permissions and approval policy."
+            )
+        else:
+            self._append_activity("SYS: Chat mode enabled. Computer-changing actions are paused.")
+
+    def _set_chat_plan_mode(self, enabled: bool):
+        self._chat_plan_mode = bool(enabled)
+        if callable(getattr(self, "on_plan_mode_change", None)):
+            self.on_plan_mode_change(self._chat_plan_mode)
+        self._refresh_composer_context()
+        self._append_activity(
+            "SYS: Plan mode enabled — JARVIS will prepare steps without running tools."
+            if enabled
+            else "SYS: Plan mode disabled."
+        )
+
+    def _refresh_composer_context(self):
+        parts = []
+        if self._chat_plan_mode:
+            parts.append("PLAN MODE · actions stay paused")
+        elif self._chat_interaction_mode == "agent":
+            parts.append("AGENT MODE · actions follow permissions")
+        if self._active_chat_goal:
+            goal = self._active_chat_goal.replace("\n", " ").strip()
+            if len(goal) > 88:
+                goal = goal[:85].rstrip() + "…"
+            parts.append(f"GOAL · {goal}")
+        self._composer_context.setText("     ·     ".join(parts))
+        self._composer_context.setVisible(bool(parts))
+
+    def _with_composer_context(self, message: str) -> str:
+        context = []
+        if self._chat_plan_mode:
+            context.append("[[JARVIS_PLAN_MODE]]")
+        if self._active_chat_goal:
+            context.append(
+                "User's active goal (use as ongoing context):\n" + self._active_chat_goal
+            )
+        context.append(message)
+        return "\n\n".join(context)
 
     def _build_content_panel(self) -> QWidget:
         """
@@ -11007,20 +12747,23 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             return
         panel = self._left_panel if index == 0 else self._right_panel
         button = self._left_toggle_btn if index == 0 else self._right_toggle_btn
-        sizes = self._main_splitter.sizes()
+        splitter = self._main_splitter if index == 0 else self._root_splitter
+        splitter_index = 0 if index == 0 else 1
+        sizes = splitter.sizes()
         if panel.isVisible():
-            if sizes[index] > 0:
-                self._side_restore_width[index] = sizes[index]
+            if sizes[splitter_index] > 0:
+                self._side_restore_width[index] = sizes[splitter_index]
             panel.hide()
         else:
             panel.show()
-            sizes = self._main_splitter.sizes()
-            sizes[index] = max(self._side_restore_width[index], panel.minimumWidth())
-            center = 1
-            sizes[center] = max(
-                1, self._main_splitter.width() - sizes[index] - sizes[2 - index]
+            sizes = splitter.sizes()
+            sizes[splitter_index] = max(
+                self._side_restore_width[index], panel.minimumWidth()
             )
-            self._main_splitter.setSizes(sizes)
+            sizes[1 - splitter_index] = max(
+                1, splitter.width() - sizes[splitter_index]
+            )
+            splitter.setSizes(sizes)
         button.setChecked(panel.isVisible())
 
     def _toggle_content_panel(self):
@@ -11041,39 +12784,140 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         self._content_toggle_btn.setChecked(self._content_panel.isVisible())
 
     def _toggle_debug_panel(self):
-        if self._debug_panel.isVisible():
-            self._debug_panel.hide()
+        is_active = (
+            self._bottom_tabs.isVisible()
+            and self._bottom_tabs.currentWidget() is self._debug_panel
+        )
+        if is_active:
+            self._hide_bottom_panel()
         else:
-            self._debug_panel.setMaximumHeight(16777215)
-            self._debug_panel.show()
+            self._show_bottom_panel(0)
+        self._debug_toggle_btn.setChecked(
+            self._bottom_tabs.isVisible()
+            and self._bottom_tabs.currentWidget() is self._debug_panel
+        )
+
+    def _show_bottom_panel(self, index: int):
+        was_hidden = not self._bottom_tabs.isVisible()
+        if self._bottom_panel_animation is not None:
+            self._bottom_panel_animation.stop()
+            self._bottom_panel_animation = None
+        self._bottom_tabs.setCurrentIndex(index)
+        self._bottom_tabs.show()
+        self._bottom_tabs.raise_()
+        if was_hidden:
             available = max(
                 1,
-                self._workspace_split.height()
-                - 2 * self._workspace_split.handleWidth(),
+                self._workspace_split.height() - self._workspace_split.handleWidth(),
             )
-            console_height = min(
-                max(260, int(available * 0.40)), max(180, available - 240)
+            panel_height = min(max(150, int(available * 0.34)), max(120, available - 220))
+            current_sizes = self._workspace_split.sizes()
+            start_height = min(
+                current_sizes[1] if len(current_sizes) > 1 else 0,
+                panel_height,
             )
             self._workspace_split.setSizes(
-                [max(300, available - console_height), 0, console_height]
+                [max(1, available - start_height), start_height]
             )
-        self._debug_toggle_btn.setChecked(self._debug_panel.isVisible())
+            animation = QVariantAnimation(self)
+            animation.setDuration(190)
+            animation.setStartValue(start_height)
+            animation.setEndValue(panel_height)
+            animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+            animation.valueChanged.connect(
+                lambda value, total=available: self._set_bottom_panel_height(
+                    total, int(value)
+                )
+            )
+            animation.finished.connect(
+                lambda total=available, height=panel_height: self._set_bottom_panel_height(
+                    total, height
+                )
+            )
+            self._bottom_panel_animation = animation
+            animation.start()
+        self._debug_toggle_btn.setChecked(index == 0)
+        self._terminal_toggle_btn.setChecked(index == 1)
+
+    def _set_bottom_panel_height(self, available: int, panel_height: int):
+        if self._reading_mode or not self._bottom_tabs.isVisible():
+            return
+        panel_height = max(0, min(panel_height, available))
+        self._workspace_split.setSizes(
+            [max(1, available - panel_height), panel_height]
+        )
+
+    def _hide_bottom_panel(self):
+        if not self._bottom_tabs.isVisible():
+            return
+        if self._bottom_panel_animation is not None:
+            self._bottom_panel_animation.stop()
+            self._bottom_panel_animation = None
+        sizes = self._workspace_split.sizes()
+        available = max(
+            1,
+            self._workspace_split.height() - self._workspace_split.handleWidth(),
+        )
+        start_height = sizes[1] if len(sizes) > 1 else 0
+        if start_height <= 0:
+            self._bottom_tabs.hide()
+            return
+        animation = QVariantAnimation(self)
+        animation.setDuration(150)
+        animation.setStartValue(start_height)
+        animation.setEndValue(0)
+        animation.setEasingCurve(QEasingCurve.Type.InCubic)
+        animation.valueChanged.connect(
+            lambda value, total=available: self._set_bottom_panel_height(
+                total, int(value)
+            )
+        )
+
+        def finish_hide():
+            if self._bottom_panel_animation is animation:
+                self._bottom_tabs.hide()
+                self._bottom_panel_animation = None
+
+        animation.finished.connect(finish_hide)
+        self._bottom_panel_animation = animation
+        animation.start()
+
+    def _on_bottom_tab_changed(self, index: int):
+        visible = self._bottom_tabs.isVisible()
+        self._debug_toggle_btn.setChecked(visible and index == 0)
+        self._terminal_toggle_btn.setChecked(visible and index == 1)
+        if visible and index == 1 and not self._terminal_sessions:
+            session = self._add_terminal_session("default")
+            if session.client_is_ready:
+                self._start_terminal_process(session.session_id)
+        elif visible and index == 1:
+            session = self._active_terminal_session()
+            if session is not None and session.client_is_ready and session.pty is None:
+                self._start_terminal_process(session.session_id)
+            if session is not None:
+                QTimer.singleShot(0, session.view.setFocus)
 
     def _toggle_reading_mode(self):
         if not self._reading_mode:
             current_main = self._main_splitter.sizes()
-            for index in (0, 2):
-                if current_main[index] > 0:
-                    self._side_restore_width[index] = current_main[index]
+            if current_main and current_main[0] > 0:
+                self._side_restore_width[0] = current_main[0]
+            current_root = self._root_splitter.sizes()
+            if len(current_root) > 1 and current_root[1] > 0:
+                self._side_restore_width[2] = current_root[1]
             self._reading_saved_layout = {
                 "main": self._main_splitter.sizes(),
+                "root": self._root_splitter.sizes(),
                 "center": self._center_split.sizes(),
                 "workspace": self._workspace_split.sizes(),
                 "left": self._left_panel.isVisible(),
                 "right": self._right_panel.isVisible(),
                 "hud": self._hud_cam_stack.isVisible(),
                 "content": self._content_panel.isVisible(),
-                "terminal": self._terminal_panel.isVisible(),
+                "terminal": self._bottom_tabs.isVisible()
+                and self._bottom_tabs.currentWidget() is self._terminal_panel,
+                "bottom_visible": self._bottom_tabs.isVisible(),
+                "bottom_index": self._bottom_tabs.currentIndex(),
                 "quiz": self._quiz_panel.isVisible(),
                 "fullscreen": self.isFullScreen(),
                 "maximized": self.isMaximized(),
@@ -11088,7 +12932,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             self._hud_cam_stack.hide()
             self._quiz_panel.hide()
             self._content_panel.show()
-            self._terminal_panel.hide()
+            self._bottom_tabs.hide()
             self._terminal_toggle_btn.setChecked(False)
             self._reading_mode_btn.setIcon(
                 QIcon(str(BASE_DIR / "assets" / "icons" / "exit-fullscreen.svg"))
@@ -11097,7 +12941,8 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             self.showFullScreen()
 
             def fill_screen():
-                self._main_splitter.setSizes([0, self._main_splitter.width(), 0])
+                self._root_splitter.setSizes([self._root_splitter.width(), 0])
+                self._main_splitter.setSizes([0, self._main_splitter.width()])
                 self._center_split.setSizes([0, self._center_split.height(), 0])
 
             QTimer.singleShot(0, fill_screen)
@@ -11109,7 +12954,9 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         self._right_panel.setVisible(saved.get("right", True))
         self._hud_cam_stack.setVisible(saved.get("hud", True))
         self._content_panel.setVisible(saved.get("content", True))
-        self._terminal_panel.setVisible(saved.get("terminal", False))
+        self._bottom_tabs.setVisible(saved.get("bottom_visible", False))
+        if saved.get("bottom_index") is not None:
+            self._bottom_tabs.setCurrentIndex(saved["bottom_index"])
         self._quiz_panel.setVisible(saved.get("quiz", False))
         self._left_toggle_btn.setEnabled(True)
         self._right_toggle_btn.setEnabled(True)
@@ -11118,7 +12965,10 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         self._left_toggle_btn.setChecked(self._left_panel.isVisible())
         self._right_toggle_btn.setChecked(self._right_panel.isVisible())
         self._content_toggle_btn.setChecked(self._content_panel.isVisible())
-        self._terminal_toggle_btn.setChecked(self._terminal_panel.isVisible())
+        self._terminal_toggle_btn.setChecked(
+            self._bottom_tabs.isVisible()
+            and self._bottom_tabs.currentWidget() is self._terminal_panel
+        )
         self._reading_mode_btn.setIcon(
             QIcon(str(BASE_DIR / "assets" / "icons" / "fullscreen.svg"))
         )
@@ -11136,9 +12986,11 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         def restore_layout():
             if saved.get("main"):
                 self._main_splitter.setSizes(saved["main"])
+            if saved.get("root"):
+                self._root_splitter.setSizes(saved["root"])
             if saved.get("center"):
                 self._center_split.setSizes(saved["center"])
-            if saved.get("workspace") and saved.get("terminal"):
+            if saved.get("workspace") and saved.get("bottom_visible"):
                 self._workspace_split.setSizes(saved["workspace"])
 
         QTimer.singleShot(0, restore_layout)
@@ -11619,7 +13471,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
 
     def _open_remote(self):
         if not self.on_remote_clicked:
-            self._log.append_log("SYS: Dashboard not running — remote unavailable.")
+            self._log.append_log("SYS: Dashboard not running - remote unavailable.")
             return
         result = self.on_remote_clicked()
         if not result:
@@ -11632,7 +13484,11 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         berr = result[4] if len(result) >= 5 else ""
         if self._remote_overlay:
             self._remote_overlay._do_close()
+
         cw = self.centralWidget()
+        settings = getattr(self, "_settings_center", None)
+        settings_visible = settings is not None and settings.isVisible()
+        parent = settings if settings_visible else cw
         ow, oh = RemoteKeyOverlay._OW, RemoteKeyOverlay._OH
         ov = RemoteKeyOverlay(
             url,
@@ -11640,20 +13496,40 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             auto_login_url=auto,
             manual_url=manual,
             expiry_secs=600,
-            parent=cw,
+            parent=parent,
             bind_error=berr,
         )
         ov.set_new_key_callback(self.on_remote_clicked)
-        ov.setGeometry(
-            (cw.width() - ow) // 2,
-            (cw.height() - oh) // 2,
-            ow,
-            oh,
-        )
-        ov.closed.connect(lambda: setattr(self, "_remote_overlay", None))
+        ov.setFixedSize(ow, oh)
+        if settings_visible:
+            # Settings is a separate non-modal top-level window. Make the QR
+            # surface a window-modal child of it so it opens in front and
+            # returns focus to Settings when dismissed.
+            ov.setWindowFlags(
+                Qt.WindowType.Dialog | Qt.WindowType.FramelessWindowHint
+            )
+            ov.setWindowModality(Qt.WindowModality.WindowModal)
+            center = settings.mapToGlobal(settings.rect().center())
+            ov.move(center - QPoint(ow // 2, oh // 2))
+        else:
+            ov.setGeometry(
+                (cw.width() - ow) // 2,
+                (cw.height() - oh) // 2,
+                ow,
+                oh,
+            )
+        def restore_settings_focus():
+            self._remote_overlay = None
+            if settings_visible and settings.isVisible():
+                settings.raise_()
+                settings.activateWindow()
+
+        ov.closed.connect(restore_settings_focus)
         ov.show()
+        ov.raise_()
+        ov.activateWindow()
         self._remote_overlay = ov
-        self._log.append_log(f"SYS: Remote key generated — manual: {manual or url}")
+        self._log.append_log(f"SYS: Remote key generated - manual: {manual or url}")
 
     # ── Auto-start ──────────────────────────────────────────────────────────────
 
@@ -12062,14 +13938,37 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         voice: str = "",
         ui_opacity: int = 100,
     ):
-        """Update all name/theme-dependent UI elements and persist to config."""
-        self._assistant_name = name.strip() or "JARVIS"
-        display = self._assistant_name.upper()
+        """Persist identity preferences first, then update the live interface."""
+        assistant_name = name.strip() or "JARVIS"
+        user_name = user_name.strip()
+        ui_opacity = max(60, min(100, int(ui_opacity)))
+        color = (ui_color or "").strip().lower()
+        from memory.config_manager import AVAILABLE_VOICES, DEFAULT_VOICE
+
+        voice_changed = False
+        previous_color = ""
+        try:
+            data = _read_full_config()
+            previous_color = str(data.get("ui_color", "") or DEFAULT_UI_COLOR).lower()
+            previous_voice = str(data.get("voice_name", DEFAULT_VOICE) or DEFAULT_VOICE)
+            data["assistant_name"] = assistant_name
+            data["user_name"] = user_name
+            data["ui_opacity"] = ui_opacity
+            if color:
+                data["ui_color"] = color
+            if voice:
+                selected_voice = voice if voice in AVAILABLE_VOICES else DEFAULT_VOICE
+                data["voice_name"] = selected_voice
+                voice_changed = selected_voice != previous_voice
+            update_json(API_FILE, lambda current: current.update(data))
+        except Exception as exc:
+            self._log.append_log(f"ERR: Config save failed — {exc}")
+            return False
+
+        self._assistant_name = assistant_name
+        display = assistant_name.upper()
         self.setWindowTitle(f"{display} — {APP_VERSION}")
-        if (
-            self._title_lbl.pixmap() is not None
-            and not self._title_lbl.pixmap().isNull()
-        ):
+        if self._title_lbl.pixmap() is not None and not self._title_lbl.pixmap().isNull():
             self._title_lbl.setToolTip(display)
         else:
             self._title_lbl.setText(display)
@@ -12077,49 +13976,31 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                 self._sub_lbl.setText("Just A Rather Very Intelligent System · V2")
             else:
                 self._sub_lbl.setText("Personal AI Assistant · V2")
-        self._log._ai_name_lc = self._assistant_name.lower()
+        self._log._ai_name_lc = assistant_name.lower()
         self.hud._assistant_name = display
-        ui_opacity = max(60, min(100, int(ui_opacity)))
         self._preview_ui_opacity(ui_opacity)
 
-        color_changed = False
-        if ui_color:
+        color_changed = bool(color and color != previous_color)
+        if color:
             old = current_palette()
-            if apply_ui_accent(ui_color):
-                # Live-paint the whole interface (panels, buttons, borders, HUD)
-                retheme_all_widgets(old, current_palette())
+            if apply_ui_accent(color):
+                updated = current_palette()
+                if old != updated:
+                    retheme_all_widgets(old, updated)
                 self._apply_design_system()
-                color_changed = old["PRI"] != C.PRI
 
-        # Voice change → persist and, if it actually changed, rebuild the Live
-        # session so the new voice takes effect (it's fixed at connect time).
-        voice_changed = False
-        if voice:
-            from memory.config_manager import get_voice, save_voice
-
-            if voice != get_voice():
-                save_voice(voice)
-                voice_changed = True
-
-        try:
-            data = _read_full_config()
-            data["assistant_name"] = self._assistant_name
-            data["user_name"] = user_name.strip()
-            data["ui_opacity"] = ui_opacity
-            if ui_color:
-                data["ui_color"] = ui_color.strip().lower()
-            update_json(API_FILE, lambda current: current.update(data))
-            self._log.append_log(f"SYS: Identity updated — {display}")
-            if color_changed:
-                self._log.append_log(f"SYS: UI colour applied — {ui_color}")
-            self._log.append_log(f"SYS: Interface opacity set — {ui_opacity}%")
-            if voice_changed:
-                self._log.append_log(f"SYS: Voice set — {voice}")
-        except Exception as e:
-            self._log.append_log(f"ERR: Config save failed — {e}")
-
-        if voice_changed and self.on_voice_change:
-            self.on_voice_change()
+        self._log.append_log(f"SYS: Identity updated — {display}")
+        if color_changed:
+            self._log.append_log(f"SYS: UI colour applied — {color}")
+        self._log.append_log(f"SYS: Interface opacity set — {ui_opacity}%")
+        if voice_changed:
+            self._log.append_log(f"SYS: Voice set — {voice}")
+            if self.on_voice_change:
+                try:
+                    self.on_voice_change()
+                except Exception as exc:
+                    self._log.append_log(f"ERR: Voice reconnect failed — {exc}")
+        return True
 
     def _centre_overlay(self, ov) -> None:
         """Place a floating overlay in the middle of the HUD and show it."""
@@ -12551,23 +14432,30 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             hours, remainder = divmod(seconds, 3600)
             minutes, secs = divmod(remainder, 60)
             elapsed = f"{hours:02d}:{minutes:02d}:{secs:02d}"
+            self._lecture_btn.setHint(self._tr("Stop recording"))
             self._lecture_btn.setIcon(
                 QIcon(str(BASE_DIR / "assets" / "icons" / "stop.svg"))
             )
-            self._lecture_btn.setToolTip(f"Stop lecture recording · {elapsed}")
-            self._lecture_btn.setStyleSheet(
-                f"QPushButton {{ background:{C.PRI_GHO}; border:1px solid {C.MUTED_C}; "
-                f"border-radius:8px; }}"
-            )
+            self._lecture_btn.setToolTip(f"Stop lecture recording - {elapsed}")
+            self._lecture_btn.setStyleSheet(f"""
+                QPushButton {{ background:{C.PRI_GHO}; color:{C.MUTED_C};
+                    border:1px solid {C.MUTED_C}; border-radius:9px;
+                    padding:0 7px; text-align:left; }}
+                QPushButton:hover {{ background:rgba(48,0,24,190); border-color:{C.MUTED_C}; }}
+            """)
         else:
+            self._lecture_btn.setHint(self._tr("Lecture"))
             self._lecture_btn.setIcon(
                 QIcon(str(BASE_DIR / "assets" / "icons" / "record.svg"))
             )
             self._lecture_btn.setToolTip("Start an unlimited lecture recording")
-            self._lecture_btn.setStyleSheet(
-                f"QPushButton {{ background:{C.PANEL2}; border:1px solid {C.BORDER}; "
-                f"border-radius:8px; }} QPushButton:hover {{ border-color:{C.PRI}; }}"
-            )
+            self._lecture_btn.setStyleSheet(f"""
+                QPushButton {{ background:{C.PANEL2}; color:{C.TEXT_MED};
+                    border:1px solid {C.BORDER}; border-radius:9px;
+                    padding:0 7px; text-align:left; }}
+                QPushButton:hover {{ color:{C.PRI}; background:{C.PRI_GHO};
+                    border-color:{C.PRI_DIM}; }}
+            """)
 
     def _set_muted(self, muted: bool, note: str = ""):
         muted = bool(muted)
@@ -12589,27 +14477,32 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
 
     def _style_mute_btn(self):
         if self._muted:
+            self._mute_btn.setHint(self._tr("Unmute"))
             self._mute_btn.setIcon(
                 QIcon(str(BASE_DIR / "assets" / "icons" / "microphone-muted.svg"))
             )
-            self._mute_btn.setText("")
+            self._mute_btn.setText(self._tr("Unmute") if self._mute_btn.underMouse() else "")
             self._mute_btn.setToolTip("Microphone muted · click to unmute · F4")
             self._mute_btn.setStyleSheet(f"""
                 QPushButton {{
                     background: {C.PANEL2}; color: {C.MUTED_C};
-                    border: 1px solid {C.MUTED_C}; border-radius: 8px;
+                    border: 1px solid {C.MUTED_C}; border-radius: 9px;
+                    padding: 0 7px; text-align: left;
                 }}
+                QPushButton:hover {{ background:{C.PRI_GHO}; }}
             """)
         else:
+            self._mute_btn.setHint(self._tr("Mute"))
             self._mute_btn.setIcon(
                 QIcon(str(BASE_DIR / "assets" / "icons" / "microphone.svg"))
             )
-            self._mute_btn.setText("")
+            self._mute_btn.setText(self._tr("Mute") if self._mute_btn.underMouse() else "")
             self._mute_btn.setToolTip("Microphone active · click to mute · F4")
             self._mute_btn.setStyleSheet(f"""
                 QPushButton {{
                     background: {C.PANEL2}; color: {C.GREEN};
-                    border: 1px solid {C.GREEN}; border-radius: 8px;
+                    border: 1px solid {C.GREEN}; border-radius: 9px;
+                    padding: 0 7px; text-align: left;
                 }}
                 QPushButton:hover {{ background: {C.PRI_GHO}; }}
             """)
@@ -12628,7 +14521,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         if not txt:
             return
         self._input.clear()
-        self._dispatch_text(txt)
+        self._dispatch_text(self._with_composer_context(txt))
 
     def _on_chat_image_pasted(self, image_bytes: bytes):
         self._pending_chat_image = image_bytes
@@ -12644,13 +14537,19 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         txt = str(txt or "").strip()
         if not txt:
             return
-        self._append_activity(f"You: {txt}")
+        display_text = txt.replace("[[JARVIS_PLAN_MODE]]", "").strip()
+        self._append_activity(f"You: {display_text}")
         if self.on_text_command:
             threading.Thread(
                 target=self.on_text_command, args=(txt,), daemon=True
             ).start()
 
     def _refresh_dev_mode_btn(self):
+        check = getattr(self, "_development_mode_check", None)
+        if check is not None:
+            check.blockSignals(True)
+            check.setChecked(bool(self._development_mode))
+            check.blockSignals(False)
         if not hasattr(self, "_dev_mode_btn"):
             return
         state = "ON" if self._development_mode else "OFF"
@@ -12671,14 +14570,10 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
     def _toggle_development_mode(self):
         self._development_mode = not self._development_mode
         _save_config_value("development_mode", self._development_mode)
-        self._work_tabs.setTabVisible(4, self._development_mode)
         if self._development_mode:
-            self._work_tabs.setCurrentIndex(4)
             self._append_activity(
                 "SYS: Development mode enabled — activity is mirrored to the terminal."
             )
-        elif self._work_tabs.currentIndex() == 4:
-            self._work_tabs.setCurrentIndex(0)
         self._refresh_dev_mode_btn()
 
     def _append_activity(self, text: str):
@@ -12728,11 +14623,13 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             result = line.split(":", 1)[1].strip()[:4000]
             rows[-1]["result"] = result
             rows[-1]["status"] = "complete"
+            rows[-1]["response_time"] = time.strftime("%Y-%m-%d %H:%M")
             turn_id = rows[-1].get("id")
             for chat_turn in reversed(chat_rows):
                 if chat_turn.get("id") == turn_id:
                     chat_turn["result"] = result
                     chat_turn["status"] = "complete"
+                    chat_turn["response_time"] = rows[-1]["response_time"]
                     break
         elif (
             rows
@@ -12754,11 +14651,13 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         ):
             rows[-1]["result"] = line[:4000]
             rows[-1]["status"] = "error"
+            rows[-1]["response_time"] = time.strftime("%Y-%m-%d %H:%M")
             turn_id = rows[-1].get("id")
             for chat_turn in reversed(chat_rows):
                 if chat_turn.get("id") == turn_id:
                     chat_turn["result"] = line[:4000]
                     chat_turn["status"] = "error"
+                    chat_turn["response_time"] = rows[-1]["response_time"]
                     break
         else:
             return
@@ -12767,70 +14666,123 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         self._refresh_history()
         self._refresh_chat()
 
-    def _refresh_chat(self):
+    def _update_chat_scroll_button(self):
+        if not hasattr(self, "_chat_view") or not hasattr(self, "_chat_latest_btn"):
+            return
+        scroll_bar = self._chat_view.verticalScrollBar()
+        is_chat_tab = (
+            not hasattr(self, "_work_tabs") or self._work_tabs.currentIndex() == 0
+        )
+        away_from_latest = scroll_bar.maximum() - scroll_bar.value() > 28
+        self._chat_latest_btn.setVisible(is_chat_tab and away_from_latest)
+
+    def _scroll_chat_to_latest(self, *_):
         if not hasattr(self, "_chat_view"):
             return
-        all_rows = _chat_turns()
-        rows = all_rows[-20:]
+        scroll_bar = self._chat_view.verticalScrollBar()
+        if getattr(self, "_chat_scroll_animation", None) is not None:
+            self._chat_scroll_animation.stop()
+        self._chat_scroll_animation = QPropertyAnimation(scroll_bar, b"value", self)
+        self._chat_scroll_animation.setDuration(220)
+        self._chat_scroll_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self._chat_scroll_animation.setStartValue(scroll_bar.value())
+        self._chat_scroll_animation.setEndValue(scroll_bar.maximum())
+        self._chat_scroll_animation.start()
+
+    def _refresh_chat(self, preserve_scroll: bool = False):
+        if not hasattr(self, "_chat_view"):
+            return
+        scroll_bar = self._chat_view.verticalScrollBar()
+        old_scroll = scroll_bar.value()
+        rows = _chat_turns()[-20:]
+        self._chat_view.set_response_times(
+            {
+                str(row.get("id", "")): str(row.get("response_time") or row.get("time") or "")
+                for row in rows
+            }
+        )
         cards = []
         for row in rows:
-            request = _html.escape(str(row.get("request", ""))).replace("\n", "<br>")
+            raw_request = str(row.get("request", ""))
+            request = _html.escape(raw_request).replace("\n", "<br>")
             result = _html.escape(str(row.get("result", ""))).replace("\n", "<br>")
-            turn_id = _html.escape(str(row.get("id", "")), quote=True)
+            raw_id = str(row.get("id", ""))
+            turn_id = _html.escape(raw_id, quote=True)
+            request_display = request
+            request_more = ""
+            if len(raw_request) > 320:
+                if raw_id in self._expanded_chat_turns:
+                    request_more = (
+                        f'<div style="margin-top:4px;"><a href="collapse-turn:{turn_id}" '
+                        f'style="color:{C.TEXT_DIM};text-decoration:none;font-size:9pt;">Show less</a></div>'
+                    )
+                else:
+                    short_request = raw_request[:320].rsplit(" ", 1)[0].rstrip()
+                    request_display = _html.escape(short_request).replace("\n", "<br>") + "…"
+                    request_more = (
+                        f'<div style="margin-top:4px;"><a href="expand-turn:{turn_id}" '
+                        f'style="color:{C.PRI};text-decoration:none;font-size:9pt;">Show more</a></div>'
+                    )
             status = _html.escape(str(row.get("status", "pending")).upper())
-            status_label = (
-                "WAITING"
-                if status == "PENDING"
-                else "ERROR" if status == "ERROR" else ""
-            )
+            status_label = "WAITING" if status == "PENDING" else "ERROR" if status == "ERROR" else ""
             if result:
                 answer, answer_color = result, C.TEXT
             elif status == "PENDING":
                 answer, answer_color = "Waiting for JARVIS...", C.TEXT_DIM
             else:
                 answer, answer_color = "No response recorded.", C.MUTED_C
+            response_stamp = str(row.get("response_time") or row.get("time") or "")
+            stamp_title = _html.escape(response_stamp, quote=True)
             cards.append(
-                f'<table width="100%" cellspacing="0" cellpadding="0">'
-                f'<tr><td align="right"><table width="88%" cellspacing="0" cellpadding="0">'
-                f'<tr><td style="padding:6px 9px;background:{C.DARK};border:1px solid {C.BORDER};'
-                f'border-right:2px solid {C.ACC};border-radius:10px;">'
+                f'<table width="100%" cellspacing="0" cellpadding="0" style="margin-bottom:4px;">'
+                f'<tr><td align="right"><table width="84%" cellspacing="0" cellpadding="0">'
+                f'<tr><td style="padding:7px 9px;background:{C.DARK};border:1px solid transparent;'
+                f'border-right:2px solid {C.ACC};border-radius:11px;">'
                 f'<table width="100%" cellspacing="0" cellpadding="0"><tr>'
-                f'<td style="color:{C.TEXT_MED};font-size:9pt;font-weight:600;">You</td>'
+                f'<td style="color:{C.TEXT_MED};font-size:8pt;font-weight:600;padding-bottom:2px;">You</td>'
                 f'<td align="right"><a href="copy-user:{turn_id}" title="Copy message" '
-                f'style="color:{C.TEXT_DIM};text-decoration:none;font-size:8pt;">Copy</a>'
+                f'style="color:{C.TEXT_DIM};text-decoration:none;font-size:10pt;">⧉</a>'
                 f'&nbsp;&nbsp;<a href="delete-turn:{turn_id}" title="Delete this turn" '
-                f'style="color:{C.TEXT_DIM};text-decoration:none;font-size:8pt;">×</a></td>'
-                f'</tr></table><div style="color:{C.TEXT};font-size:11pt;line-height:1.45;margin-top:5px;">{request}</div>'
-                f'</td></tr></table></td></tr><tr><td height="3"></td></tr>'
+                f'style="color:{C.TEXT_DIM};text-decoration:none;font-size:10pt;">×</a></td>'
+                f'</tr></table><div style="color:{C.TEXT};font-size:9pt;line-height:1.35;">{request_display}</div>{request_more}'
+                f'</td></tr></table></td></tr><tr><td height="5"></td></tr>'
                 f'<tr><td align="left"><table width="96%" cellspacing="0" cellpadding="0">'
-                f'<tr><td style="padding:6px 9px;background:{C.PANEL};'
-                f'border-left:2px solid {C.PRI};border-radius:2px 9px 9px 2px;">'
-                f'<div style="color:{C.PRI};font-size:9pt;font-weight:bold;margin-bottom:4px;">JARVIS'
+                f'<tr><td style="padding:3px 8px 1px 8px;background:transparent;">'
+                f'<div style="color:{C.PRI};font-size:8pt;font-weight:bold;margin-bottom:3px;">JARVIS'
                 f'{(" · " + status_label) if status_label else ""}</div>'
-                f'<table width="100%" cellspacing="0" cellpadding="0"><tr>'
-                f'<td style="color:{answer_color};font-size:11pt;line-height:1.5;padding-right:8px;">{answer}</td>'
-                f'<td align="right" valign="top"><a href="copy-answer:{turn_id}" title="Copy response" '
-                f'style="color:{C.TEXT_DIM};text-decoration:none;font-size:8pt;">Copy</a></td>'
-                f"</tr></table>"
-                f'</td></tr></table></td></tr><tr><td height="6"></td></tr></table>'
+                f'<div style="color:{answer_color};font-size:10pt;line-height:1.4;">{answer}</div>'
+                f'<div style="margin-top:3px;"><a href="copy-answer:{turn_id}" title="Copy response · {stamp_title}" '
+                f'style="color:{C.TEXT_DIM};text-decoration:none;font-size:10pt;">⧉</a>'
+                f'</div>'
+                f'</td></tr></table></td></tr>'
+                f'<tr><td style="padding:7px 3% 3px 3%;"><div style="border-top:1px solid {C.BORDER};opacity:0.55;"></div></td></tr>'
+                f'</table>'
             )
         if not cards:
             cards.append(
                 f'<p style="color:{C.TEXT_DIM};">Chat is empty. The archive and saved memory are unchanged.</p>'
             )
         self._chat_view.setHtml(
-            f'<html><body style="font-family:Segoe UI;font-size:11pt;color:{C.TEXT};'
+            f'<html><body style="font-family:Inter,Segoe UI,sans-serif;font-size:10pt;color:{C.TEXT};'
             f'background-color:{C.PANEL2};margin:0;">'
             + "".join(cards)
             + "</body></html>"
         )
-        bar = self._chat_view.verticalScrollBar()
-        bar.setValue(bar.maximum())
-
+        if preserve_scroll:
+            QTimer.singleShot(0, lambda: scroll_bar.setValue(old_scroll))
+        else:
+            scroll_bar.setValue(scroll_bar.maximum())
     def _chat_link_clicked(self, url: QUrl):
         link = url.toString()
         if link.startswith("delete-turn:"):
             self._delete_chat_turn(link.split(":", 1)[1])
+        elif link.startswith(("expand-turn:", "collapse-turn:")):
+            action, turn_id = link.split(":", 1)
+            if action == "expand-turn":
+                self._expanded_chat_turns.add(turn_id)
+            else:
+                self._expanded_chat_turns.discard(turn_id)
+            self._refresh_chat(preserve_scroll=True)
         elif link.startswith(("copy-user:", "copy-answer:")):
             kind, turn_id = link.split(":", 1)
             row = next(
@@ -13138,6 +15090,10 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         if getattr(self, "_auth_lock_dialog", None) is not None:
             event.ignore()
             return
+        for editor in tuple(getattr(self, "_project_editors", {}).values()):
+            if not editor.confirm_close():
+                event.ignore()
+                return
         if self._lecture_recorder is not None:
             try:
                 path = self._lecture_recorder.stop()
@@ -13435,6 +15391,10 @@ class _RootShim:
     def mainloop(self):
         self._app.exec()
 
+    def quit(self):
+        """Stop the Qt event loop from the assistant's worker thread."""
+        self._app.quit()
+
     def protocol(self, *_):
         pass
 
@@ -13486,6 +15446,14 @@ class JarvisUI:
     @on_text_command.setter
     def on_text_command(self, cb):
         self._win.on_text_command = cb
+
+    @property
+    def on_plan_mode_change(self):
+        return self._win.on_plan_mode_change
+
+    @on_plan_mode_change.setter
+    def on_plan_mode_change(self, cb):
+        self._win.on_plan_mode_change = cb
 
     @property
     def on_auth_lock(self):
@@ -13626,6 +15594,10 @@ class JarvisUI:
 
     def write_log(self, text: str):
         self._win._log_sig.emit(text)
+
+    def open_project(self, path: str, entry_file: str = ""):
+        """Open a project in Project Files; safe to call from action workers."""
+        self._win._project_open_sig.emit(str(path or ""), str(entry_file or ""))
 
     def wait_for_api_key(self):
         while not self._win._ready:

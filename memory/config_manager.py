@@ -352,7 +352,36 @@ DEFAULT_COMPUTER_PERMISSIONS = {
     "move_mouse": False,
     "click": False,
     "type": False,
+    "clipboard": False,
 }
+COMPUTER_MODES = ("chat", "agent")
+COMPUTER_ACCESS_LEVELS = ("ask", "approve", "full")
+
+
+def get_computer_access_settings() -> dict[str, str]:
+    """Return the assistant's interaction mode and computer-access policy."""
+    cfg = load_api_keys()
+    mode = str(cfg.get("computer_mode", "chat")).lower()
+    access = str(cfg.get("computer_access_level", "approve")).lower()
+    return {
+        "mode": mode if mode in COMPUTER_MODES else "chat",
+        "access_level": access if access in COMPUTER_ACCESS_LEVELS else "approve",
+    }
+
+
+def save_computer_access_settings(mode: str | None = None, access_level: str | None = None) -> None:
+    """Persist only recognized access options; legacy per-action permissions stay intact."""
+    updates = {}
+    if mode is not None:
+        mode = str(mode).lower()
+        if mode in COMPUTER_MODES:
+            updates["computer_mode"] = mode
+    if access_level is not None:
+        access_level = str(access_level).lower()
+        if access_level in COMPUTER_ACCESS_LEVELS:
+            updates["computer_access_level"] = access_level
+    if updates:
+        _patch_config(**updates)
 
 
 def get_cursor_assistant_settings() -> dict:
@@ -423,13 +452,22 @@ def save_cursor_assistant_settings(values: dict) -> None:
     _patch_config(cursor_assistant=current)
 
 
-def get_computer_permissions() -> dict:
-    cfg = load_api_keys().get("computer_permissions")
+def get_configured_computer_permissions() -> dict:
+    """Return saved per-capability choices, without the temporary full-access override."""
+    api_cfg = load_api_keys()
+    cfg = api_cfg.get("computer_permissions")
     cfg = cfg if isinstance(cfg, dict) else {}
     return {
         key: cfg.get(key) if isinstance(cfg.get(key), bool) else default
         for key, default in DEFAULT_COMPUTER_PERMISSIONS.items()
     }
+
+
+def get_computer_permissions() -> dict:
+    """Return effective permissions, including the explicit full-access override."""
+    if get_computer_access_settings()["access_level"] == "full":
+        return {key: True for key in DEFAULT_COMPUTER_PERMISSIONS}
+    return get_configured_computer_permissions()
 
 
 def save_computer_permissions(values: dict) -> None:
