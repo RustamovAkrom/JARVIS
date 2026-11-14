@@ -3342,7 +3342,12 @@ class ProvidersOverlay(_HudOverlay):
         from providers import registry
 
         self._registry = registry
-        self._get_cfg = get_provider_config
+        # Resolve credentials against the tab being edited, not the globally
+        # active runtime environment. Online and Offline drafts can be edited
+        # before the user applies either one.
+        self._get_cfg = lambda provider_id: get_provider_config(
+            provider_id, self._environment
+        )
         # Warm anything a provider can only learn by asking the machine, off
         # this thread. The installed voice list costs a PowerShell subprocess —
         # measured at 1.70 seconds — and the form asks for it on every rebuild,
@@ -4368,7 +4373,9 @@ class ProvidersOverlay(_HudOverlay):
 
         for pid in list(self._edits):
             try:
-                save_provider_config(pid, self._values(pid))
+                save_provider_config(
+                    pid, self._values(pid), environment=self._environment
+                )
             except Exception:
                 pass
 
@@ -4404,7 +4411,11 @@ class ProvidersOverlay(_HudOverlay):
         if ok and seen is not None:
             from memory.config_manager import save_provider_config
 
-            save_provider_config(pid, {"vision": "1" if seen else ""})
+            save_provider_config(
+                pid,
+                {"vision": "1" if seen else ""},
+                environment=self._environment,
+            )
             entry = self._edits.get(pid, {}).get("vision")
             if entry is not None and isinstance(entry[0], QComboBox):
                 entry[0].setCurrentIndex(1 if seen else 0)
@@ -4491,6 +4502,7 @@ class ProvidersOverlay(_HudOverlay):
     def _apply(self) -> None:
         from memory.config_manager import (
             get_online_provider_mode,
+            merge_provider_catalog_defaults,
             save_providers,
         )
 
@@ -4501,7 +4513,12 @@ class ProvidersOverlay(_HudOverlay):
             self._update_footer()
             return
 
-        creds = {pid: self._values(pid) for pid in list(self._edits)}
+        # Start from the active tab's saved values so fields hidden behind
+        # catalog presets or the Advanced disclosure are never discarded.
+        creds = {
+            pid: {**self._get_cfg(pid), **self._values(pid)}
+            for pid in list(self._edits)
+        }
         for slot, eid in self._picked.items():
             pid = self._pipe.get(slot, "")
             if pid and eid:
@@ -4513,8 +4530,11 @@ class ProvidersOverlay(_HudOverlay):
                     ),
                     {},
                 )
-                creds.setdefault(pid, {}).update(selected.get("values") or {})
-                creds[pid]["catalog"] = eid
+                creds[pid] = merge_provider_catalog_defaults(
+                    creds.get(pid, {}),
+                    selected.get("values") or {},
+                    eid,
+                )
 
         self._pipeline_drafts[self._environment] = dict(self._pipe)
         self._mode_drafts[self._environment] = self._mode
@@ -4542,7 +4562,10 @@ class ProvidersOverlay(_HudOverlay):
         except Exception:
             pass
 
-        self.hide()
+        if not self._embedded:
+            self.hide()
+        # Embedded Settings pages are cached. Keep their controls mounted
+        # after Apply so reopening AI Providers never returns an empty panel.
         # Apply may change only an API key, model name or endpoint while the
         # selected provider IDs remain identical. The live session still needs
         # to be rebuilt with the just-saved credentials.
