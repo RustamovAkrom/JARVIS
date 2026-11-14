@@ -317,6 +317,7 @@ class SettingsCenter(QDialog):
             return
         content = builder()
         layout.insertWidget(max(0, layout.count() - 1), content)
+        self._apply_glass_to_widget(content)
         self._built_categories.add(category_id)
 
     @staticmethod
@@ -362,19 +363,25 @@ class SettingsCenter(QDialog):
         else:
             self.close()
 
-    def set_glass_opacity(self, opacity: int) -> None:
-        """Apply the app's Glass value to Settings surfaces, not to its text."""
-        self._glass_opacity = max(60, min(100, int(opacity)))
-        self.setStyleSheet(_center_style(self._glass_opacity))
-        for section in self.findChildren(SettingsSection):
+    def _apply_glass_to_widget(self, root: QWidget) -> None:
+        """Apply the current glass value to settings surfaces built lazily."""
+        for section in root.findChildren(SettingsSection):
             section.set_glass_opacity(self._glass_opacity)
-        for card in self.findChildren(QFrame, "SettingsEmbeddedCard"):
+        if isinstance(root, SettingsSection):
+            root.set_glass_opacity(self._glass_opacity)
+        for card in root.findChildren(QFrame, "SettingsEmbeddedCard"):
             card.setStyleSheet(
                 f"QFrame#SettingsEmbeddedCard {{ "
                 f"background:{glass_rgba(C.PANEL, self._glass_opacity)}; "
                 f"border:1px solid {C.BORDER}; border-radius:{Radius.MD}px; }}"
                 f"QLabel {{ background:transparent; color:{C.TEXT}; border:0; }}"
             )
+
+    def set_glass_opacity(self, opacity: int) -> None:
+        """Apply the app's Glass value to Settings surfaces, not to its text."""
+        self._glass_opacity = max(60, min(100, int(opacity)))
+        self.setStyleSheet(_center_style(self._glass_opacity))
+        self._apply_glass_to_widget(self)
         self.update()
 
     def refresh_theme(self) -> None:
