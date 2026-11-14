@@ -3488,6 +3488,31 @@ class ProvidersOverlay(_HudOverlay):
         self._remember_edits()
         self._provider_category = category
         self._mode = "gemini" if category == "full" else "pipeline"
+
+        # A category switch must not leave an out-of-category provider active.
+        # Keep the existing selection when it is allowed; otherwise choose the
+        # first matching catalog entry for that slot (Claude constrains LLM only).
+        for slot, _num, _label, _purpose in self._SLOTS:
+            if category == "claude" and slot != "llm":
+                continue
+            allowed = self._catalog(slot)
+            current_pid = self._pipe.get(slot, "")
+            current_eid = self._picked.get(slot) or (
+                self._current_entry(slot, current_pid) if current_pid else ""
+            )
+            if any(pid == current_pid and eid == current_eid for pid, eid, _entry, _decl in allowed):
+                continue
+            same_provider = [
+                (pid, eid) for pid, eid, _entry, _decl in allowed if pid == current_pid
+            ]
+            if same_provider:
+                self._picked[slot] = same_provider[0][1]
+            elif allowed:
+                self._pipe[slot], self._picked[slot] = allowed[0][0], allowed[0][1]
+            else:
+                self._pipe[slot] = ""
+                self._picked[slot] = ""
+
         self._refresh_cards()
         QTimer.singleShot(0, self._rebuild_body)
 
@@ -3688,6 +3713,13 @@ class ProvidersOverlay(_HudOverlay):
                 },
             )
             for e in entries:
+                category = getattr(self, "_provider_category", "full")
+                if category == "local" and e.get("local") is not True:
+                    continue
+                if category == "custom" and e.get("local") is True:
+                    continue
+                if category == "claude" and kind == "llm" and e.get("id") != "openrouter":
+                    continue
                 out.append((decl["id"], e["id"], e, decl))
         return out
 
