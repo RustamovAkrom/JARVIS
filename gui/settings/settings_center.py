@@ -289,9 +289,8 @@ class SettingsCenter(QDialog):
 
     def show_category(self, category_id: str) -> bool:
         """Select and build a category without opening a legacy window."""
-        item = self._category_rows.get(category_id)
-        if item is None:
-            return False
+        # Search results replace the category rows, so clear the query before
+        # looking up the category item.
         self.search.clear()
         item = self._category_rows.get(category_id)
         if item is None:
