@@ -3267,8 +3267,10 @@ class ProvidersOverlay(_HudOverlay):
         self._embedded = bool(embedded)
         # Imported HERE, on the click — never at startup. See the class docstring.
         from memory.config_manager import (
+            get_online_provider_mode,
             get_pipeline,
             get_provider_config,
+            get_provider_environment,
             get_provider_mode,
             get_sidecar_first,
             get_sidecar_provider,
@@ -3347,23 +3349,32 @@ class ProvidersOverlay(_HudOverlay):
         # A dropdown hides the option you did not choose. This is the one
         # decision on the panel that changes everything below it, and both
         # answers deserve to be readable at the same time.
+        self._environment = get_provider_environment()
         self._mode = get_provider_mode()
-        self._pipe = dict(get_pipeline())
+        self._pipeline_drafts = {
+            "online": dict(get_pipeline("online")),
+            "offline": dict(get_pipeline("offline")),
+        }
+        self._mode_drafts = {
+            "online": get_online_provider_mode(),
+            "offline": "pipeline",
+        }
+        self._pipe = dict(self._pipeline_drafts.get(self._environment, {}))
         self._sidecar = get_sidecar_provider()
         self._sidecar_first = get_sidecar_first()
-        self._provider_category = self._initial_provider_category()
+        self._provider_category = self._environment
+        self._picked: dict[str, str] = {}
+
         self._category_tabs = QTabBar()
         self._category_tabs.setExpanding(True)
-        self._category_tabs.setUsesScrollButtons(True)
+        self._category_tabs.setUsesScrollButtons(False)
         self._category_tabs.setDrawBase(False)
-        for label in ("Full control AI", "Custom AI", "Local AI", "Claude AI"):
-            self._category_tabs.addTab(label)
-        self._category_tabs.setCurrentIndex(
-            ("full", "custom", "local", "claude").index(self._provider_category)
-        )
+        self._category_tabs.addTab("Online")
+        self._category_tabs.addTab("Offline")
+        self._category_tabs.setCurrentIndex(0 if self._environment == "online" else 1)
         self._category_tabs.setStyleSheet(f"""
             QTabBar::tab {{ color:{C.TEXT_MED}; background:transparent; border:0;
-                border-bottom:2px solid transparent; padding:8px 9px; }}
+                border-bottom:2px solid transparent; padding:9px 18px; }}
             QTabBar::tab:selected {{ color:{C.PRI}; border-bottom-color:{C.PRI}; }}
             QTabBar::tab:hover {{ color:{C.TEXT}; }}
         """)
@@ -3373,6 +3384,24 @@ class ProvidersOverlay(_HudOverlay):
         self._category_description.setWordWrap(True)
         self._category_description.setStyleSheet(f"color:{C.TEXT_MED}; background:transparent;")
         outer.addWidget(self._category_description)
+
+        self._online_engine_box = QWidget()
+        engine_row = QHBoxLayout(self._online_engine_box)
+        engine_row.setContentsMargins(0, 0, 0, 0)
+        engine_row.setSpacing(8)
+        self._gemini_mode_card = self._mode_card(
+            "Gemini Live",
+            "One integrated cloud service for voice, answers and tools.",
+            "gemini",
+        )
+        self._cloud_mode_card = self._mode_card(
+            "Custom online stack",
+            "Choose hosted AI and speech services separately.",
+            "pipeline",
+        )
+        engine_row.addWidget(self._gemini_mode_card, 1)
+        engine_row.addWidget(self._cloud_mode_card, 1)
+        outer.addWidget(self._online_engine_box)
 
         # ── Body ────────────────────────────────────────────────────────────
         self._scroll = QScrollArea()
