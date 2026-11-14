@@ -12689,7 +12689,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         }
         policy = policy_labels.get(access.get("access_level"), "Use allowed permissions")
         button.setToolTip(
-            f"{mode.title()} mode · {policy} · {count}/{total} capabilities allowed"
+            f"{mode.title()} mode · {policy} · {count}/{total} permissions configured"
         )
 
         menu = QMenu(button)
@@ -12704,6 +12704,14 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         mode_action.setEnabled(False)
         policy_action = menu.addAction(f"Approval: {policy}")
         policy_action.setEnabled(False)
+        if self._chat_plan_mode:
+            mode_hint = "Plan mode prepares actions without running tools."
+        elif mode == "CHAT":
+            mode_hint = "Computer-changing actions are paused in Chat mode."
+        else:
+            mode_hint = "Only the permissions listed below are available to Agent mode."
+        hint_action = menu.addAction(mode_hint)
+        hint_action.setEnabled(False)
         menu.addSeparator()
 
         labels = (
