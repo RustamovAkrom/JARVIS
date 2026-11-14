@@ -4,13 +4,15 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget
 
+from gui.themes.styles import glass_rgba
 from gui.themes.tokens import C, Radius, Space
 from gui.themes.typography import TypeScale, ui_font
 
 
-def _section_style() -> str:
+def _section_style(glass_opacity: int = 100) -> str:
+    surface = glass_rgba(C.PANEL, glass_opacity)
     return (
-        f"QFrame#SettingsSection {{ background:{C.PANEL}; border:1px solid {C.BORDER};"
+        f"QFrame#SettingsSection {{ background:{surface}; border:1px solid {C.BORDER};"
         f" border-radius:{Radius.MD}px; }}"
         f"QLabel {{ color:{C.TEXT}; background:transparent; border:0; }}"
     )
@@ -72,7 +74,8 @@ class SettingsSection(QFrame):
     def __init__(self, title: str, description: str = "", parent=None):
         super().__init__(parent)
         self.setObjectName("SettingsSection")
-        self.setStyleSheet(_section_style())
+        self._glass_opacity = 100
+        self.setStyleSheet(_section_style(self._glass_opacity))
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
         self._layout = QVBoxLayout(self)
         self._layout.setContentsMargins(Space.LG, Space.MD, Space.LG, Space.SM)
@@ -92,8 +95,13 @@ class SettingsSection(QFrame):
         self._layout.addWidget(row)
         return row
 
+    def set_glass_opacity(self, opacity: int) -> None:
+        """Update the shared translucent surface without fading its text."""
+        self._glass_opacity = max(60, min(100, int(opacity)))
+        self.setStyleSheet(_section_style(self._glass_opacity))
+
     def refresh_theme(self) -> None:
-        self.setStyleSheet(_section_style())
+        self.setStyleSheet(_section_style(self._glass_opacity))
         self.description_label.setStyleSheet(f"color:{C.TEXT_MED};")
         for row in self.findChildren(SettingRow):
             row.refresh_theme()
