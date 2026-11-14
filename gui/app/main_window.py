@@ -11925,6 +11925,11 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             path = path.expanduser().resolve(strict=True)
             if not path.is_file():
                 return
+            from memory.config_manager import get_project_open_mode
+
+            if get_project_open_mode() == "external":
+                self._open_external_project_file(path)
+                return
             size = path.stat().st_size
             mime_type, _ = mimetypes.guess_type(path.name)
             binary_suffixes = {
@@ -13308,6 +13313,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             )
             splitter.setSizes(sizes)
         button.setChecked(panel.isVisible())
+        self._refresh_workspace_settings_state()
 
     def _toggle_content_panel(self):
         if self._reading_mode:
@@ -13325,6 +13331,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                 [max(total - content - quiz, 120), content, quiz]
             )
         self._content_toggle_btn.setChecked(self._content_panel.isVisible())
+        self._refresh_workspace_settings_state()
 
     def _toggle_debug_panel(self):
         is_active = (
@@ -13339,6 +13346,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             self._bottom_tabs.isVisible()
             and self._bottom_tabs.currentWidget() is self._debug_panel
         )
+        self._refresh_workspace_settings_state()
 
     def _show_bottom_panel(self, index: int):
         was_hidden = not self._bottom_tabs.isVisible()
