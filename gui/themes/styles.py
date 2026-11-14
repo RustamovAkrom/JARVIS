@@ -1,9 +1,49 @@
 """Shared QSS builders for native Qt components."""
 
+from PyQt6.QtGui import QColor
+
 from core.runtime_paths import PATHS
 from gui.themes.tokens import C
 
 BASE_DIR = PATHS.resource_root
+
+
+def glass_rgba(
+    color: str,
+    opacity: int,
+    *,
+    minimum_alpha: int = 88,
+    maximum_alpha: int = 232,
+) -> str:
+    """Return a theme colour with alpha derived from the app's Glass setting.
+
+    The stored setting is shared by the main workspace and Settings Center.
+    Text is never faded independently; only panel surfaces receive alpha.
+    """
+    value = max(60, min(100, int(opacity)))
+    ratio = (value - 60) / 40
+    alpha = round(minimum_alpha + (maximum_alpha - minimum_alpha) * ratio)
+    selected = QColor(color)
+    return (
+        f"rgba({selected.red()}, {selected.green()}, "
+        f"{selected.blue()}, {alpha})"
+    )
+
+
+def glass_surface_style(
+    selector: str,
+    color: str,
+    opacity: int,
+    *,
+    border: str | None = None,
+    radius: int = 10,
+) -> str:
+    """Build one shared translucent surface rule for settings components."""
+    border_rule = f"border:1px solid {border};" if border else "border:0;"
+    return (
+        f"{selector} {{ background:{glass_rgba(color, opacity)}; "
+        f"{border_rule} border-radius:{radius}px; }}"
+    )
 
 def _card_qss(name: str) -> str:
     return (
