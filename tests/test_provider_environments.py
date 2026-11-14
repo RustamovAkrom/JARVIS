@@ -173,6 +173,38 @@ class ProviderEnvironmentTests(unittest.TestCase):
         self.assertEqual(merged["base_url"], "https://preset.example/v1")
         self.assertEqual(merged["catalog"], "groq")
 
+    def test_save_providers_writes_credentials_to_active_environment(self):
+        data = {
+            "providers": {
+                "environment": "online",
+                "creds": {"shared": {"model": "legacy"}},
+                "creds_online": {"shared": {"model": "cloud-model"}},
+            }
+        }
+
+        def apply_update(update):
+            update(data)
+
+        with patch.object(config_manager, "_update_config", side_effect=apply_update):
+            config_manager.save_providers(
+                environment="offline",
+                mode="pipeline",
+                pipeline={"llm": "shared"},
+                creds={"shared": {"model": "local-model", "max_tools": "12"}},
+            )
+
+        providers = data["providers"]
+        self.assertEqual(
+            providers["creds_online"]["shared"]["model"], "cloud-model"
+        )
+        self.assertEqual(
+            providers["creds_offline"]["shared"]["model"], "local-model"
+        )
+        self.assertEqual(
+            providers["creds_offline"]["shared"]["max_tools"], "12"
+        )
+        self.assertEqual(providers["creds"]["shared"]["model"], "legacy")
+
     def test_switching_back_to_online_keeps_online_engine_choice(self):
         data = {
             "providers": {
