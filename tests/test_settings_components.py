@@ -12,7 +12,7 @@ from gui.settings.categories.general import GeneralSettingsPage
 from gui.settings.categories.identity import AssistantIdentityPage
 from gui.settings.registry import CATEGORIES, ENTRIES, search_entries
 from gui.settings.settings_center import SettingsCenter
-from gui.app.main_window import AudioDeviceOverlay
+from gui.app.main_window import AudioDeviceOverlay, HueWheel
 from gui.themes.tokens import Radius, Space
 from gui.themes.typography import FONT_MONO, FONT_UI, TypeScale, mono_font, ui_font
 
@@ -68,6 +68,24 @@ class SettingsComponentTests(unittest.TestCase):
         self.assertIn("Voice & Audio", center.navigation.item(0).text())
         center.refresh_theme()
         center.close()
+
+    def test_settings_window_uses_shared_glass_opacity(self):
+        center = SettingsCenter()
+        center.set_glass_opacity(72)
+        self.assertAlmostEqual(center.windowOpacity(), 0.72, places=2)
+        center.set_glass_opacity(140)
+        self.assertAlmostEqual(center.windowOpacity(), 1.0, places=2)
+        center.set_glass_opacity(20)
+        self.assertAlmostEqual(center.windowOpacity(), 0.6, places=2)
+        center.close()
+
+    def test_hue_wheel_keeps_black_and_white_hex_preview(self):
+        wheel = HueWheel("#000000")
+        self.assertEqual(wheel.color(), "#000000")
+        wheel.set_color("#FFFFFF")
+        self.assertEqual(wheel.color(), "#ffffff")
+        wheel.set_color("#000000")
+        self.assertEqual(wheel.color(), "#000000")
 
     def test_category_pages_are_built_on_first_visit_and_cached(self):
         built = []
