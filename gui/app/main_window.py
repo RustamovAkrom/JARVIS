@@ -3001,6 +3001,10 @@ class MemoryOverlay(_HudOverlay):
         p.update(before.united(self.geometry()))
         self.update()
 
+    def refresh_state(self) -> None:
+        """Reload saved facts when the cached Memory page is reopened."""
+        self._rebuild()
+
     def _rebuild(self):
         before = self.geometry()
         self._clear_layout()
@@ -10095,7 +10099,11 @@ class MainWindow(QMainWindow):
         self._dev_mode_btn.setFixedHeight(26)
         self._dev_mode_btn.setFont(QFont(FONT_MONO, 7, QFont.Weight.Bold))
         self._dev_mode_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._dev_mode_btn.clicked.connect(self._toggle_development_mode)
+        # QPushButton.clicked emits a bool. Do not pass that False into
+        # the optional explicit-state argument: this control is a toggle.
+        self._dev_mode_btn.clicked.connect(
+            lambda _checked=False: self._toggle_development_mode()
+        )
         self._refresh_dev_mode_btn()
         lay.addWidget(self._dev_mode_btn)
 
