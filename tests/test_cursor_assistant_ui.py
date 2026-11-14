@@ -203,9 +203,12 @@ class CursorAssistantUiTests(unittest.TestCase):
 
     def test_windows_gpu_probe_is_disabled_to_keep_monitor_thread_safe(self):
         metrics = _SysMetrics.__new__(_SysMetrics)
-        with patch("ui._OS", "Windows"), patch("ui.subprocess.run") as run:
-            self.assertEqual(metrics._get_gpu(), -1.0)
-        run.assert_not_called()
+
+        with patch("gui.panels.system_monitor.metrics._OS", "Windows"):
+            with patch("gui.panels.system_monitor.metrics.ctypes.CDLL") as cdll:
+                self.assertEqual(metrics._get_gpu(), -1.0)
+
+        cdll.assert_not_called()
 
     def test_changing_cursor_style_automatically_enables_custom_cursor(self):
         class Controls:
