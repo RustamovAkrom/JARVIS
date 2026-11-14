@@ -12853,7 +12853,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         self._composer_context.setVisible(bool(parts))
 
     def _refresh_access_status(self) -> None:
-        """Show the active interaction mode and exact permission switches beside the composer."""
+        """Show a compact live summary and an expandable permission checklist."""
         button = getattr(self, "_access_status_button", None)
         if button is None:
             return
@@ -12861,53 +12861,64 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         from memory.config_manager import (
             get_computer_access_settings,
             get_computer_permissions,
+            get_configured_computer_permissions,
         )
 
         access = get_computer_access_settings()
-        configured = get_computer_permissions()
+        saved_permissions = get_configured_computer_permissions()
+        effective_permissions = get_computer_permissions()
         full_access = access.get("access_level") == "full"
-        allowed = {
-            key: (True if full_access else bool(value))
-            for key, value in configured.items()
-        }
-        count = sum(1 for value in allowed.values() if value)
-        total = len(allowed)
+        configured_count = sum(bool(value) for value in saved_permissions.values())
+        total = len(saved_permissions)
         mode = "PLAN" if self._chat_plan_mode else str(
             access.get("mode") or self._chat_interaction_mode or "chat"
         ).upper()
-        button.setText(f"{mode} · {count}/{total}")
+        if self._chat_plan_mode:
+            summary = "PLAN · PAUSED"
+        elif mode == "CHAT":
+            summary = "CHAT · READ ONLY"
+        elif full_access:
+            summary = "AGENT · FULL"
+        else:
+            summary = f"AGENT · {configured_count}/{total}"
+
+        button.setText(summary)
         button.setAccessibleName(
-            f"{mode.title()} mode, {count} of {total} computer permissions allowed"
+            f"{mode.title()} mode. {configured_count} of {total} saved computer permissions enabled."
         )
 
         policy_labels = {
-            "ask": "Ask every time",
-            "approve": "Use allowed permissions",
+            "ask": "Confirm every action",
+            "approve": "Use enabled permissions",
             "full": "Full access",
         }
-        policy = policy_labels.get(access.get("access_level"), "Use allowed permissions")
+        policy = policy_labels.get(
+            access.get("access_level"), "Use enabled permissions"
+        )
         button.setToolTip(
-            f"{mode.title()} mode · {policy} · {count}/{total} permissions configured"
+            f"{mode.title()} mode · {policy} · Open to inspect computer permissions"
         )
 
         menu = QMenu(button)
         menu.setStyleSheet(
-            f"QMenu {{ background:{C.PANEL}; color:{C.TEXT}; "
-            f"border:1px solid {C.BORDER_B}; padding:6px; }}"
-            f"QMenu::item {{ padding:6px 18px; border-radius:4px; }}"
+            f"QMenu {{ background:{glass_rgba(C.PANEL, 100)}; color:{C.TEXT}; "
+            f"border:1px solid {C.BORDER_B}; padding:7px; }}"
+            f"QMenu::item {{ padding:7px 18px; border-radius:4px; }}"
             f"QMenu::item:selected {{ background:{C.PRI_GHO}; color:{C.PRI}; }}"
-            f"QMenu::separator {{ height:1px; background:{C.BORDER}; margin:4px 7px; }}"
+            f"QMenu::separator {{ height:1px; background:{C.BORDER}; margin:5px 7px; }}"
         )
-        mode_action = menu.addAction(f"Mode: {mode.title()}")
+        mode_action = menu.addAction(f"Current mode  ·  {mode.title()}")
         mode_action.setEnabled(False)
-        policy_action = menu.addAction(f"Approval: {policy}")
+        policy_action = menu.addAction(f"Approval policy  ·  {policy}")
         policy_action.setEnabled(False)
         if self._chat_plan_mode:
-            mode_hint = "Plan mode prepares actions without running tools."
+            mode_hint = "Plan mode prepares actions. No computer action is executed."
         elif mode == "CHAT":
-            mode_hint = "Computer-changing actions are paused in Chat mode."
+            mode_hint = "Chat mode is read-only. Computer actions are paused."
         else:
-            mode_hint = "Only the permissions listed below are available to Agent mode."
+            mode_hint = (
+                "Agent mode can use only the capabilities shown as Allowed below."
+            )
         hint_action = menu.addAction(mode_hint)
         hint_action.setEnabled(False)
         menu.addSeparator()
@@ -12915,22 +12926,34 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         labels = (
             ("observe_screen", "Inspect screen"),
             ("find_elements", "Find interface elements"),
-            ("move_mouse", "Move and scroll"),
+            ("move_mouse", "Move pointer and scroll"),
             ("click", "Click and drag"),
             ("type", "Keyboard input"),
             ("clipboard", "Clipboard access"),
         )
         for key, label in labels:
-            enabled = allowed.get(key, False)
-            status = "Allowed" if enabled else "Off"
-            action = menu.addAction(f"{'✓' if enabled else '–'}  {label}: {status}")
+            saved = bool(saved_permissions.get(key, False))
+            effective = bool(effective_permissions.get(key, False))
+            if self._chat_plan_mode:
+                status = "Paused · Plan mode"
+            elif mode == "CHAT":
+                status = "Saved · Agent mode only" if saved else "Off"
+            elif effective:
+                status = "Allowed"
+            else:
+                status = "Off"
+            marker = "✓" if saved else "–"
+            action = menu.addAction(f"{marker}  {label}  ·  {status}")
             action.setEnabled(False)
 
+        if full_access:
+            override = menu.addAction(
+                "Full access temporarily overrides the saved switches."
+            )
+            override.setEnabled(False)
         menu.addSeparator()
         settings_action = menu.addAction("Open computer permissions…")
-        settings_action.triggered.connect(
-            lambda: self._open_permissions_settings()
-        )
+        settings_action.triggered.connect(self._open_permissions_settings)
         button.setMenu(menu)
 
     def _open_permissions_settings(self) -> None:
