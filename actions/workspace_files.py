@@ -123,9 +123,30 @@ def read_active_project_file() -> str:
     return read_project_file(relative_path)
 
 
-def workspace_files(parameters: dict | None = None) -> str:
+def open_project_folder(path: str, player=None) -> str:
+    raw = (path or "").strip().strip('"\'')
+    if not raw:
+        return "Provide the folder path to open in JARVIS Project Files."
+    folder = Path(raw).expanduser()
+    if not folder.is_absolute():
+        folder = Path.home() / folder
+    try:
+        folder = folder.resolve(strict=True)
+        if not folder.is_dir():
+            return f"Project path is not a folder: {folder}"
+    except OSError as exc:
+        return f"Could not open project folder '{raw}': {exc}"
+    if not player or not hasattr(player, "open_project"):
+        return "JARVIS Project Files is not available right now."
+    player.open_project(str(folder))
+    return f"Opened project folder in JARVIS Project Files: {folder}"
+
+
+def workspace_files(parameters: dict | None = None, player=None) -> str:
     params = parameters or {}
     action = str(params.get("action", "list")).strip().lower()
+    if action == "open":
+        return open_project_folder(str(params.get("path", "")), player=player)
     if action == "list":
         return list_project_files()
     if action == "read_current":
@@ -141,11 +162,13 @@ def workspace_files(parameters: dict | None = None) -> str:
 TOOL = {
     "name": "workspace_files",
     "description": (
-        "Inspect the project folder currently selected by the user in JARVIS. "
-        "Use this for questions about the user's project: first list files to "
+        "Open a requested project folder inside JARVIS Project Files using action=open; "
+        "never use a browser, Explorer, or external editor to open a local project folder "
+        "unless the user explicitly asks for that app. Inspect the selected project "
+        "using this tool: first list files to "
         "discover relative paths, then read relevant text files. For questions "
         "about the file open in the JARVIS editor, use read_current. This is "
-        "read-only and cannot access files outside the selected project."
+        "read-only for list/read actions; open selects the folder inside JARVIS."
     ),
     "parameters": {
         "type": "OBJECT",
@@ -153,13 +176,13 @@ TOOL = {
             "action": {
                 "type": "STRING",
                 "description": (
-                    "list, read_current for the file open in the editor, "
-                    "or read for a project-relative file"
+                    "open a folder in JARVIS, list project files, read_current "
+                    "for the file open in the editor, or read a project-relative file"
                 ),
             },
             "path": {
                 "type": "STRING",
-                "description": "Project-relative file path, required when action is read",
+                "description": "Folder path for action=open, or project-relative file path for action=read",
             },
         },
         "required": ["action"],

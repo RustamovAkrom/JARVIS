@@ -48,11 +48,9 @@ import re
 import threading
 import time
 import json
-import sys
 import traceback
 from contextlib import asynccontextmanager
 from datetime import datetime
-from pathlib import Path
 from core.runtime_paths import PATHS, initialize_user_data
 
 import numpy as np
@@ -606,6 +604,18 @@ class _ReconnectSignal(Exception):
         self.keep_context = keep_context
 
 
+class _ShutdownSignal(Exception):
+    """Unwind the live-session task group after the final goodbye is spoken."""
+
+
+def _is_shutdown_signal(exc: BaseException) -> bool:
+    if isinstance(exc, _ShutdownSignal):
+        return True
+    if isinstance(exc, BaseExceptionGroup):
+        return any(_is_shutdown_signal(sub) for sub in exc.exceptions)
+    return False
+
+
 def _is_reconnect_signal(exc: BaseException) -> bool:
     """True if `exc` is a _ReconnectSignal, or a(n) (Base)ExceptionGroup that
     wraps one — TaskGroup bundles child exceptions into a group."""
@@ -635,6 +645,7 @@ class JarvisLive:
         # reconnect: a dropped connection is not news about Wayland.
         self._platform_notes_shown = False
         self.ui = ui
+        self.ui.on_plan_mode_change = self._set_plan_mode
         self._asst_name = "JARVI    S"  # updated each session from config
         self.session = None
         self.audio_in_queue = None
@@ -723,6 +734,11 @@ class JarvisLive:
         self._resume_handle: str | None = None
         self._turn_done_event: asyncio.Event | None = None
         self._dashboard = None
+        self._shutdown_requested = False
+        self._shutdown_requested_at: float | None = None
+        self._plan_mode_active = bool(
+            getattr(getattr(self.ui, "_win", None), "_chat_plan_mode", False)
+        )
         self._briefing_sent = False  # morning briefing fires once per process
         self._sys_monitor = SystemMonitor()  # persistent cooldown state
         self._proactive = ProactiveEngine()
@@ -791,6 +807,10 @@ class JarvisLive:
         self.ui.on_wake_install = self._ui_wake_install  # () -> (ok, msg)
 
     # ── Wake word: state machine ─────────────────────────────────────────────
+
+    def _set_plan_mode(self, enabled: bool) -> None:
+        """Keep the backend tool guard in sync with the chat's plan toggle."""
+        self._plan_mode_active = bool(enabled)
 
     def _wake_state(self) -> dict:
         # A loaded, running detector is definitively ready; otherwise fall back
@@ -942,6 +962,13 @@ class JarvisLive:
         """
         while True:
             await asyncio.sleep(2)
+            if self._shutdown_requested:
+                requested_at = self._shutdown_requested_at or time.monotonic()
+                if time.monotonic() - requested_at >= 20:
+                    # A silent or stalled model must not leave the assistant
+                    # listening forever after an explicit shutdown request.
+                    raise _ShutdownSignal()
+                continue
             deadline = self._rx_deadline
             if deadline is None or time.monotonic() < deadline:
                 continue
@@ -1032,6 +1059,15 @@ class JarvisLive:
             return
         if not self._loop or not self.session:
             return
+        plan_marker = "[[JARVIS_PLAN_MODE]]"
+        if plan_marker in str(text):
+            self._plan_mode_active = True
+            text = str(text).replace(
+                plan_marker,
+                "Planning mode is active. Produce a plan only. Do not call action "
+                "tools or perform state-changing work. Read-only lookups are allowed "
+                "only when needed to make the plan accurate.",
+            )
         # Respect wake-word sleep: a typed command must not be answered while
         # asleep either (the sleep gate is not just for the mic). Wake first with
         # "Hey Jarvis" or the WAKE NOW button.
@@ -1340,7 +1376,14 @@ class JarvisLive:
             + "When asked about project files or code, inspect the current "
             "workspace with the workspace_files tool. List files first if "
             "needed, then read the relevant file. Use read_current for the "
-            "file open in the JARVIS editor. Never claim to have seen project "
+            "file open in the JARVIS editor. "
+            "When asked to open a local project folder, use workspace_files with "
+            "action=open so it appears in JARVIS Project Files; do not use browser_control, "
+            "open_app, computer_control, or the OS file manager for local folder paths. "
+            "When creating a project, use dev_agent and pass the requested project_path; "
+            "projects open inside JARVIS by default. Launch VS Code or another editor "
+            "only when the user explicitly asks for an external editor. "
+            "Never claim to have seen project "
             "contents until the tool returns them; unsaved editor changes "
             "must be saved before the tool can read them.\n\n"
         )
@@ -1487,6 +1530,37 @@ class JarvisLive:
                 response={"error": "Please verify your identity before using JARVIS."},
             )
 
+        if self._plan_mode_active:
+            safe_plan_tools = {
+                "recall_memory",
+                "system_status",
+                "screen_process",
+                "web_search",
+            }
+            if name not in safe_plan_tools:
+                return types.FunctionResponse(
+                    id=fc.id,
+                    name=name,
+                    response={
+                        "result": (
+                            "Plan mode is active. No action was performed. "
+                            "Continue by presenting the plan only."
+                        )
+                    },
+                )
+
+        if name == "screen_process":
+            from memory.config_manager import get_computer_permissions
+
+            if not get_computer_permissions().get("observe_screen", False):
+                return types.FunctionResponse(
+                    id=fc.id,
+                    name=name,
+                    response={
+                        "error": "Screen and camera observation are disabled in Computer Permissions."
+                    },
+                )
+
         print(f"[JARVIS] 🔧 {name}  {args}")
         self.ui.set_state("THINKING")
 
@@ -1597,31 +1671,13 @@ class JarvisLive:
                     result = "Specify action (add/remove/list) and a topic."
 
             elif name == "shutdown_jarvis":
-                self.ui.write_log("SYS: Shutdown requested.")
-
-                async def _do_shutdown():
-                    await self._save_session_summary()
-                    if self.session:
-                        try:
-                            await self.session.send_client_content(
-                                turns={
-                                    "role": "user",
-                                    "parts": [
-                                        {
-                                            "text": "Say a brief natural goodbye to the user."
-                                        }
-                                    ],
-                                },
-                                turn_complete=True,
-                            )
-                        except Exception:
-                            pass
-                    await asyncio.sleep(1.5)
-                    import os as _os
-
-                    _os._exit(0)
-
-                asyncio.create_task(_do_shutdown())
+                self._shutdown_requested = True
+                self._shutdown_requested_at = time.monotonic()
+                self.ui.write_log("SYS: JARVIS is shutting down after its goodbye.")
+                # The tool response is the model's cue to say goodbye. Sending a
+                # second user turn here races the active tool-call turn and used
+                # to leave the receive loop listening after shutdown was requested.
+                result = "Say a brief natural goodbye, then stop the assistant."
 
             elif self._action_registry.has(name):
                 # file_processor: fall back to the currently-uploaded file when none is given
@@ -1657,10 +1713,199 @@ class JarvisLive:
                     "response": None,
                     "session_memory": None,
                 }
-                r = await loop.run_in_executor(
-                    None, lambda: self._action_registry.run(name, args, _ctx)
-                )
-                result = r or "Done."
+                r = None
+                action = str(args.get("action", "")).lower().strip().replace("-", "_").replace(" ", "_")
+                if name in {
+                    "computer_control",
+                    "computer_settings",
+                    "file_controller",
+                    "open_app",
+                    "browser_control",
+                    "send_message",
+                }:
+                    from memory.config_manager import (
+                        get_computer_access_settings,
+                        get_computer_permissions,
+                    )
+
+                    policy = get_computer_access_settings()
+                    if name == "computer_control":
+                        read_only_actions = {
+                            "screenshot", "screen_find", "user_data", "random_data", "wait"
+                        }
+                    elif name == "computer_settings":
+                        read_only_actions = {
+                            "volume_get", "brightness_get", "screenshot", "find_on_page"
+                        }
+                    else:
+                        read_only_actions = (
+                            {"list", "read", "find", "largest", "disk_usage", "info"}
+                            if name == "file_controller"
+                            else set()
+                        )
+                    mutating = action not in read_only_actions
+                    if name == "computer_settings" and action == "close_app":
+                        result = (
+                            "The legacy close_app action is intentionally unavailable because it "
+                            "does not identify a target. Use computer_control with a specific app_name."
+                        )
+                    elif policy["mode"] == "chat" and mutating:
+                        result = (
+                            "Computer actions are paused in Chat mode. Switch to Agent "
+                            "mode in Settings → Computer Permissions to allow this action."
+                        )
+                    else:
+                        settings_permissions = {
+                            "type_text": "type", "write_on_screen": "type", "type": "type",
+                            "write": "type", "press_key": "type", "enter": "type",
+                            "escape": "type", "paste": ("type", "clipboard"), "cut": "type",
+                            "copy": "clipboard",
+                            "undo": "type", "redo": "type", "select_all": "type",
+                            "save": "type", "new_tab": "type", "close_tab": "type",
+                            "next_tab": "type", "prev_tab": "type", "go_back": "type",
+                            "go_forward": "type", "zoom_in": "type", "zoom_out": "type",
+                            "zoom_reset": "type", "find_on_page": "type",
+                            "reload_page_n": "type", "refresh_n": "type",
+                            "reload_n": "type", "scroll_up": "move_mouse",
+                            "scroll_down": "move_mouse", "scroll_top": "move_mouse",
+                            "scroll_bottom": "move_mouse", "page_up": "move_mouse",
+                            "page_down": "move_mouse", "close_app": "click",
+                            "close_window": "click", "full_screen": "click",
+                            "fullscreen": "click", "minimize": "click",
+                            "maximize": "click", "snap_left": "click",
+                            "snap_right": "click", "switch_window": "click",
+                            "show_desktop": "click", "task_manager": "click",
+                            "focus_search": "click",
+                        }
+                        control_permissions = {
+                            "screenshot": ("observe_screen",),
+                            "screen_find": ("find_elements",),
+                            "focus_window": ("find_elements",),
+                            "move": ("move_mouse",),
+                            "scroll": ("move_mouse",),
+                            "drag": ("move_mouse", "click"),
+                            "click": ("click",),
+                            "left_click": ("click",),
+                            "double_click": ("click",),
+                            "right_click": ("click",),
+                            "close_app": ("click",),
+                            "screen_click": ("find_elements", "click"),
+                            "copy": ("clipboard",),
+                            "type": ("type",),
+                            "smart_type": ("type",),
+                            "paste": ("type", "clipboard"),
+                            "hotkey": ("type",),
+                            "press": ("type",),
+                            "clear_field": ("type",),
+                        }
+                        if name == "computer_control":
+                            required_permissions = control_permissions.get(action, ())
+                        elif name == "computer_settings" and action in settings_permissions:
+                            permission_value = settings_permissions[action]
+                            required_permissions = (
+                                permission_value
+                                if isinstance(permission_value, tuple)
+                                else (permission_value,)
+                            )
+                        else:
+                            required_permissions = ()
+                        permissions = get_computer_permissions()
+                        denied_permissions = [
+                            permission
+                            for permission in required_permissions
+                            if not permissions.get(permission, False)
+                        ]
+                        if denied_permissions:
+                            result = (
+                                f"Permission denied: '{action}' requires "
+                                f"{', '.join(denied_permissions)} permission(s)."
+                            )
+                        else:
+                            self_gated = (
+                                name == "computer_settings"
+                                and action in {"restart", "shutdown", "toggle_wifi"}
+                            )
+                            high_impact = (
+                                (name == "computer_control" and action == "close_app")
+                                or (name == "file_controller" and action == "delete")
+                                or name == "send_message"
+                            )
+                            approval_scope = name in {
+                                "computer_control",
+                                "computer_settings",
+                                "file_controller",
+                                "open_app",
+                                "browser_control",
+                            }
+                            needs_approval = not self_gated and (
+                                (policy["access_level"] == "ask" and approval_scope)
+                                or high_impact
+                            )
+                            if needs_approval:
+                                if name == "file_controller" and action == "delete":
+                                    target = str(args.get("name") or args.get("path") or "selected file")[:120]
+                                    title = f"Move {target} to Trash?"
+                                    detail = (
+                                        "JARVIS will move the selected item to the system Trash. "
+                                        "Full access cannot skip this confirmation."
+                                    )
+                                elif name == "send_message":
+                                    recipient = str(args.get("receiver") or "the selected recipient")[:80]
+                                    platform_name = str(args.get("platform") or "messaging app")[:40]
+                                    message_preview = str(args.get("message_text") or "").strip()[:150]
+                                    title = f"Send message to {recipient}?"
+                                    detail = (
+                                        f"Platform: {platform_name}. Message: {message_preview}. "
+                                        "This sends content outside JARVIS and always requires approval."
+                                    )
+                                elif action == "close_app":
+                                    target = str(
+                                        args.get("app_name") or args.get("text") or "the requested application"
+                                    ).strip()[:100]
+                                    title = f"Close {target}?"
+                                    detail = (
+                                        "JARVIS will ask the application to close. "
+                                        "Unsaved work may be affected; the app will not be force-killed."
+                                    )
+                                elif name == "open_app":
+                                    target = str(args.get("app_name") or "the requested application").strip()[:100]
+                                    title = f"Open {target}?"
+                                    detail = "JARVIS will launch this application on your computer."
+                                elif name == "browser_control":
+                                    target = str(args.get("action") or "browser action").replace("_", " ")[:60]
+                                    address = str(args.get("url") or args.get("query") or "").strip()[:100]
+                                    title = f"Allow browser action: {target}?"
+                                    detail = (
+                                        f"JARVIS will control the browser. Target: {address}"
+                                        if address
+                                        else "JARVIS will control the browser for this request."
+                                    )
+                                else:
+                                    title = f"Allow computer action: {action.replace('_', ' ')}?"
+                                    detail = (
+                                        "JARVIS will perform this requested computer action "
+                                        "once you approve it."
+                                    )
+                                result = confirm_gate.request(
+                                    key=f"agent:{name}:{action}:{time.monotonic_ns()}",
+                                    title=title,
+                                    detail=detail,
+                                    run=lambda n=name, a=dict(args), c=dict(_ctx): (
+                                        self._action_registry.run(n, a, c) or "Done."
+                                    ),
+                                )
+                                r = None
+                            else:
+                                r = await loop.run_in_executor(
+                                    None,
+                                    lambda: self._action_registry.run(name, args, _ctx),
+                                )
+                                result = r or "Done."
+                else:
+                    r = await loop.run_in_executor(
+                        None, lambda: self._action_registry.run(name, args, _ctx)
+                    )
+                    result = r or "Done."
                 # web_search: mirror results to the on-screen content panel
                 if (
                     name == "web_search"
@@ -2179,6 +2424,13 @@ class JarvisLive:
                                     self.ui.stop_camera_stream()
 
                                 asyncio.create_task(_cam_close())
+
+                            if self._shutdown_requested:
+                                # Let the goodbye finish playing through the
+                                # output device before unwinding the session.
+                                while self._is_speaking or not self.audio_in_queue.empty():
+                                    await asyncio.sleep(0.05)
+                                raise _ShutdownSignal()
 
                     if response.tool_call:
                         names = [fc.name for fc in response.tool_call.function_calls]
@@ -3052,6 +3304,9 @@ class JarvisLive:
                 # start shutdown — resulting in "executor after shutdown" errors).
                 # Voluntary reconnect (voice change) — not an error. Rebuild the
                 # session immediately with no backoff and no scary logs.
+                if _is_shutdown_signal(e):
+                    self._shutdown_requested = True
+                    break
                 if _is_reconnect_signal(e):
                     print("[JARVIS] Voluntary reconnect requested.")
                     if not _keep_context_of(e):
@@ -3229,7 +3484,7 @@ class JarvisLive:
             finally:
                 self.session = None
                 # Only save if there was a real conversation (≥3 turns)
-                if len(self._session_log) >= 3:
+                if len(self._session_log) >= 3 and not self._shutdown_requested:
                     asyncio.create_task(self._save_session_summary())
 
             self.set_speaking(False)
@@ -3241,6 +3496,11 @@ class JarvisLive:
             delay = getattr(self, "_conn_backoff", 3)
             print(f"[JARVIS] Reconnecting in {delay}s...")
             await asyncio.sleep(delay)
+
+        if self._shutdown_requested:
+            self.set_speaking(False)
+            print("[JARVIS] Shutdown complete.")
+            self.ui.root.quit()
 
 
 def main():

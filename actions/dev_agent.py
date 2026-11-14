@@ -7,7 +7,6 @@ import re
 import time
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
-PROJECTS_DIR = Path.home() / "Desktop" / "JarvisProjects"
 MAX_FIX_ATTEMPTS = 5
 # Model choice, timeout and fallback ladder all live in core/gemini.py.
 from core import gemini
@@ -355,6 +354,38 @@ def _open_vscode(project_dir: Path) -> bool:
     return False
 
 
+def _open_external_editor(project_dir: Path, editor: str) -> bool:
+    """Open an editor only when the user explicitly requested an external app."""
+    name = (editor or "vscode").strip().strip('"\'')
+    if name.casefold() in {"vscode", "vs code", "visual studio code", "code"}:
+        return _open_vscode(project_dir)
+    executable = shutil.which(name)
+    if not executable and Path(name).is_file():
+        executable = str(Path(name).expanduser().resolve())
+    if not executable:
+        return False
+    try:
+        subprocess.Popen([executable, str(project_dir)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return True
+    except (OSError, ValueError):
+        return False
+
+
+def _project_directory(project_path: str, project_name: str, planned_name: str) -> Path:
+    if project_path.strip():
+        candidate = Path(project_path.strip().strip('"\'')).expanduser()
+        if not candidate.is_absolute():
+            candidate = Path.home() / candidate
+    else:
+        name = re.sub(r"[^\w\-. ]", "_", project_name or planned_name or "jarvis_project").strip(" .")
+        candidate = Path.home() / "Desktop" / (name or "jarvis_project")
+    candidate = candidate.resolve()
+    if candidate.exists() and not candidate.is_dir():
+        raise ValueError(f"Project path is a file, not a folder: {candidate}")
+    candidate.mkdir(parents=True, exist_ok=True)
+    return candidate
+
+
 def _run_project(run_command: str, project_dir: Path, timeout: int = 30) -> str:
     print(f"[DevAgent] 🚀 Running: {run_command}")
     try:
@@ -516,6 +547,9 @@ def _build_project(
     language: str,
     project_name: str,
     timeout: int,
+    project_path: str = "",
+    open_external: bool = False,
+    external_editor: str = "vscode",
     speak=None,
     player=None,
 ) -> str:
@@ -540,9 +574,14 @@ def _build_project(
         return msg
 
     proj_name = project_name or plan.get("project_name", "jarvis_project")
-    proj_name = re.sub(r"[^\w\-]", "_", proj_name)
-    project_dir = PROJECTS_DIR / proj_name
-    project_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        project_dir = _project_directory(project_path, project_name, proj_name)
+    except (OSError, ValueError) as exc:
+        msg = f"Could not create the project folder: {exc}"
+        if speak:
+            speak(msg)
+        return msg
+    proj_name = project_dir.name
 
     files = plan.get("files", [])
     entry_point = plan.get("entry_point", "main.py")
@@ -597,7 +636,11 @@ def _build_project(
         install_result = _install_dependencies(dependencies, project_dir)
         log(install_result)
 
-    _open_vscode(project_dir)
+    external_opened = False
+
+    def open_in_jarvis():
+        if not open_external and player and hasattr(player, "open_project"):
+            player.open_project(str(project_dir), entry_point)
 
     last_output = ""
     auto_installs = 0
@@ -608,10 +651,23 @@ def _build_project(
         log(f"Output preview: {last_output[:150]}")
 
         if not _has_error(last_output, run_command):
+            if open_external:
+                external_opened = _open_external_editor(project_dir, external_editor)
+                if not external_opened:
+                    log(f"Could not start requested editor '{external_editor}'.")
+            else:
+                open_in_jarvis()
             msg = (
                 f"Project '{proj_name}' is working, sir. "
                 f"Built in {attempt} attempt{'s' if attempt > 1 else ''}. "
-                f"Saved to: {project_dir}"
+                f"Saved to: {project_dir}. "
+                + (
+                    "Opened in the requested editor."
+                    if external_opened
+                    else f"Could not start the requested editor '{external_editor}'."
+                    if open_external
+                    else "Opened in JARVIS Project Files."
+                )
             )
             if speak:
                 speak(msg)
@@ -643,7 +699,13 @@ def _build_project(
             file_codes.update(updated)
             time.sleep(1)
         except RateLimitError:
-            msg = "Rate limit reached during fix. Project saved, check it manually in VSCode."
+            msg = f"Rate limit reached during fix. Project saved at {project_dir} and is available in JARVIS Project Files."
+            if open_external:
+                external_opened = _open_external_editor(project_dir, external_editor)
+                if not external_opened:
+                    msg += f" Could not start the requested editor '{external_editor}'."
+            else:
+                open_in_jarvis()
             if speak:
                 speak(msg)
             return msg
@@ -654,6 +716,19 @@ def _build_project(
         f"I couldn't fully fix '{proj_name}' after {MAX_FIX_ATTEMPTS} attempts, sir. "
         f"Project is saved at {project_dir} — open it in VSCode and check manually."
     )
+    if open_external:
+        external_opened = _open_external_editor(project_dir, external_editor)
+        msg = (
+            f"I couldn't fully fix '{proj_name}' after {MAX_FIX_ATTEMPTS} attempts, sir. "
+            f"Project is saved at {project_dir}. "
+            + (f"Opened in {external_editor}." if external_opened else f"Could not start {external_editor}.")
+        )
+    else:
+        open_in_jarvis()
+        msg = (
+            f"I couldn't fully fix '{proj_name}' after {MAX_FIX_ATTEMPTS} attempts, sir. "
+            f"Project is saved at {project_dir} and is open in JARVIS Project Files."
+        )
     if speak:
         speak(msg)
     return f"{msg}\n\nLast error:\n{last_output[:600]}"
@@ -670,6 +745,12 @@ def dev_agent(
     description = p.get("description", "").strip()
     language = p.get("language", "python").strip()
     project_name = p.get("project_name", "").strip()
+    project_path = p.get("project_path", "").strip()
+    open_external_value = p.get("open_external", False)
+    open_external = open_external_value is True or str(open_external_value).strip().casefold() in {
+        "yes", "true", "1"
+    }
+    external_editor = str(p.get("external_editor", "vscode")).strip() or "vscode"
     timeout = int(p.get("timeout", 30))
 
     if not description:
@@ -680,6 +761,9 @@ def dev_agent(
         language=language,
         project_name=project_name,
         timeout=timeout,
+        project_path=project_path,
+        open_external=open_external,
+        external_editor=external_editor,
         speak=speak,
         player=player,
     )
@@ -688,7 +772,7 @@ def dev_agent(
 # ── Tool declaration (auto-discovered by core/action_loader.py) ──────────────
 TOOL = {
     "name": "dev_agent",
-    "description": "Builds complete multi-file projects from scratch: plans, writes files, installs deps, opens VSCode, runs and fixes errors.",
+    "description": "Creates a project and opens it in JARVIS Project Files and its built-in editor by default. Use project_path when the user gives a folder path. Only open an external editor when explicitly requested; set open_external=true and external_editor to vscode or an editor executable. Then runs and fixes the project.",
     "parameters": {
         "type": "OBJECT",
         "properties": {
@@ -703,6 +787,18 @@ TOOL = {
             "project_name": {
                 "type": "STRING",
                 "description": "Optional project folder name",
+            },
+            "project_path": {
+                "type": "STRING",
+                "description": "Optional folder path, such as Desktop\\project_name. Defaults to a folder on the user's Desktop.",
+            },
+            "open_external": {
+                "type": "BOOLEAN",
+                "description": "True only when the user explicitly asks to open in an external editor.",
+            },
+            "external_editor": {
+                "type": "STRING",
+                "description": "External editor executable or vscode; used only when open_external is true.",
             },
             "timeout": {
                 "type": "INTEGER",
