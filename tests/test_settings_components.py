@@ -62,6 +62,15 @@ class SettingsComponentTests(unittest.TestCase):
         self.assertEqual([entry.id for entry in results], ["microphone"])
         self.assertEqual(results[0].action_id, "audio")
 
+        category_titles = {category.id: category.title for category in CATEGORIES}
+        self.assertNotIn("security", category_titles)
+        self.assertEqual(category_titles["permissions"], "Security & Permissions")
+        self.assertEqual(category_titles["integrations"], "AI Providers")
+        wake_entries = search_entries("wake word")
+        self.assertEqual(wake_entries[0].action_id, "audio")
+        agent_entries = search_entries("Agent mode")
+        self.assertTrue(any(entry.id == "computer_mode" for entry in agent_entries))
+
         center.search.setText("microphone")
         self.app.processEvents()
         self.assertGreaterEqual(center.navigation.count(), 1)
