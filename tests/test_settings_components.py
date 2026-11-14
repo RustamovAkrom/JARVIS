@@ -12,7 +12,7 @@ from gui.settings.categories.general import GeneralSettingsPage
 from gui.settings.categories.identity import AssistantIdentityPage
 from gui.settings.registry import CATEGORIES, ENTRIES, search_entries
 from gui.settings.settings_center import SettingsCenter
-from gui.app.main_window import AudioDeviceOverlay, HueWheel
+from gui.app.main_window import AudioDeviceOverlay, HueWheel, MemoryOverlay
 from gui.themes.styles import glass_rgba
 from gui.themes.tokens import Radius, Space
 from gui.themes.typography import FONT_MONO, FONT_UI, TypeScale, mono_font, ui_font
@@ -170,6 +170,14 @@ class SettingsComponentTests(unittest.TestCase):
         self.assertTrue(center.show_category("identity"))
         self.assertEqual(child.refresh_count, 1)
         center.close()
+
+    def test_memory_overlay_refresh_reloads_saved_facts(self):
+        with patch("memory.memory_manager.all_entries_for_ui", return_value=[]):
+            overlay = MemoryOverlay(embedded=True)
+        with patch.object(overlay, "_rebuild") as rebuild:
+            overlay.refresh_state()
+        rebuild.assert_called_once_with()
+        overlay.close()
 
     def test_show_category_clears_search_before_resolving_category(self):
         center = SettingsCenter()
