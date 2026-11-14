@@ -11038,6 +11038,47 @@ class MainWindow(QMainWindow):
         layout.addStretch(1)
         return page
 
+    def _diagnostic_snapshot(self) -> str:
+        """Return useful runtime diagnostics without exposing credentials."""
+        from memory.config_manager import (
+            get_computer_access_settings,
+            get_computer_permissions,
+            get_provider_environment,
+            get_provider_mode,
+            get_pipeline,
+            get_workspace_path,
+        )
+
+        access = get_computer_access_settings()
+        permissions = get_computer_permissions()
+        allowed = sum(1 for enabled in permissions.values() if enabled)
+        total = len(permissions)
+        environment = get_provider_environment()
+        engine = get_provider_mode()
+        pipeline = get_pipeline(environment)
+        selected = ", ".join(
+            f"{slot.upper()}={provider or 'not configured'}"
+            for slot, provider in pipeline.items()
+            if slot in ("stt", "llm", "tts")
+        ) or "not configured"
+        workspace = get_workspace_path() or "not configured"
+        return "\\n".join((
+            f"JARVIS version: {APP_VERSION}",
+            f"Platform: {_OS} {platform.release()}",
+            f"Python: {platform.python_version()}",
+            f"Application directory: {BASE_DIR}",
+            f"User data directory: {PATHS.user_data_root}",
+            f"AI environment: {environment.title()}",
+            f"AI engine: {'Gemini Live' if engine == 'gemini' else 'Provider pipeline'}",
+            f"Voice/model selections: {selected}",
+            f"Workspace: {workspace}",
+            f"Computer mode: {access.get('mode', 'chat').title()}",
+            f"Approval policy: {access.get('access_level', 'ask')}",
+            f"Computer permissions: {allowed}/{total} allowed",
+            f"Developer mode: {'On' if self._development_mode else 'Off'}",
+            "Credentials: intentionally excluded",
+        ))
+
     def _build_developer_settings_page(self):
         from gui.components.settings import SettingRow, SettingsSection
 
@@ -11045,9 +11086,48 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
-        section = SettingsSection(
-            "Diagnostics",
-            "Choose whether JARVIS mirrors activity to the diagnostic output.",
+
+        diagnostics = SettingsSection(
+            "System diagnostics",
+            "Live application, environment and configuration status. Secrets are never included.",
+        )
+        self._diagnostics_value = QLabel(self._diagnostic_snapshot())
+        self._diagnostics_value.setObjectName("diagnostic_snapshot")
+        self._diagnostics_value.setWordWrap(True)
+        self._diagnostics_value.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+        self._diagnostics_value.setFont(QFont(FONT_MONO, 8))
+        self._diagnostics_value.setStyleSheet(
+            f"color:{C.TEXT_MED}; background:{C.PANEL2}; "
+            f"border:1px solid {C.BORDER}; border-radius:7px; padding:10px;"
+        )
+        diagnostics._layout.addWidget(self._diagnostics_value)
+        copy_diagnostics = QPushButton(self._tr("Copy diagnostic report"))
+        copy_diagnostics.clicked.connect(
+            lambda: QApplication.clipboard().setText(self._diagnostic_snapshot())
+        )
+        diagnostics.add_row(
+            SettingRow(
+                self._tr("Diagnostic report"),
+                self._tr("Copies non-secret runtime and configuration information."),
+                copy_diagnostics,
+            )
+        )
+        refresh_diagnostics = QPushButton(self._tr("Refresh"))
+        refresh_diagnostics.clicked.connect(self._refresh_diagnostics)
+        diagnostics.add_row(
+            SettingRow(
+                self._tr("Current status"),
+                self._tr("Read the latest runtime values."),
+                refresh_diagnostics,
+            )
+        )
+        layout.addWidget(diagnostics)
+
+        developer = SettingsSection(
+            "Developer mode",
+            "For debugging and development. Detailed activity is mirrored to the terminal and may contain sensitive operational context.",
         )
         self._development_mode_check = QCheckBox(self._tr("Enable developer mode"))
         self._development_mode_check.setObjectName("developer_mode")
@@ -11055,29 +11135,41 @@ class MainWindow(QMainWindow):
         self._development_mode_check.toggled.connect(
             self._set_development_mode_from_settings
         )
-        section.add_row(
+        developer.add_row(
             SettingRow(
                 self._tr("Developer mode"),
-                self._tr("Mirror activity and diagnostic details while enabled."),
+                self._tr("Requires confirmation. You can disable it at any time."),
                 self._development_mode_check,
             )
         )
         console = QPushButton(self._tr("Open debug console"))
         console.clicked.connect(self._show_debug_console)
-        section.add_row(
+        developer.add_row(
             SettingRow(
                 self._tr("Debug console"),
-                self._tr("Show the diagnostic console in the main workspace."),
+                self._tr("View diagnostic output in the main workspace."),
                 console,
             )
         )
-        layout.addWidget(section)
+        layout.addWidget(developer)
+
+        experimental = SettingsSection(
+            "Experimental features",
+            "Preview builds, test plugins and beta tools can be introduced here. They will remain unavailable unless Developer Mode is enabled; no experimental feature is activated by this section today.",
+        )
+        layout.addWidget(experimental)
         layout.addStretch(1)
         return page
 
+    def _refresh_diagnostics(self):
+        label = getattr(self, "_diagnostics_value", None)
+        if label is not None:
+            label.setText(self._diagnostic_snapshot())
+
     def _set_development_mode_from_settings(self, enabled: bool):
         if bool(enabled) != bool(self._development_mode):
-            self._toggle_development_mode()
+            self._toggle_development_mode(bool(enabled))
+
 
     def _apply_appearance_settings(
         self,
@@ -14858,14 +14950,40 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             f"QPushButton:hover {{ border-color: {C.PRI_DIM}; color: {C.PRI}; }}"
         )
 
-    def _toggle_development_mode(self):
-        self._development_mode = not self._development_mode
+    def _toggle_development_mode(self, enabled: bool | None = None) -> bool:
+        target = not self._development_mode if enabled is None else bool(enabled)
+        if target == self._development_mode:
+            self._refresh_dev_mode_btn()
+            return True
+
+        if target:
+            answer = QMessageBox.warning(
+                self,
+                self._tr("Enable Developer Mode?"),
+                self._tr(
+                    "Developer Mode mirrors detailed activity to the terminal. "
+                    "Logs may contain prompts, file paths, command output or other "
+                    "sensitive operational context. Enable it only while debugging "
+                    "or developing JARVIS. Continue?"
+                ),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Cancel,
+            )
+            if answer != QMessageBox.StandardButton.Yes:
+                self._refresh_dev_mode_btn()
+                return False
+
+        self._development_mode = target
         _save_config_value("development_mode", self._development_mode)
         if self._development_mode:
             self._append_activity(
-                "SYS: Development mode enabled — activity is mirrored to the terminal."
+                "SYS: Developer Mode enabled — detailed activity is mirrored to the terminal."
             )
+        else:
+            self._log.append_log("SYS: Developer Mode disabled.")
         self._refresh_dev_mode_btn()
+        self._refresh_diagnostics()
+        return True
 
     def _append_activity(self, text: str):
         """Central log sink: GUI updates stay on Qt's thread; dev mode mirrors to stdout."""
