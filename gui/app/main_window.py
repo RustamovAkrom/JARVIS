@@ -3327,7 +3327,7 @@ class ProvidersOverlay(_HudOverlay):
         # Fields deliberately not drawn — the catalog already answered them, or
         # they are behind MORE. Tracked rather than asked of Qt: see _fields_into.
         self._hidden: dict[str, set] = {}
-        self._picked: dict[str, str] = {}  # slot -> catalog entry id
+ # slot -> catalog entry id
 
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         if self._embedded:
@@ -11201,17 +11201,6 @@ class MainWindow(QMainWindow):
             self._append_activity(f"ERR: Could not save file opening preference: {exc}")
 
 
-    def _build_security_settings_page(self):
-        page = QWidget()
-        layout = QVBoxLayout(page)
-        layout.setContentsMargins(0, 0, 0, 0)
-        note = QLabel(self._tr(
-            "Passcode management, face enrollment, and camera selection are provided by the lock integration."
-        ))
-        note.setWordWrap(True)
-        layout.addWidget(note)
-        layout.addStretch(1)
-        return page
 
     def _diagnostic_snapshot(self) -> str:
         """Return useful runtime diagnostics without exposing credentials."""
