@@ -96,6 +96,83 @@ class ProviderEnvironmentTests(unittest.TestCase):
         self.assertEqual(providers["environment"], "offline")
         self.assertEqual(providers["online_mode"], "pipeline")
 
+    def test_provider_credentials_are_isolated_by_environment(self):
+        data = {
+            "providers": {
+                "environment": "online",
+                "creds": {
+                    "whisper": {
+                        "model": "legacy-model",
+                        "base_url": "https://legacy.example/v1",
+                    }
+                },
+            }
+        }
+
+        def update_config(**changes):
+            data.update(changes)
+
+        with (
+            patch.object(
+                config_manager,
+                "get_providers",
+                side_effect=lambda: data["providers"],
+            ),
+            patch.object(config_manager, "_patch_config", side_effect=update_config),
+        ):
+            config_manager.save_provider_config(
+                "whisper",
+                {"model": "local-whisper", "base_url": "http://127.0.0.1:11434"},
+                environment="offline",
+            )
+            self.assertEqual(
+                config_manager.get_provider_config("whisper", "online")["model"],
+                "legacy-model",
+            )
+            self.assertEqual(
+                config_manager.get_provider_config("whisper", "offline")["model"],
+                "local-whisper",
+            )
+
+            config_manager.save_provider_config(
+                "whisper",
+                {"model": "groq-whisper", "base_url": "https://api.groq.com/openai/v1"},
+                environment="online",
+            )
+
+            self.assertEqual(
+                config_manager.get_provider_config("whisper", "online")["model"],
+                "groq-whisper",
+            )
+            self.assertEqual(
+                config_manager.get_provider_config("whisper", "offline")["model"],
+                "local-whisper",
+            )
+            self.assertEqual(
+                data["providers"]["creds"]["whisper"]["model"],
+                "legacy-model",
+            )
+
+    def test_provider_catalog_defaults_never_overwrite_existing_values(self):
+        merged = config_manager.merge_provider_catalog_defaults(
+            {
+                "model": "user-selected-model",
+                "max_tools": "37",
+                "api_key": "user-key",
+            },
+            {
+                "model": "preset-model",
+                "max_tools": "8",
+                "base_url": "https://preset.example/v1",
+            },
+            "groq",
+        )
+        self.assertEqual(merged["model"], "user-selected-model")
+        self.assertEqual(merged["max_tools"], "37")
+        self.assertEqual(merged["api_key"], "user-key")
+        self.assertEqual(merged["base_url"], "https://preset.example/v1")
+        self.assertEqual(merged["catalog"], "groq")
+
     def test_switching_back_to_online_keeps_online_engine_choice(self):
         data = {
             "providers": {
