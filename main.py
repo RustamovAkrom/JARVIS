@@ -1787,7 +1787,7 @@ class JarvisLive:
                             "type_text": ("type", "clipboard"),
                             "write_on_screen": ("type", "clipboard"), "type": "type",
                             "write": "type", "press_key": "type", "enter": "type",
-                            "escape": "type", "paste": ("type", "clipboard"), "cut": "type",
+                            "escape": "type", "paste": ("type", "clipboard"), "cut": ("type", "clipboard"),
                             "copy": "clipboard", "screenshot": "observe_screen",
                             "undo": "type", "redo": "type", "select_all": "type",
                             "save": "type", "new_tab": "type", "close_tab": "type",
