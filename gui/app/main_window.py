@@ -10352,6 +10352,7 @@ class MainWindow(QMainWindow):
                 for key, check in self._computer_permission_checks.items()
             }
         )
+        self._refresh_access_status()
 
     def _refresh_cursor_assistant(self):
         from memory.config_manager import get_cursor_assistant_settings
@@ -11011,6 +11012,7 @@ class MainWindow(QMainWindow):
                 check.setChecked(configured[permission])
             check.setEnabled(not is_full)
             check.blockSignals(False)
+        self._refresh_access_status()
 
     def _build_workspace_settings_page(self):
         page = QWidget()
@@ -12307,6 +12309,29 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         self._pending_image_button.hide()
         row.addWidget(self._pending_image_button)
 
+        self._access_status_button = QToolButton()
+        self._access_status_button.setObjectName("ChatAccessStatus")
+        self._access_status_button.setFixedHeight(30)
+        self._access_status_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._access_status_button.setToolButtonStyle(
+            Qt.ToolButtonStyle.ToolButtonTextOnly
+        )
+        self._access_status_button.setPopupMode(
+            QToolButton.ToolButtonPopupMode.InstantPopup
+        )
+        self._access_status_button.setStyleSheet(f"""
+            QToolButton {{ background:{C.PANEL}; color:{C.TEXT_MED};
+                border:1px solid {C.BORDER}; border-radius:8px;
+                padding:0 7px; font-size:8pt; }}
+            QToolButton:hover {{ color:{C.PRI}; border-color:{C.PRI_DIM};
+                background:{C.PRI_GHO}; }}
+            QToolButton::menu-indicator {{ image:none; }}
+        """)
+        self._access_status_button.setToolTip(
+            self._tr("Current assistant mode and computer permissions")
+        )
+        row.addWidget(self._access_status_button)
+
         self._chat_add_button = QToolButton()
         self._chat_add_button.setText("+")
         self._chat_add_button.setFixedSize(38, 34)
@@ -12378,6 +12403,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         self._chat_add_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         row.addWidget(self._chat_add_button)
         self._input.file_dropped.connect(self._drop_zone._set_file)
+        self._refresh_access_status()
 
         self._chat_send_btn = QPushButton()
         self._chat_send_btn.setFixedSize(34, 34)
@@ -12494,6 +12520,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         if callable(getattr(self, "on_plan_mode_change", None)):
             self.on_plan_mode_change(self._chat_plan_mode)
         self._refresh_composer_context()
+        self._refresh_access_status()
         self._append_activity(
             "SYS: Plan mode enabled — JARVIS will prepare steps without running tools."
             if enabled
@@ -12513,6 +12540,83 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             parts.append(f"GOAL · {goal}")
         self._composer_context.setText("     ·     ".join(parts))
         self._composer_context.setVisible(bool(parts))
+
+    def _refresh_access_status(self) -> None:
+        """Show the active interaction mode and exact permission switches beside the composer."""
+        button = getattr(self, "_access_status_button", None)
+        if button is None:
+            return
+
+        from memory.config_manager import (
+            get_computer_access_settings,
+            get_computer_permissions,
+        )
+
+        access = get_computer_access_settings()
+        configured = get_computer_permissions()
+        full_access = access.get("access_level") == "full"
+        allowed = {
+            key: (True if full_access else bool(value))
+            for key, value in configured.items()
+        }
+        count = sum(1 for value in allowed.values() if value)
+        total = len(allowed)
+        mode = "PLAN" if self._chat_plan_mode else str(
+            access.get("mode") or self._chat_interaction_mode or "chat"
+        ).upper()
+        button.setText(f"{mode} · {count}/{total}")
+        button.setAccessibleName(
+            f"{mode.title()} mode, {count} of {total} computer permissions allowed"
+        )
+
+        policy_labels = {
+            "ask": "Ask every time",
+            "approve": "Use allowed permissions",
+            "full": "Full access",
+        }
+        policy = policy_labels.get(access.get("access_level"), "Use allowed permissions")
+        button.setToolTip(
+            f"{mode.title()} mode · {policy} · {count}/{total} capabilities allowed"
+        )
+
+        menu = QMenu(button)
+        menu.setStyleSheet(
+            f"QMenu {{ background:{C.PANEL}; color:{C.TEXT}; "
+            f"border:1px solid {C.BORDER_B}; padding:6px; }}"
+            f"QMenu::item {{ padding:6px 18px; border-radius:4px; }}"
+            f"QMenu::item:selected {{ background:{C.PRI_GHO}; color:{C.PRI}; }}"
+            f"QMenu::separator {{ height:1px; background:{C.BORDER}; margin:4px 7px; }}"
+        )
+        mode_action = menu.addAction(f"Mode: {mode.title()}")
+        mode_action.setEnabled(False)
+        policy_action = menu.addAction(f"Approval: {policy}")
+        policy_action.setEnabled(False)
+        menu.addSeparator()
+
+        labels = (
+            ("observe_screen", "Inspect screen"),
+            ("find_elements", "Find interface elements"),
+            ("move_mouse", "Move and scroll"),
+            ("click", "Click and drag"),
+            ("type", "Keyboard input"),
+            ("clipboard", "Clipboard access"),
+        )
+        for key, label in labels:
+            enabled = allowed.get(key, False)
+            status = "Allowed" if enabled else "Off"
+            action = menu.addAction(f"{'✓' if enabled else '–'}  {label}: {status}")
+            action.setEnabled(False)
+
+        menu.addSeparator()
+        settings_action = menu.addAction("Open computer permissions…")
+        settings_action.triggered.connect(
+            lambda: self._open_permissions_settings()
+        )
+        button.setMenu(menu)
+
+    def _open_permissions_settings(self) -> None:
+        self._open_settings_center()
+        self._settings_center.show_category("permissions")
 
     def _with_composer_context(self, message: str) -> str:
         context = []
