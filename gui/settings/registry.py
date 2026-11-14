@@ -28,11 +28,15 @@ CATEGORIES = (
     SettingsCategory("appearance", "Appearance & Personalization", "Theme, accent color, opacity, and visual preferences.", (("Customize appearance", "customize"),)),
     SettingsCategory("workspace", "Workspace & Layout", "Panels and workspace surfaces.", (("Workspace panel controls", "layout"),)),
     SettingsCategory("cursor", "Cursor Assistant", "Cursor behavior, shortcuts, and quick actions.", (("Cursor assistant controls", "controls"),)),
-    SettingsCategory("permissions", "Computer Permissions", "Choose which computer interaction capabilities are allowed.", (("Review computer permissions", "controls"),)),
+    SettingsCategory(
+        "permissions",
+        "Security & Permissions",
+        "Manage Agent access, computer capabilities and authentication integrations.",
+        (("Review computer permissions", "controls"), ("Authentication integration", "security_info")),
+    ),
     SettingsCategory("integrations", "Integrations & Providers", "AI engine, provider credentials, and request routing.", (("Engine and providers", "providers"),)),
     SettingsCategory("plugins", "Plugins", "Installed extensions and their settings.", (("Plugin manager", "plugins"), ("Plugin settings", "plugin_settings"))),
     SettingsCategory("memory", "Memory", "Review and manage saved assistant memories.", (("Open memory", "memory"),)),
-    SettingsCategory("security", "Security & Access", "Authentication surfaces currently supplied by integrations.", (("Security information", "security_info"),)),
     SettingsCategory("developer", "Developer & Diagnostics", "Development mode, diagnostic logs, and system details.", (("Developer options", "setup"), ("Debug console", "console"))),
     SettingsCategory("updates", "Updates & Maintenance", "Application version and update operations.", (("Open updates", "updates"),)),
 )
@@ -63,7 +67,7 @@ ENTRIES = (
     SettingEntry("plugins", "plugins", "Installed plugins", "Enable or disable installed plugins.", ("extension", "integration"), "plugins"),
     SettingEntry("plugin_config", "plugins", "Plugin configuration", "Edit plugin-specific settings and run plugin tests.", ("extension settings",), "plugin_settings"),
     SettingEntry("saved_memory", "memory", "Saved memories", "Copy or remove stored long-term memories.", ("facts", "long term"), "memory"),
-    SettingEntry("auth", "security", "Application authentication", "Authentication is currently provided by a caller-supplied lock integration.", ("pin", "passphrase", "face unlock", "camera"), "security_info"),
+    SettingEntry("auth", "permissions", "Application authentication", "Passcode and face verification are supplied by the configured lock integration.", ("pin", "passphrase", "face unlock", "camera"), "security_info"),
     SettingEntry("developer_mode", "developer", "Developer mode", "Enable development diagnostics and console mirroring.", ("debug", "logs"), "console"),
     SettingEntry("updates", "updates", "Update preferences", "Check, download, and install application updates.", ("maintenance", "version"), "updates"),
 )
