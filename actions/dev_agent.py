@@ -375,7 +375,7 @@ def _project_directory(project_path: str, project_name: str, planned_name: str) 
     """Choose a destination without reusing or overwriting an existing project."""
     explicit_path = bool(project_path.strip())
     if explicit_path:
-        candidate = Path(project_path.strip().strip('"\\'')).expanduser()
+        candidate = Path(project_path.strip().strip(chr(34) + chr(39))).expanduser()
         if not candidate.is_absolute():
             candidate = Path.home() / candidate
         candidate = candidate.resolve()
@@ -394,7 +394,7 @@ def _project_directory(project_path: str, project_name: str, planned_name: str) 
         return candidate
 
     name = re.sub(
-        r"[^\\w\\-. ]", "_", project_name or planned_name or "jarvis_project"
+        r"[^\w\-. ]", "_", project_name or planned_name or "jarvis_project"
     ).strip(" .") or "jarvis_project"
     base = (Path.home() / "Desktop" / name).resolve()
     base.parent.mkdir(parents=True, exist_ok=True)
