@@ -3546,8 +3546,13 @@ class JarvisLive:
             finally:
                 self.session = None
                 # Only save if there was a real conversation (≥3 turns)
-                if len(self._session_log) >= 3 and not self._shutdown_requested:
-                    asyncio.create_task(self._save_session_summary())
+                if len(self._session_log) >= 3:
+                    if self._shutdown_requested:
+                        # Shutdown is the end of this session: await the save
+                        # before quitting so the task cannot be abandoned.
+                        await self._save_session_summary()
+                    else:
+                        asyncio.create_task(self._save_session_summary())
 
             self.set_speaking(False)
             self.ui.set_state("SLEEPING")
