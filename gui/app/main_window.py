@@ -3467,13 +3467,28 @@ class ProvidersOverlay(_HudOverlay):
         if self._mode != "pipeline":
             return "full"
         llm = self._pipe.get("llm", "")
-        if llm:
-            config = self._get_cfg(llm)
-            if config.get("catalog") == "claude_openrouter":
-                return "claude"
-            for pid, _eid, entry, _decl in self._catalog("llm"):
-                if pid == llm and entry.get("local") is True:
-                    return "local"
+        if not llm:
+            return "custom"
+
+        config = self._get_cfg(llm)
+        catalog_id = str(config.get("catalog") or "").strip().lower()
+        model = str(config.get("model") or "").lower()
+        if catalog_id == "claude_openrouter" or (
+            catalog_id == "openrouter" and "claude" in model
+        ):
+            return "claude"
+
+        selected_id = self._current_entry("llm", llm)
+        selected = next(
+            (
+                entry
+                for pid, entry_id, entry, _decl in self._catalog("llm")
+                if pid == llm and entry_id == selected_id
+            ),
+            None,
+        )
+        if selected is not None and selected.get("local") is True:
+            return "local"
         return "custom"
 
     def _set_provider_category_index(self, index: int) -> None:
