@@ -3020,7 +3020,7 @@ class MemoryOverlay(_HudOverlay):
 
         cap = QLabel(
             f"{len(rows)} saved facts — newest first. "
-            f"Stored locally in memory/long_term.json. Relevant memories may be "
+            f"Stored locally in {PATHS.long_term_memory_file}. Relevant memories may be "
             f"included as context in requests sent to the selected AI provider."
         )
         cap.setWordWrap(True)
