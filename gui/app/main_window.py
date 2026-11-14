@@ -229,6 +229,7 @@ _OS = platform.system()  # "Windows" | "Darwin" | "Linux"
 
 from gui.themes.typography import FONT_MONO, FONT_UI, R_L, R_S
 from gui.themes.styles import (
+    glass_rgba,
     _card_qss,
     _combo_qss,
     _ghost_qss,
