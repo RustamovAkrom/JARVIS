@@ -48,5 +48,21 @@ class ComputerControlPermissionTests(unittest.TestCase):
         click.assert_called_once_with(20, 30, "left", 1)
 
 
+    def test_quit_app_alias_cannot_bypass_close_permission(self):
+        with (
+            patch(
+                "memory.config_manager.get_computer_permissions",
+                return_value=dict(DEFAULT_COMPUTER_PERMISSIONS),
+            ),
+            patch("actions.computer_control._close_app") as close_app,
+        ):
+            result = computer_control(
+                {"action": "quit_app", "app_name": "Example App"}
+            )
+        self.assertIn("Permission denied", result)
+        self.assertIn("close_app", result)
+        close_app.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()
