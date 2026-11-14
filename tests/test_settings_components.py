@@ -13,6 +13,7 @@ from gui.settings.categories.identity import AssistantIdentityPage
 from gui.settings.registry import CATEGORIES, ENTRIES, search_entries
 from gui.settings.settings_center import SettingsCenter
 from gui.app.main_window import AudioDeviceOverlay, HueWheel
+from gui.themes.styles import glass_rgba
 from gui.themes.tokens import Radius, Space
 from gui.themes.typography import FONT_MONO, FONT_UI, TypeScale, mono_font, ui_font
 
@@ -76,6 +77,18 @@ class SettingsComponentTests(unittest.TestCase):
         self.assertGreaterEqual(center.navigation.count(), 1)
         self.assertIn("Voice & Audio", center.navigation.item(0).text())
         center.refresh_theme()
+        center.close()
+
+    def test_glass_slider_is_fully_solid_at_100_percent(self):
+        # 100% is the Solid end of the Appearance slider, not a glass preset.
+        self.assertTrue(glass_rgba("#010d14", 100).endswith(", 255)"))
+        self.assertTrue(glass_rgba("#010d14", 60).endswith(", 153)"))
+
+        center = SettingsCenter()
+        center.set_glass_opacity(100)
+        self.assertIn(", 255)", center.styleSheet())
+        center.set_glass_opacity(60)
+        self.assertIn(", 153)", center.styleSheet())
         center.close()
 
     def test_settings_window_uses_shared_glass_opacity(self):
