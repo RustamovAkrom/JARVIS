@@ -1827,18 +1827,30 @@ class HueWheel(QWidget):
         self.setFixedSize(148, 148)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self._hue = 0.53
+        self._selected_color = QColor(DEFAULT_UI_COLOR)
         self._drag = False
         self.set_color(initial_hex)
 
     # ── API ──────────────────────────────────────────────────────────────────
     def color(self) -> str:
-        return QColor.fromHsvF(self._hue, 1.0, 1.0).name()
+        return self._selected_color.name()
 
     def set_color(self, hex_str: str):
         c = QColor((hex_str or "").strip())
-        if c.isValid() and c.hsvHueF() >= 0:
-            self._hue = c.hsvHueF()
-            self.update()
+        if not c.isValid():
+            return
+        # Keep the exact selected color in sync with HEX, including pure black
+        # and white, which have no meaningful hue component in HSV.
+        self._selected_color = QColor(c)
+        hue = c.hsvHueF()
+        if hue >= 0:
+            self._hue = hue
+        self.update()
+
+    def _select_hue_at(self, position: QPointF) -> None:
+        self._hue = self._hue_from_pos(position)
+        self._selected_color = QColor.fromHsvF(self._hue, 1.0, 1.0)
+        self.update()
 
     # ── geometry helpers ─────────────────────────────────────────────────────
     def _ring_rect(self) -> QRectF:
@@ -1869,7 +1881,7 @@ class HueWheel(QWidget):
         p.drawEllipse(rect)
 
         # centre preview circle
-        preview = QColor.fromHsvF(self._hue, 1.0, 1.0)
+        preview = QColor(self._selected_color)
         inner = rect.adjusted(30, 30, -30, -30)
         p.setPen(QPen(qcol(C.BORDER_B), 1))
         p.setBrush(QBrush(preview))
@@ -1888,14 +1900,12 @@ class HueWheel(QWidget):
     # ── fare ─────────────────────────────────────────────────────────────────
     def mousePressEvent(self, e):
         self._drag = True
-        self._hue = self._hue_from_pos(e.position())
-        self.update()
+        self._select_hue_at(e.position())
         self.hue_picked.emit(self.color())
 
     def mouseMoveEvent(self, e):
         if self._drag:
-            self._hue = self._hue_from_pos(e.position())
-            self.update()
+            self._select_hue_at(e.position())
             self.hue_picked.emit(self.color())
 
     def mouseReleaseEvent(self, e):
@@ -7002,9 +7012,9 @@ class UpdatePanel(QWidget):
             else "size unavailable"
         )
         self._release.setText(
-            f"Latest stable: {result.release.version}  В·  Published: {date}  В·  {size_text}\n{result.release.url}"
+            f"Latest stable: {result.release.version}  ·  Published: {date}  ·  {size_text}\n{result.release.url}"
         )
-        self._notes.setPlainText(result.release.notes)
+        self._notes.setMarkdown(result.release.notes)
         if result.update_available:
             self._status.setText(
                 f"Update available: {result.current_version} → {result.release.version}"
