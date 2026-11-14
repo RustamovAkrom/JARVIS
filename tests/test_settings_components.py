@@ -217,7 +217,7 @@ class SettingsComponentTests(unittest.TestCase):
             panel = page.findChild(ProvidersOverlay)
             self.assertIsNotNone(panel)
             self.assertTrue(panel._embedded)
-            self.assertFalse(panel._close_button.isVisible())
+            self.assertTrue(panel._close_button.isHidden())
 
             page.show()
             panel.show()
