@@ -601,9 +601,11 @@ def computer_control(
       user_data     — pull real data from memory
     """
     params = parameters or {}
-    action = params.get("action", "").lower().strip()
-    # Canonicalize the legacy alias before checking permissions and dispatching.
-    action = {"quit_app": "close_app"}.get(action, action)
+    from core.computer_permissions import normalize_computer_action
+
+    action = normalize_computer_action(
+        "computer_control", params.get("action", "")
+    )
 
     if not action:
         return "No action specified for computer_control."
