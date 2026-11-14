@@ -82,6 +82,17 @@ class SettingsComponentTests(unittest.TestCase):
         self.assertEqual(built, ["identity"])
         center.close()
 
+    def test_show_category_clears_search_before_resolving_category(self):
+        center = SettingsCenter()
+        center.search.setText("microphone")
+        self.app.processEvents()
+        self.assertNotIn("audio", center._category_rows)
+
+        self.assertTrue(center.show_category("audio"))
+        self.assertEqual(center.search.text(), "")
+        self.assertIs(center.navigation.currentItem(), center._category_rows["audio"])
+        center.close()
+
     def test_general_toggles_reflect_owner_state_after_handler(self):
         values = {"autostart": False, "morning_brief": True, "fullscreen": False}
         language = {"value": "en"}
