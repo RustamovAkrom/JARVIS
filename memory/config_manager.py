@@ -655,11 +655,25 @@ def get_provider_mode() -> str:
     return get_online_provider_mode()
 
 
-def get_provider_config(provider_id: str) -> dict:
-    """Stored settings for one provider — address, model, key, limits."""
-    creds = get_providers().get("creds")
-    val = creds.get(provider_id) if isinstance(creds, dict) else None
-    return dict(val) if isinstance(val, dict) else {}
+def get_provider_config(
+    provider_id: str,
+    environment: str | None = None,
+) -> dict:
+    """Return settings from one environment, falling back to legacy shared data."""
+    block = get_providers()
+    target = str(environment or get_provider_environment()).strip().lower()
+    if target not in PROVIDER_ENVIRONMENTS:
+        target = get_provider_environment()
+
+    scoped = block.get(f"creds_{target}")
+    value = scoped.get(provider_id) if isinstance(scoped, dict) else None
+    if isinstance(value, dict):
+        return dict(value)
+
+    # Read-only fallback for configurations created before profile separation.
+    legacy = block.get("creds")
+    value = legacy.get(provider_id) if isinstance(legacy, dict) else None
+    return dict(value) if isinstance(value, dict) else {}
 
 
 def get_pipeline(environment: str | None = None) -> dict:
@@ -716,17 +730,31 @@ def save_provider_mode(mode: str) -> None:
     )
 
 
-def save_provider_config(provider_id: str, values: dict) -> None:
-    """Merge settings for one provider. Only the given keys are touched."""
+def save_provider_config(
+    provider_id: str,
+    values: dict,
+    environment: str | None = None,
+) -> None:
+    """Merge provider settings into the Online or Offline profile only."""
+    target = str(environment or get_provider_environment()).strip().lower()
+    if target not in PROVIDER_ENVIRONMENTS:
+        target = get_provider_environment()
+
     p = get_providers()
-    creds = p.get("creds")
-    if not isinstance(creds, dict):
-        creds = {}
-    cur = creds.get(provider_id)
-    cur = dict(cur) if isinstance(cur, dict) else {}
-    cur.update(values or {})
-    creds[provider_id] = cur
-    p["creds"] = creds
+    key = f"creds_{target}"
+    creds = p.get(key)
+    creds = dict(creds) if isinstance(creds, dict) else {}
+    current = creds.get(provider_id)
+    if not isinstance(current, dict):
+        legacy = p.get("creds")
+        legacy_value = legacy.get(provider_id) if isinstance(legacy, dict) else None
+        current = dict(legacy_value) if isinstance(legacy_value, dict) else {}
+    else:
+        current = dict(current)
+
+    current.update(values or {})
+    creds[provider_id] = current
+    p[key] = creds
     _patch_config(providers=p)
 
 
@@ -840,14 +868,23 @@ def save_providers(
             block["pipeline"] = dict(active_pipeline)
 
         if creds is not None:
-            store = block.get("creds")
+            # Credentials follow the same Online/Offline boundary as pipelines.
+            # The legacy shared map remains a read-only fallback for old configs.
+            credentials_key = f"creds_{active_environment}"
+            store = block.get(credentials_key)
             store = dict(store) if isinstance(store, dict) else {}
+            legacy_store = block.get("creds")
+            legacy_store = legacy_store if isinstance(legacy_store, dict) else {}
             for pid, values in (creds or {}).items():
                 one = store.get(pid)
-                one = dict(one) if isinstance(one, dict) else {}
+                if not isinstance(one, dict):
+                    legacy_value = legacy_store.get(pid)
+                    one = dict(legacy_value) if isinstance(legacy_value, dict) else {}
+                else:
+                    one = dict(one)
                 one.update(values or {})
                 store[pid] = one
-            block["creds"] = store
+            block[credentials_key] = store
         if sidecar is not None:
             block["sidecar"] = str(sidecar or "").strip()
         if sidecar_first is not None:
