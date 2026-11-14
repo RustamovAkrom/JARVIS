@@ -11036,16 +11036,151 @@ class MainWindow(QMainWindow):
         self._refresh_access_status()
 
     def _build_workspace_settings_page(self):
+        from gui.components.settings import SettingRow, SettingsSection
+        from memory.config_manager import get_project_open_mode, get_workspace_path
+
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
-        note = QLabel(self._tr(
-            "Use the layout controls in the main toolbar to show or hide workspace panels."
-        ))
-        note.setWordWrap(True)
-        layout.addWidget(note)
+        layout.setSpacing(12)
+
+        project = SettingsSection(
+            "Project workspace",
+            "Choose the folder JARVIS uses for project files, generated projects and new terminal sessions.",
+        )
+        self._workspace_settings_path = QLabel(
+            get_workspace_path() or "No project folder selected"
+        )
+        self._workspace_settings_path.setWordWrap(True)
+        self._workspace_settings_path.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+        self._workspace_settings_path.setStyleSheet(
+            f"color:{C.TEXT_MED}; background:{C.PANEL2}; "
+            f"border:1px solid {C.BORDER}; border-radius:6px; padding:8px;"
+        )
+        choose = QPushButton(self._tr("Choose project folder…"))
+        choose.clicked.connect(self._select_workspace_folder)
+        choose_row = QWidget()
+        choose_layout = QHBoxLayout(choose_row)
+        choose_layout.setContentsMargins(0, 0, 0, 0)
+        choose_layout.addWidget(choose)
+        self._workspace_close_button = QPushButton(self._tr("Close workspace"))
+        self._workspace_close_button.clicked.connect(self._close_project)
+        choose_layout.addWidget(self._workspace_close_button)
+        project.add_row(
+            SettingRow(
+                self._tr("Current folder"),
+                self._tr("Used by Project Files and new terminal sessions."),
+                self._workspace_settings_path,
+            )
+        )
+        project.add_row(
+            SettingRow(
+                self._tr("Project folder"),
+                self._tr("Select a different folder or close the current workspace."),
+                choose_row,
+            )
+        )
+        open_mode = QComboBox()
+        open_mode.setObjectName("project_open_mode")
+        open_mode.addItem(self._tr("Inside JARVIS editor"), "jarvis")
+        open_mode.addItem(self._tr("With the system default app"), "external")
+        open_mode.setCurrentIndex(
+            max(0, open_mode.findData(get_project_open_mode()))
+        )
+        open_mode.currentIndexChanged.connect(self._save_project_open_mode)
+        project.add_row(
+            SettingRow(
+                self._tr("Open text files"),
+                self._tr("Choose whether text files open in the built-in editor or the default desktop app."),
+                open_mode,
+            )
+        )
+        layout.addWidget(project)
+
+        panels = SettingsSection(
+            "Workspace panels",
+            "Show or hide panels in the current session. Use the toolbar for quick access.",
+        )
+        panel_specs = (
+            ("left", "Project explorer", "File tree and system monitor."),
+            ("right", "Chat and tasks", "Conversation, previous chats and task list."),
+            ("content", "Results panel", "Search results, documents and generated content."),
+            ("debug", "Debug console", "Diagnostic output in the lower panel."),
+        )
+        self._workspace_visibility_checks = {}
+        for key, title, description in panel_specs:
+            check = QCheckBox(self._tr("Visible"))
+            check.setObjectName(f"workspace_panel_{key}")
+            check.setCursor(Qt.CursorShape.PointingHandCursor)
+            check.toggled.connect(
+                lambda visible, panel=key: self._set_workspace_panel_visibility(
+                    panel, visible
+                )
+            )
+            panels.add_row(SettingRow(self._tr(title), self._tr(description), check))
+            self._workspace_visibility_checks[key] = check
+
+        layout.addWidget(panels)
         layout.addStretch(1)
+        page.refresh_state = self._refresh_workspace_settings_state
+        self._refresh_workspace_settings_state()
         return page
+
+    def _workspace_panel_is_visible(self, key: str) -> bool:
+        if key == "left":
+            return self._left_panel.isVisible()
+        if key == "right":
+            return self._right_panel.isVisible()
+        if key == "content":
+            return self._content_panel.isVisible()
+        if key == "debug":
+            return (
+                self._bottom_tabs.isVisible()
+                and self._bottom_tabs.currentWidget() is self._debug_panel
+            )
+        return False
+
+    def _set_workspace_panel_visibility(self, key: str, visible: bool) -> None:
+        current = self._workspace_panel_is_visible(key)
+        if current != bool(visible):
+            if key == "left":
+                self._toggle_side_panel(0)
+            elif key == "right":
+                self._toggle_side_panel(2)
+            elif key == "content":
+                self._toggle_content_panel()
+            elif key == "debug":
+                self._toggle_debug_panel()
+        self._refresh_workspace_settings_state()
+
+    def _refresh_workspace_settings_state(self) -> None:
+        checks = getattr(self, "_workspace_visibility_checks", {})
+        for key, check in checks.items():
+            check.blockSignals(True)
+            check.setChecked(self._workspace_panel_is_visible(key))
+            check.setEnabled(not self._reading_mode)
+            check.blockSignals(False)
+
+        label = getattr(self, "_workspace_settings_path", None)
+        if label is not None:
+            label.setText(self._workspace_path or "No project folder selected")
+        close_button = getattr(self, "_workspace_close_button", None)
+        if close_button is not None:
+            close_button.setEnabled(bool(self._workspace_path))
+
+    def _save_project_open_mode(self, index: int) -> None:
+        from memory.config_manager import save_project_open_mode
+
+        combo = self.sender()
+        if not isinstance(combo, QComboBox):
+            return
+        try:
+            save_project_open_mode(str(combo.itemData(index) or "jarvis"))
+        except ValueError as exc:
+            self._append_activity(f"ERR: Could not save file opening preference: {exc}")
+
 
     def _build_security_settings_page(self):
         page = QWidget()
