@@ -5,7 +5,13 @@ from unittest.mock import patch
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QApplication, QCheckBox, QPushButton, QWidget
+from PyQt6.QtWidgets import (
+    QApplication,
+    QCheckBox,
+    QMainWindow,
+    QPushButton,
+    QWidget,
+)
 
 from gui.components.settings import SettingRow, SettingsSection
 from gui.settings.categories.general import GeneralSettingsPage
@@ -15,6 +21,7 @@ from gui.settings.settings_center import SettingsCenter
 from gui.app.main_window import (
     AudioDeviceOverlay,
     HueWheel,
+    MainWindow,
     MemoryOverlay,
     ProvidersOverlay,
 )
@@ -176,7 +183,24 @@ class SettingsComponentTests(unittest.TestCase):
         self.assertEqual(child.refresh_count, 1)
         center.close()
 
-    def test_embedded_provider_controls_stay_visible_after_apply(self):
+    def test_real_ai_providers_settings_page_stays_visible_after_apply(self):
+        # Exercise MainWindow's actual category builder and embedding path.
+        # The old test instantiated ProvidersOverlay(embedded=True) directly,
+        # skipping the production page builder which originally left it floating.
+        owner = QMainWindow()
+        owner._ui_language = "en"
+        owner._settings_center = None
+        owner._tr = MainWindow._tr.__get__(owner, MainWindow)
+        owner._embed_settings_panels = MainWindow._embed_settings_panels.__get__(
+            owner, MainWindow
+        )
+        owner._build_integrations_settings_page = (
+            MainWindow._build_integrations_settings_page.__get__(
+                owner, MainWindow
+            )
+        )
+        owner._on_providers_applied = lambda: None
+
         with (
             patch("providers.registry.discover", return_value=[]),
             patch("providers.registry.reset"),
@@ -189,11 +213,26 @@ class SettingsComponentTests(unittest.TestCase):
             patch("memory.config_manager.get_sidecar_first", return_value=False),
             patch("memory.config_manager.save_providers"),
         ):
-            panel = ProvidersOverlay(embedded=True)
+            page = owner._build_integrations_settings_page()
+            panel = page.findChild(ProvidersOverlay)
+            self.assertIsNotNone(panel)
+            self.assertTrue(panel._embedded)
+            self.assertFalse(panel._close_button.isVisible())
+
+            page.show()
             panel.show()
-            panel._apply()
+            self.app.processEvents()
             self.assertTrue(panel.isVisible())
-            panel.close()
+
+            panel._apply()
+            self.app.processEvents()
+            self.assertTrue(
+                panel.isVisible(),
+                "The real AI Providers page must remain mounted after Save & Apply.",
+            )
+
+        page.close()
+        owner.close()
 
     def test_memory_overlay_refresh_reloads_saved_facts(self):
         with patch("memory.memory_manager.all_entries_for_ui", return_value=[]):
