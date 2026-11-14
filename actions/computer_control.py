@@ -602,6 +602,8 @@ def computer_control(
     """
     params = parameters or {}
     action = params.get("action", "").lower().strip()
+    # Canonicalize the legacy alias before checking permissions and dispatching.
+    action = {"quit_app": "close_app"}.get(action, action)
 
     if not action:
         return "No action specified for computer_control."
