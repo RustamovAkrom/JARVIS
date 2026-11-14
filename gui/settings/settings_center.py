@@ -28,9 +28,9 @@ from gui.themes.typography import TypeScale, ui_font
 def _center_style(glass_opacity: int = 100) -> str:
     """Theme Settings surfaces with the same Glass value as the main window."""
     glass_opacity = max(60, min(100, int(glass_opacity)))
-    dialog_surface = glass_rgba(C.BG, glass_opacity, minimum_alpha=72, maximum_alpha=224)
-    panel_surface = glass_rgba(C.PANEL, glass_opacity, minimum_alpha=88, maximum_alpha=232)
-    title_surface = glass_rgba(C.DARK, glass_opacity, minimum_alpha=88, maximum_alpha=232)
+    dialog_surface = glass_rgba(C.BG, glass_opacity, minimum_alpha=153, maximum_alpha=255)
+    panel_surface = glass_rgba(C.PANEL, glass_opacity, minimum_alpha=166, maximum_alpha=255)
+    title_surface = glass_rgba(C.DARK, glass_opacity, minimum_alpha=166, maximum_alpha=255)
     return f"""
         QDialog#SettingsCenter {{ background:{dialog_surface}; color:{C.TEXT}; border:1px solid {C.BORDER_B}; border-radius:{Radius.MD}px; }}
         QWidget#SettingsContent {{ background:transparent; }}
