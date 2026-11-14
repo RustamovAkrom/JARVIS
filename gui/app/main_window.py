@@ -10456,7 +10456,6 @@ class MainWindow(QMainWindow):
                     "plugins": self._build_plugins_settings_page,
                     "memory": self._build_memory_settings_page,
                     "workspace": self._build_workspace_settings_page,
-                    "security": self._build_security_settings_page,
                     "developer": self._build_developer_settings_page,
                     "updates": self._build_updates_settings_page,
                 },
@@ -10974,6 +10973,25 @@ class MainWindow(QMainWindow):
             placeholder.setStyleSheet(f"color:{C.TEXT_DIM}; font-weight:700;")
             planned.add_row(SettingRow(self._tr(title), self._tr(description), placeholder))
         layout.addWidget(planned)
+
+        authentication = SettingsSection(
+            "Authentication integration",
+            "JARVIS receives its lock verifier from the host application or an installed integration.",
+        )
+        authentication_note = QLabel(
+            self._tr(
+                "Passcode management, face enrollment and camera selection are not owned by "
+                "this Settings page. Connect a lock integration in the host application to "
+                "configure sign-in security."
+            )
+        )
+        authentication_note.setWordWrap(True)
+        authentication_note.setStyleSheet(
+            f"color:{C.TEXT_MED}; background:{C.PANEL2}; "
+            f"border:1px solid {C.BORDER}; border-radius:7px; padding:9px;"
+        )
+        authentication._layout.addWidget(authentication_note)
+        layout.addWidget(authentication)
         layout.addStretch(1)
         return page
 
@@ -11393,7 +11411,7 @@ class MainWindow(QMainWindow):
             "plugin_settings": "plugins",
             "memory": "memory",
             "layout": "workspace",
-            "security_info": "security",
+            "security_info": "permissions",
             "updates": "updates",
         }
         category_id = category_by_action.get(action_id)
