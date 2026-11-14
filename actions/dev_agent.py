@@ -372,19 +372,44 @@ def _open_external_editor(project_dir: Path, editor: str) -> bool:
 
 
 def _project_directory(project_path: str, project_name: str, planned_name: str) -> Path:
-    if project_path.strip():
-        candidate = Path(project_path.strip().strip('"\'')).expanduser()
+    """Choose a destination without reusing or overwriting an existing project."""
+    explicit_path = bool(project_path.strip())
+    if explicit_path:
+        candidate = Path(project_path.strip().strip('"\\'')).expanduser()
         if not candidate.is_absolute():
             candidate = Path.home() / candidate
-    else:
-        name = re.sub(r"[^\w\-. ]", "_", project_name or planned_name or "jarvis_project").strip(" .")
-        candidate = Path.home() / "Desktop" / (name or "jarvis_project")
-    candidate = candidate.resolve()
-    if candidate.exists() and not candidate.is_dir():
-        raise ValueError(f"Project path is a file, not a folder: {candidate}")
-    candidate.mkdir(parents=True, exist_ok=True)
-    return candidate
+        candidate = candidate.resolve()
+        if candidate.exists():
+            if not candidate.is_dir():
+                raise ValueError(f"Project path is a file, not a folder: {candidate}")
+            try:
+                next(candidate.iterdir())
+            except StopIteration:
+                return candidate
+            raise FileExistsError(
+                f"Project folder is not empty: {candidate}. Choose a new folder; "
+                "existing project files will not be overwritten."
+            )
+        candidate.mkdir(parents=True, exist_ok=False)
+        return candidate
 
+    name = re.sub(
+        r"[^\\w\\-. ]", "_", project_name or planned_name or "jarvis_project"
+    ).strip(" .") or "jarvis_project"
+    base = (Path.home() / "Desktop" / name).resolve()
+    base.parent.mkdir(parents=True, exist_ok=True)
+
+    # mkdir is the atomic reservation: if another process wins the same name,
+    # move to the next suffix rather than reusing that directory.
+    for suffix in range(1, 1000):
+        candidate = base if suffix == 1 else base.with_name(f"{base.name}-{suffix}")
+        try:
+            candidate.mkdir(parents=False, exist_ok=False)
+            return candidate
+        except FileExistsError:
+            if not candidate.is_dir():
+                continue
+    raise FileExistsError(f"Could not reserve a fresh project folder for: {base}")
 
 def _run_project(run_command: str, project_dir: Path, timeout: int = 30) -> str:
     print(f"[DevAgent] 🚀 Running: {run_command}")
@@ -605,6 +630,11 @@ def _build_project(
         log(f"Writing {file_path}...")
         for attempt in range(2):
             try:
+                target_path = _resolve_project_file(project_dir, file_path)
+                if target_path.exists():
+                    raise FileExistsError(
+                        f"Refusing to overwrite an existing project file: {file_path}"
+                    )
                 code = _write_file(
                     file_info=file_info,
                     project_description=description,
