@@ -6044,11 +6044,11 @@ class CommandPalette(QWidget):
         return [
             ("◉  Wake JARVIS now", lambda: self._owner._tap_wake_manual()),
             ("⌁  Toggle microphone", self._owner._toggle_mute),
-            ("⚙  Personalise assistant", self._owner._open_customize),
-            ("◈  Audio devices", self._owner._open_audio_devices),
-            ("▣  Engine & providers", self._owner._open_providers),
-            ("◌  Plugins", self._owner._open_plugin_manager),
-            ("◉  Memory", self._owner._open_memory_panel),
+            ("⚙  Assistant identity settings", self._owner._open_customize),
+            ("◈  Voice & Audio settings", self._owner._open_audio_devices),
+            ("▣  AI provider settings", self._owner._open_providers),
+            ("◌  Plugins and extensions", self._owner._open_plugin_manager),
+            ("◉  Saved memories", self._owner._open_memory_panel),
             ("⌂  Remote control", self._owner._open_remote),
             (
                 "⇥  Explain clipboard",
@@ -9971,7 +9971,7 @@ class MainWindow(QMainWindow):
         self._autostart_btn.clicked.connect(self._toggle_autostart)
         lay.addWidget(self._autostart_btn)
 
-        cust_btn = QPushButton(self._tr("Customize assistant"))
+        cust_btn = QPushButton(self._tr("Assistant identity"))
         _icon_button(cust_btn, "customize.svg")
         cust_btn.setFixedHeight(26)
         cust_btn.setFont(QFont(FONT_MONO, 7))
@@ -9979,28 +9979,28 @@ class MainWindow(QMainWindow):
         cust_btn.setStyleSheet(_BTN_STYLE_DIM)
         cust_btn.clicked.connect(self._open_customize)
         cust_btn.setToolTip(
-            self._tr("Change assistant name, voice, accent color, and window opacity.")
+            self._tr("Change the assistant name, your name and spoken voice.")
         )
         lay.addWidget(cust_btn)
 
-        audio_btn = QPushButton(self._tr("Audio devices"))
+        audio_btn = QPushButton(self._tr("Voice & Audio settings"))
         _icon_button(audio_btn, "audio.svg")
         audio_btn.setFixedHeight(26)
         audio_btn.setFont(QFont(FONT_MONO, 7))
         audio_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         audio_btn.setStyleSheet(_BTN_STYLE_DIM)
         audio_btn.clicked.connect(self._open_audio_devices)
-        audio_btn.setToolTip(self._tr("Choose microphone and speaker devices."))
+        audio_btn.setToolTip(self._tr("Choose microphone, speakers and voice activation options."))
         lay.addWidget(audio_btn)
 
-        mem_btn = QPushButton(self._tr("Memory"))
+        mem_btn = QPushButton(self._tr("Saved memories"))
         _icon_button(mem_btn, "memory.svg")
         mem_btn.setFixedHeight(26)
         mem_btn.setFont(QFont(FONT_MONO, 7))
         mem_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         mem_btn.setStyleSheet(_BTN_STYLE_DIM)
         mem_btn.clicked.connect(self._open_memory_panel)
-        mem_btn.setToolTip(self._tr("Review or remove saved memories."))
+        mem_btn.setToolTip(self._tr("Review stored facts. Previous conversations are in Conversations."))
         lay.addWidget(mem_btn)
 
         plugin_btn = QPushButton(self._tr("Plugins"))
@@ -10010,18 +10010,8 @@ class MainWindow(QMainWindow):
         plugin_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         plugin_btn.setStyleSheet(_BTN_STYLE_DIM)
         plugin_btn.clicked.connect(self._open_plugin_manager)
-        plugin_btn.setToolTip(self._tr("Enable extensions and connect integrations."))
+        plugin_btn.setToolTip(self._tr("Enable extensions and configure their settings."))
         lay.addWidget(plugin_btn)
-
-        settings_btn = QPushButton(self._tr("Plugin settings"))
-        _icon_button(settings_btn, "settings.svg")
-        settings_btn.setFixedHeight(26)
-        settings_btn.setFont(QFont(FONT_MONO, 7))
-        settings_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        settings_btn.setStyleSheet(_BTN_STYLE_DIM)
-        settings_btn.clicked.connect(self._open_plugin_settings)
-        settings_btn.setToolTip(self._tr("Configure plugin-specific options."))
-        lay.addWidget(settings_btn)
 
         self._dev_mode_btn = QPushButton()
         _icon_button(self._dev_mode_btn, "developer.svg")
