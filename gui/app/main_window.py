@@ -12913,9 +12913,13 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             get_computer_access_settings,
             get_computer_permissions,
             get_configured_computer_permissions,
+            get_provider_environment,
+            get_ui_opacity,
         )
 
         access = get_computer_access_settings()
+        ai_environment = get_provider_environment().title()
+        glass_opacity = get_ui_opacity()
         saved_permissions = get_configured_computer_permissions()
         effective_permissions = get_computer_permissions()
         full_access = access.get("access_level") == "full"
@@ -12952,7 +12956,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
 
         menu = QMenu(button)
         menu.setStyleSheet(
-            f"QMenu {{ background:{glass_rgba(C.PANEL, 100)}; color:{C.TEXT}; "
+            f"QMenu {{ background:{glass_rgba(C.PANEL, glass_opacity)}; color:{C.TEXT}; "
             f"border:1px solid {C.BORDER_B}; padding:7px; }}"
             f"QMenu::item {{ padding:7px 18px; border-radius:4px; }}"
             f"QMenu::item:selected {{ background:{C.PRI_GHO}; color:{C.PRI}; }}"
@@ -12962,6 +12966,8 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         mode_action.setEnabled(False)
         policy_action = menu.addAction(f"Approval policy  ·  {policy}")
         policy_action.setEnabled(False)
+        ai_action = menu.addAction(f"AI environment  ·  {ai_environment}")
+        ai_action.setEnabled(False)
         if self._chat_plan_mode:
             mode_hint = "Plan mode prepares actions. No computer action is executed."
         elif mode == "CHAT":
