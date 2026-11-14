@@ -3257,9 +3257,9 @@ class ProvidersOverlay(_HudOverlay):
     # Which provider fills each slot, and what the slot is FOR — in the words
     # somebody configuring it would use, not the words the code uses.
     _SLOTS = (
-        ("stt", "MIC", "HEARING", "turns what you say into words"),
-        ("llm", "②", "THINKING", "understands, decides, uses your tools"),
-        ("tts", "③", "SPEAKING", "reads the answer out loud"),
+        ("stt", "1", "VOICE INPUT", "Converts your speech into text."),
+        ("llm", "2", "AI MODEL", "Understands your request, answers and uses tools."),
+        ("tts", "3", "VOICE OUTPUT", "Reads the answer aloud."),
     )
 
     def __init__(self, parent=None, embedded: bool = False):
@@ -3855,7 +3855,8 @@ class ProvidersOverlay(_HudOverlay):
             )
             self._body_lay.addWidget(w)
 
-        self._body_lay.addWidget(self._sidecar_box_widget())
+        if self._environment == "online":
+            self._body_lay.addWidget(self._sidecar_box_widget())
         self._body_lay.addStretch(1)
         self._update_footer()
 
@@ -4119,10 +4120,9 @@ class ProvidersOverlay(_HudOverlay):
         w, lay = self._box([head])
         lay.addWidget(
             self._label(
-                "Reading a document, looking at your screen, writing code — the "
-                "assistant's own requests, not the conversation. These use Gemini's "
-                "text quota, which runs out before the voice does. Sending them "
-                "somewhere else keeps them working, and changes nothing you hear.",
+                "Optional: use a separate cloud model for file reading, screen "
+                "analysis and coding. This does not change the model used for your "
+                "live conversation.",
                 7,
                 C.TEXT_DIM,
             )
@@ -4217,28 +4217,29 @@ class ProvidersOverlay(_HudOverlay):
         QTimer.singleShot(0, self._rebuild_body)
 
     def _update_footer(self) -> None:
-        if self._mode != "pipeline":
+        if self._environment == "online" and self._mode == "gemini":
             self._footer.setText(
-                "Gemini Live. Nothing on this panel changes the conversation."
+                "Gemini Live is ready. No separate speech or model setup is required."
             )
             return
+
         missing = [
-            name for slot, _n, name, _w in self._SLOTS if not self._pipe.get(slot)
+            name.title()
+            for slot, _number, name, _description in self._SLOTS
+            if not self._pipe.get(slot)
         ]
-        if "THINKING" in missing:
+        if missing:
             self._footer.setText(
-                "?  ② THINKING is not set — without it the assistant falls back "
-                "to Gemini Live and says so in the log."
+                "Finish setup: " + ", ".join(missing)
+                + ". Save & Apply becomes available when all three are selected."
             )
-        elif missing:
-            words = " and ".join(f"{m.lower()}" for m in missing)
+        elif self._environment == "offline":
             self._footer.setText(
-                f"Only {words} is missing — it will run, but you will type "
-                f"instead of speak, or read instead of listen."
+                "Local setup selected. Save & Apply reconnects JARVIS using these models."
             )
         else:
             self._footer.setText(
-                "All three set. SAVE & APPLY reconnects; the conversation is kept."
+                "Online setup selected. Save & Apply reconnects JARVIS using these services."
             )
 
     # ── actions ──────────────────────────────────────────────────────────────
@@ -4408,13 +4409,19 @@ class ProvidersOverlay(_HudOverlay):
     def _apply(self) -> None:
         from memory.config_manager import (
             get_pipeline,
+            get_provider_environment,
             get_provider_mode,
+            get_online_provider_mode,
             save_providers,
         )
 
-        before = (get_provider_mode(), dict(get_pipeline()))
+        before_environment = get_provider_environment()
+        before = (
+            before_environment,
+            get_provider_mode(),
+            dict(get_pipeline(before_environment)),
+        )
 
-        # ONE write, not five. See save_providers for what the five cost.
         creds = {pid: self._values(pid) for pid in list(self._edits)}
         for slot, eid in self._picked.items():
             pid = self._pipe.get(slot, "")
@@ -4427,38 +4434,42 @@ class ProvidersOverlay(_HudOverlay):
                     ),
                     {},
                 )
-                # A catalog choice can change the endpoint even when several
-                # choices share one provider implementation (e.g. Ollama and
-                # Groq both use the OpenAI-compatible adapter).
                 creds.setdefault(pid, {}).update(selected.get("values") or {})
                 creds[pid]["catalog"] = eid
-        sidecar_pid, sidecar_eid = self._sidecar_choice()
-        if sidecar_pid and sidecar_eid:
-            creds.setdefault(sidecar_pid, {}).setdefault("catalog", sidecar_eid)
+
+        self._pipeline_drafts[self._environment] = dict(self._pipe)
+        self._mode_drafts[self._environment] = self._mode
+        sidecar_pid = self._sidecar
+        sidecar_first = self._sidecar_first
+        if self._environment == "online":
+            sidecar_pid, sidecar_eid = self._sidecar_choice()
+            if sidecar_pid and sidecar_eid:
+                creds.setdefault(sidecar_pid, {}).setdefault("catalog", sidecar_eid)
+            sidecar_first = self._first_combo.currentData() == "before"
 
         save_providers(
             mode=self._mode,
-            pipeline={
-                "stt": self._pipe.get("stt", ""),
-                "llm": self._pipe.get("llm", ""),
-                "tts": self._pipe.get("tts", ""),
-            },
+            online_mode=self._mode_drafts.get("online", get_online_provider_mode()),
+            environment=self._environment,
+            pipeline=dict(self._pipe),
+            pipelines=self._pipeline_drafts,
             creds=creds,
-            sidecar=sidecar_pid,
-            sidecar_first=self._first_combo.currentData() == "before",
+            sidecar=sidecar_pid if self._environment == "online" else None,
+            sidecar_first=sidecar_first if self._environment == "online" else None,
         )
 
-        # Providers are cached by configuration; a changed setting must not go
-        # on being served by an object built from the old one.
         try:
             self._registry.reset()
         except Exception:
             pass
 
-        after = (get_provider_mode(), dict(get_pipeline()))
+        after_environment = get_provider_environment()
+        after = (
+            after_environment,
+            get_provider_mode(),
+            dict(get_pipeline(after_environment)),
+        )
         self.hide()
-        # Background-request settings take effect on the next call with no
-        # reconnect. Only the conversation engine needs the session rebuilt.
         if before != after:
             self.changed.emit()
 
