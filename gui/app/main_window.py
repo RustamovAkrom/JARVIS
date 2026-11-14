@@ -10985,6 +10985,7 @@ class MainWindow(QMainWindow):
                 "configure sign-in security."
             )
         )
+        authentication_note.setObjectName("auth")
         authentication_note.setWordWrap(True)
         authentication_note.setStyleSheet(
             f"color:{C.TEXT_MED}; background:{C.PANEL2}; "
