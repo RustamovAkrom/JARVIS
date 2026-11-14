@@ -12993,7 +12993,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                 status = "Allowed"
             else:
                 status = "Off"
-            marker = "✓" if saved else "–"
+            marker = "✓" if (effective if mode == "AGENT" else saved) else "–"
             action = menu.addAction(f"{marker}  {label}  ·  {status}")
             action.setEnabled(False)
 
