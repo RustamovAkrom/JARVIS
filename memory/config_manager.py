@@ -676,6 +676,19 @@ def get_provider_config(
     return dict(value) if isinstance(value, dict) else {}
 
 
+def merge_provider_catalog_defaults(
+    current_values: dict,
+    preset_values: dict,
+    catalog_id: str,
+) -> dict:
+    """Fill missing catalog defaults without overwriting edited or stored values."""
+    merged = dict(preset_values or {})
+    merged.update(current_values or {})
+    if catalog_id:
+        merged["catalog"] = str(catalog_id)
+    return merged
+
+
 def get_pipeline(environment: str | None = None) -> dict:
     """Provider slots for one environment, without overwriting the other mode."""
     block = get_providers()
