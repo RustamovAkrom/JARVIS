@@ -11237,7 +11237,7 @@ class MainWindow(QMainWindow):
             if slot in ("stt", "llm", "tts")
         ) or "not configured"
         workspace = get_workspace_path() or "not configured"
-        return "\\n".join((
+        return "\n".join((
             f"JARVIS version: {APP_VERSION}",
             f"Platform: {_OS} {platform.release()}",
             f"Python: {platform.python_version()}",
@@ -12151,6 +12151,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         except OSError as exc:
             QMessageBox.warning(self, self._tr("Project file unavailable"), str(exc))
         self._update_project_explorer_state()
+        self._refresh_workspace_settings_state()
         for session in self._terminal_sessions.values():
             if session.pty is None:
                 session.cwd = self._workspace_path
@@ -12231,6 +12232,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         self._terminal_cwd.setToolTip(
             self._tr("New terminal sessions start in your home folder until a project is opened.")
         )
+        self._refresh_workspace_settings_state()
 
     def _toggle_terminal_panel(self):
         if self._reading_mode:
