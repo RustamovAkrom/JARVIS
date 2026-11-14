@@ -2996,7 +2996,7 @@ class MemoryOverlay(_HudOverlay):
 
         from memory.memory_manager import all_entries_for_ui
 
-        hdr = QLabel("🧠  WHAT JARVIS REMEMBERS")
+        hdr = QLabel("SAVED MEMORIES")
         hdr.setFont(QFont(FONT_MONO, 12, QFont.Weight.Bold))
         hdr.setStyleSheet(f"color: {C.PRI}; background: transparent;")
         self._lay.addWidget(hdr)
@@ -3009,9 +3009,9 @@ class MemoryOverlay(_HudOverlay):
         rows = all_entries_for_ui()
 
         cap = QLabel(
-            f"{len(rows)} stored facts — newest first. "
-            f"Nothing here is sent anywhere; it lives in "
-            f"memory/long_term.json on this machine."
+            f"{len(rows)} saved facts — newest first. "
+            f"Stored locally in memory/long_term.json. Relevant memories may be "
+            f"included as context in requests sent to the selected AI provider."
         )
         cap.setWordWrap(True)
         cap.setFont(QFont(FONT_UI, 9))
@@ -3096,8 +3096,19 @@ class MemoryOverlay(_HudOverlay):
                 key.setFont(QFont(FONT_UI, 10 if self._embedded else 9, QFont.Weight.DemiBold))
                 key.setStyleSheet(f"color:{C.PRI}; background:transparent;")
                 top.addWidget(key, 1)
+                category_labels = {
+                    "identity": "Identity",
+                    "preferences": "Preferences",
+                    "projects": "Projects",
+                    "relationships": "Relationships",
+                    "wishes": "Plans",
+                    "notes": "Notes",
+                }
+                category_name = category_labels.get(
+                    str(r["category"]).lower(), str(r["category"]).replace("_", " ").title()
+                )
                 meta_text = (
-                    f"{_html.escape(str(r['category'][:4]).upper())}  ·  "
+                    f"{_html.escape(category_name)}  ·  "
                     f"{_html.escape(str(r['updated'] or '—'))}"
                 )
                 meta = QLabel(meta_text)
@@ -9632,7 +9643,7 @@ class MainWindow(QMainWindow):
         self._clear_chat_btn = QPushButton(self._tr("Clear chat"))
         self._clear_chat_btn.setMinimumHeight(28)
         self._clear_chat_btn.setToolTip(
-            self._tr("Clear this chat view; saved conversation stays in Archive")
+            self._tr("Clear this chat view. Previous conversations remain in Conversations.")
         )
         self._clear_chat_btn.clicked.connect(self._clear_chat)
         chat_tools.addWidget(self._clear_chat_btn)
@@ -9692,17 +9703,17 @@ class MainWindow(QMainWindow):
         history_tools = QHBoxLayout()
         history_tools.setSpacing(5)
         history_note = QLabel(
-            self._tr("Conversation archive · Memory stores saved facts")
+            self._tr("Previous conversations · Saved facts live in Memory")
         )
         history_note.setWordWrap(True)
         history_note.setStyleSheet(f"color:{C.TEXT_DIM}; background:transparent;")
         history_note.setFont(QFont(FONT_UI, 10))
         history_tools.addWidget(history_note, 1)
-        self._clear_history_btn = QPushButton(self._tr("Clear history"))
+        self._clear_history_btn = QPushButton(self._tr("Clear conversations"))
         self._clear_history_btn.setFixedHeight(20)
         self._clear_history_btn.setToolTip(
             self._tr(
-                "Delete the conversation archive and active chat; saved memory stays"
+                "Delete saved conversations and the active chat. Saved facts in Memory stay."
             )
         )
         self._clear_history_btn.clicked.connect(self._clear_history)
@@ -9714,9 +9725,9 @@ class MainWindow(QMainWindow):
             f"QListWidget::item {{ padding: 6px; border-bottom: 1px solid {C.BORDER}; }}"
         )
         history_lay.addWidget(self._history_list, 1)
-        self._work_tabs.addTab(history_page, self._tr("ARCHIVE"))
+        self._work_tabs.addTab(history_page, self._tr("CONVERSATIONS"))
         self._work_tabs.setTabToolTip(
-            1, self._tr("Archived conversation turns. Saved facts are in Memory.")
+            1, self._tr("Previous conversations. Saved facts are managed separately in Memory.")
         )
 
         task_page = QWidget()
