@@ -10442,6 +10442,9 @@ class MainWindow(QMainWindow):
             self._settings_center.action_requested.connect(self._handle_settings_action)
             self._settings_center.closed.connect(self._on_settings_center_closed)
         self._settings_center.refresh_theme()
+        from memory.config_manager import get_ui_opacity
+
+        self._settings_center.set_glass_opacity(get_ui_opacity())
         self._settings_center.show()
         self._settings_center.raise_()
         self._settings_center.activateWindow()
@@ -14108,7 +14111,11 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             self._apply_design_system()
 
     def _preview_ui_opacity(self, opacity: int):
-        self.setWindowOpacity(max(60, min(100, int(opacity))) / 100)
+        value = max(60, min(100, int(opacity)))
+        self.setWindowOpacity(value / 100.0)
+        settings = getattr(self, "_settings_center", None)
+        if settings is not None:
+            settings.set_glass_opacity(value)
 
     def _apply_name_update(
         self,
