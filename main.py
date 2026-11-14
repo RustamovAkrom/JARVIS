@@ -1715,6 +1715,25 @@ class JarvisLive:
                 }
                 r = None
                 action = str(args.get("action", "")).lower().strip().replace("-", "_").replace(" ", "_")
+                if name == "computer_settings" and not action and args.get("description"):
+                    # Resolve free-text descriptions before enforcing policy. The
+                    # handler performs this same resolution when it executes.
+                    try:
+                        from actions.computer_settings import _detect_action
+
+                        action = str(
+                            _detect_action(str(args["description"])).get("action", "")
+                        ).lower().strip().replace("-", "_").replace(" ", "_")
+                    except Exception:
+                        action = ""
+                from core.computer_permissions import (
+                    normalize_computer_action,
+                    required_permissions_for_action,
+                )
+
+                action = normalize_computer_action(name, action)
+                if name == "workspace_files" and not action:
+                    action = "list"
                 if name in {
                     "computer_control",
                     "computer_settings",
@@ -1722,6 +1741,8 @@ class JarvisLive:
                     "open_app",
                     "browser_control",
                     "send_message",
+                    "dev_agent",
+                    "workspace_files",
                 }:
                     from memory.config_manager import (
                         get_computer_access_settings,
@@ -1737,12 +1758,16 @@ class JarvisLive:
                         read_only_actions = {
                             "volume_get", "brightness_get", "screenshot", "find_on_page"
                         }
+                    elif name == "file_controller":
+                        read_only_actions = {
+                            "list", "read", "find", "largest", "disk_usage", "info"
+                        }
+                    elif name == "workspace_files":
+                        read_only_actions = {"list", "read", "read_current"}
                     else:
-                        read_only_actions = (
-                            {"list", "read", "find", "largest", "disk_usage", "info"}
-                            if name == "file_controller"
-                            else set()
-                        )
+                        # dev_agent creates files, installs dependencies, and can
+                        # execute generated code; none of its operations is read-only.
+                        read_only_actions = set()
                     mutating = action not in read_only_actions
                     if name == "computer_settings" and action == "close_app":
                         result = (
@@ -1755,60 +1780,9 @@ class JarvisLive:
                             "mode in Settings → Computer Permissions to allow this action."
                         )
                     else:
-                        settings_permissions = {
-                            "type_text": "type", "write_on_screen": "type", "type": "type",
-                            "write": "type", "press_key": "type", "enter": "type",
-                            "escape": "type", "paste": ("type", "clipboard"), "cut": "type",
-                            "copy": "clipboard",
-                            "undo": "type", "redo": "type", "select_all": "type",
-                            "save": "type", "new_tab": "type", "close_tab": "type",
-                            "next_tab": "type", "prev_tab": "type", "go_back": "type",
-                            "go_forward": "type", "zoom_in": "type", "zoom_out": "type",
-                            "zoom_reset": "type", "find_on_page": "type",
-                            "reload_page_n": "type", "refresh_n": "type",
-                            "reload_n": "type", "scroll_up": "move_mouse",
-                            "scroll_down": "move_mouse", "scroll_top": "move_mouse",
-                            "scroll_bottom": "move_mouse", "page_up": "move_mouse",
-                            "page_down": "move_mouse", "close_app": "click",
-                            "close_window": "click", "full_screen": "click",
-                            "fullscreen": "click", "minimize": "click",
-                            "maximize": "click", "snap_left": "click",
-                            "snap_right": "click", "switch_window": "click",
-                            "show_desktop": "click", "task_manager": "click",
-                            "focus_search": "click",
-                        }
-                        control_permissions = {
-                            "screenshot": ("observe_screen",),
-                            "screen_find": ("find_elements",),
-                            "focus_window": ("find_elements",),
-                            "move": ("move_mouse",),
-                            "scroll": ("move_mouse",),
-                            "drag": ("move_mouse", "click"),
-                            "click": ("click",),
-                            "left_click": ("click",),
-                            "double_click": ("click",),
-                            "right_click": ("click",),
-                            "close_app": ("click",),
-                            "screen_click": ("find_elements", "click"),
-                            "copy": ("clipboard",),
-                            "type": ("type",),
-                            "smart_type": ("type",),
-                            "paste": ("type", "clipboard"),
-                            "hotkey": ("type",),
-                            "press": ("type",),
-                            "clear_field": ("type",),
-                        }
-                        if name == "computer_control":
-                            required_permissions = control_permissions.get(action, ())
-                        elif name == "computer_settings" and action in settings_permissions:
-                            permission_value = settings_permissions[action]
-                            required_permissions = (
-                                permission_value
-                                if isinstance(permission_value, tuple)
-                                else (permission_value,)
-                            )
-                        else:
-                            required_permissions = ()
+                        required_permissions = required_permissions_for_action(
+                            name, action
+                        )
                         permissions = get_computer_permissions()
                         denied_permissions = [
                             permission
@@ -1829,6 +1803,7 @@ class JarvisLive:
                                 (name == "computer_control" and action == "close_app")
                                 or (name == "file_controller" and action == "delete")
                                 or name == "send_message"
+                                or name == "dev_agent"
                             )
                             approval_scope = name in {
                                 "computer_control",
@@ -1836,7 +1811,8 @@ class JarvisLive:
                                 "file_controller",
                                 "open_app",
                                 "browser_control",
-                            }
+                                "dev_agent",
+                            } or (name == "workspace_files" and action == "open")
                             needs_approval = not self_gated and (
                                 (policy["access_level"] == "ask" and approval_scope)
                                 or high_impact
@@ -1886,13 +1862,42 @@ class JarvisLive:
                                         "JARVIS will perform this requested computer action "
                                         "once you approve it."
                                     )
+                                def _run_approved_action(
+                                    n=name,
+                                    a=dict(args),
+                                    c=dict(_ctx),
+                                    required=tuple(required_permissions),
+                                ):
+                                    # Approval is not a permanent permission
+                                    # grant. Re-read mode and capabilities when
+                                    # the user confirms, not when the request was
+                                    # first queued.
+                                    current_policy = get_computer_access_settings()
+                                    if current_policy.get("mode") != "agent":
+                                        return "Action cancelled: Agent mode is no longer active."
+                                    window = getattr(self.ui, "_win", None)
+                                    if self._plan_mode_active or getattr(
+                                        window, "_chat_plan_mode", False
+                                    ):
+                                        return "Action cancelled: Plan mode is active."
+                                    current_permissions = get_computer_permissions()
+                                    denied_now = [
+                                        permission
+                                        for permission in required
+                                        if not current_permissions.get(permission, False)
+                                    ]
+                                    if denied_now:
+                                        return (
+                                            "Action cancelled: permission changed while awaiting "
+                                            f"approval ({', '.join(denied_now)})."
+                                        )
+                                    return self._action_registry.run(n, a, c) or "Done."
+
                                 result = confirm_gate.request(
                                     key=f"agent:{name}:{action}:{time.monotonic_ns()}",
                                     title=title,
                                     detail=detail,
-                                    run=lambda n=name, a=dict(args), c=dict(_ctx): (
-                                        self._action_registry.run(n, a, c) or "Done."
-                                    ),
+                                    run=_run_approved_action,
                                 )
                                 r = None
                             else:
@@ -3484,8 +3489,13 @@ class JarvisLive:
             finally:
                 self.session = None
                 # Only save if there was a real conversation (≥3 turns)
-                if len(self._session_log) >= 3 and not self._shutdown_requested:
-                    asyncio.create_task(self._save_session_summary())
+                if len(self._session_log) >= 3:
+                    if self._shutdown_requested:
+                        # Shutdown is the end of this session: await the save
+                        # before quitting so the task cannot be abandoned.
+                        await self._save_session_summary()
+                    else:
+                        asyncio.create_task(self._save_session_summary())
 
             self.set_speaking(False)
             self.ui.set_state("SLEEPING")

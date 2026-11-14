@@ -601,7 +601,11 @@ def computer_control(
       user_data     — pull real data from memory
     """
     params = parameters or {}
-    action = params.get("action", "").lower().strip()
+    from core.computer_permissions import normalize_computer_action
+
+    action = normalize_computer_action(
+        "computer_control", params.get("action", "")
+    )
 
     if not action:
         return "No action specified for computer_control."
@@ -618,6 +622,7 @@ def computer_control(
         "double_click": ("click",),
         "right_click": ("click",),
         "screen_click": ("find_elements", "click"),
+        "close_app": ("click",),
         "copy": ("clipboard",),
         "type": ("type",),
         "smart_type": ("type",),

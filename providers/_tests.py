@@ -1213,18 +1213,12 @@ def test_voices_follow_the_language():
 
 
 def test_panel_settings_survive():
-    """The settings panel: does what you choose come back?
-
-    Three faults lived here, all of them reported as "it does not remember":
-    five separate writes of one file racing each other, a choice read from the
-    box that was still being built, and a redraw eating what had been typed.
-    Qt runs offscreen so this needs no display.
-    """
+    """Online and Offline provider profiles stay separate across redraws."""
     import os
 
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-    section("[10] The settings panel remembers")
+    section("[10] Online and Offline provider settings survive")
     try:
         from PyQt6.QtWidgets import QApplication, QComboBox
     except Exception as e:
@@ -1236,6 +1230,7 @@ def test_panel_settings_survive():
     from memory.config_manager import (
         get_pipeline,
         get_provider_config,
+        get_provider_environment,
         get_provider_mode,
         save_pipeline,
         save_provider_config,
@@ -1250,6 +1245,8 @@ def test_panel_settings_survive():
     ).get("providers")
 
     try:
+        # The legacy helper deliberately selects the Online profile. Clearing
+        # its pipeline must not touch a previously configured Offline profile.
         save_provider_mode("gemini")
         save_pipeline(stt="", llm="", tts="")
         save_sidecar_provider("")
@@ -1257,52 +1254,79 @@ def test_panel_settings_survive():
             "openai_compat", {"base_url": "", "model": "", "catalog": ""}
         )
 
-        # -- a provider chosen for background requests is configurable --------
         ov = UI.ProvidersOverlay()
+        check("the panel has exactly Online and Offline modes",
+              [ov._category_tabs.tabText(i) for i in range(ov._category_tabs.count())]
+              == ["Online", "Offline"])
+        check("existing setup opens in Online mode", ov._environment == "online")
+
+        # Online background requests may use cloud models, never a local Ollama
+        # server. This keeps Online and Offline responsibilities unambiguous.
         box = ov._sidecar_combo
-        i = next(
+        cloud_index = next(
             (
-                k
-                for k in range(box.count())
-                if box.itemData(k) == ("openai_compat", "ollama")
+                i for i in range(box.count())
+                if box.itemData(i) == ("openai_compat", "groq")
             ),
             -1,
         )
-        check("named services are offered for background requests", i > 0)
-        if i > 0:
-            box.setCurrentIndex(i)
-            ov._sidecar_changed(i)
+        local_index = next(
+            (
+                i for i in range(box.count())
+                if box.itemData(i) == ("openai_compat", "ollama")
+            ),
+            -1,
+        )
+        check("cloud sidecar is available online", cloud_index > 0)
+        check("local Ollama is excluded from Online sidecar", local_index < 0)
+        if cloud_index > 0:
+            box.setCurrentIndex(cloud_index)
+            ov._sidecar_changed(cloud_index)
             ov._rebuild_body()
             check(
-                "choosing one shows its form",
+                "choosing a cloud sidecar shows its form",
                 "openai_compat" in ov._edits,
                 str(list(ov._edits)),
             )
             check(
-                "its address is filled in from the preset",
-                get_provider_config("openai_compat")
-                .get("base_url", "")
-                .endswith("11434/v1"),
+                "cloud endpoint is filled from its preset",
+                "api.groq.com" in get_provider_config("openai_compat").get("base_url", ""),
                 str(get_provider_config("openai_compat")),
             )
 
-        # -- typing survives a redraw ----------------------------------------
-        if "openai_compat" in ov._edits:
-            ov._edits["openai_compat"]["model"][0].setCurrentText("qwen3:8b")
-            ov._rebuild_body()
-            check(
-                "a typed model survives a redraw",
-                get_provider_config("openai_compat").get("model") == "qwen3:8b",
-                str(get_provider_config("openai_compat").get("model")),
-            )
+        if "openai_compat" in ov._edits and "model" in ov._edits["openai_compat"]:
+            model_widget = ov._edits["openai_compat"]["model"][0]
+            if isinstance(model_widget, QComboBox):
+                model_widget.setCurrentText("qwen3:8b")
+                ov._rebuild_body()
+                check(
+                    "a typed model survives a redraw",
+                    get_provider_config("openai_compat").get("model") == "qwen3:8b",
+                    str(get_provider_config("openai_compat").get("model")),
+                )
 
-        # -- the whole setup round-trips -------------------------------------
+        # Build a cloud pipeline draft first.
         ov._set_mode("pipeline")
-        ov._rebuild_body()
-        ov._pipe.update({"stt": "whisper", "llm": "openai_compat", "tts": "elevenlabs"})
-        ov._picked.update({"stt": "local", "llm": "ollama", "tts": "elevenlabs"})
+        ov._pipe.update(
+            {"stt": "whisper", "llm": "openai_compat", "tts": "elevenlabs"}
+        )
+        ov._picked.update(
+            {"stt": "groq", "llm": "groq", "tts": "elevenlabs"}
+        )
         ov._rebuild_body()
 
+        # Switching tabs saves this draft locally; the new tab only shows local
+        # models. These are config choices, so no local service must be running.
+        ov._set_provider_category("offline")
+        ov._pipe.update(
+            {"stt": "whisper", "llm": "openai_compat", "tts": "piper"}
+        )
+        ov._picked.update(
+            {"stt": "local", "llm": "ollama", "tts": "piper"}
+        )
+        ov._rebuild_body()
+
+        # The apply operation writes one configuration transaction.
         import pathlib
 
         writes = [0]
@@ -1319,38 +1343,40 @@ def test_panel_settings_survive():
         finally:
             pathlib.Path.write_text = real
 
-        check("APPLY writes the config once", writes[0] == 1, str(writes[0]))
+        check("APPLY writes config once", writes[0] == 1, str(writes[0]))
+        check("Offline environment is active",
+              get_provider_environment() == "offline", get_provider_environment())
+        check("Offline uses the provider pipeline",
+              get_provider_mode() == "pipeline", get_provider_mode())
         check(
-            "the mode was stored",
-            get_provider_mode() == "pipeline",
-            get_provider_mode(),
+            "all Offline slots were stored",
+            all(get_pipeline("offline").get(k) for k in ("stt", "llm", "tts")),
+            str(get_pipeline("offline")),
         )
         check(
-            "all three slots were stored",
-            all(get_pipeline().get(k) for k in ("stt", "llm", "tts")),
-            str(get_pipeline()),
+            "Online draft remained separate",
+            get_pipeline("online").get("llm") == "openai_compat"
+            and get_pipeline("online").get("tts") == "elevenlabs",
+            str(get_pipeline("online")),
         )
 
         ov2 = UI.ProvidersOverlay()
-        check("reopening shows MY OWN SETUP", ov2._mode == "pipeline", ov2._mode)
-        check("the local card is the selected one", ov2._card_local.isChecked())
+        check("reopening restores Offline mode", ov2._environment == "offline")
+        check("Ollama is remembered in Offline",
+              ov2._current_entry("llm", "openai_compat") == "ollama",
+              ov2._current_entry("llm", "openai_compat"))
         check(
-            "Ollama is remembered",
-            ov2._current_entry("llm", "openai_compat") == "ollama",
-            ov2._current_entry("llm", "openai_compat"),
-        )
-        check(
-            "no slot reads 'not set'",
-            all(ov2._pipe.get(s) for s in ("stt", "llm", "tts")),
+            "all three Offline slots are selected",
+            all(ov2._pipe.get(slot) for slot in ("stt", "llm", "tts")),
             str(ov2._pipe),
         )
-
-        # -- the wheel does not change a box you scroll past -----------------
         combos = ov2.findChildren(QComboBox)
         check(
             f"all {len(combos)} boxes ignore the wheel unless focused",
             combos and all(isinstance(c, UI._ScrollSafeCombo) for c in combos),
         )
+        ov.close()
+        ov2.close()
     finally:
         from memory.config_manager import _patch_config
 

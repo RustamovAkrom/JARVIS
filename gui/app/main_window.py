@@ -185,7 +185,7 @@ def _write_json_list(path: Path, key: str, rows: list[dict]) -> None:
 
 
 def _history_turns() -> list[dict]:
-    """Load the archive and give legacy turns stable IDs for delete actions."""
+    """Load saved conversations and give legacy turns stable IDs for delete actions."""
     rows = _read_json_list(_UI_HISTORY_FILE, "turns")
     changed = False
     for row in rows:
@@ -229,6 +229,7 @@ _OS = platform.system()  # "Windows" | "Darwin" | "Linux"
 
 from gui.themes.typography import FONT_MONO, FONT_UI, R_L, R_S
 from gui.themes.styles import (
+    glass_rgba,
     _card_qss,
     _combo_qss,
     _ghost_qss,
@@ -1827,18 +1828,30 @@ class HueWheel(QWidget):
         self.setFixedSize(148, 148)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self._hue = 0.53
+        self._selected_color = QColor(DEFAULT_UI_COLOR)
         self._drag = False
         self.set_color(initial_hex)
 
     # ── API ──────────────────────────────────────────────────────────────────
     def color(self) -> str:
-        return QColor.fromHsvF(self._hue, 1.0, 1.0).name()
+        return self._selected_color.name()
 
     def set_color(self, hex_str: str):
         c = QColor((hex_str or "").strip())
-        if c.isValid() and c.hsvHueF() >= 0:
-            self._hue = c.hsvHueF()
-            self.update()
+        if not c.isValid():
+            return
+        # Keep the exact selected color in sync with HEX, including pure black
+        # and white, which have no meaningful hue component in HSV.
+        self._selected_color = QColor(c)
+        hue = c.hsvHueF()
+        if hue >= 0:
+            self._hue = hue
+        self.update()
+
+    def _select_hue_at(self, position: QPointF) -> None:
+        self._hue = self._hue_from_pos(position)
+        self._selected_color = QColor.fromHsvF(self._hue, 1.0, 1.0)
+        self.update()
 
     # ── geometry helpers ─────────────────────────────────────────────────────
     def _ring_rect(self) -> QRectF:
@@ -1869,7 +1882,7 @@ class HueWheel(QWidget):
         p.drawEllipse(rect)
 
         # centre preview circle
-        preview = QColor.fromHsvF(self._hue, 1.0, 1.0)
+        preview = QColor(self._selected_color)
         inner = rect.adjusted(30, 30, -30, -30)
         p.setPen(QPen(qcol(C.BORDER_B), 1))
         p.setBrush(QBrush(preview))
@@ -1888,14 +1901,12 @@ class HueWheel(QWidget):
     # ── fare ─────────────────────────────────────────────────────────────────
     def mousePressEvent(self, e):
         self._drag = True
-        self._hue = self._hue_from_pos(e.position())
-        self.update()
+        self._select_hue_at(e.position())
         self.hue_picked.emit(self.color())
 
     def mouseMoveEvent(self, e):
         if self._drag:
-            self._hue = self._hue_from_pos(e.position())
-            self.update()
+            self._select_hue_at(e.position())
             self.hue_picked.emit(self.color())
 
     def mouseReleaseEvent(self, e):
@@ -2990,13 +3001,17 @@ class MemoryOverlay(_HudOverlay):
         p.update(before.united(self.geometry()))
         self.update()
 
+    def refresh_state(self) -> None:
+        """Reload saved facts when the cached Memory page is reopened."""
+        self._rebuild()
+
     def _rebuild(self):
         before = self.geometry()
         self._clear_layout()
 
         from memory.memory_manager import all_entries_for_ui
 
-        hdr = QLabel("🧠  WHAT JARVIS REMEMBERS")
+        hdr = QLabel("MEMORY · SAVED FACTS")
         hdr.setFont(QFont(FONT_MONO, 12, QFont.Weight.Bold))
         hdr.setStyleSheet(f"color: {C.PRI}; background: transparent;")
         self._lay.addWidget(hdr)
@@ -3009,14 +3024,29 @@ class MemoryOverlay(_HudOverlay):
         rows = all_entries_for_ui()
 
         cap = QLabel(
-            f"{len(rows)} stored facts — newest first. "
-            f"Nothing here is sent anywhere; it lives in "
-            f"memory/long_term.json on this machine."
+            f"{len(rows)} saved facts — newest first. "
+            f"Stored locally in {PATHS.long_term_memory_file}. Relevant memories may be "
+            f"included as context in requests sent to the selected AI provider."
         )
         cap.setWordWrap(True)
         cap.setFont(QFont(FONT_UI, 9))
         cap.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
         self._lay.addWidget(cap)
+
+        memory_cards = []
+        memory_search = None
+        if rows:
+            memory_search = QLineEdit()
+            memory_search.setObjectName("MemorySearch")
+            memory_search.setPlaceholderText("Search saved facts")
+            memory_search.setClearButtonEnabled(True)
+            memory_search.setAccessibleName("Search saved facts")
+            memory_search.setStyleSheet(
+                f"QLineEdit {{ background:{C.PANEL2}; color:{C.TEXT}; "
+                f"border:1px solid {C.BORDER}; border-radius:7px; padding:7px 9px; }}"
+                f"QLineEdit:focus {{ border-color:{C.PRI}; }}"
+            )
+            self._lay.addWidget(memory_search)
 
         if not rows:
             empty = QLabel("Nothing stored yet.")
@@ -3096,8 +3126,19 @@ class MemoryOverlay(_HudOverlay):
                 key.setFont(QFont(FONT_UI, 10 if self._embedded else 9, QFont.Weight.DemiBold))
                 key.setStyleSheet(f"color:{C.PRI}; background:transparent;")
                 top.addWidget(key, 1)
+                category_labels = {
+                    "identity": "Identity",
+                    "preferences": "Preferences",
+                    "projects": "Projects",
+                    "relationships": "Relationships",
+                    "wishes": "Plans",
+                    "notes": "Notes",
+                }
+                category_name = category_labels.get(
+                    str(r["category"]).lower(), str(r["category"]).replace("_", " ").title()
+                )
                 meta_text = (
-                    f"{_html.escape(str(r['category'][:4]).upper())}  ·  "
+                    f"{_html.escape(category_name)}  ·  "
                     f"{_html.escape(str(r['updated'] or '—'))}"
                 )
                 meta = QLabel(meta_text)
@@ -3143,6 +3184,23 @@ class MemoryOverlay(_HudOverlay):
                 )
                 card_lay.addWidget(txt)
                 ilay.addWidget(card)
+                searchable = " ".join(
+                    (
+                        str(r.get("key", "")),
+                        str(r.get("value", "")),
+                        str(r.get("category", "")),
+                        category_name,
+                    )
+                ).casefold()
+                memory_cards.append((card, searchable))
+
+            if memory_search is not None:
+                def _filter_memory_cards(query: str) -> None:
+                    query = query.strip().casefold()
+                    for memory_card, searchable in memory_cards:
+                        memory_card.setVisible(not query or query in searchable)
+
+                memory_search.textChanged.connect(_filter_memory_cards)
 
             ilay.addStretch()
             scroll.setWidget(inner)
@@ -3170,6 +3228,16 @@ class MemoryOverlay(_HudOverlay):
 
     def _forget(self, category: str, key: str):
         from memory.memory_manager import forget
+
+        answer = QMessageBox.question(
+            self,
+            "Forget this saved fact?",
+            f"Remove “{key.replace('_', ' ')}” from JARVIS Memory? This cannot be undone.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
 
         forget(key, category)
         # Rebuild on the NEXT event-loop turn, not inside this click handler.
@@ -3257,9 +3325,9 @@ class ProvidersOverlay(_HudOverlay):
     # Which provider fills each slot, and what the slot is FOR — in the words
     # somebody configuring it would use, not the words the code uses.
     _SLOTS = (
-        ("stt", "MIC", "HEARING", "turns what you say into words"),
-        ("llm", "②", "THINKING", "understands, decides, uses your tools"),
-        ("tts", "③", "SPEAKING", "reads the answer out loud"),
+        ("stt", "1", "VOICE RECOGNITION", "Turns your speech into text."),
+        ("llm", "2", "AI MODEL", "Understands your request, answers and uses tools."),
+        ("tts", "3", "SPOKEN VOICE", "Reads JARVIS responses aloud."),
     )
 
     def __init__(self, parent=None, embedded: bool = False):
@@ -3267,8 +3335,10 @@ class ProvidersOverlay(_HudOverlay):
         self._embedded = bool(embedded)
         # Imported HERE, on the click — never at startup. See the class docstring.
         from memory.config_manager import (
+            get_online_provider_mode,
             get_pipeline,
             get_provider_config,
+            get_provider_environment,
             get_provider_mode,
             get_sidecar_first,
             get_sidecar_provider,
@@ -3276,7 +3346,12 @@ class ProvidersOverlay(_HudOverlay):
         from providers import registry
 
         self._registry = registry
-        self._get_cfg = get_provider_config
+        # Resolve credentials against the tab being edited, not the globally
+        # active runtime environment. Online and Offline drafts can be edited
+        # before the user applies either one.
+        self._get_cfg = lambda provider_id: get_provider_config(
+            provider_id, self._environment
+        )
         # Warm anything a provider can only learn by asking the machine, off
         # this thread. The installed voice list costs a PowerShell subprocess —
         # measured at 1.70 seconds — and the form asks for it on every rebuild,
@@ -3304,7 +3379,7 @@ class ProvidersOverlay(_HudOverlay):
         # Fields deliberately not drawn — the catalog already answered them, or
         # they are behind MORE. Tracked rather than asked of Qt: see _fields_into.
         self._hidden: dict[str, set] = {}
-        self._picked: dict[str, str] = {}  # slot -> catalog entry id
+ # slot -> catalog entry id
 
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         if self._embedded:
@@ -3327,15 +3402,15 @@ class ProvidersOverlay(_HudOverlay):
                                  0 if self._embedded else 22, 0 if self._embedded else 18)
         outer.setSpacing(10)
 
-        title = QLabel("AI engine and providers")
+        title = QLabel("AI setup")
         title.setFont(QFont(FONT_MONO, 13, QFont.Weight.Bold))
         title.setStyleSheet(f"color: {C.PRI}; background: transparent;")
         if not self._embedded:
             outer.addWidget(title)
 
         sub = QLabel(
-            "Choose what powers the conversation. "
-            "Gemini is the default and needs nothing set up here."
+            "Choose where JARVIS runs its AI. "
+            "Choose Online for cloud services or Offline for models on this device."
         )
         sub.setWordWrap(True)
         sub.setFont(QFont(FONT_MONO, 8))
@@ -3347,23 +3422,32 @@ class ProvidersOverlay(_HudOverlay):
         # A dropdown hides the option you did not choose. This is the one
         # decision on the panel that changes everything below it, and both
         # answers deserve to be readable at the same time.
+        self._environment = get_provider_environment()
         self._mode = get_provider_mode()
-        self._pipe = dict(get_pipeline())
+        self._pipeline_drafts = {
+            "online": dict(get_pipeline("online")),
+            "offline": dict(get_pipeline("offline")),
+        }
+        self._mode_drafts = {
+            "online": get_online_provider_mode(),
+            "offline": "pipeline",
+        }
+        self._pipe = dict(self._pipeline_drafts.get(self._environment, {}))
         self._sidecar = get_sidecar_provider()
         self._sidecar_first = get_sidecar_first()
-        self._provider_category = self._initial_provider_category()
+        self._provider_category = self._environment
+        self._picked: dict[str, str] = {}
+
         self._category_tabs = QTabBar()
         self._category_tabs.setExpanding(True)
-        self._category_tabs.setUsesScrollButtons(True)
+        self._category_tabs.setUsesScrollButtons(False)
         self._category_tabs.setDrawBase(False)
-        for label in ("Full control AI", "Custom AI", "Local AI", "Claude AI"):
-            self._category_tabs.addTab(label)
-        self._category_tabs.setCurrentIndex(
-            ("full", "custom", "local", "claude").index(self._provider_category)
-        )
+        self._category_tabs.addTab("Online")
+        self._category_tabs.addTab("Offline")
+        self._category_tabs.setCurrentIndex(0 if self._environment == "online" else 1)
         self._category_tabs.setStyleSheet(f"""
             QTabBar::tab {{ color:{C.TEXT_MED}; background:transparent; border:0;
-                border-bottom:2px solid transparent; padding:8px 9px; }}
+                border-bottom:2px solid transparent; padding:9px 18px; }}
             QTabBar::tab:selected {{ color:{C.PRI}; border-bottom-color:{C.PRI}; }}
             QTabBar::tab:hover {{ color:{C.TEXT}; }}
         """)
@@ -3373,6 +3457,24 @@ class ProvidersOverlay(_HudOverlay):
         self._category_description.setWordWrap(True)
         self._category_description.setStyleSheet(f"color:{C.TEXT_MED}; background:transparent;")
         outer.addWidget(self._category_description)
+
+        self._online_engine_box = QWidget()
+        engine_row = QHBoxLayout(self._online_engine_box)
+        engine_row.setContentsMargins(0, 0, 0, 0)
+        engine_row.setSpacing(8)
+        self._gemini_mode_card = self._mode_card(
+            "Gemini Live (recommended)",
+            "One online service handles voice input, answers and spoken replies.",
+            "gemini",
+        )
+        self._cloud_mode_card = self._mode_card(
+            "Configure online services",
+            "Choose the cloud services used for voice recognition, answers and spoken replies.",
+            "pipeline",
+        )
+        engine_row.addWidget(self._gemini_mode_card, 1)
+        engine_row.addWidget(self._cloud_mode_card, 1)
+        outer.addWidget(self._online_engine_box)
 
         # ── Body ────────────────────────────────────────────────────────────
         self._scroll = QScrollArea()
@@ -3412,6 +3514,7 @@ class ProvidersOverlay(_HudOverlay):
         row = QHBoxLayout()
         row.setSpacing(8)
         apply_btn = QPushButton("▸  SAVE  &  APPLY")
+        self._apply_btn = apply_btn
         apply_btn.setFixedHeight(34)
         apply_btn.setFont(QFont(FONT_MONO, 9, QFont.Weight.Bold))
         apply_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -3436,6 +3539,7 @@ class ProvidersOverlay(_HudOverlay):
         row.addWidget(close, 1)
         outer.addLayout(row)
         self._refresh_cards()
+        self._update_footer()
 
     # ── pieces ───────────────────────────────────────────────────────────────
     def _mode_card(self, title: str, body: str, value: str) -> QPushButton:
@@ -3443,51 +3547,90 @@ class ProvidersOverlay(_HudOverlay):
         b.setCheckable(True)
         b.setMinimumHeight(84)
         b.setCursor(Qt.CursorShape.PointingHandCursor)
-        b.setText(f"{title}\n\n{body}")
-        b.setFont(QFont(FONT_MONO, 7))
+        b.setText(f"{title}\n{body}")
+        b.setFont(QFont(FONT_UI, 9, QFont.Weight.DemiBold))
+        b.setStyleSheet(f"""
+            QPushButton {{ background:{C.PANEL}; color:{C.TEXT_MED};
+                border:1px solid {C.BORDER}; border-radius:8px;
+                padding:10px; text-align:left; }}
+            QPushButton:checked {{ background:{C.PRI_GHO}; color:{C.PRI};
+                border:1px solid {C.PRI_DIM}; }}
+            QPushButton:hover {{ border-color:{C.BORDER_B}; }}
+        """)
         b.clicked.connect(lambda _=0, v=value: self._set_mode(v))
         b.setProperty("modeValue", value)
         return b
 
     def _refresh_cards(self) -> None:
         labels = {
-            "full": "Gemini Live manages listening, reasoning, speech, and tool calls in one service.",
-            "custom": "Combine cloud AI services or connect a compatible provider with your own settings.",
-            "local": "Choose on-device speech and language providers; requests stay on this computer where supported.",
-            "claude": "Connect Claude models through OpenRouter. Select a Claude model after connecting your account.",
+            "online": "Use cloud services. Choose Gemini Live for one integrated service, or configure hosted AI and speech providers below.",
+            "offline": "Use AI and speech models running on this computer. Download the required models once; after setup, the conversation can run without a cloud AI provider.",
         }
         if hasattr(self, "_category_tabs"):
-            index = ("full", "custom", "local", "claude").index(self._provider_category)
+            index = 0 if self._environment == "online" else 1
             self._category_tabs.blockSignals(True)
             self._category_tabs.setCurrentIndex(index)
             self._category_tabs.blockSignals(False)
-            self._category_description.setText(labels[self._provider_category])
+            self._category_description.setText(labels[self._environment])
+        if hasattr(self, "_online_engine_box"):
+            self._online_engine_box.setVisible(self._environment == "online")
+            self._gemini_mode_card.setChecked(
+                self._environment == "online" and self._mode == "gemini"
+            )
+            self._cloud_mode_card.setChecked(
+                self._environment == "online" and self._mode == "pipeline"
+            )
 
     def _initial_provider_category(self) -> str:
-        if self._mode != "pipeline":
-            return "full"
-        llm = self._pipe.get("llm", "")
-        if llm:
-            config = self._get_cfg(llm)
-            if config.get("catalog") == "claude_openrouter":
-                return "claude"
-            for pid, _eid, entry, _decl in self._catalog("llm"):
-                if pid == llm and entry.get("local") is True:
-                    return "local"
-        return "custom"
+        return self._environment
 
     def _set_provider_category_index(self, index: int) -> None:
-        categories = ("full", "custom", "local", "claude")
-        if 0 <= index < len(categories):
-            self._set_provider_category(categories[index])
+        self._set_provider_category("online" if index == 0 else "offline")
 
-    def _set_provider_category(self, category: str) -> None:
-        if category == self._provider_category:
+    def _set_provider_category(self, environment: str) -> None:
+        if environment not in ("online", "offline"):
+            return
+        if environment == self._environment:
             self._refresh_cards()
             return
+
+        # Switching tabs preserves independent drafts. Nothing reaches the
+        # running assistant until Save & Apply is selected.
         self._remember_edits()
-        self._provider_category = category
-        self._mode = "gemini" if category == "full" else "pipeline"
+        self._pipeline_drafts[self._environment] = dict(self._pipe)
+        self._mode_drafts[self._environment] = self._mode
+
+        self._environment = environment
+        self._provider_category = environment
+        self._pipe = dict(self._pipeline_drafts.get(environment, {}))
+        self._mode = (
+            self._mode_drafts.get(environment, "gemini")
+            if environment == "online"
+            else "pipeline"
+        )
+        self._picked.clear()
+
+        for slot, _num, _label, _purpose in self._SLOTS:
+            allowed = self._catalog(slot)
+            current_pid = self._pipe.get(slot, "")
+            current_eid = self._current_entry(slot, current_pid) if current_pid else ""
+            if current_pid and not any(
+                pid == current_pid and eid == current_eid
+                for pid, eid, _entry, _decl in allowed
+            ):
+                matches = [
+                    (pid, eid) for pid, eid, _entry, _decl in allowed if pid == current_pid
+                ]
+                if matches:
+                    self._picked[slot] = matches[0][1]
+                elif allowed:
+                    self._pipe[slot] = allowed[0][0]
+                    self._picked[slot] = allowed[0][1]
+                else:
+                    self._pipe[slot] = ""
+            elif current_pid:
+                self._picked[slot] = current_eid
+
         self._refresh_cards()
         QTimer.singleShot(0, self._rebuild_body)
 
@@ -3594,11 +3737,14 @@ class ProvidersOverlay(_HudOverlay):
         )
 
     def _set_mode(self, value: str) -> None:
-        if value == self._mode:
+        if self._environment != "online":
+            return
+        if value not in ("gemini", "pipeline") or value == self._mode:
             self._refresh_cards()
             return
-        self._mode = value
         self._remember_edits()
+        self._mode = value
+        self._mode_drafts["online"] = value
         self._refresh_cards()
         QTimer.singleShot(0, self._rebuild_body)
 
@@ -3688,6 +3834,11 @@ class ProvidersOverlay(_HudOverlay):
                 },
             )
             for e in entries:
+                environment = getattr(self, "_environment", "online")
+                if environment == "offline" and e.get("local") is not True:
+                    continue
+                if environment == "online" and e.get("local") is True:
+                    continue
                 out.append((decl["id"], e["id"], e, decl))
         return out
 
@@ -3771,15 +3922,16 @@ class ProvidersOverlay(_HudOverlay):
             )
             lay.addWidget(
                 self._label(
-                    "Pick MY OWN SETUP above to run it on your own machine, or "
-                    "through another company's model.",
+                    "Choose Configure online services to select hosted models, "
+                    "or switch to Offline to use models on this device.",
                     7,
                     C.TEXT_DIM,
                 )
             )
             self._body_lay.addWidget(w)
 
-        self._body_lay.addWidget(self._sidecar_box_widget())
+        if self._environment == "online":
+            self._body_lay.addWidget(self._sidecar_box_widget())
         self._body_lay.addStretch(1)
         self._update_footer()
 
@@ -3793,11 +3945,11 @@ class ProvidersOverlay(_HudOverlay):
         for pid, eid, entry, decl in entries:
             label = entry["label"]
             if entry.get("local") is True:
-                label = f"🖥  {label}"
+                label = f"{label}  ·  On this device"
             elif entry.get("local") is False:
-                label = f"AI  {label}"
+                label = f"{label}  ·  Online"
             else:
-                label = f"    {label}"
+                label = str(label)
             note = entry.get("note") or ""
             if not decl.get("_available", True):
                 note = (note + " · needs install").strip(" ·")
@@ -3871,6 +4023,16 @@ class ProvidersOverlay(_HudOverlay):
         )
         is_local = entry.get("local") is True
         entry_values = entry.get("values") or {}
+        if str(stored.get("catalog") or "") != eid:
+            previous_base_url = stored.get("base_url")
+            stored.update(entry_values)
+            if (
+                "base_url" in entry_values
+                and previous_base_url != entry_values.get("base_url")
+            ):
+                # A model identifier belongs to its endpoint; do not carry a
+                # Groq/Ollama selection into a different catalog provider.
+                stored["model"] = ""
         # An entry that MENTIONS the address has answered it — including
         # answering it with "", which is what the local speech recogniser does
         # because it does not use one at all. Testing the value rather than the
@@ -4033,10 +4195,9 @@ class ProvidersOverlay(_HudOverlay):
         w, lay = self._box([head])
         lay.addWidget(
             self._label(
-                "Reading a document, looking at your screen, writing code — the "
-                "assistant's own requests, not the conversation. These use Gemini's "
-                "text quota, which runs out before the voice does. Sending them "
-                "somewhere else keeps them working, and changes nothing you hear.",
+                "Optional: use a separate cloud model for file reading, screen "
+                "analysis and coding. This does not change the model used for your "
+                "live conversation.",
                 7,
                 C.TEXT_DIM,
             )
@@ -4131,28 +4292,45 @@ class ProvidersOverlay(_HudOverlay):
         QTimer.singleShot(0, self._rebuild_body)
 
     def _update_footer(self) -> None:
-        if self._mode != "pipeline":
+        ready = (
+            self._environment == "online" and self._mode == "gemini"
+        ) or bool(self._pipe.get("llm"))
+
+        apply_button = getattr(self, "_apply_btn", None)
+        if apply_button is not None:
+            apply_button.setEnabled(ready)
+
+        if self._environment == "online" and self._mode == "gemini":
             self._footer.setText(
-                "Gemini Live. Nothing on this panel changes the conversation."
+                "Gemini Live is ready. No separate speech or model setup is required."
             )
             return
-        missing = [
-            name for slot, _n, name, _w in self._SLOTS if not self._pipe.get(slot)
-        ]
-        if "THINKING" in missing:
+
+        if not self._pipe.get("llm"):
             self._footer.setText(
-                "?  ② THINKING is not set — without it the assistant falls back "
-                "to Gemini Live and says so in the log."
+                "Choose an AI model before applying this setup. Voice input and output are optional."
             )
-        elif missing:
-            words = " and ".join(f"{m.lower()}" for m in missing)
+            return
+
+        missing_voice = []
+        if not self._pipe.get("stt"):
+            missing_voice.append("voice input")
+        if not self._pipe.get("tts"):
+            missing_voice.append("voice output")
+
+        if missing_voice:
             self._footer.setText(
-                f"Only {words} is missing — it will run, but you will type "
-                f"instead of speak, or read instead of listen."
+                "AI model is selected. Missing "
+                + " and ".join(missing_voice)
+                + " is optional: you can type instead of speaking or read the answer."
+            )
+        elif self._environment == "offline":
+            self._footer.setText(
+                "Local setup selected. Save & Apply reconnects JARVIS using these models."
             )
         else:
             self._footer.setText(
-                "All three set. SAVE & APPLY reconnects; the conversation is kept."
+                "Online setup selected. Save & Apply reconnects JARVIS using these services."
             )
 
     # ── actions ──────────────────────────────────────────────────────────────
@@ -4199,7 +4377,9 @@ class ProvidersOverlay(_HudOverlay):
 
         for pid in list(self._edits):
             try:
-                save_provider_config(pid, self._values(pid))
+                save_provider_config(
+                    pid, self._values(pid), environment=self._environment
+                )
             except Exception:
                 pass
 
@@ -4235,7 +4415,11 @@ class ProvidersOverlay(_HudOverlay):
         if ok and seen is not None:
             from memory.config_manager import save_provider_config
 
-            save_provider_config(pid, {"vision": "1" if seen else ""})
+            save_provider_config(
+                pid,
+                {"vision": "1" if seen else ""},
+                environment=self._environment,
+            )
             entry = self._edits.get(pid, {}).get("vision")
             if entry is not None and isinstance(entry[0], QComboBox):
                 entry[0].setCurrentIndex(1 if seen else 0)
@@ -4321,48 +4505,75 @@ class ProvidersOverlay(_HudOverlay):
 
     def _apply(self) -> None:
         from memory.config_manager import (
-            get_pipeline,
-            get_provider_mode,
+            get_online_provider_mode,
+            merge_provider_catalog_defaults,
             save_providers,
         )
 
-        before = (get_provider_mode(), dict(get_pipeline()))
+        ready = (
+            self._environment == "online" and self._mode == "gemini"
+        ) or bool(self._pipe.get("llm"))
+        if not ready:
+            self._update_footer()
+            return
 
-        # ONE write, not five. See save_providers for what the five cost.
-        creds = {pid: self._values(pid) for pid in list(self._edits)}
+        # Start from the active tab's saved values so fields hidden behind
+        # catalog presets or the Advanced disclosure are never discarded.
+        creds = {
+            pid: {**self._get_cfg(pid), **self._values(pid)}
+            for pid in list(self._edits)
+        }
         for slot, eid in self._picked.items():
             pid = self._pipe.get(slot, "")
             if pid and eid:
-                creds.setdefault(pid, {})["catalog"] = eid
-        sidecar_pid, sidecar_eid = self._sidecar_choice()
-        if sidecar_pid and sidecar_eid:
-            creds.setdefault(sidecar_pid, {}).setdefault("catalog", sidecar_eid)
+                selected = next(
+                    (
+                        entry
+                        for provider_id, entry_id, entry, _decl in self._catalog(slot)
+                        if provider_id == pid and entry_id == eid
+                    ),
+                    {},
+                )
+                creds[pid] = merge_provider_catalog_defaults(
+                    creds.get(pid, {}),
+                    selected.get("values") or {},
+                    eid,
+                )
+
+        self._pipeline_drafts[self._environment] = dict(self._pipe)
+        self._mode_drafts[self._environment] = self._mode
+        sidecar_pid = self._sidecar
+        sidecar_first = self._sidecar_first
+        if self._environment == "online":
+            sidecar_pid, sidecar_eid = self._sidecar_choice()
+            if sidecar_pid and sidecar_eid:
+                creds.setdefault(sidecar_pid, {}).setdefault("catalog", sidecar_eid)
+            sidecar_first = self._first_combo.currentData() == "before"
 
         save_providers(
             mode=self._mode,
-            pipeline={
-                "stt": self._pipe.get("stt", ""),
-                "llm": self._pipe.get("llm", ""),
-                "tts": self._pipe.get("tts", ""),
-            },
+            online_mode=self._mode_drafts.get("online", get_online_provider_mode()),
+            environment=self._environment,
+            pipeline=dict(self._pipe),
+            pipelines=self._pipeline_drafts,
             creds=creds,
-            sidecar=sidecar_pid,
-            sidecar_first=self._first_combo.currentData() == "before",
+            sidecar=sidecar_pid if self._environment == "online" else None,
+            sidecar_first=sidecar_first if self._environment == "online" else None,
         )
 
-        # Providers are cached by configuration; a changed setting must not go
-        # on being served by an object built from the old one.
         try:
             self._registry.reset()
         except Exception:
             pass
 
-        after = (get_provider_mode(), dict(get_pipeline()))
-        self.hide()
-        # Background-request settings take effect on the next call with no
-        # reconnect. Only the conversation engine needs the session rebuilt.
-        if before != after:
-            self.changed.emit()
+        if not self._embedded:
+            self.hide()
+        # Embedded Settings pages are cached. Keep their controls mounted
+        # after Apply so reopening AI Providers never returns an empty panel.
+        # Apply may change only an API key, model name or endpoint while the
+        # selected provider IDs remain identical. The live session still needs
+        # to be rebuilt with the just-saved credentials.
+        self.changed.emit()
 
 
 class ClipboardPanel(QWidget):
@@ -5914,10 +6125,10 @@ class CommandPalette(QWidget):
         return [
             ("◉  Wake JARVIS now", lambda: self._owner._tap_wake_manual()),
             ("⌁  Toggle microphone", self._owner._toggle_mute),
-            ("⚙  Personalise assistant", self._owner._open_customize),
-            ("◈  Audio devices", self._owner._open_audio_devices),
-            ("▣  Engine & providers", self._owner._open_providers),
-            ("◌  Plugins", self._owner._open_plugin_manager),
+            ("⚙  Assistant identity settings", self._owner._open_customize),
+            ("◈  Voice & Audio settings", self._owner._open_audio_devices),
+            ("▣  AI provider settings", self._owner._open_providers),
+            ("◌  Plugins and extensions", self._owner._open_plugin_manager),
             ("◉  Memory", self._owner._open_memory_panel),
             ("⌂  Remote control", self._owner._open_remote),
             (
@@ -6737,7 +6948,7 @@ class UpdatePanel(QWidget):
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(8)
         self._version = QLabel(
-            f"JARVIS {APP_RELEASE_VERSION}  В·  {RELEASE_CHANNEL} channel"
+            f"JARVIS {APP_RELEASE_VERSION}  ·  {RELEASE_CHANNEL} channel"
         )
         self._version.setStyleSheet(
             f"color:{C.TEXT}; background:transparent; font-weight:600;"
@@ -6882,9 +7093,9 @@ class UpdatePanel(QWidget):
             else "size unavailable"
         )
         self._release.setText(
-            f"Latest stable: {result.release.version}  В·  Published: {date}  В·  {size_text}\n{result.release.url}"
+            f"Latest stable: {result.release.version}  ·  Published: {date}  ·  {size_text}\n{result.release.url}"
         )
-        self._notes.setPlainText(result.release.notes)
+        self._notes.setMarkdown(result.release.notes)
         if result.update_available:
             self._status.setText(
                 f"Update available: {result.current_version} → {result.release.version}"
@@ -7412,6 +7623,7 @@ class MainWindow(QMainWindow):
         self._editor_tabs.tabBar().setElideMode(Qt.TextElideMode.ElideRight)
         self._editor_tabs.setStyleSheet(_tabs_qss())
         self._editor_tabs.tabCloseRequested.connect(self._close_project_editor_tab)
+        self._editor_tabs.currentChanged.connect(self._on_project_editor_tab_changed)
         self._center_views.addWidget(self._editor_tabs)
         self._main_splitter.addWidget(self._center_views)
 
@@ -9522,7 +9734,7 @@ class MainWindow(QMainWindow):
         self._clear_chat_btn = QPushButton(self._tr("Clear chat"))
         self._clear_chat_btn.setMinimumHeight(28)
         self._clear_chat_btn.setToolTip(
-            self._tr("Clear this chat view; saved conversation stays in Archive")
+            self._tr("Clear this chat view. Previous conversations remain in Conversations.")
         )
         self._clear_chat_btn.clicked.connect(self._clear_chat)
         chat_tools.addWidget(self._clear_chat_btn)
@@ -9582,17 +9794,17 @@ class MainWindow(QMainWindow):
         history_tools = QHBoxLayout()
         history_tools.setSpacing(5)
         history_note = QLabel(
-            self._tr("Conversation archive · Memory stores saved facts")
+            self._tr("Previous conversations · Saved facts live in Memory")
         )
         history_note.setWordWrap(True)
         history_note.setStyleSheet(f"color:{C.TEXT_DIM}; background:transparent;")
         history_note.setFont(QFont(FONT_UI, 10))
         history_tools.addWidget(history_note, 1)
-        self._clear_history_btn = QPushButton(self._tr("Clear history"))
+        self._clear_history_btn = QPushButton(self._tr("Clear conversations"))
         self._clear_history_btn.setFixedHeight(20)
         self._clear_history_btn.setToolTip(
             self._tr(
-                "Delete the conversation archive and active chat; saved memory stays"
+                "Delete saved conversations and the active chat. Saved facts in Memory stay."
             )
         )
         self._clear_history_btn.clicked.connect(self._clear_history)
@@ -9604,9 +9816,9 @@ class MainWindow(QMainWindow):
             f"QListWidget::item {{ padding: 6px; border-bottom: 1px solid {C.BORDER}; }}"
         )
         history_lay.addWidget(self._history_list, 1)
-        self._work_tabs.addTab(history_page, self._tr("ARCHIVE"))
+        self._work_tabs.addTab(history_page, self._tr("CONVERSATIONS"))
         self._work_tabs.setTabToolTip(
-            1, self._tr("Archived conversation turns. Saved facts are in Memory.")
+            1, self._tr("Previous conversations. Saved facts are managed separately in Memory.")
         )
 
         task_page = QWidget()
@@ -9840,7 +10052,7 @@ class MainWindow(QMainWindow):
         self._autostart_btn.clicked.connect(self._toggle_autostart)
         lay.addWidget(self._autostart_btn)
 
-        cust_btn = QPushButton(self._tr("Customize assistant"))
+        cust_btn = QPushButton(self._tr("Assistant identity"))
         _icon_button(cust_btn, "customize.svg")
         cust_btn.setFixedHeight(26)
         cust_btn.setFont(QFont(FONT_MONO, 7))
@@ -9848,18 +10060,18 @@ class MainWindow(QMainWindow):
         cust_btn.setStyleSheet(_BTN_STYLE_DIM)
         cust_btn.clicked.connect(self._open_customize)
         cust_btn.setToolTip(
-            self._tr("Change assistant name, voice, accent color, and window opacity.")
+            self._tr("Change the assistant name, your name and spoken voice.")
         )
         lay.addWidget(cust_btn)
 
-        audio_btn = QPushButton(self._tr("Audio devices"))
+        audio_btn = QPushButton(self._tr("Voice & Audio settings"))
         _icon_button(audio_btn, "audio.svg")
         audio_btn.setFixedHeight(26)
         audio_btn.setFont(QFont(FONT_MONO, 7))
         audio_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         audio_btn.setStyleSheet(_BTN_STYLE_DIM)
         audio_btn.clicked.connect(self._open_audio_devices)
-        audio_btn.setToolTip(self._tr("Choose microphone and speaker devices."))
+        audio_btn.setToolTip(self._tr("Choose microphone, speakers and voice activation options."))
         lay.addWidget(audio_btn)
 
         mem_btn = QPushButton(self._tr("Memory"))
@@ -9869,7 +10081,7 @@ class MainWindow(QMainWindow):
         mem_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         mem_btn.setStyleSheet(_BTN_STYLE_DIM)
         mem_btn.clicked.connect(self._open_memory_panel)
-        mem_btn.setToolTip(self._tr("Review or remove saved memories."))
+        mem_btn.setToolTip(self._tr("Review stored facts. Previous conversations are in Conversations."))
         lay.addWidget(mem_btn)
 
         plugin_btn = QPushButton(self._tr("Plugins"))
@@ -9879,25 +10091,19 @@ class MainWindow(QMainWindow):
         plugin_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         plugin_btn.setStyleSheet(_BTN_STYLE_DIM)
         plugin_btn.clicked.connect(self._open_plugin_manager)
-        plugin_btn.setToolTip(self._tr("Enable extensions and connect integrations."))
+        plugin_btn.setToolTip(self._tr("Enable extensions and configure their settings."))
         lay.addWidget(plugin_btn)
-
-        settings_btn = QPushButton(self._tr("Plugin settings"))
-        _icon_button(settings_btn, "settings.svg")
-        settings_btn.setFixedHeight(26)
-        settings_btn.setFont(QFont(FONT_MONO, 7))
-        settings_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        settings_btn.setStyleSheet(_BTN_STYLE_DIM)
-        settings_btn.clicked.connect(self._open_plugin_settings)
-        settings_btn.setToolTip(self._tr("Configure plugin-specific options."))
-        lay.addWidget(settings_btn)
 
         self._dev_mode_btn = QPushButton()
         _icon_button(self._dev_mode_btn, "developer.svg")
         self._dev_mode_btn.setFixedHeight(26)
         self._dev_mode_btn.setFont(QFont(FONT_MONO, 7, QFont.Weight.Bold))
         self._dev_mode_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._dev_mode_btn.clicked.connect(self._toggle_development_mode)
+        # QPushButton.clicked emits a bool. Do not pass that False into
+        # the optional explicit-state argument: this control is a toggle.
+        self._dev_mode_btn.clicked.connect(
+            lambda _checked=False: self._toggle_development_mode()
+        )
         self._refresh_dev_mode_btn()
         lay.addWidget(self._dev_mode_btn)
 
@@ -10013,16 +10219,22 @@ class MainWindow(QMainWindow):
         self._brief_btn = _row(QPushButton(), basics)
         self._brief_btn.clicked.connect(self._toggle_brief)
 
-        self._wake_btn = _row(QPushButton(), basics)
+        self._brief_btn.setToolTip(self._tr("Toggle the daily morning summary."))
+
+        voice_activation = _section(
+            "VOICE ACTIVATION",
+            "Configure hands-free wake word listening and push-to-talk.",
+        )
+        self._voice_controls_panel = voice_activation.parentWidget()
+        self._wake_btn = _row(QPushButton(), voice_activation)
         self._wake_btn.clicked.connect(self._toggle_wake_word)
-        self._wake_sleep_btn = _row(QPushButton(), basics)
+        self._wake_sleep_btn = _row(QPushButton(), voice_activation)
         self._wake_sleep_btn.clicked.connect(self._tap_wake_manual)
         self._wake_btn.setText(self._tr("Wake word"))
         self._wake_btn.setToolTip(self._tr("Toggle hands-free voice activation."))
-        self._brief_btn.setToolTip(self._tr("Toggle the daily morning summary."))
         self._wake_sleep_btn.hide()
 
-        self._ptt_btn = _row(QPushButton(), basics)
+        self._ptt_btn = _row(QPushButton(), voice_activation)
         self._ptt_btn.clicked.connect(self._toggle_ptt)
         self._refresh_talk_btns()
 
@@ -10236,6 +10448,7 @@ class MainWindow(QMainWindow):
                 for key, check in self._computer_permission_checks.items()
             }
         )
+        self._refresh_access_status()
 
     def _refresh_cursor_assistant(self):
         from memory.config_manager import get_cursor_assistant_settings
@@ -10318,7 +10531,6 @@ class MainWindow(QMainWindow):
                     "plugins": self._build_plugins_settings_page,
                     "memory": self._build_memory_settings_page,
                     "workspace": self._build_workspace_settings_page,
-                    "security": self._build_security_settings_page,
                     "developer": self._build_developer_settings_page,
                     "updates": self._build_updates_settings_page,
                 },
@@ -10326,6 +10538,9 @@ class MainWindow(QMainWindow):
             self._settings_center.action_requested.connect(self._handle_settings_action)
             self._settings_center.closed.connect(self._on_settings_center_closed)
         self._settings_center.refresh_theme()
+        from memory.config_manager import get_ui_opacity
+
+        self._settings_center.set_glass_opacity(get_ui_opacity())
         self._settings_center.show()
         self._settings_center.raise_()
         self._settings_center.activateWindow()
@@ -10406,7 +10621,7 @@ class MainWindow(QMainWindow):
                 "Select your microphone and speaker, adjust output volume, and test each device.",
                 device_panel,
             )),
-            open_voice_controls=lambda: self._settings_center.show_category("cursor"),
+            voice_controls_panel=self._voice_controls_panel,
         )
 
     def _embed_settings_panels(self, *panels):
@@ -10415,6 +10630,10 @@ class MainWindow(QMainWindow):
         Each item is (title, description, widget), with an optional fourth
         value to preserve a meaningful first label inside the widget.
         """
+        from gui.themes.styles import glass_rgba
+
+        settings = getattr(self, "_settings_center", None)
+        glass_opacity = getattr(settings, "_glass_opacity", 100)
         host = QWidget()
         host.setObjectName("EmbeddedSettingsPanels")
         host.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
@@ -10428,7 +10647,8 @@ class MainWindow(QMainWindow):
             card = QFrame()
             card.setObjectName("SettingsEmbeddedCard")
             card.setStyleSheet(
-                f"QFrame#SettingsEmbeddedCard {{ background:{C.PANEL}; "
+                f"QFrame#SettingsEmbeddedCard {{ "
+                f"background:{glass_rgba(C.PANEL, glass_opacity)}; "
                 f"border:1px solid {C.BORDER}; border-radius:10px; }}"
                 f"QLabel {{ background:transparent; color:{C.TEXT}; border:0; }}"
             )
@@ -10508,7 +10728,7 @@ class MainWindow(QMainWindow):
         )
         panel.on_preview = self._preview_ui_color
         panel.on_opacity_preview = self._preview_ui_opacity
-        panel.saved.connect(self._apply_name_update)
+        panel.saved.connect(self._apply_appearance_settings)
         return self._embed_settings_panels((
             "Personalization",
             "Set the JARVIS accent and window opacity. Identity and voice live in their own settings category.",
@@ -10528,7 +10748,7 @@ class MainWindow(QMainWindow):
             panel.changed.connect(self._on_providers_applied)
         return self._embed_settings_panels((
             "AI providers",
-            "Choose the active model and configure speech and response providers.",
+            "Choose Online cloud services or Offline models on this device. Configure voice recognition, the AI model and spoken responses inside each mode.",
             panel,
         ))
 
@@ -10544,8 +10764,8 @@ class MainWindow(QMainWindow):
 
     def _build_memory_settings_page(self):
         return self._embed_settings_panels((
-            "Saved memories",
-            "Review and manage information stored locally by JARVIS.",
+            "Saved facts",
+            "Review facts JARVIS has saved. Conversation history is managed separately in Conversations.",
             MemoryOverlay(embedded=True),
         ))
 
@@ -10833,6 +11053,26 @@ class MainWindow(QMainWindow):
             placeholder.setStyleSheet(f"color:{C.TEXT_DIM}; font-weight:700;")
             planned.add_row(SettingRow(self._tr(title), self._tr(description), placeholder))
         layout.addWidget(planned)
+
+        authentication = SettingsSection(
+            "Authentication integration",
+            "JARVIS receives its lock verifier from the host application or an installed integration.",
+        )
+        authentication_note = QLabel(
+            self._tr(
+                "Passcode management, face enrollment and camera selection are not owned by "
+                "this Settings page. Connect a lock integration in the host application to "
+                "configure sign-in security."
+            )
+        )
+        authentication_note.setObjectName("auth")
+        authentication_note.setWordWrap(True)
+        authentication_note.setStyleSheet(
+            f"color:{C.TEXT_MED}; background:{C.PANEL2}; "
+            f"border:1px solid {C.BORDER}; border-radius:7px; padding:9px;"
+        )
+        authentication._layout.addWidget(authentication_note)
+        layout.addWidget(authentication)
         layout.addStretch(1)
         return page
 
@@ -10892,30 +11132,217 @@ class MainWindow(QMainWindow):
                 check.setChecked(configured[permission])
             check.setEnabled(not is_full)
             check.blockSignals(False)
+        self._refresh_access_status()
 
     def _build_workspace_settings_page(self):
+        from gui.components.settings import SettingRow, SettingsSection
+        from memory.config_manager import get_project_open_mode, get_workspace_path
+
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
-        note = QLabel(self._tr(
-            "Use the layout controls in the main toolbar to show or hide workspace panels."
-        ))
-        note.setWordWrap(True)
-        layout.addWidget(note)
+        layout.setSpacing(12)
+
+        project = SettingsSection(
+            "Project workspace",
+            "Choose the folder JARVIS uses for project files, generated projects and new terminal sessions.",
+        )
+        self._workspace_settings_path = QLabel(
+            get_workspace_path() or "No project folder selected"
+        )
+        self._workspace_settings_path.setWordWrap(True)
+        self._workspace_settings_path.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+        self._workspace_settings_path.setStyleSheet(
+            f"color:{C.TEXT_MED}; background:{C.PANEL2}; "
+            f"border:1px solid {C.BORDER}; border-radius:6px; padding:8px;"
+        )
+        choose = QPushButton(self._tr("Choose project folder…"))
+        choose.clicked.connect(self._select_workspace_folder)
+        choose_row = QWidget()
+        choose_layout = QHBoxLayout(choose_row)
+        choose_layout.setContentsMargins(0, 0, 0, 0)
+        choose_layout.addWidget(choose)
+        self._workspace_close_button = QPushButton(self._tr("Close workspace"))
+        self._workspace_close_button.clicked.connect(self._close_project)
+        choose_layout.addWidget(self._workspace_close_button)
+        project.add_row(
+            SettingRow(
+                self._tr("Current folder"),
+                self._tr("Used by Project Files and new terminal sessions."),
+                self._workspace_settings_path,
+            )
+        )
+        project.add_row(
+            SettingRow(
+                self._tr("Project folder"),
+                self._tr("Select a different folder or close the current workspace."),
+                choose_row,
+            )
+        )
+        open_mode = QComboBox()
+        open_mode.setObjectName("project_open_mode")
+        open_mode.addItem(self._tr("Inside JARVIS editor"), "jarvis")
+        open_mode.addItem(self._tr("With the system default app"), "external")
+        open_mode.setCurrentIndex(
+            max(0, open_mode.findData(get_project_open_mode()))
+        )
+        open_mode.currentIndexChanged.connect(self._save_project_open_mode)
+        project.add_row(
+            SettingRow(
+                self._tr("Open text files"),
+                self._tr("Choose whether text files open in the built-in editor or the default desktop app."),
+                open_mode,
+            )
+        )
+        layout.addWidget(project)
+
+        panels = SettingsSection(
+            "Workspace panels",
+            "Show or hide panels in the current session. Use the toolbar for quick access.",
+        )
+        panel_specs = (
+            ("left", "Project explorer", "File tree and system monitor."),
+            ("right", "Chat and tasks", "Conversation, previous chats and task list."),
+            ("content", "Results panel", "Search results, documents and generated content."),
+            ("debug", "Debug console", "Diagnostic output in the lower panel."),
+        )
+        self._workspace_visibility_checks = {}
+        for key, title, description in panel_specs:
+            check = QCheckBox(self._tr("Visible"))
+            check.setObjectName(f"workspace_panel_{key}")
+            check.setCursor(Qt.CursorShape.PointingHandCursor)
+            check.toggled.connect(
+                lambda visible, panel=key: self._set_workspace_panel_visibility(
+                    panel, visible
+                )
+            )
+            panels.add_row(SettingRow(self._tr(title), self._tr(description), check))
+            self._workspace_visibility_checks[key] = check
+
+        layout.addWidget(panels)
         layout.addStretch(1)
+        page.refresh_state = self._refresh_workspace_settings_state
+        self._refresh_workspace_settings_state()
         return page
 
-    def _build_security_settings_page(self):
-        page = QWidget()
-        layout = QVBoxLayout(page)
-        layout.setContentsMargins(0, 0, 0, 0)
-        note = QLabel(self._tr(
-            "Passcode management, face enrollment, and camera selection are provided by the lock integration."
+    def _workspace_panel_is_visible(self, key: str) -> bool:
+        if key == "left":
+            return self._left_panel.isVisible()
+        if key == "right":
+            return self._right_panel.isVisible()
+        if key == "content":
+            return self._content_panel.isVisible()
+        if key == "debug":
+            return (
+                self._bottom_tabs.isVisible()
+                and self._bottom_tabs.currentWidget() is self._debug_panel
+            )
+        return False
+
+    def _set_workspace_panel_visibility(self, key: str, visible: bool) -> None:
+        current = self._workspace_panel_is_visible(key)
+        if current != bool(visible):
+            if key == "left":
+                self._toggle_side_panel(0)
+            elif key == "right":
+                self._toggle_side_panel(2)
+            elif key == "content":
+                self._toggle_content_panel()
+            elif key == "debug":
+                self._toggle_debug_panel()
+        self._refresh_workspace_settings_state()
+
+    def _refresh_workspace_settings_state(self) -> None:
+        checks = getattr(self, "_workspace_visibility_checks", {})
+        for key, check in checks.items():
+            check.blockSignals(True)
+            check.setChecked(self._workspace_panel_is_visible(key))
+            check.setEnabled(not self._reading_mode)
+            check.blockSignals(False)
+
+        label = getattr(self, "_workspace_settings_path", None)
+        if label is not None:
+            label.setText(self._workspace_path or "No project folder selected")
+        close_button = getattr(self, "_workspace_close_button", None)
+        if close_button is not None:
+            close_button.setEnabled(bool(self._workspace_path))
+
+    def _save_project_open_mode(self, index: int) -> None:
+        from memory.config_manager import save_project_open_mode
+
+        combo = self.sender()
+        if not isinstance(combo, QComboBox):
+            return
+        try:
+            save_project_open_mode(str(combo.itemData(index) or "jarvis"))
+        except ValueError as exc:
+            self._append_activity(f"ERR: Could not save file opening preference: {exc}")
+
+
+
+    def _diagnostic_snapshot(self) -> str:
+        """Return actionable runtime/configuration details without credentials."""
+        from memory.config_manager import (
+            get_computer_access_settings,
+            get_computer_permissions,
+            get_project_open_mode,
+            get_provider_config,
+            get_provider_environment,
+            get_provider_mode,
+            get_pipeline,
+            get_ui_opacity,
+            get_workspace_path,
+        )
+
+        access = get_computer_access_settings()
+        permissions = get_computer_permissions()
+        allowed = sum(1 for enabled in permissions.values() if enabled)
+        total = len(permissions)
+        environment = get_provider_environment()
+        engine = get_provider_mode()
+        pipeline = get_pipeline(environment)
+
+        slot_labels = {
+            "stt": "Voice recognition",
+            "llm": "AI model",
+            "tts": "Spoken voice",
+        }
+        selected = []
+        for slot, label in slot_labels.items():
+            provider = str(pipeline.get(slot) or "").strip()
+            if not provider:
+                selected.append(f"{label}: not configured")
+                continue
+            config = get_provider_config(provider)
+            catalog = str(config.get("catalog") or provider).strip()
+            model = str(config.get("model") or config.get("voice") or "").strip()
+            value = f"{catalog} / {model}" if model else catalog
+            selected.append(f"{label}: {value}")
+
+        workspace = get_workspace_path() or "not configured"
+        return "\n".join((
+            f"JARVIS version: {APP_VERSION}",
+            f"Platform: {_OS} {platform.release()}",
+            f"Python: {platform.python_implementation()} {platform.python_version()}",
+            f"Python executable: {sys.executable}",
+            f"Working directory: {os.getcwd()}",
+            f"Application directory: {BASE_DIR}",
+            f"User data directory: {PATHS.user_data_root}",
+            f"Memory file: {PATHS.long_term_memory_file}",
+            f"AI environment: {environment.title()}",
+            f"AI engine: {'Gemini Live' if engine == 'gemini' else 'Configured model services'}",
+            *selected,
+            f"Workspace: {workspace}",
+            f"File opening preference: {get_project_open_mode()}",
+            f"Glass opacity: {get_ui_opacity()}%",
+            f"Computer mode: {access.get('mode', 'chat').title()}",
+            f"Approval policy: {access.get('access_level', 'ask')}",
+            f"Computer permissions: {allowed}/{total} enabled",
+            f"Developer mode: {'On' if self._development_mode else 'Off'}",
+            "API keys, passwords and secret values: intentionally excluded",
         ))
-        note.setWordWrap(True)
-        layout.addWidget(note)
-        layout.addStretch(1)
-        return page
 
     def _build_developer_settings_page(self):
         from gui.components.settings import SettingRow, SettingsSection
@@ -10924,9 +11351,10 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
-        section = SettingsSection(
-            "Diagnostics",
-            "Choose whether JARVIS mirrors activity to the diagnostic output.",
+
+        developer = SettingsSection(
+            "Developer mode",
+            "Optional tools for debugging and testing JARVIS. Enabling this mode mirrors detailed activity to the terminal; prompts, file paths and command output may be sensitive.",
         )
         self._development_mode_check = QCheckBox(self._tr("Enable developer mode"))
         self._development_mode_check.setObjectName("developer_mode")
@@ -10934,29 +11362,143 @@ class MainWindow(QMainWindow):
         self._development_mode_check.toggled.connect(
             self._set_development_mode_from_settings
         )
-        section.add_row(
+        developer.add_row(
             SettingRow(
                 self._tr("Developer mode"),
-                self._tr("Mirror activity and diagnostic details while enabled."),
+                self._tr("JARVIS asks for confirmation before enabling it. You can turn it off at any time."),
                 self._development_mode_check,
             )
         )
-        console = QPushButton(self._tr("Open debug console"))
-        console.clicked.connect(self._show_debug_console)
-        section.add_row(
+        self._debug_console_button = QPushButton(self._tr("Open debug console"))
+        self._debug_console_button.clicked.connect(self._show_debug_console)
+        developer.add_row(
             SettingRow(
                 self._tr("Debug console"),
-                self._tr("Show the diagnostic console in the main workspace."),
-                console,
+                self._tr("View diagnostic output in the main workspace."),
+                self._debug_console_button,
             )
         )
-        layout.addWidget(section)
+        layout.addWidget(developer)
+
+        diagnostics = SettingsSection(
+            "Runtime diagnostics",
+            "Detailed, current configuration for troubleshooting. Credentials and private keys are never copied.",
+        )
+        self._diagnostics_value = QLabel()
+        self._diagnostics_value.setObjectName("diagnostic_snapshot")
+        self._diagnostics_value.setWordWrap(True)
+        self._diagnostics_value.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+        self._diagnostics_value.setFont(QFont(FONT_MONO, 8))
+        self._diagnostics_value.setStyleSheet(
+            f"color:{C.TEXT_MED}; background:{C.PANEL2}; "
+            f"border:1px solid {C.BORDER}; border-radius:7px; padding:10px;"
+        )
+        diagnostics._layout.addWidget(self._diagnostics_value)
+        self._copy_diagnostics_button = QPushButton(
+            self._tr("Copy diagnostic report")
+        )
+        self._copy_diagnostics_button.clicked.connect(
+            lambda: QApplication.clipboard().setText(self._diagnostic_snapshot())
+        )
+        diagnostics.add_row(
+            SettingRow(
+                self._tr("Diagnostic report"),
+                self._tr("Copies runtime paths, active AI mode, selected models and permission status. Secrets are excluded."),
+                self._copy_diagnostics_button,
+            )
+        )
+        refresh_diagnostics = QPushButton(self._tr("Refresh"))
+        refresh_diagnostics.clicked.connect(self._refresh_diagnostics)
+        diagnostics.add_row(
+            SettingRow(
+                self._tr("Current status"),
+                self._tr("Re-read live application and configuration values."),
+                refresh_diagnostics,
+            )
+        )
+        layout.addWidget(diagnostics)
+
+        self._experimental_features_section = SettingsSection(
+            "Testing and preview features",
+            "This build has no external beta feed or test-plugin channel configured. When trusted preview sources are added, their opt-in controls and versions will appear here.",
+        )
+        layout.addWidget(self._experimental_features_section)
         layout.addStretch(1)
+        self._refresh_diagnostics()
         return page
 
+    def _refresh_diagnostics(self):
+        label = getattr(self, "_diagnostics_value", None)
+        enabled = bool(getattr(self, "_development_mode", False))
+        if label is not None:
+            label.setText(
+                self._diagnostic_snapshot()
+                if enabled
+                else (
+                    "Detailed runtime and model configuration is hidden. "
+                    "Enable Developer Mode above to inspect and copy this report."
+                )
+            )
+        for name in ("_debug_console_button", "_copy_diagnostics_button"):
+            control = getattr(self, name, None)
+            if control is not None:
+                control.setEnabled(enabled)
+        experimental = getattr(self, "_experimental_features_section", None)
+        if experimental is not None:
+            experimental.setVisible(enabled)
+
     def _set_development_mode_from_settings(self, enabled: bool):
-        if bool(enabled) != bool(self._development_mode):
-            self._toggle_development_mode()
+        enabled = bool(enabled)
+        if enabled == bool(self._development_mode):
+            return
+        changed = self._toggle_development_mode(enabled)
+        # A declined confirmation must restore the actual state in the UI.
+        # QCheckBox::toggled is synchronous, so block its signal during rollback.
+        control = getattr(self, "_development_mode_check", None)
+        if control is not None and control.isChecked() != bool(self._development_mode):
+            control.blockSignals(True)
+            control.setChecked(bool(self._development_mode))
+            control.blockSignals(False)
+        if not changed:
+            self._refresh_diagnostics()
+
+
+    def _apply_appearance_settings(
+        self,
+        _assistant_name: str,
+        _user_name: str,
+        ui_color: str,
+        _voice: str,
+        ui_opacity: int,
+    ) -> bool:
+        """Persist only appearance fields; never write cached identity values."""
+        color = (ui_color or "").strip().lower()
+        opacity = max(60, min(100, int(ui_opacity)))
+        try:
+            current = _read_full_config()
+            previous_color = str(
+                current.get("ui_color", "") or DEFAULT_UI_COLOR
+            ).lower()
+            changes = {"ui_opacity": opacity}
+            if color:
+                changes["ui_color"] = color
+            update_json(API_FILE, lambda data: data.update(changes))
+        except Exception as exc:
+            self._log.append_log(f"ERR: Appearance save failed — {exc}")
+            return False
+
+        self._preview_ui_opacity(opacity)
+        if color and color != previous_color:
+            old = current_palette()
+            if apply_ui_accent(color):
+                updated = current_palette()
+                if old != updated:
+                    retheme_all_widgets(old, updated)
+                self._apply_design_system()
+        self._log.append_log("SYS: Appearance settings updated.")
+        return True
 
     def _apply_identity_settings(self, assistant_name: str, user_name: str, voice: str) -> bool:
         from memory.config_manager import get_ui_opacity
@@ -10989,7 +11531,7 @@ class MainWindow(QMainWindow):
             "plugin_settings": "plugins",
             "memory": "memory",
             "layout": "workspace",
-            "security_info": "security",
+            "security_info": "permissions",
             "updates": "updates",
         }
         category_id = category_by_action.get(action_id)
@@ -11521,6 +12063,11 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             path = path.expanduser().resolve(strict=True)
             if not path.is_file():
                 return
+            from memory.config_manager import get_project_open_mode
+
+            if get_project_open_mode() == "external":
+                self._open_external_project_file(path)
+                return
             size = path.stat().st_size
             mime_type, _ = mimetypes.guess_type(path.name)
             binary_suffixes = {
@@ -11597,6 +12144,35 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         self._current_file = str(path)
         self._center_views.setCurrentWidget(self._editor_tabs)
         editor.editor.setFocus()
+
+    def _on_project_editor_tab_changed(self, index: int) -> None:
+        """Keep the persisted current-file pointer aligned with the selected tab."""
+        from memory.config_manager import save_active_project_file
+
+        editor = self._editor_tabs.widget(index) if index >= 0 else None
+        if not isinstance(editor, _ProjectEditorPage):
+            self._current_file = None
+            try:
+                save_active_project_file("")
+            except (OSError, ValueError) as exc:
+                self._log.append_log(f"ERR: Could not clear active project file — {exc}")
+            return
+
+        path = Path(editor._path).resolve()
+        self._current_file = str(path)
+        try:
+            if not self._workspace_path:
+                save_active_project_file("")
+                return
+            relative = path.relative_to(Path(self._workspace_path).resolve())
+            save_active_project_file(str(relative))
+        except (ValueError, OSError) as exc:
+            self._current_file = None
+            try:
+                save_active_project_file("")
+            except (OSError, ValueError):
+                pass
+            self._log.append_log(f"ERR: Could not update active project file — {exc}")
 
     def _update_editor_tab_title(self, filename: str, modified: bool, editor):
         index = self._editor_tabs.indexOf(editor)
@@ -11694,6 +12270,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         except OSError as exc:
             QMessageBox.warning(self, self._tr("Project file unavailable"), str(exc))
         self._update_project_explorer_state()
+        self._refresh_workspace_settings_state()
         for session in self._terminal_sessions.values():
             if session.pty is None:
                 session.cwd = self._workspace_path
@@ -11774,6 +12351,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         self._terminal_cwd.setToolTip(
             self._tr("New terminal sessions start in your home folder until a project is opened.")
         )
+        self._refresh_workspace_settings_state()
 
     def _toggle_terminal_panel(self):
         if self._reading_mode:
@@ -12124,6 +12702,29 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         self._pending_image_button.hide()
         row.addWidget(self._pending_image_button)
 
+        self._access_status_button = QToolButton()
+        self._access_status_button.setObjectName("ChatAccessStatus")
+        self._access_status_button.setFixedHeight(30)
+        self._access_status_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._access_status_button.setToolButtonStyle(
+            Qt.ToolButtonStyle.ToolButtonTextOnly
+        )
+        self._access_status_button.setPopupMode(
+            QToolButton.ToolButtonPopupMode.InstantPopup
+        )
+        self._access_status_button.setStyleSheet(f"""
+            QToolButton {{ background:{C.PANEL}; color:{C.TEXT_MED};
+                border:1px solid {C.BORDER}; border-radius:8px;
+                padding:0 7px; font-size:8pt; }}
+            QToolButton:hover {{ color:{C.PRI}; border-color:{C.PRI_DIM};
+                background:{C.PRI_GHO}; }}
+            QToolButton::menu-indicator {{ image:none; }}
+        """)
+        self._access_status_button.setToolTip(
+            self._tr("Current assistant mode and computer permissions")
+        )
+        row.addWidget(self._access_status_button)
+
         self._chat_add_button = QToolButton()
         self._chat_add_button.setText("+")
         self._chat_add_button.setFixedSize(38, 34)
@@ -12195,6 +12796,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         self._chat_add_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         row.addWidget(self._chat_add_button)
         self._input.file_dropped.connect(self._drop_zone._set_file)
+        self._refresh_access_status()
 
         self._chat_send_btn = QPushButton()
         self._chat_send_btn.setFixedSize(34, 34)
@@ -12311,6 +12913,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         if callable(getattr(self, "on_plan_mode_change", None)):
             self.on_plan_mode_change(self._chat_plan_mode)
         self._refresh_composer_context()
+        self._refresh_access_status()
         self._append_activity(
             "SYS: Plan mode enabled — JARVIS will prepare steps without running tools."
             if enabled
@@ -12330,6 +12933,120 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             parts.append(f"GOAL · {goal}")
         self._composer_context.setText("     ·     ".join(parts))
         self._composer_context.setVisible(bool(parts))
+
+    def _refresh_access_status(self) -> None:
+        """Show a compact live summary and an expandable permission checklist."""
+        button = getattr(self, "_access_status_button", None)
+        if button is None:
+            return
+
+        from memory.config_manager import (
+            get_computer_access_settings,
+            get_computer_permissions,
+            get_configured_computer_permissions,
+            get_provider_environment,
+            get_ui_opacity,
+        )
+
+        access = get_computer_access_settings()
+        ai_environment = get_provider_environment().title()
+        glass_opacity = get_ui_opacity()
+        saved_permissions = get_configured_computer_permissions()
+        effective_permissions = get_computer_permissions()
+        full_access = access.get("access_level") == "full"
+        configured_count = sum(bool(value) for value in saved_permissions.values())
+        total = len(saved_permissions)
+        mode = "PLAN" if self._chat_plan_mode else str(
+            access.get("mode") or self._chat_interaction_mode or "chat"
+        ).upper()
+        if self._chat_plan_mode:
+            summary = "PLAN · PAUSED"
+        elif mode == "CHAT":
+            summary = "CHAT · READ ONLY"
+        elif full_access:
+            summary = "AGENT · FULL"
+        else:
+            summary = f"AGENT · {configured_count}/{total}"
+
+        button.setText(summary)
+        button.setAccessibleName(
+            f"{mode.title()} mode. {configured_count} of {total} saved computer permissions enabled."
+        )
+
+        policy_labels = {
+            "ask": "Confirm every action",
+            "approve": "Use enabled permissions",
+            "full": "Full access",
+        }
+        policy = policy_labels.get(
+            access.get("access_level"), "Use enabled permissions"
+        )
+        button.setToolTip(
+            f"{mode.title()} mode · {policy} · Open to inspect computer permissions"
+        )
+
+        menu = QMenu(button)
+        menu.setStyleSheet(
+            f"QMenu {{ background:{glass_rgba(C.PANEL, glass_opacity)}; color:{C.TEXT}; "
+            f"border:1px solid {C.BORDER_B}; padding:7px; }}"
+            f"QMenu::item {{ padding:7px 18px; border-radius:4px; }}"
+            f"QMenu::item:selected {{ background:{C.PRI_GHO}; color:{C.PRI}; }}"
+            f"QMenu::separator {{ height:1px; background:{C.BORDER}; margin:5px 7px; }}"
+        )
+        mode_action = menu.addAction(f"Current mode  ·  {mode.title()}")
+        mode_action.setEnabled(False)
+        policy_action = menu.addAction(f"Approval policy  ·  {policy}")
+        policy_action.setEnabled(False)
+        ai_action = menu.addAction(f"AI environment  ·  {ai_environment}")
+        ai_action.setEnabled(False)
+        if self._chat_plan_mode:
+            mode_hint = "Plan mode prepares actions. No computer action is executed."
+        elif mode == "CHAT":
+            mode_hint = "Chat mode is read-only. Computer actions are paused."
+        else:
+            mode_hint = (
+                "Agent mode can use only the capabilities shown as Allowed below."
+            )
+        hint_action = menu.addAction(mode_hint)
+        hint_action.setEnabled(False)
+        menu.addSeparator()
+
+        labels = (
+            ("observe_screen", "Inspect screen"),
+            ("find_elements", "Find interface elements"),
+            ("move_mouse", "Move pointer and scroll"),
+            ("click", "Click and drag"),
+            ("type", "Keyboard input"),
+            ("clipboard", "Clipboard access"),
+        )
+        for key, label in labels:
+            saved = bool(saved_permissions.get(key, False))
+            effective = bool(effective_permissions.get(key, False))
+            if self._chat_plan_mode:
+                status = "Paused · Plan mode"
+            elif mode == "CHAT":
+                status = "Saved · Agent mode only" if saved else "Off"
+            elif effective:
+                status = "Allowed"
+            else:
+                status = "Off"
+            marker = "✓" if (effective if mode == "AGENT" else saved) else "–"
+            action = menu.addAction(f"{marker}  {label}  ·  {status}")
+            action.setEnabled(False)
+
+        if full_access:
+            override = menu.addAction(
+                "Full access temporarily overrides the saved switches."
+            )
+            override.setEnabled(False)
+        menu.addSeparator()
+        settings_action = menu.addAction("Open computer permissions…")
+        settings_action.triggered.connect(self._open_permissions_settings)
+        button.setMenu(menu)
+
+    def _open_permissions_settings(self) -> None:
+        self._open_settings_center()
+        self._settings_center.show_category("permissions")
 
     def _with_composer_context(self, message: str) -> str:
         context = []
@@ -12765,6 +13482,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             )
             splitter.setSizes(sizes)
         button.setChecked(panel.isVisible())
+        self._refresh_workspace_settings_state()
 
     def _toggle_content_panel(self):
         if self._reading_mode:
@@ -12782,6 +13500,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                 [max(total - content - quiz, 120), content, quiz]
             )
         self._content_toggle_btn.setChecked(self._content_panel.isVisible())
+        self._refresh_workspace_settings_state()
 
     def _toggle_debug_panel(self):
         is_active = (
@@ -12796,6 +13515,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             self._bottom_tabs.isVisible()
             and self._bottom_tabs.currentWidget() is self._debug_panel
         )
+        self._refresh_workspace_settings_state()
 
     def _show_bottom_panel(self, index: int):
         was_hidden = not self._bottom_tabs.isVisible()
@@ -13890,35 +14610,15 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
 
     # ── Customization ────────────────────────────────────────────────────────────
 
-    def _open_customize(self):
-        cfg = _read_full_config()
-        from memory.config_manager import get_ui_opacity
+    def _show_settings_category(self, category_id: str) -> None:
+        """Route legacy quick actions into the single Settings Center."""
+        self._open_settings_center()
+        if self._settings_center.show_category(category_id):
+            self._settings_center.raise_()
+            self._settings_center.activateWindow()
 
-        if self._customize_overlay:
-            self._customize_overlay.hide()
-        cw = self.centralWidget()
-        ov = CustomizeOverlay(
-            cfg.get("assistant_name", "JARVIS") or "JARVIS",
-            cfg.get("user_name", ""),
-            cfg.get("ui_color", "") or DEFAULT_UI_COLOR,
-            cfg.get("voice_name", ""),
-            ui_opacity=get_ui_opacity(),
-            language=self._ui_language,
-            parent=cw,
-        )
-        ow, oh = CustomizeOverlay._OW, CustomizeOverlay._OH
-        oh = min(oh, cw.height() - 16)
-        ov.setGeometry(
-            (cw.width() - ow) // 2,
-            (cw.height() - oh) // 2,
-            ow,
-            oh,
-        )
-        ov.on_preview = self._preview_ui_color
-        ov.on_opacity_preview = self._preview_ui_opacity
-        ov.saved.connect(self._apply_name_update)
-        ov.show()
-        self._customize_overlay = ov
+    def _open_customize(self):
+        self._show_settings_category("identity")
 
     def _preview_ui_color(self, hex_color: str):
         """Live preview — paints the whole interface the new colour (does NOT write to config)."""
@@ -13928,7 +14628,11 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             self._apply_design_system()
 
     def _preview_ui_opacity(self, opacity: int):
-        self.setWindowOpacity(max(60, min(100, int(opacity))) / 100)
+        value = max(60, min(100, int(opacity)))
+        self.setWindowOpacity(value / 100.0)
+        settings = getattr(self, "_settings_center", None)
+        if settings is not None:
+            settings.set_glass_opacity(value)
 
     def _apply_name_update(
         self,
@@ -14018,10 +14722,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
     # ── Audio devices ────────────────────────────────────────────────────────
 
     def _open_audio_devices(self):
-        ov = AudioDeviceOverlay(parent=self.centralWidget())
-        ov.picked.connect(self._on_audio_devices_applied)
-        self._centre_overlay(ov)
-        self._audio_overlay = ov  # keep a reference so it isn't GC'd
+        self._show_settings_category("audio")
 
     def _on_audio_devices_applied(self):
         self._log.append_log("SYS: Audio devices updated.")
@@ -14031,26 +14732,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
     # ── Engine & providers ───────────────────────────────────────────────────
 
     def _open_providers(self):
-        """Open the engine panel. Everything it needs is imported on this call.
-
-        A failure here must not take the drawer with it — the folder can be
-        deleted, which is the point of it being a folder, and the honest answer
-        to that is a line in the log rather than a traceback.
-        """
-        try:
-            ov = ProvidersOverlay(parent=self.centralWidget())
-        except ImportError:
-            self._log.append_log(
-                "SYS: The providers folder is not installed — "
-                "the assistant runs on Gemini Live."
-            )
-            return
-        except Exception as e:
-            self._log.append_log(f"SYS: Provider settings unavailable: {e}")
-            return
-        ov.changed.connect(self._on_providers_applied)
-        self._centre_overlay(ov)
-        self._providers_overlay = ov  # keep a reference so it isn't GC'd
+        self._show_settings_category("integrations")
 
     def _on_providers_applied(self):
         """Rebuild the session so the new engine takes over.
@@ -14066,11 +14748,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
     # ── Memory panel ─────────────────────────────────────────────────────────
 
     def _open_memory_panel(self):
-        ov = MemoryOverlay(parent=self.centralWidget())
-        self._centre_overlay(ov)
-        self._memory_overlay = ov
-
-    # ── Irreversible-action confirmation ─────────────────────────────────────
+        self._show_settings_category("memory")
 
     def _show_confirm_banner(self, title: str, detail: str):
         self._hide_confirm_banner()
@@ -14099,37 +14777,10 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             self._log.append_log(f"ERR: Confirmation failed — {e}")
 
     def _open_plugin_manager(self):
-        plugins = self.get_plugins() if self.get_plugins else []
-        cw = self.centralWidget()
-        ov = PluginManagerOverlay(plugins, parent=cw)
-        ov.adjustSize()
-        ov.setGeometry(
-            (cw.width() - ov.width()) // 2,
-            (cw.height() - ov.height()) // 2,
-            ov.width(),
-            ov.height(),
-        )
-        ov.show()
-        ov.raise_()
-        self._plugin_manager_overlay = ov  # keep a reference so it isn't GC'd
+        self._show_settings_category("plugins")
 
     def _open_plugin_settings(self):
-        sections = self.get_plugin_settings() if self.get_plugin_settings else []
-        cw = self.centralWidget()
-        ov = PluginSettingsOverlay(sections, parent=cw)
-        ow = PluginSettingsOverlay._OW
-        oh = min(560, cw.height() - 16)
-        ov.setGeometry(
-            (cw.width() - ow) // 2,
-            (cw.height() - oh) // 2,
-            ow,
-            oh,
-        )
-        ov.show()
-        ov.raise_()
-        self._plugin_settings_overlay = ov  # keep a reference so it isn't GC'd
-
-    # ── Clipboard intelligence ───────────────────────────────────────────────────
+        self._show_settings_category("plugins")
 
     def _on_clipboard_changed(self):
         try:
@@ -14567,14 +15218,40 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             f"QPushButton:hover {{ border-color: {C.PRI_DIM}; color: {C.PRI}; }}"
         )
 
-    def _toggle_development_mode(self):
-        self._development_mode = not self._development_mode
+    def _toggle_development_mode(self, enabled: bool | None = None) -> bool:
+        target = not self._development_mode if enabled is None else bool(enabled)
+        if target == self._development_mode:
+            self._refresh_dev_mode_btn()
+            return True
+
+        if target:
+            answer = QMessageBox.warning(
+                self,
+                self._tr("Enable Developer Mode?"),
+                self._tr(
+                    "Developer Mode mirrors detailed activity to the terminal. "
+                    "Logs may contain prompts, file paths, command output or other "
+                    "sensitive operational context. Enable it only while debugging "
+                    "or developing JARVIS. Continue?"
+                ),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Cancel,
+            )
+            if answer != QMessageBox.StandardButton.Yes:
+                self._refresh_dev_mode_btn()
+                return False
+
+        self._development_mode = target
         _save_config_value("development_mode", self._development_mode)
         if self._development_mode:
             self._append_activity(
-                "SYS: Development mode enabled — activity is mirrored to the terminal."
+                "SYS: Developer Mode enabled — detailed activity is mirrored to the terminal."
             )
+        else:
+            self._log.append_log("SYS: Developer Mode disabled.")
         self._refresh_dev_mode_btn()
+        self._refresh_diagnostics()
+        return True
 
     def _append_activity(self, text: str):
         """Central log sink: GUI updates stay on Qt's thread; dev mode mirrors to stdout."""
@@ -14760,7 +15437,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             )
         if not cards:
             cards.append(
-                f'<p style="color:{C.TEXT_DIM};">Chat is empty. The archive and saved memory are unchanged.</p>'
+                f'<p style="color:{C.TEXT_DIM};">Chat is empty. Previous conversations and saved memories are unchanged.</p>'
             )
         self._chat_view.setHtml(
             f'<html><body style="font-family:Inter,Segoe UI,sans-serif;font-size:10pt;color:{C.TEXT};'
@@ -14801,9 +15478,9 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         if not turn_id:
             return
         chat_rows = [r for r in _chat_turns() if str(r.get("id", "")) != turn_id]
-        archive_rows = [r for r in _history_turns() if str(r.get("id", "")) != turn_id]
+        conversation_rows = [r for r in _history_turns() if str(r.get("id", "")) != turn_id]
         _write_json_list(_UI_CHAT_FILE, "turns", chat_rows[-100:])
-        _write_json_list(_UI_HISTORY_FILE, "turns", archive_rows[-100:])
+        _write_json_list(_UI_HISTORY_FILE, "turns", conversation_rows[-100:])
         self._refresh_chat()
         self._refresh_history()
 
@@ -14814,8 +15491,8 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
     def _clear_history(self):
         choice = QMessageBox.question(
             self,
-            "Clear conversation history",
-            "Delete the archive and clear the current chat? Saved memory facts will remain.",
+            "Clear conversations",
+            "Delete previous conversations and clear the current chat? Saved memories will remain.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
@@ -14853,7 +15530,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             remove = QPushButton("×")
             remove.setFixedSize(20, 20)
             remove.setToolTip(
-                "Delete this turn from chat and archive; saved memory is unchanged"
+                "Delete this turn from the current chat and Conversations; saved memories are unchanged"
             )
             remove.setStyleSheet(
                 f"QPushButton {{color:{C.TEXT_DIM}; background:transparent; border:1px solid {C.BORDER}; border-radius:4px;}} QPushButton:hover {{color:{C.RED}; border-color:{C.RED};}}"

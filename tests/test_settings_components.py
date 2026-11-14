@@ -12,7 +12,8 @@ from gui.settings.categories.general import GeneralSettingsPage
 from gui.settings.categories.identity import AssistantIdentityPage
 from gui.settings.registry import CATEGORIES, ENTRIES, search_entries
 from gui.settings.settings_center import SettingsCenter
-from gui.app.main_window import AudioDeviceOverlay
+from gui.app.main_window import AudioDeviceOverlay, HueWheel, MemoryOverlay
+from gui.themes.styles import glass_rgba
 from gui.themes.tokens import Radius, Space
 from gui.themes.typography import FONT_MONO, FONT_UI, TypeScale, mono_font, ui_font
 
@@ -62,12 +63,78 @@ class SettingsComponentTests(unittest.TestCase):
         self.assertEqual([entry.id for entry in results], ["microphone"])
         self.assertEqual(results[0].action_id, "audio")
 
+        category_titles = {category.id: category.title for category in CATEGORIES}
+        self.assertNotIn("security", category_titles)
+        self.assertEqual(category_titles["permissions"], "Security & Permissions")
+        self.assertEqual(category_titles["integrations"], "AI Providers")
+        wake_entries = search_entries("wake word")
+        self.assertEqual(wake_entries[0].action_id, "audio")
+        agent_entries = search_entries("Agent mode")
+        self.assertTrue(any(entry.id == "computer_mode" for entry in agent_entries))
+
         center.search.setText("microphone")
         self.app.processEvents()
         self.assertGreaterEqual(center.navigation.count(), 1)
         self.assertIn("Voice & Audio", center.navigation.item(0).text())
         center.refresh_theme()
         center.close()
+
+    def test_glass_slider_is_fully_solid_at_100_percent(self):
+        # 100% is the Solid end of the Appearance slider, not a glass preset.
+        self.assertTrue(glass_rgba("#010d14", 100).endswith(", 255)"))
+        self.assertTrue(glass_rgba("#010d14", 60).endswith(", 153)"))
+
+        center = SettingsCenter()
+        center.set_glass_opacity(100)
+        self.assertIn(", 255)", center.styleSheet())
+        center.set_glass_opacity(60)
+        self.assertIn(", 153)", center.styleSheet())
+        center.close()
+
+    def test_settings_window_uses_shared_glass_opacity(self):
+        center = SettingsCenter()
+        center.set_glass_opacity(72)
+        self.assertEqual(center._glass_opacity, 72)
+        self.assertIn("rgba(", center.styleSheet())
+        self.assertTrue(center.testAttribute(Qt.WidgetAttribute.WA_TranslucentBackground))
+        # Glass changes panel surfaces while keeping text and window chrome crisp.
+        self.assertAlmostEqual(center.windowOpacity(), 1.0, places=2)
+        center.set_glass_opacity(140)
+        self.assertEqual(center._glass_opacity, 100)
+        center.set_glass_opacity(20)
+        self.assertEqual(center._glass_opacity, 60)
+        center.close()
+
+    def test_glass_opacity_reaches_categories_built_later(self):
+        built = []
+
+        def build_identity():
+            section = SettingsSection("Identity", "Profile settings")
+            built.append(section)
+            return section
+
+        center = SettingsCenter(page_builders={"identity": build_identity})
+        center.set_glass_opacity(76)
+        center._ensure_category_page("identity")
+        self.assertEqual(len(built), 1)
+        self.assertEqual(built[0]._glass_opacity, 76)
+        self.assertIn("rgba(", built[0].styleSheet())
+        center.close()
+
+    def test_settings_sections_follow_glass_opacity_without_fading_text(self):
+        section = SettingsSection("Appearance", "Visual preferences")
+        section.set_glass_opacity(68)
+        self.assertEqual(section._glass_opacity, 68)
+        self.assertIn("rgba(", section.styleSheet())
+        self.assertIn("color:", section.styleSheet())
+
+    def test_hue_wheel_keeps_black_and_white_hex_preview(self):
+        wheel = HueWheel("#000000")
+        self.assertEqual(wheel.color(), "#000000")
+        wheel.set_color("#FFFFFF")
+        self.assertEqual(wheel.color(), "#ffffff")
+        wheel.set_color("#000000")
+        self.assertEqual(wheel.color(), "#000000")
 
     def test_category_pages_are_built_on_first_visit_and_cached(self):
         built = []
@@ -80,6 +147,50 @@ class SettingsComponentTests(unittest.TestCase):
         center.navigation.setCurrentRow(0)
         center.navigation.setCurrentItem(center._category_rows["identity"])
         self.assertEqual(built, ["identity"])
+        center.close()
+
+    def test_reopening_cached_category_refreshes_live_widget_state(self):
+        class RefreshablePage(QWidget):
+            def __init__(self):
+                super().__init__()
+                self.refresh_count = 0
+
+            def refresh_state(self):
+                self.refresh_count += 1
+
+        child = RefreshablePage()
+        page = QWidget()
+        from PyQt6.QtWidgets import QVBoxLayout
+
+        QVBoxLayout(page).addWidget(child)
+        center = SettingsCenter(page_builders={"identity": lambda: page})
+
+        self.assertTrue(center.show_category("identity"))
+        self.assertEqual(child.refresh_count, 0)
+        self.assertTrue(center.show_category("identity"))
+        self.assertEqual(child.refresh_count, 1)
+        center.close()
+
+    def test_memory_overlay_refresh_reloads_saved_facts(self):
+        with patch("memory.memory_manager.all_entries_for_ui", return_value=[]):
+            overlay = MemoryOverlay(embedded=True)
+        with patch.object(overlay, "_rebuild") as rebuild:
+            overlay.refresh_state()
+        rebuild.assert_called_once_with()
+        overlay.close()
+
+    def test_show_category_clears_search_before_resolving_category(self):
+        center = SettingsCenter()
+        center.search.setText("microphone")
+        self.app.processEvents()
+        self.assertNotIn("audio", center._category_rows)
+
+        self.assertTrue(center.show_category("audio"))
+        self.assertEqual(center.search.text(), "")
+        self.assertEqual(
+            center.navigation.currentItem().data(Qt.ItemDataRole.UserRole),
+            ("category", "audio"),
+        )
         center.close()
 
     def test_general_toggles_reflect_owner_state_after_handler(self):

@@ -20,31 +20,38 @@ from PyQt6.QtWidgets import (
 
 from gui.components.settings import SettingRow, SettingsSection
 from gui.settings.registry import CATEGORIES, ENTRIES, SettingEntry, search_entries
+from gui.themes.styles import glass_rgba
 from gui.themes.tokens import C, Radius, Space
 from gui.themes.typography import TypeScale, ui_font
 
 
-def _center_style() -> str:
+def _center_style(glass_opacity: int = 100) -> str:
+    """Theme Settings surfaces with the same Glass value as the main window."""
+    glass_opacity = max(60, min(100, int(glass_opacity)))
+    dialog_surface = glass_rgba(C.BG, glass_opacity, minimum_alpha=153, maximum_alpha=255)
+    panel_surface = glass_rgba(C.PANEL, glass_opacity, minimum_alpha=166, maximum_alpha=255)
+    title_surface = glass_rgba(C.DARK, glass_opacity, minimum_alpha=166, maximum_alpha=255)
     return f"""
-        QDialog#SettingsCenter {{ background:{C.BG}; color:{C.TEXT}; border:1px solid {C.BORDER_B}; border-radius:{Radius.MD}px; }}
-        QWidget#SettingsContent {{ background:{C.BG}; }}
-        QFrame#SettingsTitleBar {{ background:{C.DARK}; border-bottom:1px solid {C.BORDER}; border-top-left-radius:{Radius.MD}px; border-top-right-radius:{Radius.MD}px; }}
+        QDialog#SettingsCenter {{ background:{dialog_surface}; color:{C.TEXT}; border:1px solid {C.BORDER_B}; border-radius:{Radius.MD}px; }}
+        QWidget#SettingsContent {{ background:transparent; }}
+        QFrame#SettingsTitleBar {{ background:{title_surface}; border-bottom:1px solid {C.BORDER}; border-top-left-radius:{Radius.MD}px; border-top-right-radius:{Radius.MD}px; }}
         QLabel#SettingsWindowTitle {{ color:{C.PRI}; background:transparent; letter-spacing:1px; }}
         QPushButton#SettingsCloseButton {{ background:transparent; color:{C.TEXT_MED}; border:1px solid transparent; border-radius:5px; padding:0; font-size:18px; }}
         QPushButton#SettingsCloseButton:hover {{ color:{C.WHITE}; background:{C.RED}; border-color:{C.RED}; }}
-        QStackedWidget {{ background:{C.BG}; border:0; }}
-        QScrollArea {{ border:0; background:{C.BG}; }}
-        QScrollArea::viewport {{ background:{C.BG}; border:0; }}
-        QWidget#SettingsPage {{ background:{C.BG}; }}
-        QFrame#SettingsSidebar {{ background:{C.PANEL}; border:1px solid {C.BORDER}; border-radius:{Radius.MD}px; }}
+        QStackedWidget {{ background:transparent; border:0; }}
+        QScrollArea {{ border:0; background:transparent; }}
+        QScrollArea::viewport {{ background:transparent; border:0; }}
+        QWidget#SettingsPage {{ background:transparent; }}
+        QFrame#SettingsSidebar {{ background:{panel_surface}; border:1px solid {C.BORDER}; border-radius:{Radius.MD}px; }}
+        QFrame#SettingsEmbeddedCard {{ background:{panel_surface}; border:1px solid {C.BORDER}; border-radius:{Radius.MD}px; }}
         QLabel {{ color:{C.TEXT}; background:transparent; }}
-        QLineEdit {{ background:{C.PANEL2}; color:{C.WHITE}; border:1px solid {C.BORDER}; border-radius:6px; padding:8px 10px; }}
+        QLineEdit {{ background:{glass_rgba(C.PANEL2, glass_opacity)}; color:{C.WHITE}; border:1px solid {C.BORDER}; border-radius:6px; padding:8px 10px; }}
         QLineEdit:focus {{ border-color:{C.PRI}; }}
         QListWidget {{ background:transparent; color:{C.TEXT_MED}; border:0; outline:0; }}
         QListWidget::item {{ padding:8px 9px; border-radius:5px; }}
         QListWidget::item:hover {{ background:{C.PRI_GHO}; color:{C.TEXT}; }}
         QListWidget::item:selected {{ background:{C.PRI_GHO}; color:{C.PRI}; }}
-        QPushButton {{ background:{C.PANEL2}; color:{C.TEXT}; border:1px solid {C.BORDER}; border-radius:6px; padding:7px 10px; text-align:left; }}
+        QPushButton {{ background:{glass_rgba(C.PANEL2, glass_opacity)}; color:{C.TEXT}; border:1px solid {C.BORDER}; border-radius:6px; padding:7px 10px; text-align:left; }}
         QPushButton:hover {{ background:{C.PRI_GHO}; color:{C.PRI}; border-color:{C.PRI_DIM}; }}
         QScrollBar:vertical {{ background:transparent; width:9px; margin:2px; }}
         QScrollBar::handle:vertical {{ background:{C.BORDER_B}; border-radius:4px; min-height:26px; }}
@@ -94,9 +101,11 @@ class SettingsCenter(QDialog):
         self.setWindowTitle("JARVIS Settings")
         self.setWindowModality(Qt.WindowModality.NonModal)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        self._glass_opacity = 100
         self.setMinimumSize(720, 520)
         self.resize(980, 680)
-        self.setStyleSheet(_center_style())
+        self.setStyleSheet(_center_style(self._glass_opacity))
 
         root = QVBoxLayout(self)
         root.setContentsMargins(1, 1, 1, 1)
@@ -229,8 +238,8 @@ class SettingsCenter(QDialog):
             scroll.setWidgetResizable(True)
             scroll.setFrameShape(QFrame.Shape.NoFrame)
             scroll.setStyleSheet(
-                f"QScrollArea {{ background:{C.BG}; border:0; }}"
-                f"QScrollArea::viewport {{ background:{C.BG}; border:0; }}"
+                "QScrollArea { background:transparent; border:0; }"
+                "QScrollArea::viewport { background:transparent; border:0; }"
             )
             scroll.setWidget(page)
             self.pages.addWidget(scroll)
@@ -269,6 +278,26 @@ class SettingsCenter(QDialog):
         elif self.navigation.count():
             self.navigation.setCurrentRow(0)
 
+    def _show_category_page(self, category_id: str) -> None:
+        """Select a settings page and refresh its live state when revisited."""
+        was_built = category_id in self._built_categories
+        self._ensure_category_page(category_id)
+        page = self._category_pages.get(category_id)
+        if page is None:
+            return
+        self.pages.setCurrentWidget(page)
+        if was_built:
+            self._refresh_widget_state(page)
+
+    @staticmethod
+    def _refresh_widget_state(root: QWidget) -> None:
+        """Refresh cached settings widgets without reconstructing the page."""
+        widgets = [root, *root.findChildren(QWidget)]
+        for widget in widgets:
+            refresh = getattr(widget, "refresh_state", None)
+            if callable(refresh):
+                refresh()
+
     def _navigation_selected(self, row: int):
         if row < 0:
             return
@@ -278,25 +307,27 @@ class SettingsCenter(QDialog):
             return
         kind, key = value
         if kind == "category":
-            self._ensure_category_page(key)
-            self.pages.setCurrentWidget(self._category_pages[key])
+            self._show_category_page(key)
         elif kind == "result" and 0 <= key < len(self._search_entries):
             entry = self._search_entries[key]
-            self._ensure_category_page(entry.category_id)
+            self._show_category_page(entry.category_id)
             page = self._category_pages[entry.category_id]
-            self.pages.setCurrentWidget(page)
             self._focus_entry(page, entry, focus=False)
 
     def show_category(self, category_id: str) -> bool:
         """Select and build a category without opening a legacy window."""
-        item = self._category_rows.get(category_id)
-        if item is None:
-            return False
+        # Search results replace the category rows, so clear the query before
+        # looking up the category item.
         self.search.clear()
         item = self._category_rows.get(category_id)
         if item is None:
             return False
+        # Block the list signal so this method owns exactly one page selection
+        # and can also handle a category that is already selected.
+        was_blocked = self.navigation.blockSignals(True)
         self.navigation.setCurrentItem(item)
+        self.navigation.blockSignals(was_blocked)
+        self._show_category_page(category_id)
         return True
 
     def _ensure_category_page(self, category_id: str):
@@ -309,6 +340,7 @@ class SettingsCenter(QDialog):
             return
         content = builder()
         layout.insertWidget(max(0, layout.count() - 1), content)
+        self._apply_glass_to_widget(content)
         self._built_categories.add(category_id)
 
     @staticmethod
@@ -354,11 +386,34 @@ class SettingsCenter(QDialog):
         else:
             self.close()
 
+    def _apply_glass_to_widget(self, root: QWidget) -> None:
+        """Apply the current glass value to settings surfaces built lazily."""
+        for section in root.findChildren(SettingsSection):
+            section.set_glass_opacity(self._glass_opacity)
+        if isinstance(root, SettingsSection):
+            root.set_glass_opacity(self._glass_opacity)
+        for card in root.findChildren(QFrame, "SettingsEmbeddedCard"):
+            card.setStyleSheet(
+                f"QFrame#SettingsEmbeddedCard {{ "
+                f"background:{glass_rgba(C.PANEL, self._glass_opacity)}; "
+                f"border:1px solid {C.BORDER}; border-radius:{Radius.MD}px; }}"
+                f"QLabel {{ background:transparent; color:{C.TEXT}; border:0; }}"
+            )
+
+    def set_glass_opacity(self, opacity: int) -> None:
+        """Apply the app's Glass value to Settings surfaces, not to its text."""
+        self._glass_opacity = max(60, min(100, int(opacity)))
+        self.setStyleSheet(_center_style(self._glass_opacity))
+        self._apply_glass_to_widget(self)
+        self.update()
+
     def refresh_theme(self) -> None:
         """Refresh token-based styles after the app accent/theme changes."""
-        self.setStyleSheet(_center_style())
+        self.setStyleSheet(_center_style(self._glass_opacity))
+        self._apply_glass_to_widget(self)
         for section in self.findChildren(SettingsSection):
             section.refresh_theme()
+            section.set_glass_opacity(self._glass_opacity)
         for page in self.findChildren(QWidget):
             refresh = getattr(page, "refresh_state", None)
             if callable(refresh):
