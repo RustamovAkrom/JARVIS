@@ -12,7 +12,12 @@ from gui.settings.categories.general import GeneralSettingsPage
 from gui.settings.categories.identity import AssistantIdentityPage
 from gui.settings.registry import CATEGORIES, ENTRIES, search_entries
 from gui.settings.settings_center import SettingsCenter
-from gui.app.main_window import AudioDeviceOverlay, HueWheel, MemoryOverlay
+from gui.app.main_window import (
+    AudioDeviceOverlay,
+    HueWheel,
+    MemoryOverlay,
+    ProvidersOverlay,
+)
 from gui.themes.styles import glass_rgba
 from gui.themes.tokens import Radius, Space
 from gui.themes.typography import FONT_MONO, FONT_UI, TypeScale, mono_font, ui_font
@@ -170,6 +175,25 @@ class SettingsComponentTests(unittest.TestCase):
         self.assertTrue(center.show_category("identity"))
         self.assertEqual(child.refresh_count, 1)
         center.close()
+
+    def test_embedded_provider_controls_stay_visible_after_apply(self):
+        with (
+            patch("providers.registry.discover", return_value=[]),
+            patch("providers.registry.reset"),
+            patch("memory.config_manager.get_provider_environment", return_value="online"),
+            patch("memory.config_manager.get_provider_mode", return_value="gemini"),
+            patch("memory.config_manager.get_online_provider_mode", return_value="gemini"),
+            patch("memory.config_manager.get_pipeline", return_value={}),
+            patch("memory.config_manager.get_provider_config", return_value={}),
+            patch("memory.config_manager.get_sidecar_provider", return_value=""),
+            patch("memory.config_manager.get_sidecar_first", return_value=False),
+            patch("memory.config_manager.save_providers"),
+        ):
+            panel = ProvidersOverlay(embedded=True)
+            panel.show()
+            panel._apply()
+            self.assertTrue(panel.isVisible())
+            panel.close()
 
     def test_memory_overlay_refresh_reloads_saved_facts(self):
         with patch("memory.memory_manager.all_entries_for_ui", return_value=[]):
