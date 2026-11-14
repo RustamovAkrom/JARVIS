@@ -770,6 +770,7 @@ def save_providers(
     sidecar_first: bool = None,
     environment: str = None,
     online_mode: str = None,
+    pipelines: dict = None,
 ) -> None:
     """Persist one environment's engine, slots and credentials in one write.
 
@@ -808,13 +809,27 @@ def save_providers(
         elif active_environment == "offline":
             block["mode"] = PROVIDER_MODE_PIPELINE
 
+        if pipelines is not None:
+            for target, values in (pipelines or {}).items():
+                target = str(target or "").strip().lower()
+                if target not in PROVIDER_ENVIRONMENTS or not isinstance(values, dict):
+                    continue
+                key = f"pipeline_{target}"
+                current = block.get(key)
+                current = dict(current) if isinstance(current, dict) else {}
+                current.update({k: str(v or "").strip() for k, v in values.items()})
+                block[key] = current
+
         if pipeline is not None:
             target_key = f"pipeline_{active_environment}"
             current = block.get(target_key)
             current = dict(current) if isinstance(current, dict) else {}
             current.update({k: str(v or "").strip() for k, v in pipeline.items()})
             block[target_key] = current
-            block["pipeline"] = dict(current)
+
+        active_pipeline = block.get(f"pipeline_{active_environment}")
+        if isinstance(active_pipeline, dict):
+            block["pipeline"] = dict(active_pipeline)
 
         if creds is not None:
             store = block.get("creds")
