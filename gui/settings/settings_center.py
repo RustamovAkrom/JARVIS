@@ -387,6 +387,7 @@ class SettingsCenter(QDialog):
     def refresh_theme(self) -> None:
         """Refresh token-based styles after the app accent/theme changes."""
         self.setStyleSheet(_center_style(self._glass_opacity))
+        self._apply_glass_to_widget(self)
         for section in self.findChildren(SettingsSection):
             section.refresh_theme()
             section.set_glass_opacity(self._glass_opacity)
