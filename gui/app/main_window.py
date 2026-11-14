@@ -11251,13 +11251,16 @@ class MainWindow(QMainWindow):
 
 
     def _diagnostic_snapshot(self) -> str:
-        """Return useful runtime diagnostics without exposing credentials."""
+        """Return actionable runtime/configuration details without credentials."""
         from memory.config_manager import (
             get_computer_access_settings,
             get_computer_permissions,
+            get_project_open_mode,
+            get_provider_config,
             get_provider_environment,
             get_provider_mode,
             get_pipeline,
+            get_ui_opacity,
             get_workspace_path,
         )
 
@@ -11268,27 +11271,45 @@ class MainWindow(QMainWindow):
         environment = get_provider_environment()
         engine = get_provider_mode()
         pipeline = get_pipeline(environment)
-        selected = ", ".join(
-            f"{slot.upper()}={provider or 'not configured'}"
-            for slot, provider in pipeline.items()
-            if slot in ("stt", "llm", "tts")
-        ) or "not configured"
+
+        slot_labels = {
+            "stt": "Voice recognition",
+            "llm": "AI model",
+            "tts": "Spoken voice",
+        }
+        selected = []
+        for slot, label in slot_labels.items():
+            provider = str(pipeline.get(slot) or "").strip()
+            if not provider:
+                selected.append(f"{label}: not configured")
+                continue
+            config = get_provider_config(provider)
+            catalog = str(config.get("catalog") or provider).strip()
+            model = str(config.get("model") or config.get("voice") or "").strip()
+            value = f"{catalog} / {model}" if model else catalog
+            selected.append(f"{label}: {value}")
+
         workspace = get_workspace_path() or "not configured"
         return "\n".join((
             f"JARVIS version: {APP_VERSION}",
             f"Platform: {_OS} {platform.release()}",
-            f"Python: {platform.python_version()}",
+            f"Python: {platform.python_implementation()} {platform.python_version()}",
+            f"Python executable: {sys.executable}",
+            f"Working directory: {os.getcwd()}",
             f"Application directory: {BASE_DIR}",
             f"User data directory: {PATHS.user_data_root}",
+            f"Memory file: {PATHS.long_term_memory_file}",
             f"AI environment: {environment.title()}",
-            f"AI engine: {'Gemini Live' if engine == 'gemini' else 'Provider pipeline'}",
-            f"Voice/model selections: {selected}",
+            f"AI engine: {'Gemini Live' if engine == 'gemini' else 'Configured model services'}",
+            *selected,
             f"Workspace: {workspace}",
+            f"File opening preference: {get_project_open_mode()}",
+            f"Glass opacity: {get_ui_opacity()}%",
             f"Computer mode: {access.get('mode', 'chat').title()}",
             f"Approval policy: {access.get('access_level', 'ask')}",
-            f"Computer permissions: {allowed}/{total} allowed",
+            f"Computer permissions: {allowed}/{total} enabled",
             f"Developer mode: {'On' if self._development_mode else 'Off'}",
-            "Credentials: intentionally excluded",
+            "API keys, passwords and secret values: intentionally excluded",
         ))
 
     def _build_developer_settings_page(self):
