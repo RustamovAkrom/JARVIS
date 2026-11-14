@@ -1868,8 +1868,7 @@ class JarvisLive:
                                 "open_app",
                                 "browser_control",
                                 "dev_agent",
-                                "workspace_files",
-                            }
+                            } or (name == "workspace_files" and action == "open")
                             needs_approval = not self_gated and (
                                 (policy["access_level"] == "ask" and approval_scope)
                                 or high_impact
