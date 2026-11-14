@@ -3398,11 +3398,13 @@ class ProvidersOverlay(_HudOverlay):
             self.setFixedWidth(self._OW)
 
         outer = QVBoxLayout(self)
+        self._outer_layout = outer
         outer.setContentsMargins(0 if self._embedded else 22, 0 if self._embedded else 18,
                                  0 if self._embedded else 22, 0 if self._embedded else 18)
         outer.setSpacing(10)
 
         title = QLabel("AI setup")
+        self._title_label = title
         title.setFont(QFont(FONT_MONO, 13, QFont.Weight.Bold))
         title.setStyleSheet(f"color: {C.PRI}; background: transparent;")
         if not self._embedded:
@@ -3414,6 +3416,7 @@ class ProvidersOverlay(_HudOverlay):
         )
         sub.setWordWrap(True)
         sub.setFont(QFont(FONT_MONO, 8))
+        self._subtitle_label = sub
         sub.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
         if not self._embedded:
             outer.addWidget(sub)
@@ -3527,6 +3530,7 @@ class ProvidersOverlay(_HudOverlay):
         row.addWidget(apply_btn, 2)
 
         close = QPushButton("CLOSE")
+        self._close_button = close
         close.setFixedHeight(34)
         close.setFont(QFont(FONT_MONO, 9))
         close.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -3540,6 +3544,39 @@ class ProvidersOverlay(_HudOverlay):
         outer.addLayout(row)
         self._refresh_cards()
         self._update_footer()
+
+    def set_embedded(self, embedded: bool = True) -> None:
+        """Switch the provider form between floating-window and Settings use.
+
+        Settings reparents a floating provider panel into a cached page. Update
+        the component state as well as its Qt parent/layout; otherwise Apply
+        still behaves like a floating dialog and hides the cached page content.
+        """
+        self._embedded = bool(embedded)
+        if self._embedded:
+            self.setStyleSheet("ProvidersOverlay { background:transparent; border:0; }")
+            self.setMinimumWidth(0)
+            self.setMaximumWidth(16777215)
+            self.setSizePolicy(
+                QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
+            )
+            self._outer_layout.setContentsMargins(0, 0, 0, 0)
+            self._title_label.hide()
+            self._subtitle_label.hide()
+            self._close_button.hide()
+        else:
+            self.setStyleSheet(f"""
+                ProvidersOverlay {{
+                    background: {C.PANEL};
+                    border: 1px solid {C.BORDER_B};
+                    border-radius: 8px;
+                }}
+            """)
+            self.setFixedWidth(self._OW)
+            self._outer_layout.setContentsMargins(22, 18, 22, 18)
+            self._title_label.show()
+            self._subtitle_label.show()
+            self._close_button.show()
 
     # ── pieces ───────────────────────────────────────────────────────────────
     def _mode_card(self, title: str, body: str, value: str) -> QPushButton:
@@ -10644,6 +10681,9 @@ class MainWindow(QMainWindow):
         for item in panels:
             title, description, panel, *options = item
             preserve_header = bool(options[0]) if options else False
+            set_embedded = getattr(panel, "set_embedded", None)
+            if callable(set_embedded):
+                set_embedded(True)
             card = QFrame()
             card.setObjectName("SettingsEmbeddedCard")
             card.setStyleSheet(
