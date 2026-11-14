@@ -21,7 +21,9 @@ class DevAgentProjectDirectoryTests(unittest.TestCase):
             with patch("actions.dev_agent.Path.home", return_value=home):
                 destination = _project_directory("", "demo", "demo")
 
-            self.assertEqual(destination, desktop / "demo-2")
+            # resolve() may canonicalize platform aliases:
+            # macOS /var -> /private/var and Windows 8.3 short names.
+            self.assertEqual(destination.resolve(), (desktop / "demo-2").resolve())
             self.assertTrue(destination.is_dir())
             self.assertEqual(sentinel.read_text(encoding="utf-8"), "preserve")
 
@@ -47,7 +49,8 @@ class DevAgentProjectDirectoryTests(unittest.TestCase):
 
             selected = _project_directory(str(destination), "project", "project")
 
-            self.assertEqual(selected, destination)
+            # Compare canonical paths rather than their display spelling.
+            self.assertEqual(selected.resolve(), destination.resolve())
             self.assertEqual(list(destination.iterdir()), [])
 
 
