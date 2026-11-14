@@ -6867,7 +6867,7 @@ class UpdatePanel(QWidget):
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(8)
         self._version = QLabel(
-            f"JARVIS {APP_RELEASE_VERSION}  В·  {RELEASE_CHANNEL} channel"
+            f"JARVIS {APP_RELEASE_VERSION}  ·  {RELEASE_CHANNEL} channel"
         )
         self._version.setStyleSheet(
             f"color:{C.TEXT}; background:transparent; font-weight:600;"
@@ -15362,7 +15362,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             )
         if not cards:
             cards.append(
-                f'<p style="color:{C.TEXT_DIM};">Chat is empty. The archive and saved memory are unchanged.</p>'
+                f'<p style="color:{C.TEXT_DIM};">Chat is empty. Previous conversations and saved memories are unchanged.</p>'
             )
         self._chat_view.setHtml(
             f'<html><body style="font-family:Inter,Segoe UI,sans-serif;font-size:10pt;color:{C.TEXT};'
@@ -15416,8 +15416,8 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
     def _clear_history(self):
         choice = QMessageBox.question(
             self,
-            "Clear conversation history",
-            "Delete the archive and clear the current chat? Saved memory facts will remain.",
+            "Clear conversations",
+            "Delete previous conversations and clear the current chat? Saved memories will remain.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
@@ -15455,7 +15455,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             remove = QPushButton("×")
             remove.setFixedSize(20, 20)
             remove.setToolTip(
-                "Delete this turn from chat and archive; saved memory is unchanged"
+                "Delete this turn from the current chat and Conversations; saved memories are unchanged"
             )
             remove.setStyleSheet(
                 f"QPushButton {{color:{C.TEXT_DIM}; background:transparent; border:1px solid {C.BORDER}; border-radius:4px;}} QPushButton:hover {{color:{C.RED}; border-color:{C.RED};}}"
