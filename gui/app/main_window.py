@@ -4365,7 +4365,19 @@ class ProvidersOverlay(_HudOverlay):
         for slot, eid in self._picked.items():
             pid = self._pipe.get(slot, "")
             if pid and eid:
-                creds.setdefault(pid, {})["catalog"] = eid
+                selected = next(
+                    (
+                        entry
+                        for provider_id, entry_id, entry, _decl in self._catalog(slot)
+                        if provider_id == pid and entry_id == eid
+                    ),
+                    {},
+                )
+                # A catalog choice can change the endpoint even when several
+                # choices share one provider implementation (e.g. Ollama and
+                # Groq both use the OpenAI-compatible adapter).
+                creds.setdefault(pid, {}).update(selected.get("values") or {})
+                creds[pid]["catalog"] = eid
         sidecar_pid, sidecar_eid = self._sidecar_choice()
         if sidecar_pid and sidecar_eid:
             creds.setdefault(sidecar_pid, {}).setdefault("catalog", sidecar_eid)
