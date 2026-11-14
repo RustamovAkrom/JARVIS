@@ -620,6 +620,7 @@ def computer_control(
         "double_click": ("click",),
         "right_click": ("click",),
         "screen_click": ("find_elements", "click"),
+        "close_app": ("click",),
         "copy": ("clipboard",),
         "type": ("type",),
         "smart_type": ("type",),
