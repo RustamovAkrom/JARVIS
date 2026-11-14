@@ -353,6 +353,11 @@ class SettingsCenter(QDialog):
         else:
             self.close()
 
+    def set_glass_opacity(self, opacity: int) -> None:
+        """Keep the Settings window on the same glass-opacity setting as JARVIS."""
+        value = max(60, min(100, int(opacity)))
+        self.setWindowOpacity(value / 100.0)
+
     def refresh_theme(self) -> None:
         """Refresh token-based styles after the app accent/theme changes."""
         self.setStyleSheet(_center_style())
