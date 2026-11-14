@@ -7412,6 +7412,7 @@ class MainWindow(QMainWindow):
         self._editor_tabs.tabBar().setElideMode(Qt.TextElideMode.ElideRight)
         self._editor_tabs.setStyleSheet(_tabs_qss())
         self._editor_tabs.tabCloseRequested.connect(self._close_project_editor_tab)
+        self._editor_tabs.currentChanged.connect(self._on_project_editor_tab_changed)
         self._center_views.addWidget(self._editor_tabs)
         self._main_splitter.addWidget(self._center_views)
 
@@ -10013,16 +10014,22 @@ class MainWindow(QMainWindow):
         self._brief_btn = _row(QPushButton(), basics)
         self._brief_btn.clicked.connect(self._toggle_brief)
 
-        self._wake_btn = _row(QPushButton(), basics)
+        self._brief_btn.setToolTip(self._tr("Toggle the daily morning summary."))
+
+        voice_activation = _section(
+            "VOICE ACTIVATION",
+            "Configure hands-free wake word listening and push-to-talk.",
+        )
+        self._voice_controls_panel = voice_activation.parentWidget()
+        self._wake_btn = _row(QPushButton(), voice_activation)
         self._wake_btn.clicked.connect(self._toggle_wake_word)
-        self._wake_sleep_btn = _row(QPushButton(), basics)
+        self._wake_sleep_btn = _row(QPushButton(), voice_activation)
         self._wake_sleep_btn.clicked.connect(self._tap_wake_manual)
         self._wake_btn.setText(self._tr("Wake word"))
         self._wake_btn.setToolTip(self._tr("Toggle hands-free voice activation."))
-        self._brief_btn.setToolTip(self._tr("Toggle the daily morning summary."))
         self._wake_sleep_btn.hide()
 
-        self._ptt_btn = _row(QPushButton(), basics)
+        self._ptt_btn = _row(QPushButton(), voice_activation)
         self._ptt_btn.clicked.connect(self._toggle_ptt)
         self._refresh_talk_btns()
 
@@ -10406,7 +10413,7 @@ class MainWindow(QMainWindow):
                 "Select your microphone and speaker, adjust output volume, and test each device.",
                 device_panel,
             )),
-            open_voice_controls=lambda: self._settings_center.show_category("cursor"),
+            voice_controls_panel=self._voice_controls_panel,
         )
 
     def _embed_settings_panels(self, *panels):
@@ -10508,7 +10515,7 @@ class MainWindow(QMainWindow):
         )
         panel.on_preview = self._preview_ui_color
         panel.on_opacity_preview = self._preview_ui_opacity
-        panel.saved.connect(self._apply_name_update)
+        panel.saved.connect(self._apply_appearance_settings)
         return self._embed_settings_panels((
             "Personalization",
             "Set the JARVIS accent and window opacity. Identity and voice live in their own settings category.",
@@ -10957,6 +10964,26 @@ class MainWindow(QMainWindow):
     def _set_development_mode_from_settings(self, enabled: bool):
         if bool(enabled) != bool(self._development_mode):
             self._toggle_development_mode()
+
+    def _apply_appearance_settings(
+        self,
+        _assistant_name: str,
+        _user_name: str,
+        ui_color: str,
+        _voice: str,
+        ui_opacity: int,
+    ) -> bool:
+        """Persist appearance only, reading identity values fresh from config."""
+        config = _read_full_config()
+        return bool(
+            self._apply_name_update(
+                config.get("assistant_name", "JARVIS") or "JARVIS",
+                config.get("user_name", "") or "",
+                ui_color,
+                config.get("voice_name", "") or "",
+                ui_opacity,
+            )
+        )
 
     def _apply_identity_settings(self, assistant_name: str, user_name: str, voice: str) -> bool:
         from memory.config_manager import get_ui_opacity
@@ -11597,6 +11624,35 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         self._current_file = str(path)
         self._center_views.setCurrentWidget(self._editor_tabs)
         editor.editor.setFocus()
+
+    def _on_project_editor_tab_changed(self, index: int) -> None:
+        """Keep the persisted current-file pointer aligned with the selected tab."""
+        from memory.config_manager import save_active_project_file
+
+        editor = self._editor_tabs.widget(index) if index >= 0 else None
+        if not isinstance(editor, _ProjectEditorPage):
+            self._current_file = None
+            try:
+                save_active_project_file("")
+            except (OSError, ValueError) as exc:
+                self._log.append_log(f"ERR: Could not clear active project file — {exc}")
+            return
+
+        path = Path(editor._path).resolve()
+        self._current_file = str(path)
+        try:
+            if not self._workspace_path:
+                save_active_project_file("")
+                return
+            relative = path.relative_to(Path(self._workspace_path).resolve())
+            save_active_project_file(str(relative))
+        except (ValueError, OSError) as exc:
+            self._current_file = None
+            try:
+                save_active_project_file("")
+            except (OSError, ValueError):
+                pass
+            self._log.append_log(f"ERR: Could not update active project file — {exc}")
 
     def _update_editor_tab_title(self, filename: str, modified: bool, editor):
         index = self._editor_tabs.indexOf(editor)
