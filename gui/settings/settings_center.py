@@ -238,8 +238,8 @@ class SettingsCenter(QDialog):
             scroll.setWidgetResizable(True)
             scroll.setFrameShape(QFrame.Shape.NoFrame)
             scroll.setStyleSheet(
-                f"QScrollArea {{ background:{C.BG}; border:0; }}"
-                f"QScrollArea::viewport {{ background:{C.BG}; border:0; }}"
+                "QScrollArea { background:transparent; border:0; }"
+                "QScrollArea::viewport { background:transparent; border:0; }"
             )
             scroll.setWidget(page)
             self.pages.addWidget(scroll)
