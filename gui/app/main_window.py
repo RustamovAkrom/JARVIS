@@ -3918,6 +3918,16 @@ class ProvidersOverlay(_HudOverlay):
         )
         is_local = entry.get("local") is True
         entry_values = entry.get("values") or {}
+        if str(stored.get("catalog") or "") != eid:
+            previous_base_url = stored.get("base_url")
+            stored.update(entry_values)
+            if (
+                "base_url" in entry_values
+                and previous_base_url != entry_values.get("base_url")
+            ):
+                # A model identifier belongs to its endpoint; do not carry a
+                # Groq/Ollama selection into a different catalog provider.
+                stored["model"] = ""
         # An entry that MENTIONS the address has answered it — including
         # answering it with "", which is what the local speech recogniser does
         # because it does not use one at all. Testing the value rather than the
