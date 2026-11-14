@@ -1726,11 +1726,13 @@ class JarvisLive:
                         ).lower().strip().replace("-", "_").replace(" ", "_")
                     except Exception:
                         action = ""
-                if name == "computer_control":
-                    # The handler accepts quit_app as a close_app alias. Apply
-                    # the same safety policy to both spellings.
-                    action = {"quit_app": "close_app"}.get(action, action)
-                elif name == "workspace_files" and not action:
+                from core.computer_permissions import (
+                    normalize_computer_action,
+                    required_permissions_for_action,
+                )
+
+                action = normalize_computer_action(name, action)
+                if name == "workspace_files" and not action:
                     action = "list"
                 if name in {
                     "computer_control",
@@ -1778,106 +1780,9 @@ class JarvisLive:
                             "mode in Settings → Computer Permissions to allow this action."
                         )
                     else:
-                        settings_permissions = {
-                            # Keyboard and system-control actions.
-                            "type_text": ("type", "clipboard"),
-                            "write_on_screen": ("type", "clipboard"),
-                            "type": "type",
-                            "write": "type",
-                            "press_key": "type",
-                            "enter": "type",
-                            "escape": "type",
-                            "volume_up": "type",
-                            "volume_down": "type",
-                            "mute": "type",
-                            "unmute": "type",
-                            "toggle_mute": "type",
-                            "brightness_up": "type",
-                            "brightness_down": "type",
-                            "sleep_display": "type",
-                            "screen_off": "type",
-                            "pause_video": "type",
-                            "play_pause": "type",
-                            "full_screen": "type",
-                            "fullscreen": "type",
-                            "minimize": "type",
-                            "maximize": "type",
-                            "snap_left": "type",
-                            "snap_right": "type",
-                            "switch_window": "type",
-                            "show_desktop": "type",
-                            "task_manager": "type",
-                            "focus_search": "type",
-                            "refresh_page": "type",
-                            "reload": "type",
-                            "close_tab": "type",
-                            "new_tab": "type",
-                            "next_tab": "type",
-                            "prev_tab": "type",
-                            "go_back": "type",
-                            "go_forward": "type",
-                            "zoom_in": "type",
-                            "zoom_out": "type",
-                            "zoom_reset": "type",
-                            "find_on_page": "type",
-                            "undo": "type",
-                            "redo": "type",
-                            "select_all": "type",
-                            "save": "type",
-                            "lock_screen": "type",
-                            "open_settings": "type",
-                            "file_explorer": "type",
-                            "open_run": "type",
-                            "dark_mode": "type",
-                            "toggle_wifi": "type",
-                            "restart": "type",
-                            "shutdown": "type",
-                            # Clipboard and pointer actions need their own capabilities.
-                            "paste": ("type", "clipboard"),
-                            "cut": ("type", "clipboard"),
-                            "copy": "clipboard",
-                            "screenshot": "observe_screen",
-                            "scroll_up": "move_mouse",
-                            "scroll_down": "move_mouse",
-                            "scroll_top": "move_mouse",
-                            "scroll_bottom": "move_mouse",
-                            "page_up": "move_mouse",
-                            "page_down": "move_mouse",
-                            "close_app": "click",
-                            "close_window": "click",
-                        }
-                        control_permissions = {
-                            "screenshot": ("observe_screen",),
-                            "screen_find": ("find_elements",),
-                            "focus_window": ("find_elements",),
-                            "move": ("move_mouse",),
-                            "scroll": ("move_mouse",),
-                            "drag": ("move_mouse", "click"),
-                            "click": ("click",),
-                            "left_click": ("click",),
-                            "double_click": ("click",),
-                            "right_click": ("click",),
-                            "close_app": ("click",),
-                            "screen_click": ("find_elements", "click"),
-                            "copy": ("clipboard",),
-                            "type": ("type",),
-                            "smart_type": ("type", "clipboard"),
-                            "paste": ("type", "clipboard"),
-                            "hotkey": ("type",),
-                            "press": ("type",),
-                            "clear_field": ("type",),
-                        }
-                        if name == "computer_control":
-                            required_permissions = control_permissions.get(action, ())
-                        elif name == "computer_settings" and action in settings_permissions:
-                            permission_value = settings_permissions[action]
-                            required_permissions = (
-                                permission_value
-                                if isinstance(permission_value, tuple)
-                                else (permission_value,)
-                            )
-                        else:
-                            required_permissions = ()
+                        required_permissions = required_permissions_for_action(
+                            name, action
+                        )
                         permissions = get_computer_permissions()
                         denied_permissions = [
                             permission
