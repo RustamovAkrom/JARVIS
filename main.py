@@ -1904,7 +1904,6 @@ class JarvisLive:
                                 or (name == "file_controller" and action == "delete")
                                 or name == "send_message"
                                 or name == "dev_agent"
-                                or (name == "workspace_files" and action == "open")
                             )
                             approval_scope = name in {
                                 "computer_control",
