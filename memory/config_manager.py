@@ -587,8 +587,10 @@ def save_plugin_enabled(plugin_name: str, enabled: bool) -> None:
 # providers, and every caller checks that BEFORE importing the providers
 # package — so an ordinary install never executes a line of it. This is the
 # whole basis of the claim that the folder costs nothing when unused.
-PROVIDER_MODE_GEMINI = "gemini"  # the conversation runs on the Live API
-PROVIDER_MODE_PIPELINE = "pipeline"  # STT -> LLM -> TTS, assembled from providers
+PROVIDER_MODE_GEMINI = "gemini"  # integrated online conversation
+PROVIDER_MODE_PIPELINE = "pipeline"  # configurable voice/model/voice stack
+PROVIDER_ENVIRONMENTS = ("online", "offline")
+_LOCAL_CATALOG_IDS = frozenset({"ollama", "lmstudio", "llamacpp", "vllm", "jan", "local", "piper", "system"})
 
 
 def get_providers() -> dict:
@@ -597,14 +599,60 @@ def get_providers() -> dict:
     return dict(val) if isinstance(val, dict) else {}
 
 
+def _legacy_provider_environment(block: dict) -> str:
+    """Infer the environment used by legacy configs that stored one pipeline."""
+    mode = str(block.get("mode", PROVIDER_MODE_GEMINI) or "").strip().lower()
+    if mode != PROVIDER_MODE_PIPELINE:
+        return "online"
+
+    pipeline = block.get("pipeline")
+    pipeline = pipeline if isinstance(pipeline, dict) else {}
+    creds = block.get("creds")
+    creds = creds if isinstance(creds, dict) else {}
+
+    llm_id = str(pipeline.get("llm") or "").strip()
+    llm_cfg = creds.get(llm_id)
+    llm_cfg = llm_cfg if isinstance(llm_cfg, dict) else {}
+    catalog_id = str(llm_cfg.get("catalog") or "").strip().lower()
+    if catalog_id in _LOCAL_CATALOG_IDS:
+        return "offline"
+
+    stt_id = str(pipeline.get("stt") or "").strip()
+    stt_cfg = creds.get(stt_id)
+    stt_cfg = stt_cfg if isinstance(stt_cfg, dict) else {}
+    if str(stt_cfg.get("backend") or "").strip().lower() == "local":
+        return "offline"
+
+    if str(pipeline.get("tts") or "").strip().lower() in {"piper", "system_tts"}:
+        return "offline"
+    return "online"
+
+
+def get_provider_environment() -> str:
+    """Return the selected top-level AI environment: online or offline."""
+    block = get_providers()
+    value = str(block.get("environment") or "").strip().lower()
+    if value in PROVIDER_ENVIRONMENTS:
+        return value
+    return _legacy_provider_environment(block)
+
+
+def get_online_provider_mode() -> str:
+    """Return the online engine: integrated Gemini Live or a configurable stack."""
+    block = get_providers()
+    mode = str(
+        block.get("online_mode")
+        or (block.get("mode") if get_provider_environment() == "online" else "")
+        or PROVIDER_MODE_GEMINI
+    ).strip().lower()
+    return mode if mode in (PROVIDER_MODE_GEMINI, PROVIDER_MODE_PIPELINE) else PROVIDER_MODE_GEMINI
+
+
 def get_provider_mode() -> str:
-    """Which engine holds the conversation. Defaults to Gemini Live."""
-    mode = str(get_providers().get("mode", "") or "").strip().lower()
-    return (
-        mode
-        if mode in (PROVIDER_MODE_GEMINI, PROVIDER_MODE_PIPELINE)
-        else PROVIDER_MODE_GEMINI
-    )
+    """Runtime engine for the currently selected Online/Offline environment."""
+    if get_provider_environment() == "offline":
+        return PROVIDER_MODE_PIPELINE
+    return get_online_provider_mode()
 
 
 def get_provider_config(provider_id: str) -> dict:
@@ -614,24 +662,27 @@ def get_provider_config(provider_id: str) -> dict:
     return dict(val) if isinstance(val, dict) else {}
 
 
-def get_pipeline() -> dict:
-    """Which provider fills each slot of the pipeline engine."""
-    val = get_providers().get("pipeline")
-    return dict(val) if isinstance(val, dict) else {}
+def get_pipeline(environment: str | None = None) -> dict:
+    """Provider slots for one environment, without overwriting the other mode."""
+    block = get_providers()
+    target = str(environment or get_provider_environment()).strip().lower()
+    if target not in PROVIDER_ENVIRONMENTS:
+        target = get_provider_environment()
+
+    value = block.get(f"pipeline_{target}")
+    if isinstance(value, dict):
+        return dict(value)
+
+    # Compatibility path for installations created before Online and Offline
+    # had separate provider selections.
+    legacy = block.get("pipeline")
+    if isinstance(legacy, dict) and target == _legacy_provider_environment(block):
+        return dict(legacy)
+    return {}
 
 
 def get_sidecar_provider() -> str:
-    """The provider id used for one-shot calls when Gemini cannot answer them,
-    or '' for none.
-
-    Separate from the conversation on purpose: these are different jobs with
-    different failure modes. Gemini's Live quota and its text quota are separate
-    pools, and on the free tier it is the text pool that runs out first — which
-    kills document reading, screen reasoning and code generation while the
-    conversation carries on. Being able to point only those at another model,
-    without changing the voice at all, is the cheapest useful thing this whole
-    folder does.
-    """
+    """Optional cloud fallback for background requests while using Gemini Live."""
     return str(get_providers().get("sidecar", "") or "").strip()
 
 
@@ -641,20 +692,24 @@ def _patch_providers(**fields) -> None:
     _patch_config(providers=p)
 
 
+def save_provider_environment(environment: str) -> None:
+    """Persist the selected Online or Offline environment."""
+    value = str(environment or "").strip().lower()
+    if value not in PROVIDER_ENVIRONMENTS:
+        raise ValueError(f"Unsupported AI environment: {environment}")
+    _patch_providers(environment=value)
+
+
 def save_provider_mode(mode: str) -> None:
-    mode = (mode or "").strip().lower()
-    _patch_providers(
-        mode=(
-            mode
-            if mode in (PROVIDER_MODE_GEMINI, PROVIDER_MODE_PIPELINE)
-            else PROVIDER_MODE_GEMINI
-        )
-    )
+    """Save the online engine choice; Offline always uses the provider stack."""
+    value = str(mode or "").strip().lower()
+    if value not in (PROVIDER_MODE_GEMINI, PROVIDER_MODE_PIPELINE):
+        value = PROVIDER_MODE_GEMINI
+    _patch_providers(online_mode=value)
 
 
 def save_provider_config(provider_id: str, values: dict) -> None:
-    """Merge settings for one provider. Only the given keys are touched, so the
-    panel can save one field without reading and rewriting the rest."""
+    """Merge settings for one provider. Only the given keys are touched."""
     p = get_providers()
     creds = p.get("creds")
     if not isinstance(creds, dict):
@@ -667,16 +722,32 @@ def save_provider_config(provider_id: str, values: dict) -> None:
     _patch_config(providers=p)
 
 
-def save_pipeline(stt: str = None, llm: str = None, tts: str = None) -> None:
-    """Set one or more pipeline slots. `None` leaves a slot alone; '' clears it."""
-    p = get_providers()
-    pipe = p.get("pipeline")
-    pipe = dict(pipe) if isinstance(pipe, dict) else {}
+def save_pipeline(
+    stt: str = None,
+    llm: str = None,
+    tts: str = None,
+    environment: str | None = None,
+) -> None:
+    """Save provider slots for the selected environment only."""
+    target = str(environment or get_provider_environment()).strip().lower()
+    if target not in PROVIDER_ENVIRONMENTS:
+        target = get_provider_environment()
+
+    block = get_providers()
+    key = f"pipeline_{target}"
+    pipeline = block.get(key)
+    if not isinstance(pipeline, dict):
+        pipeline = get_pipeline(target)
+    else:
+        pipeline = dict(pipeline)
     for slot, value in (("stt", stt), ("llm", llm), ("tts", tts)):
         if value is not None:
-            pipe[slot] = str(value).strip()
-    p["pipeline"] = pipe
-    _patch_config(providers=p)
+            pipeline[slot] = str(value).strip()
+
+    block[key] = pipeline
+    block["pipeline"] = dict(pipeline)  # legacy readers see the active environment
+    block["environment"] = target
+    _patch_config(providers=block)
 
 
 def save_sidecar_provider(provider_id: str) -> None:
@@ -684,14 +755,6 @@ def save_sidecar_provider(provider_id: str) -> None:
 
 
 def get_sidecar_first() -> bool:
-    """Whether the side-call provider is tried BEFORE Gemini rather than after.
-
-    Off by default: measured in core/gemini.py, the Gemini rungs answer a short
-    request in well under a second, and a local model on ordinary hardware does
-    not. On means something specific — 'I would rather this stayed on my
-    machine, and I accept it being slower' — so it is a choice someone makes,
-    never a default they inherit.
-    """
     return bool(get_providers().get("sidecar_first", False))
 
 
@@ -705,38 +768,54 @@ def save_providers(
     creds: dict = None,
     sidecar: str = None,
     sidecar_first: bool = None,
+    environment: str = None,
+    online_mode: str = None,
 ) -> None:
-    """Write the whole providers block in ONE file write.
+    """Persist one environment's engine, slots and credentials in one write.
 
-    The settings panel used to call five setters in a row — one per provider's
-    credentials, then the mode, then the pipeline, then the two side-call
-    keys — and every one of them was a separate read-modify-write of
-    api_keys.json. Five reads and five writes of the same file, in sequence,
-    while the panel's own APPLY was already triggering a reconnect that makes
-    main.py write to it too. Any interleaving loses whichever key was written
-    first, and the one people noticed was the mode: set MY OWN SETUP, save,
-    reopen, and it says Gemini again.
-
-    `None` leaves a section alone; `creds` is merged per provider so a panel
-    that only edited one does not have to send the others.
+    The pipeline argument remains the active-environment alias for older
+    callers. Explicit pipeline_online and pipeline_offline keys retain both
+    selections.
     """
-
     def merge(data: dict) -> None:
         block = data.get("providers")
         block = dict(block) if isinstance(block, dict) else {}
 
-        if mode is not None:
-            m = str(mode).strip().lower()
-            block["mode"] = (
-                m
-                if m in (PROVIDER_MODE_GEMINI, PROVIDER_MODE_PIPELINE)
+        active_environment = str(
+            environment or block.get("environment") or _legacy_provider_environment(block)
+        ).strip().lower()
+        if active_environment not in PROVIDER_ENVIRONMENTS:
+            active_environment = "online"
+        block["environment"] = active_environment
+
+        if online_mode is not None:
+            candidate = str(online_mode).strip().lower()
+            block["online_mode"] = (
+                candidate
+                if candidate in (PROVIDER_MODE_GEMINI, PROVIDER_MODE_PIPELINE)
                 else PROVIDER_MODE_GEMINI
             )
+        elif mode is not None and active_environment == "online":
+            candidate = str(mode).strip().lower()
+            block["online_mode"] = (
+                candidate
+                if candidate in (PROVIDER_MODE_GEMINI, PROVIDER_MODE_PIPELINE)
+                else PROVIDER_MODE_GEMINI
+            )
+
+        if mode is not None and active_environment == "online":
+            block["mode"] = block.get("online_mode", PROVIDER_MODE_GEMINI)
+        elif active_environment == "offline":
+            block["mode"] = PROVIDER_MODE_PIPELINE
+
         if pipeline is not None:
-            current = block.get("pipeline")
+            target_key = f"pipeline_{active_environment}"
+            current = block.get(target_key)
             current = dict(current) if isinstance(current, dict) else {}
             current.update({k: str(v or "").strip() for k, v in pipeline.items()})
-            block["pipeline"] = current
+            block[target_key] = current
+            block["pipeline"] = dict(current)
+
         if creds is not None:
             store = block.get("creds")
             store = dict(store) if isinstance(store, dict) else {}
