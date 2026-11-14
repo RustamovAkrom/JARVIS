@@ -34,7 +34,7 @@ CATEGORIES = (
         "Manage Agent access, computer capabilities and authentication integrations.",
         (("Review computer permissions", "security_info"), ("Authentication integration", "security_info")),
     ),
-    SettingsCategory("integrations", "Integrations & Providers", "AI engine, provider credentials, and request routing.", (("Engine and providers", "providers"),)),
+    SettingsCategory("integrations", "AI Providers", "Choose Online or Offline AI and configure the models used by JARVIS.", (("AI provider settings", "providers"),)),
     SettingsCategory("plugins", "Plugins", "Installed extensions and their settings.", (("Plugin manager", "plugins"), ("Plugin settings", "plugin_settings"))),
     SettingsCategory("memory", "Memory", "Review and manage saved assistant memories.", (("Open memory", "memory"),)),
     SettingsCategory("developer", "Developer & Diagnostics", "Development mode, diagnostic logs, and system details.", (("Developer options", "setup"), ("Debug console", "console"))),
