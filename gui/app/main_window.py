@@ -185,7 +185,7 @@ def _write_json_list(path: Path, key: str, rows: list[dict]) -> None:
 
 
 def _history_turns() -> list[dict]:
-    """Load the archive and give legacy turns stable IDs for delete actions."""
+    """Load saved conversations and give legacy turns stable IDs for delete actions."""
     rows = _read_json_list(_UI_HISTORY_FILE, "turns")
     changed = False
     for row in rows:
@@ -6102,7 +6102,7 @@ class CommandPalette(QWidget):
             ("◈  Voice & Audio settings", self._owner._open_audio_devices),
             ("▣  AI provider settings", self._owner._open_providers),
             ("◌  Plugins and extensions", self._owner._open_plugin_manager),
-            ("◉  Saved memories", self._owner._open_memory_panel),
+            ("◉  Memory", self._owner._open_memory_panel),
             ("⌂  Remote control", self._owner._open_remote),
             (
                 "⇥  Explain clipboard",
@@ -10047,7 +10047,7 @@ class MainWindow(QMainWindow):
         audio_btn.setToolTip(self._tr("Choose microphone, speakers and voice activation options."))
         lay.addWidget(audio_btn)
 
-        mem_btn = QPushButton(self._tr("Saved memories"))
+        mem_btn = QPushButton(self._tr("Memory"))
         _icon_button(mem_btn, "memory.svg")
         mem_btn.setFixedHeight(26)
         mem_btn.setFont(QFont(FONT_MONO, 7))
@@ -10733,8 +10733,8 @@ class MainWindow(QMainWindow):
 
     def _build_memory_settings_page(self):
         return self._embed_settings_panels((
-            "Saved memories",
-            "Review and manage information stored locally by JARVIS.",
+            "Saved facts",
+            "Review facts JARVIS has saved. Conversation history is managed separately in Conversations.",
             MemoryOverlay(embedded=True),
         ))
 
@@ -15441,9 +15441,9 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         if not turn_id:
             return
         chat_rows = [r for r in _chat_turns() if str(r.get("id", "")) != turn_id]
-        archive_rows = [r for r in _history_turns() if str(r.get("id", "")) != turn_id]
+        conversation_rows = [r for r in _history_turns() if str(r.get("id", "")) != turn_id]
         _write_json_list(_UI_CHAT_FILE, "turns", chat_rows[-100:])
-        _write_json_list(_UI_HISTORY_FILE, "turns", archive_rows[-100:])
+        _write_json_list(_UI_HISTORY_FILE, "turns", conversation_rows[-100:])
         self._refresh_chat()
         self._refresh_history()
 
