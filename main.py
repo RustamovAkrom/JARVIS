@@ -998,10 +998,11 @@ class JarvisLive:
         if loop and ev is not None:
             loop.call_soon_threadsafe(ev.set)
 
-    def _restore_chat_session_log(self) -> None:
-        """Rebuild the summary buffer from the selected chat, not other chats."""
+    def _restore_chat_session_log(self, chat_id: str | None = None) -> None:
+        """Rebuild the summary buffer from one chat, not other chats."""
+        selected_chat_id = str(chat_id or self._active_chat_id or "")
         try:
-            context = self.ui.get_chat_context(self._active_chat_id, limit=24)
+            context = self.ui.get_chat_context(selected_chat_id, limit=24)
         except Exception:
             context = []
         self._session_log = [
@@ -1047,13 +1048,22 @@ class JarvisLive:
         self.request_reconnect(keep_context=True, reason="audio device")
 
     async def _watch_reconnect(self):
-        """Session-scoped task: when a voluntary reconnect is requested, raise a
-        signal that unwinds the TaskGroup so the run loop rebuilds the session."""
+        """Unwind the session for settings changes or a different selected chat."""
         assert self._reconnect_event is not None
-        await self._reconnect_event.wait()
-        self._reconnect_event.clear()
-        keep = self._reconnect_keep
-        reason = getattr(self, "_reconnect_reason", "") or "settings"
+        while True:
+            await self._reconnect_event.wait()
+            self._reconnect_event.clear()
+            keep = self._reconnect_keep
+            reason = getattr(self, "_reconnect_reason", "") or "settings"
+            # A chat switch requested before this connection was established
+            # may already be reflected in the just-connected session. Ignore
+            # only that stale notification; all other reconnect causes remain.
+            if (
+                reason == "chat switched"
+                and self._session_chat_id == self._active_chat_id
+            ):
+                continue
+            break
         self.ui.write_log(
             f"SYS: Applying {reason} — reconnecting"
             + ("..." if keep else " (starting a fresh conversation)...")
@@ -1311,8 +1321,17 @@ class JarvisLive:
         self.ui.write_log(f"ERR: {tool_name} — {short}")
         self.speak(f"Sir, {tool_name} encountered an error. {short}")
 
-    def _build_config(self) -> types.LiveConnectConfig:
+    def _build_config(
+        self,
+        chat_id: str | None = None,
+        resume_handle: str | None = None,
+    ) -> types.LiveConnectConfig:
         from datetime import datetime
+
+        selected_chat_id = str(chat_id or self._active_chat_id or "")
+        selected_resume_handle = (
+            resume_handle if self._engine_caps is None else None
+        )
 
         # Load customization from config
         try:
@@ -1464,10 +1483,10 @@ class JarvisLive:
         # A valid Live handle restores the server context directly. If a chat
         # has no handle (first use, deleted turn, or expired handle), supply its
         # own saved transcript as reference context; never include another chat.
-        if self._engine_caps is None and not self._resume_handle:
+        if self._engine_caps is None and not selected_resume_handle:
             try:
                 chat_context = self.ui.get_chat_context(
-                    self._active_chat_id, limit=24
+                    selected_chat_id, limit=24
                 )
             except Exception:
                 chat_context = []
@@ -1502,7 +1521,7 @@ class JarvisLive:
             # update. `handle=None` is exactly the old behaviour (ask for
             # handles, start fresh), so the first connect of a run is unchanged.
             session_resumption=types.SessionResumptionConfig(
-                handle=self._resume_handle
+                handle=selected_resume_handle
             ),
             # Sliding-window compression: session never dies from a full context
             # window — JARVIS can stay in one conversation for hours
@@ -3168,7 +3187,9 @@ class JarvisLive:
             return None
 
     @asynccontextmanager
-    async def _open_session(self, live_model: str, config):
+    async def _open_session(
+        self, live_model: str, config, chat_id: str | None = None
+    ):
         """The conversation, from whichever engine is configured.
 
         Both branches yield an object with the same four methods and the same
@@ -3213,7 +3234,7 @@ class JarvisLive:
             config=config,
             log=self.ui.write_log,
             history=self.ui.get_chat_context(
-                self._active_chat_id, limit=40
+                chat_id or self._active_chat_id, limit=40
             ),
         )
         # Without push-to-talk nothing else knows when a sentence ended, so the
@@ -3266,6 +3287,7 @@ class JarvisLive:
 
         while True:
             try:
+                connecting_chat_id = str(self._active_chat_id or "")
                 print("[JARVIS] Connecting...")
                 self.ui.set_state("THINKING")
                 # Pick the rung to open the conversation on. A model resting
@@ -3284,14 +3306,19 @@ class JarvisLive:
                 if self._engine_caps is not None:
                     # The local PipelineEngine owns its replayable history and
                     # cannot resume a Gemini Live server session.
+                    connecting_resume_handle = None
                     self._resume_handle = None
                     _resumed_with = False
                 else:
-                    self._resume_handle = self.ui.get_chat_resume_handle(
-                        self._active_chat_id
+                    connecting_resume_handle = self.ui.get_chat_resume_handle(
+                        connecting_chat_id
                     )
-                    _resumed_with = self._resume_handle is not None
-                config = self._build_config()
+                    self._resume_handle = connecting_resume_handle
+                    _resumed_with = connecting_resume_handle is not None
+                config = self._build_config(
+                    chat_id=connecting_chat_id,
+                    resume_handle=connecting_resume_handle,
+                )
 
                 # The conversation itself. `_open_session` gives back a Gemini
                 # Live session or a local pipeline wearing the same interface —
@@ -3299,9 +3326,17 @@ class JarvisLive:
                 # to avoid stale HTTP state, and still asks for v1alpha when
                 # proactive audio is on.
                 async with (
-                    self._open_session(live_model, config) as session,
+                    self._open_session(
+                        live_model, config, chat_id=connecting_chat_id
+                    ) as session,
                     asyncio.TaskGroup() as tg,
                 ):
+                    # If the user switched while the network connection was
+                    # opening, discard this session before any message can be
+                    # sent into the wrong conversation.
+                    if self._active_chat_id != connecting_chat_id:
+                        raise _ReconnectSignal(keep_context=True)
+
                     # Every user turn arms the stall watchdog. Wrapping the
                     # session once covers all eleven send sites — and every one
                     # added later — where instrumenting them by hand would work
@@ -3327,9 +3362,9 @@ class JarvisLive:
                     session.send_client_content = _send_and_arm
 
                     self.session = session
-                    self._session_chat_id = self._active_chat_id
+                    self._session_chat_id = connecting_chat_id
                     self._turn_chat_id = self._session_chat_id
-                    self._restore_chat_session_log()
+                    self._restore_chat_session_log(connecting_chat_id)
 
                     # Flush only messages explicitly queued for this chat.
                     # Messages queued for another chat remain isolated until
@@ -3436,7 +3471,6 @@ class JarvisLive:
                             {"type": "status", "state": "active"}
                         )
 
-                    self._reconnect_event.clear()  # ignore requests from before this session
                     tg.create_task(self._watch_reconnect())
                     tg.create_task(self._watch_stall())
                     tg.create_task(self._send_realtime())
