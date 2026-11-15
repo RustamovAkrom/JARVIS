@@ -1081,10 +1081,13 @@ class JarvisLive:
             getattr(self._dashboard, "_bind_error", "") or "",
         )
 
-    def _on_text_command(self, text: str):
+    def _on_text_command(self, text: str, chat_id: str | None = None):
         if self.ui.auth_locked:
             return
         if not self._loop:
+            return
+        target_chat_id = str(chat_id or self._active_chat_id or "")
+        if not target_chat_id:
             return
         plan_marker = "[[JARVIS_PLAN_MODE]]"
         if plan_marker in str(text):
@@ -1109,9 +1112,9 @@ class JarvisLive:
         # associated with the selected chat and flush it after that chat connects.
         if (
             self.session is None
-            or self._session_chat_id != self._active_chat_id
+            or self._session_chat_id != target_chat_id
+            or self._active_chat_id != target_chat_id
         ):
-            chat_id = self._active_chat_id
             with self._pending_chat_commands_lock:
                 if len(self._pending_chat_commands) >= 20:
                     self.ui.write_log(
@@ -1119,12 +1122,15 @@ class JarvisLive:
                         "Please send the message again after reconnect."
                     )
                     return
-                self._pending_chat_commands.append((chat_id, str(text)))
+                self._pending_chat_commands.append((target_chat_id, str(text)))
             self.ui.write_log(
-                "SYS: Chat is reconnecting. Message queued for the selected conversation."
+                "SYS: Chat is reconnecting. Message queued for its original conversation."
             )
             return
 
+        self._session_log.append(
+            f"User: {str(text).replace(plan_marker, '').strip()}"
+        )
         asyncio.run_coroutine_threadsafe(
             self.session.send_client_content(
                 turns={"role": "user", "parts": [{"text": text}]}, turn_complete=True

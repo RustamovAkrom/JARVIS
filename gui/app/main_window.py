@@ -15630,8 +15630,11 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         display_text = txt.replace("[[JARVIS_PLAN_MODE]]", "").strip()
         self._append_activity(f"You: {display_text}")
         if self.on_text_command:
+            originating_chat_id = str(getattr(self, "_active_chat_id", "") or "")
             threading.Thread(
-                target=self.on_text_command, args=(txt,), daemon=True
+                target=self.on_text_command,
+                args=(txt, originating_chat_id),
+                daemon=True,
             ).start()
 
     def _refresh_dev_mode_btn(self):
