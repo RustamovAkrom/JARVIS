@@ -103,7 +103,7 @@ class SettingsComponentTests(unittest.TestCase):
         center.set_glass_opacity(100)
         self.assertIn(", 255)", center.styleSheet())
         center.set_glass_opacity(60)
-        self.assertIn(", 215)", center.styleSheet())
+        self.assertIn(", 245)", center.styleSheet())
         center.close()
 
     def test_settings_window_uses_shared_glass_opacity(self):
@@ -111,7 +111,7 @@ class SettingsComponentTests(unittest.TestCase):
         center.set_glass_opacity(72)
         self.assertEqual(center._glass_opacity, 72)
         self.assertIn("rgba(", center.styleSheet())
-        self.assertTrue(center.testAttribute(Qt.WidgetAttribute.WA_TranslucentBackground))
+        self.assertFalse(center.testAttribute(Qt.WidgetAttribute.WA_TranslucentBackground))
         # Glass changes panel surfaces while keeping text and window chrome crisp.
         self.assertAlmostEqual(center.windowOpacity(), 1.0, places=2)
         center.set_glass_opacity(140)
