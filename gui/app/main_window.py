@@ -10010,7 +10010,9 @@ class MainWindow(QMainWindow):
         self._work_tabs.setDocumentMode(True)
         self._work_tabs.setUsesScrollButtons(True)
         self._work_tabs.tabBar().setExpanding(False)
-        self._work_tabs.tabBar().setElideMode(Qt.TextElideMode.ElideRight)
+        # Keep full tab names. If the panel gets narrow, Qt exposes the
+        # scroll buttons instead of replacing the label text with an ellipsis.
+        self._work_tabs.tabBar().setElideMode(Qt.TextElideMode.ElideNone)
         self._work_tabs.setStyleSheet(f"""
             QTabWidget::pane {{ border:0; background:transparent; }}
             QTabBar::tab {{ color:{C.TEXT_DIM}; background:transparent; padding:7px 11px;
@@ -15158,6 +15160,31 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             return
         plugin_name = str(section.get("plugin") or section.get("namespace") or "Plugin")
         dialog_key = str(section.get("namespace") or plugin_name)
+
+        # The Plugins page is cached, but plugin settings can be saved from a
+        # separate dialog. Re-read the registry so reopening a form always
+        # reflects current persisted values rather than the first-page snapshot.
+        get_settings = getattr(self, "get_plugin_settings", None)
+        if callable(get_settings):
+            try:
+                latest_sections = get_settings() or []
+            except Exception as exc:
+                self._append_activity(
+                    f"ERR: Could not refresh {plugin_name} settings: {exc}"
+                )
+            else:
+                section = next(
+                    (
+                        candidate
+                        for candidate in latest_sections
+                        if isinstance(candidate, dict)
+                        and str(candidate.get("namespace") or candidate.get("plugin") or "")
+                        == dialog_key
+                    ),
+                    section,
+                )
+                section = {**section, "plugin": plugin_name}
+
         dialogs = getattr(self, "_plugin_settings_dialogs", None)
         if dialogs is None:
             dialogs = self._plugin_settings_dialogs = {}
@@ -15903,15 +15930,21 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                 )
                 QApplication.clipboard().setText(str(text))
 
-    def _notify_chat_switch(self, chat: dict) -> None:
+    def _notify_chat_switch(
+        self, chat: dict, *, force_reconnect: bool = False
+    ) -> None:
         callback = getattr(self, "on_chat_switch", None)
         if callback is None:
             return
         try:
-            callback(
+            args = (
                 str(chat.get("id") or ""),
                 str(chat.get("resume_handle") or "") or None,
             )
+            if force_reconnect:
+                callback(*args, force_reconnect=True)
+            else:
+                callback(*args)
         except Exception as exc:
             self._append_activity(f"ERR: Chat session switch failed: {exc}")
 
@@ -15992,7 +16025,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         _write_json_list(_UI_CHAT_FILE, "turns", chat["turns"][-100:])
         self._refresh_chat()
         self._refresh_history()
-        self._notify_chat_switch(chat)
+        self._notify_chat_switch(chat, force_reconnect=True)
 
     def _clear_chat(self):
         chat = self._chat_store.clear_chat(self._active_chat_id)
@@ -16003,7 +16036,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         _write_json_list(_UI_CHAT_FILE, "turns", [])
         self._refresh_chat()
         self._refresh_history()
-        self._notify_chat_switch(chat)
+        self._notify_chat_switch(chat, force_reconnect=True)
 
     def _clear_history(self):
         choice = QMessageBox.question(
