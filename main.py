@@ -1013,20 +1013,35 @@ class JarvisLive:
         ]
 
     def _on_chat_switch(
-        self, chat_id: str, resume_handle: str | None = None
+        self,
+        chat_id: str,
+        resume_handle: str | None = None,
+        *,
+        force_reconnect: bool = False,
     ) -> None:
-        """Switch UI and Live backend to one isolated chat session."""
+        """Switch chats, or rebuild the current session after its history is edited."""
         target_id = str(chat_id or "").strip()
-        if not target_id or target_id == self._active_chat_id:
+        if not target_id:
             return
+
+        same_chat = target_id == self._active_chat_id
+        if same_chat and not force_reconnect:
+            return
+
         self._active_chat_id = target_id
-        self._resume_handle = str(resume_handle or "").strip() or None
+        if force_reconnect:
+            # A clear/delete operation keeps the chat ID but invalidates both
+            # the server transcript and any local PipelineEngine history.
+            self._resume_handle = None
+        else:
+            self._resume_handle = str(resume_handle or "").strip() or None
+
         # Keep the old session's transcript target until its TaskGroup is
         # cancelled. The replacement session adopts target_id after connecting.
         self._last_out_logged = ""
         self.request_reconnect(
-            keep_context=True,
-            reason="chat switched",
+            keep_context=not force_reconnect,
+            reason="chat reset" if force_reconnect else "chat switched",
         )
 
     def _on_voice_change(self):
@@ -3416,7 +3431,7 @@ class JarvisLive:
                             for chat_id, text in self._pending_chat_commands
                             if chat_id != self._session_chat_id
                         ]
-                    for queued_text in ready_commands:
+                    for command_index, queued_text in enumerate(ready_commands):
                         try:
                             await session.send_client_content(
                                 turns={
@@ -3426,10 +3441,15 @@ class JarvisLive:
                                 turn_complete=True,
                             )
                         except Exception:
+                            # The batch was removed before sending. Restore the
+                            # failed command and every later command, preserving
+                            # their order ahead of anything queued concurrently.
+                            unsent_commands = ready_commands[command_index:]
                             with self._pending_chat_commands_lock:
-                                self._pending_chat_commands.insert(
-                                    0, (self._session_chat_id, queued_text)
-                                )
+                                self._pending_chat_commands[0:0] = [
+                                    (self._session_chat_id, text)
+                                    for text in unsent_commands
+                                ]
                             raise
 
                     self.audio_in_queue = asyncio.Queue()
@@ -3616,7 +3636,7 @@ class JarvisLive:
                     )
                     self._resume_handle = None
                     try:
-                        self.ui.save_chat_resume_handle(None, self._session_chat_id)
+                        self.ui.save_chat_resume_handle(None, connecting_chat_id)
                     except Exception:
                         pass
                     self._conn_backoff = 3
@@ -3642,7 +3662,7 @@ class JarvisLive:
                     )
                     self._resume_handle = None
                     try:
-                        self.ui.save_chat_resume_handle(None, self._session_chat_id)
+                        self.ui.save_chat_resume_handle(None, connecting_chat_id)
                     except Exception:
                         pass
                     self._conn_backoff = 0
