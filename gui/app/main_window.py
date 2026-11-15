@@ -7741,6 +7741,7 @@ class MainWindow(QMainWindow):
         self._center_split.setCollapsible(1, True)
         self._center_split.setCollapsible(2, True)
         self._center_views = QStackedWidget()
+        self._center_views.setMinimumWidth(320)
         self._center_views.addWidget(self._center_split)
         self._editor_tabs = QTabWidget()
         self._editor_tabs.setDocumentMode(True)
@@ -7759,7 +7760,7 @@ class MainWindow(QMainWindow):
         )
 
         self._right_panel = self._build_right_panel()
-        self._right_panel.setMinimumWidth(280)
+        self._right_panel.setMinimumWidth(250)
         self._debug_panel = QWidget()
         self._debug_panel.setObjectName("DebugPanel")
         self._debug_panel.setMinimumHeight(0)
@@ -7783,7 +7784,7 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(0, self._update_advanced_telemetry_visibility)
 
         self._workspace_split = QSplitter(Qt.Orientation.Vertical)
-        self._workspace_split.setMinimumWidth(560)
+        self._workspace_split.setMinimumWidth(545)
         self._workspace_split.setChildrenCollapsible(True)
         self._workspace_split.setHandleWidth(8)
         self._workspace_split.setStyleSheet(
@@ -9196,6 +9197,7 @@ class MainWindow(QMainWindow):
         if hasattr(self, "_quick_drawer") and self._quick_drawer.isVisible():
             self._position_quick_drawer()
         self._fit_video()
+        self._update_advanced_telemetry_visibility()
 
     def _update_advanced_telemetry_visibility(self, *_args):
         panel = getattr(self, "_advanced_panel", None)
@@ -9589,6 +9591,9 @@ class MainWindow(QMainWindow):
         panel_layout.setSpacing(0)
         self._left_tabs = QTabWidget()
         self._left_tabs.setDocumentMode(True)
+        self._left_tabs.setUsesScrollButtons(True)
+        self._left_tabs.tabBar().setExpanding(False)
+        self._left_tabs.tabBar().setElideMode(Qt.TextElideMode.ElideRight)
         self._left_tabs.setStyleSheet(f"""
             QTabWidget::pane {{ border:0; background:{C.PANEL}; }}
             QTabBar::tab {{ color:{C.TEXT_DIM}; background:{C.PANEL2}; padding:6px 9px;
@@ -10045,8 +10050,8 @@ class MainWindow(QMainWindow):
         self._work_tabs = QTabWidget()
         self._work_tabs.setDocumentMode(True)
         self._work_tabs.setUsesScrollButtons(True)
-        self._work_tabs.tabBar().setExpanding(True)
-        self._work_tabs.tabBar().setElideMode(Qt.TextElideMode.ElideNone)
+        self._work_tabs.tabBar().setExpanding(False)
+        self._work_tabs.tabBar().setElideMode(Qt.TextElideMode.ElideRight)
         self._work_tabs.setStyleSheet(f"""
             QTabWidget::pane {{ border:0; background:transparent; }}
             QTabBar::tab {{ color:{C.TEXT_DIM}; background:transparent; padding:7px 11px;
