@@ -239,8 +239,20 @@ class SettingsComponentTests(unittest.TestCase):
 
     def test_plugin_settings_are_exposed_per_plugin_row_only_when_declared(self):
         plugins = [
-            {"name": "configured", "valid": True, "enabled": True, "description": "Has settings"},
-            {"name": "plain", "valid": True, "enabled": True, "description": "No settings"},
+            {
+                "name": "configured",
+                "valid": True,
+                "enabled": True,
+                "description": "Has settings",
+                "settings_namespace": "configured",
+            },
+            {
+                "name": "plain",
+                "valid": True,
+                "enabled": True,
+                "description": "No settings",
+                "settings_namespace": "",
+            },
         ]
         sections = [
             {"plugin": "configured", "namespace": "configured", "fields": [{"key": "endpoint", "type": "text"}]}
