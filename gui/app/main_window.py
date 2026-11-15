@@ -7760,7 +7760,6 @@ class MainWindow(QMainWindow):
 
         self._right_panel = self._build_right_panel()
         self._right_panel.setMinimumWidth(280)
-        self._workspace_split.setMinimumWidth(560)
         self._debug_panel = QWidget()
         self._debug_panel.setObjectName("DebugPanel")
         self._debug_panel.setMinimumHeight(0)
@@ -7784,6 +7783,7 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(0, self._update_advanced_telemetry_visibility)
 
         self._workspace_split = QSplitter(Qt.Orientation.Vertical)
+        self._workspace_split.setMinimumWidth(560)
         self._workspace_split.setChildrenCollapsible(True)
         self._workspace_split.setHandleWidth(8)
         self._workspace_split.setStyleSheet(
