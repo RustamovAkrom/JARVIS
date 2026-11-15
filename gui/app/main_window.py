@@ -7271,6 +7271,7 @@ class UpdatePanel(QWidget):
 
 class MainWindow(QMainWindow):
     _log_sig = pyqtSignal(str)
+    _chat_log_sig = pyqtSignal(str, str)  # transcript text, originating chat ID
     _project_open_sig = pyqtSignal(str, str)
     _state_sig = pyqtSignal(str)
     _content_sig = pyqtSignal(str, str, str)  # (title, text, stable update key)
@@ -7315,6 +7316,31 @@ class MainWindow(QMainWindow):
         )
         self._assistant_name: str = (_cfg.get("assistant_name") or "JARVIS").strip()
         _display = self._assistant_name.upper()
+
+        # Chats live in user data, outside replaceable application files.
+        from gui.app.chat_store import ChatStore
+
+        chat_store_path = CONFIG_DIR / "ui_chats.json"
+        had_chat_store = chat_store_path.exists()
+        had_legacy_chats = bool(
+            _read_json_list(_UI_CHAT_FILE, "turns")
+            or _read_json_list(_UI_HISTORY_FILE, "turns")
+        )
+        self._chat_store = ChatStore(
+            chat_store_path,
+            legacy_chat_path=_UI_CHAT_FILE,
+            legacy_history_path=_UI_HISTORY_FILE,
+        )
+        self._active_chat = (
+            self._chat_store.start_new_chat()
+            if had_chat_store or had_legacy_chats
+            else self._chat_store.get_active_chat()
+        )
+        self._active_chat_id = str(self._active_chat.get("id") or "")
+        self.on_chat_switch = None
+        self._chat_switcher_open = False
+        self._chat_switcher_animation = None
+
         self._reader_window = None
         self._reader_detaching = False
         self._content_expanded = False
@@ -7815,6 +7841,7 @@ class MainWindow(QMainWindow):
         self._update_metrics()
 
         self._log_sig.connect(self._append_activity)
+        self._chat_log_sig.connect(self._append_activity)
         self._project_open_sig.connect(self._open_project_from_assistant)
         self._state_sig.connect(self._apply_state)
         self._content_sig.connect(self._show_content)
@@ -9832,14 +9859,60 @@ class MainWindow(QMainWindow):
         chat_title.setFont(QFont(FONT_UI, 10))
         chat_tools.addWidget(chat_title)
         chat_tools.addStretch(1)
-        self._clear_chat_btn = QPushButton(self._tr("Clear chat"))
-        self._clear_chat_btn.setMinimumHeight(28)
+        self._chat_switcher_btn = QPushButton("☷")
+        self._chat_switcher_btn.setFixedSize(28, 28)
+        self._chat_switcher_btn.setCheckable(True)
+        self._chat_switcher_btn.setToolTip(self._tr("Show saved chats"))
+        self._chat_switcher_btn.setAccessibleName(self._tr("Show saved chats"))
+        self._chat_switcher_btn.clicked.connect(self._toggle_chat_switcher)
+        chat_tools.addWidget(self._chat_switcher_btn)
+
+        self._new_chat_btn = QPushButton("+")
+        self._new_chat_btn.setFixedSize(28, 28)
+        self._new_chat_btn.setToolTip(self._tr("Start a new chat"))
+        self._new_chat_btn.setAccessibleName(self._tr("Start a new chat"))
+        self._new_chat_btn.clicked.connect(self._start_new_chat)
+        chat_tools.addWidget(self._new_chat_btn)
+
+        self._clear_chat_btn = QPushButton("×")
+        self._clear_chat_btn.setFixedSize(28, 28)
         self._clear_chat_btn.setToolTip(
-            self._tr("Clear this chat view. Previous conversations remain in Conversations.")
+            self._tr("Clear this chat. Other saved chats remain unchanged.")
+        )
+        self._clear_chat_btn.setAccessibleName(self._tr("Clear current chat"))
+        self._clear_chat_btn.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{C.TEXT_MED}; "
+            f"border:1px solid {C.BORDER}; border-radius:5px; }}"
+            f"QPushButton:hover {{ color:{C.RED}; border-color:{C.RED}; }}"
         )
         self._clear_chat_btn.clicked.connect(self._clear_chat)
         chat_tools.addWidget(self._clear_chat_btn)
         chat_lay.addLayout(chat_tools)
+
+        self._chat_switcher_panel = QFrame()
+        self._chat_switcher_panel.setObjectName("ChatSwitcherPanel")
+        self._chat_switcher_panel.setStyleSheet(
+            f"QFrame#ChatSwitcherPanel {{ background:{C.PANEL}; "
+            f"border:1px solid {C.BORDER}; border-radius:7px; }}"
+        )
+        self._chat_switcher_panel.setMaximumHeight(0)
+        self._chat_switcher_panel.hide()
+        switcher_layout = QVBoxLayout(self._chat_switcher_panel)
+        switcher_layout.setContentsMargins(5, 5, 5, 5)
+        switcher_layout.setSpacing(4)
+        self._chat_switcher_list = QListWidget()
+        self._chat_switcher_list.setObjectName("chat_switcher_list")
+        self._chat_switcher_list.setMaximumHeight(150)
+        self._chat_switcher_list.setStyleSheet(
+            f"QListWidget {{ background:{C.PANEL2}; color:{C.TEXT}; "
+            f"border:0; border-radius:5px; }}"
+            f"QListWidget::item {{ padding:6px; border-bottom:1px solid {C.BORDER}; }}"
+            f"QListWidget::item:selected {{ background:{C.PRI_GHO}; color:{C.PRI}; }}"
+        )
+        self._chat_switcher_list.itemClicked.connect(self._switch_chat_item)
+        switcher_layout.addWidget(self._chat_switcher_list)
+        chat_lay.addWidget(self._chat_switcher_panel)
+
         chat_history_surface = QWidget()
         chat_history_layout = QGridLayout(chat_history_surface)
         chat_history_layout.setContentsMargins(0, 0, 0, 0)
@@ -9912,10 +9985,13 @@ class MainWindow(QMainWindow):
         history_tools.addWidget(self._clear_history_btn)
         history_lay.addLayout(history_tools)
         self._history_list = QListWidget()
+        self._history_list.setObjectName("saved_chats_list")
         self._history_list.setStyleSheet(
             f"background: {C.PANEL2}; color: {C.TEXT}; border: none; border-radius: 5px;"
             f"QListWidget::item {{ padding: 6px; border-bottom: 1px solid {C.BORDER}; }}"
+            f"QListWidget::item:selected {{ background:{C.PRI_GHO}; color:{C.PRI}; }}"
         )
+        self._history_list.itemClicked.connect(self._switch_chat_item)
         history_lay.addWidget(self._history_list, 1)
         self._work_tabs.addTab(history_page, self._tr("CONVERSATIONS"))
         self._work_tabs.setTabToolTip(
@@ -15402,8 +15478,8 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         self._refresh_diagnostics()
         return True
 
-    def _append_activity(self, text: str):
-        """Central log sink: GUI updates stay on Qt's thread; dev mode mirrors to stdout."""
+    def _append_activity(self, text: str, chat_id: str | None = None):
+        """Central log sink; chat transcripts retain the ID of their source chat."""
         text = str(text or "")
         if self._development_mode:
             stream = getattr(self, "_console_stdout", None) or sys.__stdout__
@@ -15418,82 +15494,87 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             activity.append_event(text)
         if text.strip().lower().startswith("[reminder]"):
             self._refresh_tasks()
-        self._record_history_line(text)
+        self._record_history_line(text, chat_id=chat_id)
 
-    def _record_history_line(self, text: str):
-        line = text.strip()
+    def _active_chat_turns(self) -> list[dict]:
+        chat = self._chat_store.get_chat(self._active_chat_id)
+        if chat is None:
+            chat = self._chat_store.get_active_chat()
+            self._active_chat = chat
+            self._active_chat_id = str(chat.get("id") or "")
+        else:
+            self._active_chat = chat
+        return list(self._active_chat.get("turns") or [])
+
+    def _record_history_line(self, text: str, chat_id: str | None = None):
+        line = str(text or "").strip()
         low = line.lower()
-        rows = _history_turns()
-        chat_rows = _chat_turns()
+        target_id = str(chat_id or self._active_chat_id or "")
+        chat = self._chat_store.get_chat(target_id)
+        if chat is None:
+            return
+
+        turns = list(chat.get("turns") or [])
+        context = list(chat.get("context") or [])
+        now = time.strftime("%Y-%m-%d %H:%M")
         if low.startswith("you:"):
             request = line.split(":", 1)[1].strip()[:4000]
             if (
-                rows
-                and rows[-1].get("request", "").casefold() == request.casefold()
-                and not rows[-1].get("result")
+                turns
+                and turns[-1].get("request", "").casefold() == request.casefold()
+                and not turns[-1].get("result")
             ):
                 return
-            turn = {
+            turns.append({
                 "id": uuid.uuid4().hex,
                 "request": request,
                 "result": "",
-                "time": time.strftime("%Y-%m-%d %H:%M"),
+                "time": now,
                 "status": "pending",
-            }
-            rows.append(turn.copy())
-            chat_rows.append(turn.copy())
+            })
+            context.append({"role": "user", "text": request})
+            if str(chat.get("title") or "New chat") == "New chat":
+                chat["title"] = request[:52].rstrip() + ("…" if len(request) > 52 else "")
         elif (
             low.startswith(
                 (self._assistant_name.lower() + ":", "jarvis:", "j.a.r.v.i.s:")
             )
-            and rows
-            and rows[-1].get("status") == "pending"
+            and turns
+            and turns[-1].get("status") == "pending"
         ):
             result = line.split(":", 1)[1].strip()[:4000]
-            rows[-1]["result"] = result
-            rows[-1]["status"] = "complete"
-            rows[-1]["response_time"] = time.strftime("%Y-%m-%d %H:%M")
-            turn_id = rows[-1].get("id")
-            for chat_turn in reversed(chat_rows):
-                if chat_turn.get("id") == turn_id:
-                    chat_turn["result"] = result
-                    chat_turn["status"] = "complete"
-                    chat_turn["response_time"] = rows[-1]["response_time"]
-                    break
+            turns[-1]["result"] = result
+            turns[-1]["status"] = "complete"
+            turns[-1]["response_time"] = now
+            context.append({"role": "model", "text": result})
         elif (
-            rows
-            and rows[-1].get("status") == "pending"
+            turns
+            and turns[-1].get("status") == "pending"
             and (
                 low.startswith(("err:", "[stderr]"))
                 or any(
                     word in low
                     for word in (
-                        "failed",
-                        "failure",
-                        "unavailable",
-                        "timed out",
-                        "could not",
-                        "exception",
+                        "failed", "failure", "unavailable",
+                        "timed out", "could not", "exception",
                     )
                 )
             )
         ):
-            rows[-1]["result"] = line[:4000]
-            rows[-1]["status"] = "error"
-            rows[-1]["response_time"] = time.strftime("%Y-%m-%d %H:%M")
-            turn_id = rows[-1].get("id")
-            for chat_turn in reversed(chat_rows):
-                if chat_turn.get("id") == turn_id:
-                    chat_turn["result"] = line[:4000]
-                    chat_turn["status"] = "error"
-                    chat_turn["response_time"] = rows[-1]["response_time"]
-                    break
+            turns[-1]["result"] = line[:4000]
+            turns[-1]["status"] = "error"
+            turns[-1]["response_time"] = now
         else:
             return
-        _write_json_list(_UI_HISTORY_FILE, "turns", rows[-100:])
-        _write_json_list(_UI_CHAT_FILE, "turns", chat_rows[-100:])
+
+        chat["turns"] = turns[-self._chat_store.MAX_TURNS :]
+        chat["context"] = context[-self._chat_store.MAX_CONTEXT_MESSAGES :]
+        self._chat_store.save_chat(chat, activate=False)
+        if target_id == self._active_chat_id:
+            self._active_chat = chat
+            _write_json_list(_UI_CHAT_FILE, "turns", chat["turns"][-100:])
+            self._refresh_chat()
         self._refresh_history()
-        self._refresh_chat()
 
     def _update_chat_scroll_button(self):
         if not hasattr(self, "_chat_view") or not hasattr(self, "_chat_latest_btn"):
@@ -15523,7 +15604,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             return
         scroll_bar = self._chat_view.verticalScrollBar()
         old_scroll = scroll_bar.value()
-        rows = _chat_turns()[-20:]
+        rows = self._active_chat_turns()[-20:]
         self._chat_view.set_response_times(
             {
                 str(row.get("id", "")): str(row.get("response_time") or row.get("time") or "")
@@ -15615,7 +15696,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         elif link.startswith(("copy-user:", "copy-answer:")):
             kind, turn_id = link.split(":", 1)
             row = next(
-                (r for r in _chat_turns() if str(r.get("id", "")) == turn_id),
+                (r for r in self._active_chat_turns() if str(r.get("id", "")) == turn_id),
                 None,
             )
             if row is not None:
@@ -15626,77 +15707,163 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                 )
                 QApplication.clipboard().setText(str(text))
 
+    def _notify_chat_switch(self, chat: dict) -> None:
+        callback = getattr(self, "on_chat_switch", None)
+        if callback is None:
+            return
+        try:
+            callback(
+                str(chat.get("id") or ""),
+                str(chat.get("resume_handle") or "") or None,
+            )
+        except Exception as exc:
+            self._append_activity(f"ERR: Chat session switch failed: {exc}")
+
+    def _switch_chat_item(self, item: QListWidgetItem, *_args) -> None:
+        chat_id = str(item.data(Qt.ItemDataRole.UserRole) or "")
+        if not chat_id or chat_id == self._active_chat_id:
+            self._toggle_chat_switcher(False)
+            return
+        chat = self._chat_store.set_active(chat_id)
+        if chat is None:
+            return
+        self._active_chat = chat
+        self._active_chat_id = chat_id
+        self._expanded_chat_turns.clear()
+        _write_json_list(_UI_CHAT_FILE, "turns", chat.get("turns", [])[-100:])
+        self._refresh_chat()
+        self._refresh_history()
+        self._toggle_chat_switcher(False)
+        self._notify_chat_switch(chat)
+
+    def _start_new_chat(self) -> None:
+        chat = self._chat_store.start_new_chat()
+        self._active_chat = chat
+        self._active_chat_id = str(chat.get("id") or "")
+        self._expanded_chat_turns.clear()
+        _write_json_list(_UI_CHAT_FILE, "turns", [])
+        self._refresh_chat()
+        self._refresh_history()
+        self._toggle_chat_switcher(False)
+        self._notify_chat_switch(chat)
+
+    def _toggle_chat_switcher(self, force_open: bool | None = None) -> None:
+        target_open = (
+            not self._chat_switcher_open if force_open is None else bool(force_open)
+        )
+        if target_open == self._chat_switcher_open:
+            return
+        panel = self._chat_switcher_panel
+        if self._chat_switcher_animation is not None:
+            self._chat_switcher_animation.stop()
+            self._chat_switcher_animation = None
+        if target_open:
+            self._refresh_history()
+            panel.show()
+        self._chat_switcher_open = target_open
+        self._chat_switcher_btn.setChecked(target_open)
+        start = panel.height() if panel.isVisible() else 0
+        end = 170 if target_open else 0
+        animation = QVariantAnimation(self)
+        animation.setDuration(160)
+        animation.setStartValue(start)
+        animation.setEndValue(end)
+        animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+        animation.valueChanged.connect(
+            lambda value, widget=panel: widget.setMaximumHeight(int(value))
+        )
+        if not target_open:
+            animation.finished.connect(panel.hide)
+        else:
+            animation.finished.connect(lambda: panel.setMaximumHeight(170))
+        self._chat_switcher_animation = animation
+        animation.start()
+
     def _delete_chat_turn(self, turn_id: str):
         if not turn_id:
             return
-        chat_rows = [r for r in _chat_turns() if str(r.get("id", "")) != turn_id]
-        conversation_rows = [r for r in _history_turns() if str(r.get("id", "")) != turn_id]
-        _write_json_list(_UI_CHAT_FILE, "turns", chat_rows[-100:])
-        _write_json_list(_UI_HISTORY_FILE, "turns", conversation_rows[-100:])
+        chat = self._chat_store.get_chat(self._active_chat_id)
+        if chat is None:
+            return
+        chat["turns"] = [
+            row for row in chat.get("turns", [])
+            if str(row.get("id") or "") != turn_id
+        ]
+        chat["context"] = self._chat_store._context_from_turns(chat["turns"])
+        chat["resume_handle"] = ""
+        self._chat_store.save_chat(chat, activate=False)
+        self._active_chat = chat
+        _write_json_list(_UI_CHAT_FILE, "turns", chat["turns"][-100:])
         self._refresh_chat()
         self._refresh_history()
+        self._notify_chat_switch(chat)
 
     def _clear_chat(self):
+        chat = self._chat_store.clear_chat(self._active_chat_id)
+        if chat is None:
+            return
+        self._active_chat = chat
+        self._expanded_chat_turns.clear()
         _write_json_list(_UI_CHAT_FILE, "turns", [])
         self._refresh_chat()
+        self._refresh_history()
+        self._notify_chat_switch(chat)
 
     def _clear_history(self):
         choice = QMessageBox.question(
             self,
             "Clear conversations",
-            "Delete previous conversations and clear the current chat? Saved memories will remain.",
+            "Delete all saved chats and clear the current chat? Saved memories will remain.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
         if choice != QMessageBox.StandardButton.Yes:
             return
+        chat = self._chat_store.clear_all()
+        self._active_chat = chat
+        self._active_chat_id = str(chat.get("id") or "")
+        self._expanded_chat_turns.clear()
         _write_json_list(_UI_HISTORY_FILE, "turns", [])
         _write_json_list(_UI_CHAT_FILE, "turns", [])
         self._refresh_chat()
         self._refresh_history()
+        self._notify_chat_switch(chat)
 
     def _refresh_history(self):
-        if not hasattr(self, "_history_list"):
-            return
-        self._history_list.clear()
-        rows = _history_turns()
-        for row in reversed(rows[-50:]):
-            request = str(row.get("request", ""))
-            result = str(row.get("result", "Awaiting a response…"))
-            stamp = str(row.get("time", ""))
-            status = str(row.get("status", ""))
-            item = QListWidgetItem()
-            item.setData(Qt.ItemDataRole.UserRole, str(row.get("id", "")))
-            holder = QWidget()
-            row_lay = QHBoxLayout(holder)
-            row_lay.setContentsMargins(5, 4, 3, 4)
-            row_lay.setSpacing(5)
-            copy = QLabel(
-                f"{stamp} · {status.upper()}\nYou: {request}\nJARVIS: {result}"
-            )
-            copy.setWordWrap(True)
-            copy.setTextFormat(Qt.TextFormat.PlainText)
-            copy.setFont(QFont(FONT_UI, 8))
-            copy.setStyleSheet(f"color:{C.TEXT}; background:transparent;")
-            row_lay.addWidget(copy, 1)
-            remove = QPushButton("×")
-            remove.setFixedSize(20, 20)
-            remove.setToolTip(
-                "Delete this turn from the current chat and Conversations; saved memories are unchanged"
-            )
-            remove.setStyleSheet(
-                f"QPushButton {{color:{C.TEXT_DIM}; background:transparent; border:1px solid {C.BORDER}; border-radius:4px;}} QPushButton:hover {{color:{C.RED}; border-color:{C.RED};}}"
-            )
-            remove.clicked.connect(
-                lambda _=False, tid=str(row.get("id", "")): self._delete_chat_turn(tid)
-            )
-            row_lay.addWidget(remove)
-            item.setSizeHint(holder.sizeHint())
-            item.setToolTip(f"You: {request}\nJARVIS: {result}")
-            self._history_list.addItem(item)
-            self._history_list.setItemWidget(item, holder)
-        if not rows:
-            self._history_list.addItem("No recent requests yet.")
+        chats = self._chat_store.list_chats()
+        for widget in (
+            getattr(self, "_history_list", None),
+            getattr(self, "_chat_switcher_list", None),
+        ):
+            if widget is None:
+                continue
+            widget.clear()
+            for chat in chats:
+                chat_id = str(chat.get("id") or "")
+                turns = list(chat.get("turns") or [])
+                title = str(chat.get("title") or "New chat")
+                preview = ""
+                for turn in turns:
+                    preview = str(turn.get("request") or "").strip()
+                    if preview:
+                        break
+                if len(preview) > 72:
+                    preview = preview[:69].rstrip() + "…"
+                updated = str(chat.get("updated_at") or chat.get("created_at") or "")
+                label = (
+                    f"{title}\n{preview or 'No messages yet'}"
+                    f" · {len(turns)} messages · {updated}"
+                )
+                item = QListWidgetItem(label)
+                item.setData(Qt.ItemDataRole.UserRole, chat_id)
+                if chat_id == self._active_chat_id:
+                    item.setForeground(QColor(C.PRI))
+                    item.setToolTip("Current chat")
+                else:
+                    item.setToolTip("Select to switch to this chat")
+                widget.addItem(item)
+        if not chats and hasattr(self, "_history_list"):
+            self._history_list.addItem("No saved chats yet.")
 
     def _refresh_tasks(self):
         if not hasattr(self, "_task_list"):
@@ -16323,6 +16490,35 @@ class JarvisUI:
     @on_audio_device_change.setter
     def on_audio_device_change(self, cb):
         self._win.on_audio_device_change = cb
+
+    @property
+    def on_chat_switch(self):
+        return self._win.on_chat_switch
+
+    @on_chat_switch.setter
+    def on_chat_switch(self, cb):
+        self._win.on_chat_switch = cb
+
+    @property
+    def active_chat_id(self) -> str:
+        return self._win._active_chat_id
+
+    def get_chat_resume_handle(self, chat_id: str | None = None) -> str | None:
+        return self._win._chat_store.get_resume_handle(chat_id)
+
+    def save_chat_resume_handle(
+        self, handle: str | None, chat_id: str | None = None
+    ) -> bool:
+        return self._win._chat_store.save_resume_handle(handle, chat_id)
+
+    def get_chat_context(
+        self, chat_id: str | None = None, *, limit: int = 24
+    ) -> list[dict[str, str]]:
+        return self._win._chat_store.get_context(chat_id, limit=limit)
+
+    def write_chat_log(self, text: str, chat_id: str | None = None) -> None:
+        target = str(chat_id or self._win._active_chat_id or "")
+        self._win._chat_log_sig.emit(str(text or ""), target)
 
     def show_confirm(self, title: str, detail: str) -> None:
         """Thread-safe: raise the irreversible-action gate. Called from action
