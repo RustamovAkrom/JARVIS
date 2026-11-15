@@ -138,14 +138,14 @@ class PluginRegistry:
     # -- called by ui.py's settings tab to render per-plugin config forms --
     def settings_schemas(self) -> list[dict]:
         """One entry per settings SECTION, for enabled plugins that declare a
-        PLUGIN_SETTINGS schema. Sections are deduped by namespace so a suite of
-        plugins sharing one namespace (e.g. the printer trio) shows a single
-        form. Current stored values are merged in so the UI can pre-fill fields.
+        PLUGIN_SETTINGS schema, whether enabled or disabled. Sections are deduped
+        by namespace so a suite of plugins sharing one namespace (e.g. the printer
+        trio) shows a single form. Stored values pre-fill the declared fields.
         """
         seen: set[str] = set()
         out: list[dict] = []
         for name, rec in self._plugins.items():
-            if not rec.settings or not get_plugin_enabled(name):
+            if not rec.settings:
                 continue
             ns = rec.settings.get("namespace") or rec.name
             if ns in seen:

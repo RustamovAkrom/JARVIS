@@ -30,6 +30,9 @@ class UiFacadeTests(unittest.TestCase):
             panel = window._left_panel
             scroll = panel.findChild(QScrollArea)
             self.assertIsNotNone(scroll)
+            self.assertEqual(window._left_tabs.count(), 3)
+            self.assertEqual(window._left_tabs.tabText(2), "ACTIVITY")
+            self.assertFalse(window._debug_toggle_btn.isVisible())
             self.assertTrue(panel.testAttribute(Qt.WidgetAttribute.WA_StyledBackground))
             self.assertRegex(
                 panel.styleSheet(),

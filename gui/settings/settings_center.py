@@ -1,8 +1,12 @@
 """Searchable, keyboard-accessible Settings Center shell."""
 
+import ctypes
+import platform
+
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont, QKeySequence, QShortcut
 from PyQt6.QtWidgets import (
+    QApplication,
     QDialog,
     QFrame,
     QHBoxLayout,
@@ -13,6 +17,7 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QSizePolicy,
     QScrollArea,
+    QSizeGrip,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
@@ -28,9 +33,12 @@ from gui.themes.typography import TypeScale, ui_font
 def _center_style(glass_opacity: int = 100) -> str:
     """Theme Settings surfaces with the same Glass value as the main window."""
     glass_opacity = max(60, min(100, int(glass_opacity)))
-    dialog_surface = glass_rgba(C.BG, glass_opacity, minimum_alpha=153, maximum_alpha=255)
-    panel_surface = glass_rgba(C.PANEL, glass_opacity, minimum_alpha=166, maximum_alpha=255)
-    title_surface = glass_rgba(C.DARK, glass_opacity, minimum_alpha=166, maximum_alpha=255)
+    # Settings text must remain readable over the dashboard. Windows 11 gets
+    # a native Acrylic backdrop where supported; other platforms use a denser
+    # glass surface rather than exposing the entire workspace through it.
+    dialog_surface = glass_rgba(C.BG, glass_opacity, minimum_alpha=215, maximum_alpha=255)
+    panel_surface = glass_rgba(C.PANEL, glass_opacity, minimum_alpha=225, maximum_alpha=255)
+    title_surface = glass_rgba(C.DARK, glass_opacity, minimum_alpha=220, maximum_alpha=255)
     return f"""
         QDialog#SettingsCenter {{ background:{dialog_surface}; color:{C.TEXT}; border:1px solid {C.BORDER_B}; border-radius:{Radius.MD}px; }}
         QWidget#SettingsContent {{ background:transparent; }}
@@ -38,6 +46,8 @@ def _center_style(glass_opacity: int = 100) -> str:
         QLabel#SettingsWindowTitle {{ color:{C.PRI}; background:transparent; letter-spacing:1px; }}
         QPushButton#SettingsCloseButton {{ background:transparent; color:{C.TEXT_MED}; border:1px solid transparent; border-radius:5px; padding:0; font-size:18px; }}
         QPushButton#SettingsCloseButton:hover {{ color:{C.WHITE}; background:{C.RED}; border-color:{C.RED}; }}
+        QPushButton#SettingsMaximizeButton {{ background:transparent; color:{C.TEXT_MED}; border:1px solid transparent; border-radius:5px; padding:0; font-size:15px; }}
+        QPushButton#SettingsMaximizeButton:hover {{ color:{C.PRI}; background:{C.PRI_GHO}; border-color:{C.BORDER}; }}
         QStackedWidget {{ background:transparent; border:0; }}
         QScrollArea {{ border:0; background:transparent; }}
         QScrollArea::viewport {{ background:transparent; border:0; }}
@@ -45,7 +55,7 @@ def _center_style(glass_opacity: int = 100) -> str:
         QFrame#SettingsSidebar {{ background:{panel_surface}; border:1px solid {C.BORDER}; border-radius:{Radius.MD}px; }}
         QFrame#SettingsEmbeddedCard {{ background:{panel_surface}; border:1px solid {C.BORDER}; border-radius:{Radius.MD}px; }}
         QLabel {{ color:{C.TEXT}; background:transparent; }}
-        QLineEdit {{ background:{glass_rgba(C.PANEL2, glass_opacity)}; color:{C.WHITE}; border:1px solid {C.BORDER}; border-radius:6px; padding:8px 10px; }}
+        QLineEdit {{ background:{glass_rgba(C.PANEL2, glass_opacity, minimum_alpha=220)}; color:{C.WHITE}; border:1px solid {C.BORDER}; border-radius:6px; padding:8px 10px; }}
         QLineEdit:focus {{ border-color:{C.PRI}; }}
         QListWidget {{ background:transparent; color:{C.TEXT_MED}; border:0; outline:0; }}
         QListWidget::item {{ padding:8px 9px; border-radius:5px; }}
@@ -68,7 +78,7 @@ class _SettingsTitleBar(QFrame):
         self._drag_offset = None
 
     def mousePressEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton:
+        if event.button() == Qt.MouseButton.LeftButton and not self._owner.isMaximized():
             self._drag_offset = (
                 event.globalPosition().toPoint() - self._owner.frameGeometry().topLeft()
             )
@@ -103,8 +113,17 @@ class SettingsCenter(QDialog):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self._glass_opacity = 100
-        self.setMinimumSize(720, 520)
-        self.resize(980, 680)
+        screen = QApplication.primaryScreen()
+        available = screen.availableGeometry() if screen is not None else None
+        available_width = available.width() if available is not None else 1200
+        available_height = available.height() if available is not None else 800
+        minimum_width = min(720, max(420, available_width - 32))
+        minimum_height = min(520, max(360, available_height - 80))
+        self.setMinimumSize(minimum_width, minimum_height)
+        self.resize(
+            min(980, max(minimum_width, available_width - 48)),
+            min(680, max(minimum_height, available_height - 96)),
+        )
         self.setStyleSheet(_center_style(self._glass_opacity))
 
         root = QVBoxLayout(self)
@@ -126,6 +145,13 @@ class SettingsCenter(QDialog):
         close_button.setAccessibleName("Close settings")
         close_button.setToolTip("Close Settings")
         close_button.clicked.connect(self.close)
+        self._maximize_button = QPushButton("□")
+        self._maximize_button.setObjectName("SettingsMaximizeButton")
+        self._maximize_button.setFixedSize(30, 30)
+        self._maximize_button.setAccessibleName("Maximize settings")
+        self._maximize_button.setToolTip("Maximize settings")
+        self._maximize_button.clicked.connect(self._toggle_maximized)
+        title_layout.addWidget(self._maximize_button)
         title_layout.addWidget(close_button)
         root.addWidget(title_bar)
 
@@ -139,7 +165,9 @@ class SettingsCenter(QDialog):
 
         sidebar = QFrame()
         sidebar.setObjectName("SettingsSidebar")
-        sidebar.setFixedWidth(230)
+        sidebar.setMinimumWidth(160)
+        sidebar.setMaximumWidth(230)
+        sidebar.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         side = QVBoxLayout(sidebar)
         side.setContentsMargins(Space.MD, Space.MD, Space.MD, Space.MD)
         side.setSpacing(Space.SM)
@@ -161,6 +189,15 @@ class SettingsCenter(QDialog):
         self.pages.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         content_layout.addWidget(self.pages, 1)
 
+        grip_row = QHBoxLayout()
+        grip_row.setContentsMargins(0, 0, Space.SM, Space.XS)
+        grip_row.addStretch(1)
+        self._size_grip = QSizeGrip(self)
+        self._size_grip.setObjectName("SettingsSizeGrip")
+        self._size_grip.setToolTip("Resize Settings")
+        grip_row.addWidget(self._size_grip, 0, Qt.AlignmentFlag.AlignRight)
+        root.addLayout(grip_row)
+
         self._category_pages: dict[str, QWidget] = {}
         self._category_page_layouts = {}
         self._category_rows: dict[str, QListWidgetItem] = {}
@@ -181,6 +218,36 @@ class SettingsCenter(QDialog):
 
         if CATEGORIES:
             self.navigation.setCurrentRow(0)
+
+    def _toggle_maximized(self) -> None:
+        if self.isMaximized():
+            self.showNormal()
+            self._maximize_button.setText("□")
+            self._maximize_button.setToolTip("Maximize settings")
+            self._size_grip.show()
+        else:
+            self.showMaximized()
+            self._maximize_button.setText("❐")
+            self._maximize_button.setToolTip("Restore settings")
+            self._size_grip.hide()
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if platform.system() != "Windows":
+            return
+        try:
+            # DWMWA_SYSTEMBACKDROP_TYPE=38, DWMSBT_TRANSIENTWINDOW=3 (Acrylic).
+            backdrop = ctypes.c_int(3)
+            dwmapi = ctypes.WinDLL("dwmapi")
+            result = dwmapi.DwmSetWindowAttribute(
+                ctypes.c_void_p(int(self.winId())),
+                ctypes.c_uint(38),
+                ctypes.byref(backdrop),
+                ctypes.sizeof(backdrop),
+            )
+            self._native_backdrop_enabled = result == 0
+        except (AttributeError, OSError, TypeError, ValueError):
+            self._native_backdrop_enabled = False
 
     def _make_category_pages(self):
         entries_by_category: dict[str, list[SettingEntry]] = {}

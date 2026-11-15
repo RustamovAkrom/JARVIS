@@ -241,6 +241,7 @@ from gui.themes.styles import (
 
 
 from gui.components.inputs import ChatInput
+from gui.panels.activity import ActivityPanel
 from gui.panels.system_monitor.metrics import _SysMetrics
 from gui.panels.system_monitor.widgets import MetricGauge, MetricTrendChart
 from gui.panels.debug.log_widget import LogWidget
@@ -2296,11 +2297,12 @@ class CustomizeOverlay(QWidget):
 
 
 class PluginManagerOverlay(QWidget):
-    """Floating overlay — lists discovered plugins with per-plugin ON/OFF toggles."""
+    """Lists discovered plugins with enable toggles and optional per-plugin settings."""
 
+    configuration_requested = pyqtSignal(object)
     _OW = 420
 
-    def __init__(self, plugins: list[dict], parent=None):
+    def __init__(self, plugins: list[dict], settings_sections: list[dict] | None = None, parent=None):
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(f"""
@@ -2311,6 +2313,13 @@ class PluginManagerOverlay(QWidget):
             }}
         """)
         self.setFixedWidth(self._OW)
+        self._configuration_by_plugin = {
+            str(section.get("plugin") or ""): section
+            for section in (settings_sections or [])
+            if isinstance(section, dict)
+            and section.get("plugin")
+            and any(isinstance(field, dict) and field.get("key") for field in (section.get("fields") or []))
+        }
 
         lay = QVBoxLayout(self)
         lay.setContentsMargins(20, 16, 20, 16)
@@ -2381,6 +2390,25 @@ class PluginManagerOverlay(QWidget):
             self._style_toggle(btn, p["enabled"])
             btn.clicked.connect(lambda _, name=p["name"], b=btn: self._toggle(name, b))
         row.addWidget(btn)
+
+        section = self._configuration_by_plugin.get(str(p.get("name") or ""))
+        if p.get("valid") and section is not None:
+            settings_btn = QPushButton("⚙")
+            settings_btn.setObjectName(f"plugin_settings_{p['name']}")
+            settings_btn.setFixedSize(26, 24)
+            settings_btn.setToolTip(f"Configure {p['name']}")
+            settings_btn.setAccessibleName(f"Configure {p['name']}")
+            settings_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            settings_btn.setStyleSheet(f"""
+                QPushButton {{ background:transparent; color:{C.TEXT_MED};
+                    border:1px solid {C.BORDER}; border-radius:4px; }}
+                QPushButton:hover {{ color:{C.PRI}; border-color:{C.PRI_DIM};
+                    background:{C.PRI_GHO}; }}
+            """)
+            settings_btn.clicked.connect(
+                lambda _=False, schema=section: self.configuration_requested.emit(schema)
+            )
+            row.addWidget(settings_btn)
         return row
 
     def _style_toggle(self, btn: QPushButton, enabled: bool):
@@ -3830,11 +3858,14 @@ class ProvidersOverlay(_HudOverlay):
 
     def _line(self, text: str = "") -> QLineEdit:
         w = QLineEdit(text)
-        w.setFont(QFont(FONT_MONO, 8))
-        w.setFixedHeight(27)
+        w.setFont(QFont(FONT_MONO, 9))
+        w.setMinimumWidth(0)
+        w.setMinimumHeight(34)
+        w.setFixedHeight(34)
+        w.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         w.setStyleSheet(
             f"QLineEdit {{ background: {C.DARK}; color: {C.TEXT}; "
-            f"border: 1px solid {C.BORDER}; border-radius: 3px; padding: 2px 9px; }}"
+            f"border: 1px solid {C.BORDER}; border-radius: 4px; padding: 4px 10px; }}"
             f"QLineEdit:focus {{ border-color: {C.PRI_DIM}; }}"
         )
         return w
@@ -5540,6 +5571,7 @@ class PluginSettingsOverlay(QWidget):
     """
 
     _test_done = pyqtSignal(str, bool, str)  # namespace, ok, message
+    closed = pyqtSignal()
     _OW = 460
 
     def __init__(self, sections: list[dict], parent=None):
@@ -5625,7 +5657,7 @@ class PluginSettingsOverlay(QWidget):
                 border: 1px solid {C.BORDER}; border-radius: 3px; }}
             QPushButton:hover {{ color: {C.TEXT}; border-color: {C.BORDER_B}; }}
         """)
-        close_btn.clicked.connect(self.hide)
+        close_btn.clicked.connect(self.closed.emit)
         btn_row.addWidget(close_btn)
         root.addLayout(btn_row)
 
@@ -7000,6 +7032,24 @@ class UpdatePanel(QWidget):
             f"color:{C.TEXT_DIM}; background:transparent;"
         )
         layout.addWidget(self._install_state)
+        self._manual_update = QLabel(
+            "<b>Manual update required</b><br>"
+            "1. Open <a href='https://github.com/RustamovAkrom/JARVIS/releases/latest'>GitHub Releases</a> "
+            "and download the latest Windows Installer (.exe).<br>"
+            "2. Close JARVIS, run the installer and install the new version.<br>"
+            "3. JARVIS settings, memory and plugins are stored separately from application files. "
+            "Keep the user-data directory; do not choose an option that removes it."
+        )
+        self._manual_update.setWordWrap(True)
+        self._manual_update.setOpenExternalLinks(True)
+        self._manual_update.setTextFormat(Qt.TextFormat.RichText)
+        self._manual_update.setStyleSheet(
+            f"QLabel {{ color:{C.TEXT_MED}; background:{C.PANEL2}; "
+            f"border:1px solid {C.BORDER}; border-radius:6px; padding:9px; }}"
+            f"QLabel a {{ color:{C.PRI}; }}"
+        )
+        self._manual_update.setVisible(not self._installable)
+        layout.addWidget(self._manual_update)
         self._status = QLabel("Not checked yet")
         self._status.setStyleSheet(f"color:{C.PRI}; background:transparent;")
         layout.addWidget(self._status)
@@ -7031,6 +7081,8 @@ class UpdatePanel(QWidget):
         self._auto_install = QCheckBox("Apply a downloaded update at the next launch")
         self._auto_install.setChecked(self._settings["auto_install"])
         self._auto_install.setEnabled(self._installable)
+        self._auto_download.setVisible(self._installable)
+        self._auto_install.setVisible(self._installable)
         for checkbox in (self._auto_check, self._auto_download, self._auto_install):
             checkbox.setStyleSheet(f"color:{C.TEXT_DIM}; background:transparent;")
             layout.addWidget(checkbox)
@@ -7047,6 +7099,8 @@ class UpdatePanel(QWidget):
         self._install_button = QPushButton("Restart and update")
         self._install_button.setEnabled(False)
         self._install_button.clicked.connect(self.install_now)
+        self._download_button.setVisible(self._installable)
+        self._install_button.setVisible(self._installable)
         for button in (self._check_button, self._download_button, self._install_button):
             actions.addWidget(button)
         layout.addLayout(actions)
@@ -7136,6 +7190,7 @@ class UpdatePanel(QWidget):
         if result.update_available:
             self._status.setText(
                 f"Update available: {result.current_version} → {result.release.version}"
+                + (" — manual installation required" if not result.install_supported else "")
             )
             self._download_button.setEnabled(result.install_supported)
         else:
@@ -9524,6 +9579,8 @@ class MainWindow(QMainWindow):
 
         self._left_tabs.addTab(system_page, self._tr("SYSTEM"))
         self._build_project_explorer()
+        self._activity_panel = ActivityPanel()
+        self._left_tabs.addTab(self._activity_panel, self._tr("ACTIVITY"))
         return w
 
     def _build_project_explorer(self):
@@ -9896,6 +9953,7 @@ class MainWindow(QMainWindow):
         self._development_mode = bool(
             _read_full_config().get("development_mode", False)
         )
+        self._debug_toggle_btn.setVisible(self._development_mode)
         self._work_tabs.setCurrentIndex(0)
         lay.addWidget(self._work_tabs, stretch=1)
         self._refresh_chat()
@@ -10795,11 +10853,10 @@ class MainWindow(QMainWindow):
     def _build_plugins_settings_page(self):
         plugins = self.get_plugins() if self.get_plugins else []
         sections = self.get_plugin_settings() if self.get_plugin_settings else []
-        manager = PluginManagerOverlay(plugins)
-        settings = PluginSettingsOverlay(sections)
+        manager = PluginManagerOverlay(plugins, sections)
+        manager.configuration_requested.connect(self._open_plugin_configuration)
         return self._embed_settings_panels(
-            ("Plugin manager", "Enable installed plugins and review their status.", manager),
-            ("Plugin configuration", "Configure plugin options and run their available checks.", settings),
+            ("Plugins", "Enable or disable plugins. Use the settings icon on a plugin row to configure only that plugin.", manager),
         )
 
     def _build_memory_settings_page(self):
@@ -14822,6 +14879,41 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
     def _open_plugin_settings(self):
         self._show_settings_category("plugins")
 
+    def _open_plugin_configuration(self, section: dict):
+        if not isinstance(section, dict):
+            return
+        plugin_name = str(section.get("plugin") or section.get("namespace") or "Plugin")
+        dialogs = getattr(self, "_plugin_settings_dialogs", None)
+        if dialogs is None:
+            dialogs = self._plugin_settings_dialogs = {}
+        current = dialogs.get(plugin_name)
+        if current is not None:
+            current.raise_()
+            current.activateWindow()
+            return
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle(f"{plugin_name} settings")
+        dialog.setWindowModality(Qt.WindowModality.NonModal)
+        dialog.setMinimumSize(380, 260)
+        dialog.resize(460, 390)
+        dialog.setStyleSheet(
+            f"QDialog {{ background:{C.PANEL}; color:{C.TEXT}; "
+            f"border:1px solid {C.BORDER_B}; }}"
+        )
+        dialog_layout = QVBoxLayout(dialog)
+        dialog_layout.setContentsMargins(6, 6, 6, 6)
+        editor = PluginSettingsOverlay([section], dialog)
+        dialog_layout.addWidget(editor)
+        editor.closed.connect(dialog.close)
+        dialog.finished.connect(
+            lambda _result, key=plugin_name: dialogs.pop(key, None)
+        )
+        dialogs[plugin_name] = dialog
+        dialog.show()
+        dialog.raise_()
+        dialog.activateWindow()
+
     def _on_clipboard_changed(self):
         try:
             text = QApplication.clipboard().text().strip()
@@ -15241,6 +15333,16 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             check.blockSignals(True)
             check.setChecked(bool(self._development_mode))
             check.blockSignals(False)
+        debug_button = getattr(self, "_debug_toggle_btn", None)
+        if debug_button is not None:
+            debug_button.setVisible(bool(self._development_mode))
+        if (
+            not self._development_mode
+            and getattr(self, "_bottom_tabs", None) is not None
+            and self._bottom_tabs.isVisible()
+            and self._bottom_tabs.currentWidget() is getattr(self, "_debug_panel", None)
+        ):
+            self._hide_bottom_panel()
         if not hasattr(self, "_dev_mode_btn"):
             return
         state = "ON" if self._development_mode else "OFF"
@@ -15304,6 +15406,9 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             except Exception:
                 pass
         self._log.append_log(text)
+        activity = getattr(self, "_activity_panel", None)
+        if activity is not None:
+            activity.append_event(text)
         if text.strip().lower().startswith("[reminder]"):
             self._refresh_tasks()
         self._record_history_line(text)
