@@ -14,13 +14,11 @@ class ChatStoreResumeHandleTests(unittest.TestCase):
             chat = store.get_active_chat()
             chat_id = chat["id"]
 
-            self.assertTrue(store.save_resume_handle("fresh-handle", chat_id))
-
-            # Simulate a stale UI snapshot created before the receive loop
-            # persisted the latest session handle.
+            # Capture a UI snapshot before the receive loop persists its
+            # newer handle, then try to save that stale snapshot afterward.
             stale_snapshot = store.get_chat(chat_id)
             self.assertIsNotNone(stale_snapshot)
-            stale_snapshot["resume_handle"] = ""
+            self.assertTrue(store.save_resume_handle("fresh-handle", chat_id))
             stale_snapshot["turns"].append(
                 {"id": "turn-1", "request": "hello", "result": "world"}
             )
@@ -35,10 +33,8 @@ class ChatStoreResumeHandleTests(unittest.TestCase):
             store = ChatStore(Path(directory) / "chats.json")
             chat = store.get_active_chat()
             chat_id = chat["id"]
-            store.save_resume_handle("old-handle", chat_id)
-
             snapshot = store.get_chat(chat_id)
-            snapshot["resume_handle"] = ""
+            store.save_resume_handle("old-handle", chat_id)
             store.save_chat(
                 snapshot,
                 activate=False,
