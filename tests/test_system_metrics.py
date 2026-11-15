@@ -29,7 +29,12 @@ class SystemMetricsTests(unittest.TestCase):
         with (
             patch.object(metrics_module.psutil, "cpu_percent", return_value=12.0),
             patch.object(metrics_module.psutil, "virtual_memory", return_value=memory),
-            patch.object(metrics_module.psutil, "cpu_freq", side_effect=RuntimeError("unsupported")),
+            patch.object(
+                metrics_module.psutil,
+                "cpu_freq",
+                create=True,
+                side_effect=RuntimeError("unsupported"),
+            ),
             patch.object(metrics_module.psutil, "net_io_counters", return_value=counters),
             patch.object(metrics_module.psutil, "pids", return_value=[1, 2, 3]),
         ):
