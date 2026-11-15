@@ -717,6 +717,7 @@ class JarvisLive:
         )  # voice picker → rebuild session
         self.ui.on_audio_device_change = self._on_audio_device_change
         self._active_chat_id = str(getattr(self.ui, "active_chat_id", "") or "")
+        self._session_chat_id = self._active_chat_id
         self._resume_handle: str | None = self.ui.get_chat_resume_handle(
             self._active_chat_id
         )
@@ -1017,9 +1018,9 @@ class JarvisLive:
             return
         self._active_chat_id = target_id
         self._resume_handle = str(resume_handle or "").strip() or None
-        self._turn_chat_id = target_id
+        # Keep the old session's transcript target until its TaskGroup is
+        # cancelled. The replacement session adopts target_id after connecting.
         self._last_out_logged = ""
-        self._restore_chat_session_log()
         self.request_reconnect(
             keep_context=True,
             reason="chat switched",
@@ -2346,13 +2347,17 @@ class JarvisLive:
                         ):
                             if self._resume_handle is None:
                                 print("[JARVIS] 🔗 Session resumption armed")
-                            self._resume_handle = _sru.new_handle
+                            _new_handle = _sru.new_handle
                             try:
                                 self.ui.save_chat_resume_handle(
-                                    self._resume_handle, self._active_chat_id
+                                    _new_handle, self._session_chat_id
                                 )
                             except Exception as exc:
                                 print(f"[Chat] Could not persist session handle: {exc}")
+                            # An old session can still deliver its final
+                            # resumption update while a chat switch is queued.
+                            if self._session_chat_id == self._active_chat_id:
+                                self._resume_handle = _new_handle
 
                     if response.data:
                         if self._interrupted:
@@ -2426,7 +2431,7 @@ class JarvisLive:
                             if full_in:
                                 print(f"[LiveDiag][USER_TRANSCRIPT] {full_in}")
                                 self._last_out_logged = ""  # new exchange
-                                self._turn_chat_id = self._active_chat_id
+                                self._turn_chat_id = self._session_chat_id
                                 self.ui.write_chat_log(
                                     f"You: {full_in}", self._turn_chat_id
                                 )
@@ -3277,6 +3282,9 @@ class JarvisLive:
                     session.send_client_content = _send_and_arm
 
                     self.session = session
+                    self._session_chat_id = self._active_chat_id
+                    self._turn_chat_id = self._session_chat_id
+                    self._restore_chat_session_log()
                     self.audio_in_queue = asyncio.Queue()
                     self.out_queue = asyncio.Queue(maxsize=200)
                     self._turn_done_event = asyncio.Event()
@@ -3409,7 +3417,7 @@ class JarvisLive:
                         self._resume_handle = None
                         try:
                             self.ui.save_chat_resume_handle(
-                                None, self._active_chat_id
+                                None, self._session_chat_id
                             )
                         except Exception:
                             pass
@@ -3462,7 +3470,7 @@ class JarvisLive:
                     )
                     self._resume_handle = None
                     try:
-                        self.ui.save_chat_resume_handle(None, self._active_chat_id)
+                        self.ui.save_chat_resume_handle(None, self._session_chat_id)
                     except Exception:
                         pass
                     self._conn_backoff = 3
@@ -3488,7 +3496,7 @@ class JarvisLive:
                     )
                     self._resume_handle = None
                     try:
-                        self.ui.save_chat_resume_handle(None, self._active_chat_id)
+                        self.ui.save_chat_resume_handle(None, self._session_chat_id)
                     except Exception:
                         pass
                     self._conn_backoff = 0
