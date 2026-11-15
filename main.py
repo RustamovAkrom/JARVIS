@@ -1003,18 +1003,25 @@ class JarvisLive:
             self.request_reconnect(keep_context=True, reason="no response")
             return  # this session is going away; the new one gets its own watcher
 
-    def request_reconnect(self, keep_context: bool = True, reason: str = ""):
-        """Thread-safe: ask the run loop to tear down and rebuild the Live
-        session. Called from the Qt thread. No-op until the async loop and
-        reconnect event exist.
+    def request_reconnect(
+        self,
+        keep_context: bool = True,
+        reason: str = "",
+        *,
+        reset_chat_id: str | None = None,
+    ):
+        """Thread-safe: ask the run loop to rebuild the active session.
 
-        `keep_context=False` drops the resumption handle so the new session
-        starts empty — only for changes the server cannot apply to a resumed
-        session."""
+        A chat-history reset carries its target ID with the request so a fast
+        subsequent chat switch cannot clear the wrong chat's resume handle.
+        """
         loop = getattr(self, "_loop", None)
         ev = self._reconnect_event
         self._reconnect_keep = keep_context
         self._reconnect_reason = reason
+        self._reconnect_reset_chat_id = (
+            str(reset_chat_id or "").strip() or None
+        )
         if loop and ev is not None:
             loop.call_soon_threadsafe(ev.set)
 
@@ -1062,6 +1069,7 @@ class JarvisLive:
         self.request_reconnect(
             keep_context=not force_reconnect,
             reason="chat reset" if force_reconnect else "chat switched",
+            reset_chat_id=target_id if force_reconnect else None,
         )
 
     def _on_voice_change(self):
@@ -1090,6 +1098,8 @@ class JarvisLive:
             self._reconnect_event.clear()
             keep = self._reconnect_keep
             reason = getattr(self, "_reconnect_reason", "") or "settings"
+            reset_chat_id = getattr(self, "_reconnect_reset_chat_id", None)
+            self._reconnect_reset_chat_id = None
             # A chat switch requested before this connection was established
             # may already be reflected in the just-connected session. Ignore
             # only that stale notification; all other reconnect causes remain.
@@ -1106,11 +1116,7 @@ class JarvisLive:
         raise _ReconnectSignal(
             keep_context=keep,
             reason=reason,
-            reset_chat_id=(
-                str(self._active_chat_id or "")
-                if reason == "chat reset"
-                else None
-            ),
+            reset_chat_id=reset_chat_id,
         )
 
     def _make_remote_key(self):
@@ -3448,16 +3454,17 @@ class JarvisLive:
                     # Flush only messages explicitly queued for this chat.
                     # Messages queued for another chat remain isolated until
                     # that chat is selected and its own session is connected.
+                    queued_chat_id = str(self._session_chat_id or "")
                     with self._pending_chat_commands_lock:
                         ready_commands = [
                             text
                             for chat_id, text in self._pending_chat_commands
-                            if chat_id == self._session_chat_id
+                            if chat_id == queued_chat_id
                         ]
                         self._pending_chat_commands = [
                             (chat_id, text)
                             for chat_id, text in self._pending_chat_commands
-                            if chat_id != self._session_chat_id
+                            if chat_id != queued_chat_id
                         ]
                     for command_index, queued_text in enumerate(ready_commands):
                         try:
@@ -3475,7 +3482,7 @@ class JarvisLive:
                             unsent_commands = ready_commands[command_index:]
                             with self._pending_chat_commands_lock:
                                 self._pending_chat_commands[0:0] = [
-                                    (self._session_chat_id, text)
+                                    (queued_chat_id, text)
                                     for text in unsent_commands
                                 ]
                             raise
