@@ -7434,7 +7434,9 @@ class MainWindow(QMainWindow):
         root.addWidget(self._build_header())
 
         self._main_splitter = QSplitter(Qt.Orientation.Horizontal)
-        self._main_splitter.setChildrenCollapsible(True)
+        self._main_splitter.setChildrenCollapsible(False)
+        self._main_splitter.setCollapsible(0, False)
+        self._main_splitter.setCollapsible(1, False)
         self._main_splitter.setContentsMargins(6, 6, 6, 6)
         self._main_splitter.setStyleSheet("""
             QSplitter::handle { background: transparent; width: 5px; }
@@ -7442,6 +7444,7 @@ class MainWindow(QMainWindow):
         """)
 
         self._left_panel = self._build_left_panel()
+        self._left_panel.setMinimumWidth(200)
         self._main_splitter.addWidget(self._left_panel)
 
         # Center column: HUD + resizable content panel via QSplitter
@@ -7756,6 +7759,8 @@ class MainWindow(QMainWindow):
         )
 
         self._right_panel = self._build_right_panel()
+        self._right_panel.setMinimumWidth(280)
+        self._workspace_split.setMinimumWidth(560)
         self._debug_panel = QWidget()
         self._debug_panel.setObjectName("DebugPanel")
         self._debug_panel.setMinimumHeight(0)
@@ -7805,7 +7810,9 @@ class MainWindow(QMainWindow):
         self._bottom_tabs.hide()
 
         self._root_splitter = QSplitter(Qt.Orientation.Horizontal)
-        self._root_splitter.setChildrenCollapsible(True)
+        self._root_splitter.setChildrenCollapsible(False)
+        self._root_splitter.setCollapsible(0, False)
+        self._root_splitter.setCollapsible(1, False)
         self._root_splitter.setHandleWidth(5)
         self._root_splitter.setStyleSheet(
             "QSplitter::handle { background:transparent; width:5px; }"
@@ -13845,6 +13852,8 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         button = self._left_toggle_btn if index == 0 else self._right_toggle_btn
         splitter = self._main_splitter if index == 0 else self._root_splitter
         splitter_index = 0 if index == 0 else 1
+        other_index = 1 - splitter_index
+        other_panel = splitter.widget(other_index)
         sizes = splitter.sizes()
         if panel.isVisible():
             if sizes[splitter_index] > 0:
@@ -13852,15 +13861,26 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             panel.hide()
         else:
             panel.show()
-            sizes = splitter.sizes()
-            sizes[splitter_index] = max(
-                self._side_restore_width[index], panel.minimumWidth()
+            available = max(
+                0, splitter.width() - splitter.handleWidth()
             )
-            sizes[1 - splitter_index] = max(
-                1, splitter.width() - sizes[splitter_index]
+            panel_min = max(1, panel.minimumWidth())
+            other_min = max(1, other_panel.minimumWidth())
+            desired = max(
+                panel_min,
+                int(self._side_restore_width.get(index, panel_min)),
             )
+            # Never restore a panel to a width that leaves its neighbour below
+            # its declared usable width. The user can still hide either panel
+            # independently when the overall window is narrow.
+            max_panel_width = max(panel_min, available - other_min)
+            restored = min(desired, max_panel_width)
+            sizes[splitter_index] = restored
+            sizes[other_index] = max(other_min, available - restored)
             splitter.setSizes(sizes)
+            self._side_restore_width[index] = restored
         button.setChecked(panel.isVisible())
+        self._update_advanced_telemetry_visibility()
         self._refresh_workspace_settings_state()
 
     def _toggle_content_panel(self):
