@@ -9056,6 +9056,68 @@ class MainWindow(QMainWindow):
         if event.type() == QEvent.Type.WindowStateChange:
             self._update_window_controls()
 
+    def nativeEvent(self, event_type, message):
+        """Expose native non-client hit targets for Windows Snap and resizing.
+
+        The application keeps its custom frameless title bar, but Windows still
+        needs HTMAXBUTTON to show Snap Layouts when the user hovers Maximize.
+        Returning native edge hit targets also lets the shell manage resize
+        cursors and window sizing consistently.
+        """
+        if self._custom_chrome_enabled:
+            try:
+                import ctypes
+                from ctypes import wintypes
+
+                native_message = ctypes.cast(
+                    int(message), ctypes.POINTER(wintypes.MSG)
+                ).contents
+                if native_message.message == 0x0084:  # WM_NCHITTEST
+                    packed = int(native_message.lParam)
+                    screen_x = ctypes.c_short(packed & 0xFFFF).value
+                    screen_y = ctypes.c_short((packed >> 16) & 0xFFFF).value
+                    screen_point = QPoint(screen_x, screen_y)
+
+                    maximize_button = getattr(self, "_maximize_window_btn", None)
+                    if maximize_button is not None and maximize_button.isVisible():
+                        button_origin = maximize_button.mapToGlobal(QPoint(0, 0))
+                        button_rect = QRect(button_origin, maximize_button.size())
+                        if button_rect.contains(screen_point):
+                            return True, 9  # HTMAXBUTTON: enable Windows Snap Layouts
+
+                    if not (self.isMaximized() or self.isFullScreen()):
+                        origin = self.mapToGlobal(QPoint(0, 0))
+                        local_x = screen_x - origin.x()
+                        local_y = screen_y - origin.y()
+                        margin = 7
+                        on_left = local_x < margin
+                        on_right = local_x >= self.width() - margin
+                        on_top = local_y < margin
+                        on_bottom = local_y >= self.height() - margin
+
+                        if on_top and on_left:
+                            return True, 13  # HTTOPLEFT
+                        if on_top and on_right:
+                            return True, 14  # HTTOPRIGHT
+                        if on_bottom and on_left:
+                            return True, 16  # HTBOTTOMLEFT
+                        if on_bottom and on_right:
+                            return True, 17  # HTBOTTOMRIGHT
+                        if on_left:
+                            return True, 10  # HTLEFT
+                        if on_right:
+                            return True, 11  # HTRIGHT
+                        if on_top:
+                            return True, 12  # HTTOP
+                        if on_bottom:
+                            return True, 15  # HTBOTTOM
+            except (AttributeError, OSError, TypeError, ValueError):
+                # Native hit-testing is an enhancement. The existing Qt
+                # startSystemMove/startSystemResize fallback remains available.
+                pass
+
+        return super().nativeEvent(event_type, message)
+
     def eventFilter(self, watched, event):
         if (
             self._custom_chrome_enabled
