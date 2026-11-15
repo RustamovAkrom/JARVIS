@@ -7460,8 +7460,6 @@ class MainWindow(QMainWindow):
 
         self._main_splitter = QSplitter(Qt.Orientation.Horizontal)
         self._main_splitter.setChildrenCollapsible(False)
-        self._main_splitter.setCollapsible(0, False)
-        self._main_splitter.setCollapsible(1, False)
         self._main_splitter.setContentsMargins(6, 6, 6, 6)
         self._main_splitter.setStyleSheet("""
             QSplitter::handle { background: transparent; width: 5px; }
@@ -7837,8 +7835,6 @@ class MainWindow(QMainWindow):
 
         self._root_splitter = QSplitter(Qt.Orientation.Horizontal)
         self._root_splitter.setChildrenCollapsible(False)
-        self._root_splitter.setCollapsible(0, False)
-        self._root_splitter.setCollapsible(1, False)
         self._root_splitter.setHandleWidth(5)
         self._root_splitter.setStyleSheet(
             "QSplitter::handle { background:transparent; width:5px; }"
