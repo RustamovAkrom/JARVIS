@@ -601,9 +601,17 @@ class _ReconnectSignal(Exception):
     new session must genuinely start clean (see the voice-change note in
     _on_voice_change)."""
 
-    def __init__(self, keep_context: bool = True):
+    def __init__(
+        self,
+        keep_context: bool = True,
+        *,
+        reason: str = "",
+        reset_chat_id: str | None = None,
+    ):
         super().__init__()
         self.keep_context = keep_context
+        self.reason = reason
+        self.reset_chat_id = reset_chat_id
 
 
 class _ShutdownSignal(Exception):
@@ -639,6 +647,18 @@ def _keep_context_of(exc: BaseException) -> bool:
             if _is_reconnect_signal(sub):
                 return _keep_context_of(sub)
     return True
+
+
+def _reset_chat_id_of(exc: BaseException) -> str | None:
+    """Return an explicit chat reset target from a reconnect signal/group."""
+    if isinstance(exc, _ReconnectSignal):
+        value = str(getattr(exc, "reset_chat_id", "") or "").strip()
+        return value or None
+    if isinstance(exc, BaseExceptionGroup):
+        for sub in exc.exceptions:
+            if _is_reconnect_signal(sub):
+                return _reset_chat_id_of(sub)
+    return None
 
 
 class JarvisLive:
@@ -1083,7 +1103,15 @@ class JarvisLive:
             f"SYS: Applying {reason} — reconnecting"
             + ("..." if keep else " (starting a fresh conversation)...")
         )
-        raise _ReconnectSignal(keep_context=keep)
+        raise _ReconnectSignal(
+            keep_context=keep,
+            reason=reason,
+            reset_chat_id=(
+                str(self._active_chat_id or "")
+                if reason == "chat reset"
+                else None
+            ),
+        )
 
     def _make_remote_key(self):
         """Called from Qt main thread when user presses Remote Control."""
@@ -3582,8 +3610,9 @@ class JarvisLive:
                         # remains available as fallback context.
                         self._resume_handle = None
                         try:
+                            reset_chat_id = _reset_chat_id_of(e)
                             self.ui.save_chat_resume_handle(
-                                None, self._session_chat_id
+                                None, reset_chat_id or self._session_chat_id
                             )
                         except Exception:
                             pass
