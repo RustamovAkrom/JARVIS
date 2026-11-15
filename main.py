@@ -1564,6 +1564,8 @@ class JarvisLive:
                 )
 
         print(f"[JARVIS] 🔧 {name}  {args}")
+        tool_started_at = time.perf_counter()
+        self.ui.write_log(f"[TOOL START] {name}")
         self.ui.set_state("THINKING")
 
         if name == "save_memory":
@@ -1573,6 +1575,10 @@ class JarvisLive:
             if key and value:
                 update_memory({category: {key: {"value": value}}})
                 print(f"[Memory] 💾 save_memory: {category}/{key} = {value}")
+            elapsed = time.perf_counter() - tool_started_at
+            self.ui.write_log(
+                f"[TOOL COMPLETE] {name} · {elapsed:.2f}s"
+            )
             if not self.ui.muted:
                 self.ui.set_state("LISTENING")
             return types.FunctionResponse(
@@ -1946,6 +1952,29 @@ class JarvisLive:
             result = f"Tool '{name}' failed: {e}"
             traceback.print_exc()
             self.speak_error(name, e)
+
+        elapsed = time.perf_counter() - tool_started_at
+        result_text = str(result or "")
+        result_lower = result_text.casefold()
+        failed = any(
+            marker in result_lower
+            for marker in (
+                " failed",
+                "failure",
+                "error:",
+                "permission denied",
+                "action cancelled",
+                "unknown tool",
+                "not available",
+                "could not",
+                "traceback",
+            )
+        )
+        status = "FAILED" if failed else "COMPLETE"
+        event = f"[TOOL {status}] {name} · {elapsed:.2f}s"
+        if failed and result_text:
+            event += f" · {result_text[:180]}"
+        self.ui.write_log(event)
 
         if not self.ui.muted:
             self.ui.set_state("LISTENING")
