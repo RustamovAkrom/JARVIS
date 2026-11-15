@@ -104,6 +104,7 @@ class ChatStore:
             "updated_at": str(chat.get("updated_at") or chat.get("created_at") or ChatStore._timestamp()),
             "turns": turns[-ChatStore.MAX_TURNS :],
             "context": context[-ChatStore.MAX_CONTEXT_MESSAGES :],
+            "resume_handle": str(chat.get("resume_handle") or ""),
         }
 
     def _write(self, data: dict[str, Any]) -> None:
@@ -164,6 +165,7 @@ class ChatStore:
             "updated_at": now,
             "turns": [],
             "context": [],
+            "resume_handle": "",
         }
 
     def list_chats(self) -> list[dict[str, Any]]:
@@ -185,6 +187,52 @@ class ChatStore:
         if chat is not None:
             return chat
         return self.create_chat()
+
+    def get_active_chat_id(self) -> str:
+        with self._lock:
+            return str(self._read().get("active_chat_id") or "")
+
+    def get_resume_handle(self, chat_id: str | None = None) -> str | None:
+        chat = self.get_chat(chat_id)
+        handle = str(chat.get("resume_handle") or "").strip() if chat else ""
+        return handle or None
+
+    def save_resume_handle(
+        self, handle: str | None, chat_id: str | None = None
+    ) -> bool:
+        with self._lock:
+            data = self._read()
+            target = str(chat_id or data.get("active_chat_id") or "")
+            for chat in data["chats"]:
+                if chat["id"] == target:
+                    chat["resume_handle"] = str(handle or "")
+                    self._write(data)
+                    return True
+            return False
+
+    def get_context(
+        self, chat_id: str | None = None, *, limit: int = MAX_CONTEXT_MESSAGES
+    ) -> list[dict[str, str]]:
+        chat = self.get_chat(chat_id)
+        if not chat:
+            return []
+        count = max(0, min(self.MAX_CONTEXT_MESSAGES, int(limit)))
+        return list(chat.get("context") or [])[-count:] if count else []
+
+    def clear_chat(self, chat_id: str | None = None) -> dict[str, Any] | None:
+        with self._lock:
+            data = self._read()
+            target = str(chat_id or data.get("active_chat_id") or "")
+            for chat in data["chats"]:
+                if chat["id"] == target:
+                    chat["turns"] = []
+                    chat["context"] = []
+                    chat["resume_handle"] = ""
+                    chat["title"] = "New chat"
+                    chat["updated_at"] = self._timestamp()
+                    self._write(data)
+                    return dict(chat)
+            return None
 
     def start_new_chat(self, title: str = "New chat") -> dict[str, Any]:
         """Create a fresh chat context; previous chats remain available."""
