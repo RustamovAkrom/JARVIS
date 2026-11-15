@@ -19,6 +19,7 @@ from gui.settings.categories.identity import AssistantIdentityPage
 from gui.settings.registry import CATEGORIES, ENTRIES, search_entries
 from gui.settings.settings_center import SettingsCenter
 from gui.app.main_window import (
+    PluginManagerOverlay,
     AudioDeviceOverlay,
     HueWheel,
     MainWindow,
@@ -67,6 +68,8 @@ class SettingsComponentTests(unittest.TestCase):
         self.assertTrue(center.windowFlags() & Qt.WindowType.FramelessWindowHint)
         self.assertIsNotNone(center.findChild(QWidget, "SettingsTitleBar"))
         self.assertIsNotNone(center.findChild(QPushButton, "SettingsCloseButton"))
+        self.assertIsNotNone(center.findChild(QPushButton, "SettingsMaximizeButton"))
+        self.assertIsNotNone(center.findChild(QWidget, "SettingsSizeGrip"))
         self.assertIn("border:1px solid", center.styleSheet())
         self.assertEqual(center.navigation.count(), len(CATEGORIES))
         self.assertEqual({entry.category_id for entry in ENTRIES} - {item.id for item in CATEGORIES}, set())
@@ -100,7 +103,7 @@ class SettingsComponentTests(unittest.TestCase):
         center.set_glass_opacity(100)
         self.assertIn(", 255)", center.styleSheet())
         center.set_glass_opacity(60)
-        self.assertIn(", 153)", center.styleSheet())
+        self.assertIn(", 245)", center.styleSheet())
         center.close()
 
     def test_settings_window_uses_shared_glass_opacity(self):
@@ -108,7 +111,7 @@ class SettingsComponentTests(unittest.TestCase):
         center.set_glass_opacity(72)
         self.assertEqual(center._glass_opacity, 72)
         self.assertIn("rgba(", center.styleSheet())
-        self.assertTrue(center.testAttribute(Qt.WidgetAttribute.WA_TranslucentBackground))
+        self.assertFalse(center.testAttribute(Qt.WidgetAttribute.WA_TranslucentBackground))
         # Glass changes panel surfaces while keeping text and window chrome crisp.
         self.assertAlmostEqual(center.windowOpacity(), 1.0, places=2)
         center.set_glass_opacity(140)
@@ -233,6 +236,36 @@ class SettingsComponentTests(unittest.TestCase):
 
         page.close()
         owner.close()
+
+    def test_plugin_settings_are_exposed_per_plugin_row_only_when_declared(self):
+        plugins = [
+            {
+                "name": "configured",
+                "valid": True,
+                "enabled": True,
+                "description": "Has settings",
+                "settings_namespace": "configured",
+            },
+            {
+                "name": "plain",
+                "valid": True,
+                "enabled": True,
+                "description": "No settings",
+                "settings_namespace": "",
+            },
+        ]
+        sections = [
+            {"plugin": "configured", "namespace": "configured", "fields": [{"key": "endpoint", "type": "text"}]}
+        ]
+        manager = PluginManagerOverlay(plugins, settings_sections=sections)
+        configured_button = manager.findChild(QPushButton, "plugin_settings_configured")
+        self.assertIsNotNone(configured_button)
+        self.assertIsNone(manager.findChild(QPushButton, "plugin_settings_plain"))
+        received = []
+        manager.configuration_requested.connect(received.append)
+        configured_button.click()
+        self.assertEqual(received, sections)
+        manager.close()
 
     def test_memory_overlay_refresh_reloads_saved_facts(self):
         with patch("memory.memory_manager.all_entries_for_ui", return_value=[]):

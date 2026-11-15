@@ -115,6 +115,7 @@ class PipelineEngine:
         *,
         config=None,
         log=None,
+        history: list[dict] | None = None,
         history_chars: int = _DEFAULT_HISTORY_CHARS,
     ):
         self._llm = llm
@@ -152,6 +153,18 @@ class PipelineEngine:
             self._read_config(config)
 
         self._history: list[dict] = []
+        for item in list(history or [])[-80:]:
+            if not isinstance(item, dict):
+                continue
+            role = str(item.get("role") or "").strip().lower()
+            content = str(item.get("text") or item.get("content") or "").strip()
+            if not content:
+                continue
+            if role == "model":
+                role = "assistant"
+            if role not in {"user", "assistant"}:
+                continue
+            self._history.append({"role": role, "content": content})
         self._queue: asyncio.Queue = asyncio.Queue()
         self._gen: Optional[asyncio.Task] = None
         self._closed = False

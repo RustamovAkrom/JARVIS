@@ -1,5 +1,6 @@
 import re
 import unittest
+from unittest.mock import patch
 import gui.app.main_window as implementation
 import ui
 from PyQt6.QtCore import Qt
@@ -24,12 +25,23 @@ class UiFacadeTests(unittest.TestCase):
 
     def test_left_monitor_scroll_surfaces_do_not_cover_panel_theme(self):
         app = QApplication.instance() or QApplication([])
-        window = ui.MainWindow("")
+        # Keep this UI test independent from a developer-mode preference saved
+        # in the local user profile by a previous interactive session.
+        with patch.object(implementation, "_read_full_config", return_value={}):
+            window = ui.MainWindow("")
         try:
             self.assertFalse(hasattr(window, "_ctrl_btn"))
             panel = window._left_panel
             scroll = panel.findChild(QScrollArea)
             self.assertIsNotNone(scroll)
+            self.assertEqual(window._left_tabs.count(), 3)
+            self.assertEqual(window._left_tabs.tabText(2), "ACTIVITY")
+            self.assertTrue(window._debug_toggle_btn.isHidden())
+            self.assertEqual(
+                window._work_tabs.tabBar().elideMode(),
+                Qt.TextElideMode.ElideNone,
+            )
+            self.assertTrue(window._work_tabs.usesScrollButtons())
             self.assertTrue(panel.testAttribute(Qt.WidgetAttribute.WA_StyledBackground))
             self.assertRegex(
                 panel.styleSheet(),

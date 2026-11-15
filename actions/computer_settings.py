@@ -91,17 +91,85 @@ def volume_down():
         )
 
 
-def volume_mute():
+def volume_mute_get() -> bool | None:
+    """Read the current output-mute state, or None when the OS cannot report it."""
+    try:
+        if _OS == "Windows":
+            return bool(_win_endpoint_volume().GetMute())
+        if _OS == "Darwin":
+            result = subprocess.run(
+                ["osascript", "-e", "output muted of (get volume settings)"],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=5,
+            )
+            value = result.stdout.strip().lower()
+            return value == "true" if value in {"true", "false"} else None
+        result = subprocess.run(
+            ["pactl", "get-sink-mute", "@DEFAULT_SINK@"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=5,
+        )
+        value = result.stdout.strip().lower()
+        if "yes" in value:
+            return True
+        if "no" in value:
+            return False
+    except Exception:
+        pass
+    return None
+
+
+def volume_mute(muted: bool | None = None) -> None:
+    """Set output mute explicitly; None means invert the current state.
+
+    The former implementation mapped both mute and unmute to a toggle key.
+    That made the semantic meaning depend on the previous state and could
+    leave Windows muted after an "unmute" command. Use each platform's
+    state-aware audio API so repeated mute/unmute commands are idempotent.
+    """
+    target = muted
+    if target is None:
+        current = volume_mute_get()
+        if current is None:
+            raise RuntimeError("The current output mute state could not be read.")
+        target = not current
+
     if _OS == "Windows":
-        pyautogui.press("volumemute")
+        _win_endpoint_volume().SetMute(bool(target), None)
     elif _OS == "Darwin":
-        subprocess.run(
-            ["osascript", "-e", "set volume with output muted"], capture_output=True
+        modifier = "with" if target else "without"
+        result = subprocess.run(
+            ["osascript", "-e", f"set volume {modifier} output muted"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=5,
         )
+        if result.returncode:
+            raise RuntimeError(result.stderr.strip() or "macOS rejected the mute change.")
     else:
-        subprocess.run(
-            ["pactl", "set-sink-mute", "@DEFAULT_SINK@", "toggle"], capture_output=True
+        result = subprocess.run(
+            [
+                "pactl",
+                "set-sink-mute",
+                "@DEFAULT_SINK@",
+                "1" if target else "0",
+            ],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=5,
         )
+        if result.returncode:
+            raise RuntimeError(result.stderr.strip() or "PulseAudio/PipeWire rejected the mute change.")
 
 
 def _win_endpoint_volume():
@@ -906,8 +974,8 @@ def shutdown_computer():
 ACTION_MAP: dict[str, callable] = {
     "volume_up": volume_up,
     "volume_down": volume_down,
-    "mute": volume_mute,
-    "unmute": volume_mute,
+    "mute": lambda: volume_mute(True),
+    "unmute": lambda: volume_mute(False),
     "toggle_mute": volume_mute,
     "brightness_up": brightness_up,
     "brightness_down": brightness_down,
@@ -1019,7 +1087,11 @@ _DANGEROUS_ACTIONS = set(_IRREVERSIBLE)
 _ALIASES = {
     "volume_up": ("louder", "raise volume", "turn it up", "increase volume"),
     "volume_down": ("quieter", "lower volume", "turn it down", "decrease volume"),
-    "mute": ("silence", "sound off", "no sound"),
+    "mute": ("silence", "sound off", "no sound", "turn sound off", "disable sound"),
+    "unmute": (
+        "sound on", "turn sound on", "turn the sound back on", "enable sound",
+        "restore sound", "unmute audio", "enable audio", "switch speakers on"
+    ),
     "brightness_up": ("brighter", "raise brightness", "increase brightness"),
     "brightness_down": ("dimmer", "dim", "lower brightness", "decrease brightness"),
     "close_window": ("close this", "close it"),
@@ -1120,16 +1192,9 @@ def computer_settings(
     player=None,
     session_memory=None,
 ) -> str:
-    if not _PYAUTOGUI:
-        return outcome.failed(
-            "computer_settings",
-            "pyautogui is not installed, so the keyboard cannot be driven - "
-            "run: pip install pyautogui",
-        )
-
     params = parameters or {}
-    raw_action = params.get("action", "").strip()
-    description = params.get("description", "").strip()
+    raw_action = str(params.get("action", "") or "").strip()
+    description = str(params.get("description", "") or "").strip()
     value = params.get("value", None)
 
     if not raw_action and description:
@@ -1142,6 +1207,16 @@ def computer_settings(
 
     if not action:
         return _suggest(description or raw_action)
+
+    # Speaker mute is handled by the OS audio endpoint directly. It must remain
+    # usable even if the optional keyboard automation package is unavailable.
+    if not _PYAUTOGUI and action not in {"mute", "unmute", "toggle_mute"}:
+        return outcome.failed(
+            "computer_settings",
+            "pyautogui is not installed, so keyboard-driven computer actions are unavailable - "
+            "run: pip install pyautogui",
+            wanted=action,
+        )
 
     print(f"[Settings] Action: {action}  Value: {value}  OS: {_OS}")
     if player:
@@ -1252,7 +1327,9 @@ def computer_settings(
     # tell us the current value, nothing is registered — an undo that restores
     # a guess is worse than no undo at all.
     _before = None
-    if action in ("volume_up", "volume_down", "mute", "unmute", "toggle_mute"):
+    if action in ("mute", "unmute", "toggle_mute"):
+        _before = ("mute", volume_mute_get())
+    elif action in ("volume_up", "volume_down"):
         _before = ("volume", volume_get())
     elif action in ("brightness_up", "brightness_down"):
         _before = ("brightness", brightness_get())
@@ -1266,7 +1343,9 @@ def computer_settings(
     if _before:
         kind, old = _before
         if old is not None:
-            if kind == "volume":
+            if kind == "mute":
+                pass  # Register undo only after the requested state is verified.
+            elif kind == "volume":
                 push_undo(
                     f"volume ({action})",
                     lambda b=old: (volume_set(b), f"Volume back to {b}%.")[1],
@@ -1304,6 +1383,36 @@ def computer_settings(
     #     keystroke as a keystroke is not that.
     if _before:
         kind, old_value = _before
+        if kind == "mute":
+            now = volume_mute_get()
+            if now is None:
+                return outcome.unverified(
+                    "computer_settings",
+                    "the OS could not report the current speaker mute state",
+                    wanted=action,
+                )
+            expected = (
+                True if action == "mute"
+                else False if action == "unmute"
+                else (not old_value) if old_value is not None
+                else None
+            )
+            if expected is not None and now is not expected:
+                return outcome.unverified(
+                    "computer_settings",
+                    "the speaker mute state did not reach the requested value",
+                    wanted=action,
+                    muted=now,
+                )
+            if old_value is not None and now != old_value:
+                push_undo(
+                    f"speaker mute ({action})",
+                    lambda b=old_value: (volume_mute(b), f"Speaker mute restored to {b}.")[1],
+                )
+            return outcome.done(
+                "computer_settings", wanted=action, muted=now, verified=True
+            )
+
         now = volume_get() if kind == "volume" else brightness_get()
         if old_value is None or now is None:
             return outcome.unverified(
@@ -1330,11 +1439,22 @@ def computer_settings(
 # ── Tool declaration (auto-discovered by core/action_loader.py) ──────────────
 TOOL = {
     "name": "computer_settings",
-    "description": "Controls the computer: volume, brightness, window management, keyboard shortcuts, typing text on screen, closing apps, fullscreen, dark mode, WiFi, restart, shutdown, scrolling, tab management, zoom, screenshots, lock screen, refresh/reload page. Use for ANY single computer control command. restart, shutdown and toggle_wifi put a confirmation on the user's screen and do NOT happen until they press it — never claim they are done. Volume, brightness and dark mode can be reversed with the `undo` tool.",
+    "description": (
+        "Controls computer output volume and mute state, brightness, window management, "
+        "keyboard shortcuts, typing, fullscreen, dark mode, WiFi, restart, shutdown, "
+        "scrolling, tab management, zoom, screenshots and lock screen. "
+        "For speaker sound: use action='mute' to turn output off, action='unmute' to turn "
+        "output back on, and action='volume_set' with value 0-100 to set the level. "
+        "Mute and unmute are explicit, separate states, not toggles. "
+        "Never use the undo tool as a substitute for unmute. "
+        "Do not confuse speaker output mute with JARVIS microphone-input mute. "
+        "restart, shutdown and toggle_wifi require the user's on-screen confirmation."
+    ),
     # Used in place of `description` only when a small model is on a tool
     # budget - Gemini still gets the full text. See providers/schema.py.
     "brief": (
-        "Changes a computer setting: volume, brightness, WiFi, window layout, power. Name the action in 'action'."
+        "Controls speaker output (volume, mute, unmute), brightness, WiFi, window layout and power. "
+        "For speaker sound, use mute or unmute explicitly; do not substitute undo."
     ),
     "parameters": {
         "type": "OBJECT",
@@ -1353,7 +1473,7 @@ TOOL = {
                 "type": "STRING",
                 "description": (
                     "The exact action. Prefer this over `description` — pick one of: "
-                    "volume_up | volume_down | volume_set | mute | "
+                    "volume_up | volume_down | volume_set | mute | unmute | toggle_mute | "
                     "brightness_up | brightness_down | sleep_display | "
                     "pause_video | close_window | full_screen | "
                     "minimize | maximize | snap_left | snap_right | "

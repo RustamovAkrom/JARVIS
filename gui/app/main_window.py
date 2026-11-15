@@ -241,6 +241,7 @@ from gui.themes.styles import (
 
 
 from gui.components.inputs import ChatInput
+from gui.panels.activity import ActivityPanel
 from gui.panels.system_monitor.metrics import _SysMetrics
 from gui.panels.system_monitor.widgets import MetricGauge, MetricTrendChart
 from gui.panels.debug.log_widget import LogWidget
@@ -2296,11 +2297,18 @@ class CustomizeOverlay(QWidget):
 
 
 class PluginManagerOverlay(QWidget):
-    """Floating overlay — lists discovered plugins with per-plugin ON/OFF toggles."""
+    """Lists discovered plugins with enable toggles and optional per-plugin settings."""
 
+    configuration_requested = pyqtSignal(object)
     _OW = 420
 
-    def __init__(self, plugins: list[dict], parent=None):
+    def __init__(
+        self,
+        plugins: list[dict],
+        parent=None,
+        *,
+        settings_sections: list[dict] | None = None,
+    ):
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(f"""
@@ -2311,6 +2319,24 @@ class PluginManagerOverlay(QWidget):
             }}
         """)
         self.setFixedWidth(self._OW)
+        schemas_by_namespace = {
+            str(section.get("namespace") or section.get("plugin") or ""): section
+            for section in (settings_sections or [])
+            if isinstance(section, dict)
+            and (section.get("namespace") or section.get("plugin"))
+            and any(
+                isinstance(field, dict) and field.get("key")
+                for field in (section.get("fields") or [])
+            )
+        }
+        self._configuration_by_plugin = {
+            str(plugin.get("name") or ""): schemas_by_namespace[str(
+                plugin.get("settings_namespace") or ""
+            )]
+            for plugin in plugins
+            if plugin.get("name")
+            and plugin.get("settings_namespace") in schemas_by_namespace
+        }
 
         lay = QVBoxLayout(self)
         lay.setContentsMargins(20, 16, 20, 16)
@@ -2381,6 +2407,26 @@ class PluginManagerOverlay(QWidget):
             self._style_toggle(btn, p["enabled"])
             btn.clicked.connect(lambda _, name=p["name"], b=btn: self._toggle(name, b))
         row.addWidget(btn)
+
+        section = self._configuration_by_plugin.get(str(p.get("name") or ""))
+        if p.get("valid") and section is not None:
+            settings_btn = QPushButton("⚙")
+            settings_btn.setObjectName(f"plugin_settings_{p['name']}")
+            settings_btn.setFixedSize(26, 24)
+            settings_btn.setToolTip(f"Configure {p['name']}")
+            settings_btn.setAccessibleName(f"Configure {p['name']}")
+            settings_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            settings_btn.setStyleSheet(f"""
+                QPushButton {{ background:transparent; color:{C.TEXT_MED};
+                    border:1px solid {C.BORDER}; border-radius:4px; }}
+                QPushButton:hover {{ color:{C.PRI}; border-color:{C.PRI_DIM};
+                    background:{C.PRI_GHO}; }}
+            """)
+            settings_btn.clicked.connect(
+                lambda _=False, schema=section, plugin_name=str(p.get("name") or ""):
+                    self.configuration_requested.emit({**schema, "plugin": plugin_name})
+            )
+            row.addWidget(settings_btn)
         return row
 
     def _style_toggle(self, btn: QPushButton, enabled: bool):
@@ -3830,11 +3876,14 @@ class ProvidersOverlay(_HudOverlay):
 
     def _line(self, text: str = "") -> QLineEdit:
         w = QLineEdit(text)
-        w.setFont(QFont(FONT_MONO, 8))
-        w.setFixedHeight(27)
+        w.setFont(QFont(FONT_MONO, 9))
+        w.setMinimumWidth(0)
+        w.setMinimumHeight(34)
+        w.setFixedHeight(34)
+        w.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         w.setStyleSheet(
             f"QLineEdit {{ background: {C.DARK}; color: {C.TEXT}; "
-            f"border: 1px solid {C.BORDER}; border-radius: 3px; padding: 2px 9px; }}"
+            f"border: 1px solid {C.BORDER}; border-radius: 4px; padding: 4px 10px; }}"
             f"QLineEdit:focus {{ border-color: {C.PRI_DIM}; }}"
         )
         return w
@@ -5540,6 +5589,7 @@ class PluginSettingsOverlay(QWidget):
     """
 
     _test_done = pyqtSignal(str, bool, str)  # namespace, ok, message
+    closed = pyqtSignal()
     _OW = 460
 
     def __init__(self, sections: list[dict], parent=None):
@@ -5625,6 +5675,7 @@ class PluginSettingsOverlay(QWidget):
                 border: 1px solid {C.BORDER}; border-radius: 3px; }}
             QPushButton:hover {{ color: {C.TEXT}; border-color: {C.BORDER_B}; }}
         """)
+        close_btn.clicked.connect(self.closed.emit)
         close_btn.clicked.connect(self.hide)
         btn_row.addWidget(close_btn)
         root.addLayout(btn_row)
@@ -7000,6 +7051,37 @@ class UpdatePanel(QWidget):
             f"color:{C.TEXT_DIM}; background:transparent;"
         )
         layout.addWidget(self._install_state)
+        platform_name = platform.system()
+        if platform_name == "Windows":
+            package_instruction = (
+                "On Windows, download the latest Windows Installer (.exe), "
+                "close JARVIS, run the installer and install the new version."
+            )
+        else:
+            package_instruction = (
+                f"Download the release package built for {platform_name}, close JARVIS, "
+                "then install or replace the application using that package's normal procedure."
+            )
+        user_data_path = _html.escape(str(PATHS.user_data_root))
+        self._manual_update = QLabel(
+            "<b>Manual update required</b><br>"
+            "1. Open <a href='https://github.com/RustamovAkrom/JARVIS/releases/latest'>GitHub Releases</a> "
+            "and download the package for this operating system.<br>"
+            f"2. {package_instruction}<br>"
+            "3. User settings, memory, plugins and profiles are stored outside the application files. "
+            "Do not remove or overwrite the user-data directory:<br>"
+            f"<code>{user_data_path}</code>"
+        )
+        self._manual_update.setWordWrap(True)
+        self._manual_update.setOpenExternalLinks(True)
+        self._manual_update.setTextFormat(Qt.TextFormat.RichText)
+        self._manual_update.setStyleSheet(
+            f"QLabel {{ color:{C.TEXT_MED}; background:{C.PANEL2}; "
+            f"border:1px solid {C.BORDER}; border-radius:6px; padding:9px; }}"
+            f"QLabel a {{ color:{C.PRI}; }}"
+        )
+        self._manual_update.setVisible(not self._installable)
+        layout.addWidget(self._manual_update)
         self._status = QLabel("Not checked yet")
         self._status.setStyleSheet(f"color:{C.PRI}; background:transparent;")
         layout.addWidget(self._status)
@@ -7031,6 +7113,8 @@ class UpdatePanel(QWidget):
         self._auto_install = QCheckBox("Apply a downloaded update at the next launch")
         self._auto_install.setChecked(self._settings["auto_install"])
         self._auto_install.setEnabled(self._installable)
+        self._auto_download.setVisible(self._installable)
+        self._auto_install.setVisible(self._installable)
         for checkbox in (self._auto_check, self._auto_download, self._auto_install):
             checkbox.setStyleSheet(f"color:{C.TEXT_DIM}; background:transparent;")
             layout.addWidget(checkbox)
@@ -7047,6 +7131,8 @@ class UpdatePanel(QWidget):
         self._install_button = QPushButton("Restart and update")
         self._install_button.setEnabled(False)
         self._install_button.clicked.connect(self.install_now)
+        self._download_button.setVisible(self._installable)
+        self._install_button.setVisible(self._installable)
         for button in (self._check_button, self._download_button, self._install_button):
             actions.addWidget(button)
         layout.addLayout(actions)
@@ -7136,6 +7222,7 @@ class UpdatePanel(QWidget):
         if result.update_available:
             self._status.setText(
                 f"Update available: {result.current_version} → {result.release.version}"
+                + (" — manual installation required" if not result.install_supported else "")
             )
             self._download_button.setEnabled(result.install_supported)
         else:
@@ -7209,6 +7296,7 @@ class UpdatePanel(QWidget):
 
 class MainWindow(QMainWindow):
     _log_sig = pyqtSignal(str)
+    _chat_log_sig = pyqtSignal(str, str)  # transcript text, originating chat ID
     _project_open_sig = pyqtSignal(str, str)
     _state_sig = pyqtSignal(str)
     _content_sig = pyqtSignal(str, str, str)  # (title, text, stable update key)
@@ -7253,6 +7341,31 @@ class MainWindow(QMainWindow):
         )
         self._assistant_name: str = (_cfg.get("assistant_name") or "JARVIS").strip()
         _display = self._assistant_name.upper()
+
+        # Chats live in user data, outside replaceable application files.
+        from gui.app.chat_store import ChatStore
+
+        chat_store_path = CONFIG_DIR / "ui_chats.json"
+        had_chat_store = chat_store_path.exists()
+        had_legacy_chats = bool(
+            _read_json_list(_UI_CHAT_FILE, "turns")
+            or _read_json_list(_UI_HISTORY_FILE, "turns")
+        )
+        self._chat_store = ChatStore(
+            chat_store_path,
+            legacy_chat_path=_UI_CHAT_FILE,
+            legacy_history_path=_UI_HISTORY_FILE,
+        )
+        self._active_chat = (
+            self._chat_store.start_new_chat()
+            if had_chat_store or had_legacy_chats
+            else self._chat_store.get_active_chat()
+        )
+        self._active_chat_id = str(self._active_chat.get("id") or "")
+        self.on_chat_switch = None
+        self._chat_switcher_open = False
+        self._chat_switcher_animation = None
+
         self._reader_window = None
         self._reader_detaching = False
         self._content_expanded = False
@@ -7346,7 +7459,7 @@ class MainWindow(QMainWindow):
         root.addWidget(self._build_header())
 
         self._main_splitter = QSplitter(Qt.Orientation.Horizontal)
-        self._main_splitter.setChildrenCollapsible(True)
+        self._main_splitter.setChildrenCollapsible(False)
         self._main_splitter.setContentsMargins(6, 6, 6, 6)
         self._main_splitter.setStyleSheet("""
             QSplitter::handle { background: transparent; width: 5px; }
@@ -7354,6 +7467,7 @@ class MainWindow(QMainWindow):
         """)
 
         self._left_panel = self._build_left_panel()
+        self._left_panel.setMinimumWidth(200)
         self._main_splitter.addWidget(self._left_panel)
 
         # Center column: HUD + resizable content panel via QSplitter
@@ -7650,6 +7764,7 @@ class MainWindow(QMainWindow):
         self._center_split.setCollapsible(1, True)
         self._center_split.setCollapsible(2, True)
         self._center_views = QStackedWidget()
+        self._center_views.setMinimumWidth(320)
         self._center_views.addWidget(self._center_split)
         self._editor_tabs = QTabWidget()
         self._editor_tabs.setDocumentMode(True)
@@ -7663,8 +7778,12 @@ class MainWindow(QMainWindow):
         self._editor_tabs.currentChanged.connect(self._on_project_editor_tab_changed)
         self._center_views.addWidget(self._editor_tabs)
         self._main_splitter.addWidget(self._center_views)
+        self._main_splitter.splitterMoved.connect(
+            self._update_advanced_telemetry_visibility
+        )
 
         self._right_panel = self._build_right_panel()
+        self._right_panel.setMinimumWidth(250)
         self._debug_panel = QWidget()
         self._debug_panel.setObjectName("DebugPanel")
         self._debug_panel.setMinimumHeight(0)
@@ -7685,8 +7804,10 @@ class MainWindow(QMainWindow):
         self._main_splitter.setStretchFactor(0, 0)
         self._main_splitter.setStretchFactor(1, 1)
         self._main_splitter.setSizes([_LEFT_W, 760])
+        QTimer.singleShot(0, self._update_advanced_telemetry_visibility)
 
         self._workspace_split = QSplitter(Qt.Orientation.Vertical)
+        self._workspace_split.setMinimumWidth(545)
         self._workspace_split.setChildrenCollapsible(True)
         self._workspace_split.setHandleWidth(8)
         self._workspace_split.setStyleSheet(
@@ -7713,7 +7834,7 @@ class MainWindow(QMainWindow):
         self._bottom_tabs.hide()
 
         self._root_splitter = QSplitter(Qt.Orientation.Horizontal)
-        self._root_splitter.setChildrenCollapsible(True)
+        self._root_splitter.setChildrenCollapsible(False)
         self._root_splitter.setHandleWidth(5)
         self._root_splitter.setStyleSheet(
             "QSplitter::handle { background:transparent; width:5px; }"
@@ -7753,6 +7874,7 @@ class MainWindow(QMainWindow):
         self._update_metrics()
 
         self._log_sig.connect(self._append_activity)
+        self._chat_log_sig.connect(self._append_activity)
         self._project_open_sig.connect(self._open_project_from_assistant)
         self._state_sig.connect(self._apply_state)
         self._content_sig.connect(self._show_content)
@@ -9034,6 +9156,20 @@ class MainWindow(QMainWindow):
         if hasattr(self, "_quick_drawer") and self._quick_drawer.isVisible():
             self._position_quick_drawer()
         self._fit_video()
+        self._update_advanced_telemetry_visibility()
+
+    def _update_advanced_telemetry_visibility(self, *_args):
+        panel = getattr(self, "_advanced_panel", None)
+        left = getattr(self, "_left_panel", None)
+        tabs = getattr(self, "_left_tabs", None)
+        if panel is None or left is None or tabs is None:
+            return
+        expanded = (
+            left.isVisible()
+            and left.width() >= 390
+            and tabs.currentWidget() is getattr(self, "_system_page", None)
+        )
+        panel.setVisible(expanded)
 
     def _update_metrics(self):
         snap = _metrics.snapshot()
@@ -9084,6 +9220,74 @@ class MainWindow(QMainWindow):
         proc_count = snap.get("process_count", 0)
         value = str(proc_count) if proc_count else "--"
         self._proc_lbl.setText(f"{self._tr('PROCESSES')}  {value}")
+
+        if hasattr(self, "_advanced_labels"):
+            cpu_frequency = float(snap.get("cpu_freq_mhz", -1.0))
+            if cpu_frequency >= 1000:
+                frequency_text = f"{cpu_frequency / 1000:.2f} GHz"
+            elif cpu_frequency > 0:
+                frequency_text = f"{cpu_frequency:.0f} MHz"
+            else:
+                frequency_text = "N/A"
+            physical = int(snap.get("cpu_cores_physical", 0) or 0)
+            logical = int(snap.get("cpu_cores_logical", 0) or 0)
+            self._advanced_labels["cpu"].setText(
+                f"{frequency_text} · {physical} cores / {logical} threads"
+            )
+
+            def _format_size(value):
+                number = max(0.0, float(value))
+                for unit in ("B", "KB", "MB", "GB", "TB"):
+                    if number < 1024 or unit == "TB":
+                        return f"{number:.1f} {unit}" if unit != "B" else f"{number:.0f} B"
+                    number /= 1024
+                return f"{number:.1f} TB"
+
+            total_memory = int(snap.get("mem_total_bytes", 0) or 0)
+            available_memory = int(snap.get("mem_available_bytes", 0) or 0)
+            if total_memory:
+                used_memory = max(0, total_memory - available_memory)
+                self._advanced_labels["memory"].setText(
+                    f"{_format_size(used_memory)} used / {_format_size(total_memory)} total"
+                    f" · {_format_size(available_memory)} available"
+                )
+            else:
+                self._advanced_labels["memory"].setText("N/A")
+
+            upload_bps = float(snap.get("net_upload_bps", 0.0) or 0.0)
+            download_bps = float(snap.get("net_download_bps", 0.0) or 0.0)
+
+            def _format_rate(value):
+                number = max(0.0, float(value))
+                if number < 1024 * 1024:
+                    return f"{number / 1024:.0f} KB/s"
+                return f"{number / (1024 * 1024):.2f} MB/s"
+
+            self._advanced_labels["network"].setText(
+                f"UPLOAD  {_format_rate(upload_bps)}   ·   "
+                f"DOWNLOAD  {_format_rate(download_bps)}"
+            )
+            # The chart uses a 20 MB/s reference scale; exact rates remain
+            # visible in the line above and are not clipped to that scale.
+            scale_bps = 20 * 1024 * 1024
+            self._network_trend_chart.set_values(
+                min(100.0, download_bps * 100.0 / scale_bps),
+                min(100.0, upload_bps * 100.0 / scale_bps),
+            )
+
+            gpu_used = float(snap.get("gpu_memory_used_mb", -1.0))
+            gpu_total = float(snap.get("gpu_memory_total_mb", -1.0))
+            gpu_temperature = float(snap.get("gpu_temp", -1.0))
+            gpu_parts = []
+            if gpu_used >= 0 and gpu_total > 0:
+                gpu_parts.append(f"VRAM  {gpu_used:.0f} / {gpu_total:.0f} MB")
+            else:
+                gpu_parts.append("VRAM  N/A")
+            if gpu_temperature >= 0:
+                gpu_parts.append(f"{gpu_temperature:.0f} °C")
+            else:
+                gpu_parts.append("Temperature  N/A")
+            self._advanced_labels["gpu"].setText("   ·   ".join(gpu_parts))
 
     def _build_header(self) -> QWidget:
         w = _WindowHeader(self)
@@ -9346,6 +9550,9 @@ class MainWindow(QMainWindow):
         panel_layout.setSpacing(0)
         self._left_tabs = QTabWidget()
         self._left_tabs.setDocumentMode(True)
+        self._left_tabs.setUsesScrollButtons(True)
+        self._left_tabs.tabBar().setExpanding(False)
+        self._left_tabs.tabBar().setElideMode(Qt.TextElideMode.ElideRight)
         self._left_tabs.setStyleSheet(f"""
             QTabWidget::pane {{ border:0; background:{C.PANEL}; }}
             QTabBar::tab {{ color:{C.TEXT_DIM}; background:{C.PANEL2}; padding:6px 9px;
@@ -9354,6 +9561,7 @@ class MainWindow(QMainWindow):
         """)
         panel_layout.addWidget(self._left_tabs)
         system_page = QWidget()
+        self._system_page = system_page
         system_layout = QVBoxLayout(system_page)
         system_layout.setContentsMargins(0, 0, 0, 0)
         system_layout.setSpacing(0)
@@ -9522,8 +9730,61 @@ class MainWindow(QMainWindow):
 
         lay.addWidget(info_panel)
 
+        # Advanced telemetry remains hidden at the default compact panel width.
+        # The existing gauges and load graph above are unchanged.
+        self._advanced_panel = QFrame()
+        self._advanced_panel.setObjectName("AdvancedTelemetry")
+        self._advanced_panel.setStyleSheet(
+            f"QFrame#AdvancedTelemetry {{ background:{C.PANEL2}; "
+            f"border:1px solid {C.BORDER}; border-radius:7px; }}"
+        )
+        advanced_layout = QVBoxLayout(self._advanced_panel)
+        advanced_layout.setContentsMargins(7, 7, 7, 7)
+        advanced_layout.setSpacing(4)
+        advanced_title = QLabel(self._tr("ADVANCED TELEMETRY"))
+        advanced_title.setFont(QFont(FONT_MONO, 7, QFont.Weight.Bold))
+        advanced_title.setStyleSheet(f"color:{C.PRI}; background:transparent;")
+        advanced_layout.addWidget(advanced_title)
+
+        self._advanced_labels = {}
+        advanced_rows = (
+            ("cpu", "CPU DETAILS"),
+            ("memory", "MEMORY"),
+            ("network", "NETWORK"),
+            ("gpu", "GPU / VRAM"),
+        )
+        for key, caption_text in advanced_rows:
+            caption = QLabel(self._tr(caption_text))
+            caption.setFont(QFont(FONT_MONO, 6, QFont.Weight.Bold))
+            caption.setStyleSheet(f"color:{C.TEXT_DIM}; background:transparent;")
+            advanced_layout.addWidget(caption)
+            value = QLabel("Collecting telemetry…")
+            value.setObjectName(f"advanced_{key}")
+            value.setWordWrap(True)
+            value.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+            value.setFont(QFont(FONT_MONO, 8))
+            value.setStyleSheet(f"color:{C.TEXT}; background:transparent;")
+            advanced_layout.addWidget(value)
+            self._advanced_labels[key] = value
+
+        self._network_trend_chart = MetricTrendChart(
+            self._tr("NETWORK TRAFFIC HISTORY"),
+            self._tr("COLLECTING NETWORK TRAFFIC"),
+            self._tr("UPLOAD"),
+            primary_label=self._tr("DOWNLOAD"),
+        )
+        self._network_trend_chart.setMinimumHeight(92)
+        advanced_layout.addWidget(self._network_trend_chart)
+        self._advanced_panel.hide()
+        lay.addWidget(self._advanced_panel)
+
         self._left_tabs.addTab(system_page, self._tr("SYSTEM"))
         self._build_project_explorer()
+        self._activity_panel = ActivityPanel()
+        self._left_tabs.addTab(self._activity_panel, self._tr("ACTIVITY"))
+        self._left_tabs.currentChanged.connect(
+            self._update_advanced_telemetry_visibility
+        )
         return w
 
     def _build_project_explorer(self):
@@ -9748,7 +10009,9 @@ class MainWindow(QMainWindow):
         self._work_tabs = QTabWidget()
         self._work_tabs.setDocumentMode(True)
         self._work_tabs.setUsesScrollButtons(True)
-        self._work_tabs.tabBar().setExpanding(True)
+        self._work_tabs.tabBar().setExpanding(False)
+        # Keep full tab names. If the panel gets narrow, Qt exposes the
+        # scroll buttons instead of replacing the label text with an ellipsis.
         self._work_tabs.tabBar().setElideMode(Qt.TextElideMode.ElideNone)
         self._work_tabs.setStyleSheet(f"""
             QTabWidget::pane {{ border:0; background:transparent; }}
@@ -9768,14 +10031,60 @@ class MainWindow(QMainWindow):
         chat_title.setFont(QFont(FONT_UI, 10))
         chat_tools.addWidget(chat_title)
         chat_tools.addStretch(1)
-        self._clear_chat_btn = QPushButton(self._tr("Clear chat"))
-        self._clear_chat_btn.setMinimumHeight(28)
+        self._chat_switcher_btn = QPushButton("☷")
+        self._chat_switcher_btn.setFixedSize(28, 28)
+        self._chat_switcher_btn.setCheckable(True)
+        self._chat_switcher_btn.setToolTip(self._tr("Show saved chats"))
+        self._chat_switcher_btn.setAccessibleName(self._tr("Show saved chats"))
+        self._chat_switcher_btn.clicked.connect(self._toggle_chat_switcher)
+        chat_tools.addWidget(self._chat_switcher_btn)
+
+        self._new_chat_btn = QPushButton("+")
+        self._new_chat_btn.setFixedSize(28, 28)
+        self._new_chat_btn.setToolTip(self._tr("Start a new chat"))
+        self._new_chat_btn.setAccessibleName(self._tr("Start a new chat"))
+        self._new_chat_btn.clicked.connect(self._start_new_chat)
+        chat_tools.addWidget(self._new_chat_btn)
+
+        self._clear_chat_btn = QPushButton("×")
+        self._clear_chat_btn.setFixedSize(28, 28)
         self._clear_chat_btn.setToolTip(
-            self._tr("Clear this chat view. Previous conversations remain in Conversations.")
+            self._tr("Clear this chat. Other saved chats remain unchanged.")
+        )
+        self._clear_chat_btn.setAccessibleName(self._tr("Clear current chat"))
+        self._clear_chat_btn.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{C.TEXT_MED}; "
+            f"border:1px solid {C.BORDER}; border-radius:5px; }}"
+            f"QPushButton:hover {{ color:{C.RED}; border-color:{C.RED}; }}"
         )
         self._clear_chat_btn.clicked.connect(self._clear_chat)
         chat_tools.addWidget(self._clear_chat_btn)
         chat_lay.addLayout(chat_tools)
+
+        self._chat_switcher_panel = QFrame()
+        self._chat_switcher_panel.setObjectName("ChatSwitcherPanel")
+        self._chat_switcher_panel.setStyleSheet(
+            f"QFrame#ChatSwitcherPanel {{ background:{C.PANEL}; "
+            f"border:1px solid {C.BORDER}; border-radius:7px; }}"
+        )
+        self._chat_switcher_panel.setMaximumHeight(0)
+        self._chat_switcher_panel.hide()
+        switcher_layout = QVBoxLayout(self._chat_switcher_panel)
+        switcher_layout.setContentsMargins(5, 5, 5, 5)
+        switcher_layout.setSpacing(4)
+        self._chat_switcher_list = QListWidget()
+        self._chat_switcher_list.setObjectName("chat_switcher_list")
+        self._chat_switcher_list.setMaximumHeight(150)
+        self._chat_switcher_list.setStyleSheet(
+            f"QListWidget {{ background:{C.PANEL2}; color:{C.TEXT}; "
+            f"border:0; border-radius:5px; }}"
+            f"QListWidget::item {{ padding:6px; border-bottom:1px solid {C.BORDER}; }}"
+            f"QListWidget::item:selected {{ background:{C.PRI_GHO}; color:{C.PRI}; }}"
+        )
+        self._chat_switcher_list.itemClicked.connect(self._switch_chat_item)
+        switcher_layout.addWidget(self._chat_switcher_list)
+        chat_lay.addWidget(self._chat_switcher_panel)
+
         chat_history_surface = QWidget()
         chat_history_layout = QGridLayout(chat_history_surface)
         chat_history_layout.setContentsMargins(0, 0, 0, 0)
@@ -9848,10 +10157,13 @@ class MainWindow(QMainWindow):
         history_tools.addWidget(self._clear_history_btn)
         history_lay.addLayout(history_tools)
         self._history_list = QListWidget()
+        self._history_list.setObjectName("saved_chats_list")
         self._history_list.setStyleSheet(
             f"background: {C.PANEL2}; color: {C.TEXT}; border: none; border-radius: 5px;"
             f"QListWidget::item {{ padding: 6px; border-bottom: 1px solid {C.BORDER}; }}"
+            f"QListWidget::item:selected {{ background:{C.PRI_GHO}; color:{C.PRI}; }}"
         )
+        self._history_list.itemClicked.connect(self._switch_chat_item)
         history_lay.addWidget(self._history_list, 1)
         self._work_tabs.addTab(history_page, self._tr("CONVERSATIONS"))
         self._work_tabs.setTabToolTip(
@@ -9896,6 +10208,7 @@ class MainWindow(QMainWindow):
         self._development_mode = bool(
             _read_full_config().get("development_mode", False)
         )
+        self._debug_toggle_btn.setVisible(self._development_mode)
         self._work_tabs.setCurrentIndex(0)
         lay.addWidget(self._work_tabs, stretch=1)
         self._refresh_chat()
@@ -10786,20 +11099,27 @@ class MainWindow(QMainWindow):
             panel.setWordWrap(True)
         if isinstance(panel, ProvidersOverlay):
             panel.changed.connect(self._on_providers_applied)
-        return self._embed_settings_panels((
+        page = self._embed_settings_panels((
             "AI providers",
             "Choose Online cloud services or Offline models on this device. Configure voice recognition, the AI model and spoken responses inside each mode.",
             panel,
         ))
+        # Keep the provider form readable on wide displays without forcing a
+        # horizontal scroll. On narrower Settings windows it still follows the
+        # viewport because the page is width-expanding up to this cap.
+        page.setMaximumWidth(940)
+        page.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
+        )
+        return page
 
     def _build_plugins_settings_page(self):
         plugins = self.get_plugins() if self.get_plugins else []
         sections = self.get_plugin_settings() if self.get_plugin_settings else []
-        manager = PluginManagerOverlay(plugins)
-        settings = PluginSettingsOverlay(sections)
+        manager = PluginManagerOverlay(plugins, settings_sections=sections)
+        manager.configuration_requested.connect(self._open_plugin_configuration)
         return self._embed_settings_panels(
-            ("Plugin manager", "Enable installed plugins and review their status.", manager),
-            ("Plugin configuration", "Configure plugin options and run their available checks.", settings),
+            ("Plugins", "Enable or disable plugins. Use the settings icon on a plugin row to configure only that plugin.", manager),
         )
 
     def _build_memory_settings_page(self):
@@ -13506,6 +13826,8 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         button = self._left_toggle_btn if index == 0 else self._right_toggle_btn
         splitter = self._main_splitter if index == 0 else self._root_splitter
         splitter_index = 0 if index == 0 else 1
+        other_index = 1 - splitter_index
+        other_panel = splitter.widget(other_index)
         sizes = splitter.sizes()
         if panel.isVisible():
             if sizes[splitter_index] > 0:
@@ -13513,15 +13835,26 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             panel.hide()
         else:
             panel.show()
-            sizes = splitter.sizes()
-            sizes[splitter_index] = max(
-                self._side_restore_width[index], panel.minimumWidth()
+            available = max(
+                0, splitter.width() - splitter.handleWidth()
             )
-            sizes[1 - splitter_index] = max(
-                1, splitter.width() - sizes[splitter_index]
+            panel_min = max(1, panel.minimumWidth())
+            other_min = max(1, other_panel.minimumWidth())
+            desired = max(
+                panel_min,
+                int(self._side_restore_width.get(index, panel_min)),
             )
+            # Never restore a panel to a width that leaves its neighbour below
+            # its declared usable width. The user can still hide either panel
+            # independently when the overall window is narrow.
+            max_panel_width = max(panel_min, available - other_min)
+            restored = min(desired, max_panel_width)
+            sizes[splitter_index] = restored
+            sizes[other_index] = max(other_min, available - restored)
             splitter.setSizes(sizes)
+            self._side_restore_width[index] = restored
         button.setChecked(panel.isVisible())
+        self._update_advanced_telemetry_visibility()
         self._refresh_workspace_settings_state()
 
     def _toggle_content_panel(self):
@@ -14822,6 +15155,67 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
     def _open_plugin_settings(self):
         self._show_settings_category("plugins")
 
+    def _open_plugin_configuration(self, section: dict):
+        if not isinstance(section, dict):
+            return
+        plugin_name = str(section.get("plugin") or section.get("namespace") or "Plugin")
+        dialog_key = str(section.get("namespace") or plugin_name)
+
+        # The Plugins page is cached, but plugin settings can be saved from a
+        # separate dialog. Re-read the registry so reopening a form always
+        # reflects current persisted values rather than the first-page snapshot.
+        get_settings = getattr(self, "get_plugin_settings", None)
+        if callable(get_settings):
+            try:
+                latest_sections = get_settings() or []
+            except Exception as exc:
+                self._append_activity(
+                    f"ERR: Could not refresh {plugin_name} settings: {exc}"
+                )
+            else:
+                section = next(
+                    (
+                        candidate
+                        for candidate in latest_sections
+                        if isinstance(candidate, dict)
+                        and str(candidate.get("namespace") or candidate.get("plugin") or "")
+                        == dialog_key
+                    ),
+                    section,
+                )
+                section = {**section, "plugin": plugin_name}
+
+        dialogs = getattr(self, "_plugin_settings_dialogs", None)
+        if dialogs is None:
+            dialogs = self._plugin_settings_dialogs = {}
+        current = dialogs.get(dialog_key)
+        if current is not None:
+            current.raise_()
+            current.activateWindow()
+            return
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle(f"{plugin_name} settings")
+        dialog.setWindowModality(Qt.WindowModality.NonModal)
+        dialog.setMinimumSize(380, 260)
+        dialog.resize(460, 390)
+        dialog.setStyleSheet(
+            f"QDialog {{ background:{C.PANEL}; color:{C.TEXT}; "
+            f"border:1px solid {C.BORDER_B}; }}"
+        )
+        dialog_layout = QVBoxLayout(dialog)
+        dialog_layout.setContentsMargins(6, 6, 6, 6)
+        editor = PluginSettingsOverlay([section], dialog)
+        dialog_layout.addWidget(editor)
+        editor.closed.connect(dialog.close)
+        dialog.finished.connect(
+            lambda _result, key=dialog_key: dialogs.pop(key, None)
+        )
+        dialogs[dialog_key] = dialog
+        dialog.show()
+        dialog.raise_()
+        dialog.activateWindow()
+
     def _on_clipboard_changed(self):
         try:
             text = QApplication.clipboard().text().strip()
@@ -15231,8 +15625,11 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         display_text = txt.replace("[[JARVIS_PLAN_MODE]]", "").strip()
         self._append_activity(f"You: {display_text}")
         if self.on_text_command:
+            originating_chat_id = str(getattr(self, "_active_chat_id", "") or "")
             threading.Thread(
-                target=self.on_text_command, args=(txt,), daemon=True
+                target=self.on_text_command,
+                args=(txt, originating_chat_id),
+                daemon=True,
             ).start()
 
     def _refresh_dev_mode_btn(self):
@@ -15241,6 +15638,16 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             check.blockSignals(True)
             check.setChecked(bool(self._development_mode))
             check.blockSignals(False)
+        debug_button = getattr(self, "_debug_toggle_btn", None)
+        if debug_button is not None:
+            debug_button.setVisible(bool(self._development_mode))
+        if (
+            not self._development_mode
+            and getattr(self, "_bottom_tabs", None) is not None
+            and self._bottom_tabs.isVisible()
+            and self._bottom_tabs.currentWidget() is getattr(self, "_debug_panel", None)
+        ):
+            self._hide_bottom_panel()
         if not hasattr(self, "_dev_mode_btn"):
             return
         state = "ON" if self._development_mode else "OFF"
@@ -15293,8 +15700,8 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         self._refresh_diagnostics()
         return True
 
-    def _append_activity(self, text: str):
-        """Central log sink: GUI updates stay on Qt's thread; dev mode mirrors to stdout."""
+    def _append_activity(self, text: str, chat_id: str | None = None):
+        """Central log sink; chat transcripts retain the ID of their source chat."""
         text = str(text or "")
         if self._development_mode:
             stream = getattr(self, "_console_stdout", None) or sys.__stdout__
@@ -15304,84 +15711,93 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             except Exception:
                 pass
         self._log.append_log(text)
+        activity = getattr(self, "_activity_panel", None)
+        if activity is not None:
+            activity.append_event(text)
         if text.strip().lower().startswith("[reminder]"):
             self._refresh_tasks()
-        self._record_history_line(text)
+        self._record_history_line(text, chat_id=chat_id)
 
-    def _record_history_line(self, text: str):
-        line = text.strip()
+    def _active_chat_turns(self) -> list[dict]:
+        chat = self._chat_store.get_chat(self._active_chat_id)
+        if chat is None:
+            chat = self._chat_store.get_active_chat()
+            self._active_chat = chat
+            self._active_chat_id = str(chat.get("id") or "")
+        else:
+            self._active_chat = chat
+        return list(self._active_chat.get("turns") or [])
+
+    def _record_history_line(self, text: str, chat_id: str | None = None):
+        line = str(text or "").strip()
         low = line.lower()
-        rows = _history_turns()
-        chat_rows = _chat_turns()
+        target_id = str(chat_id or self._active_chat_id or "")
+        chat = self._chat_store.get_chat(target_id)
+        if chat is None:
+            return
+
+        turns = list(chat.get("turns") or [])
+        context = list(chat.get("context") or [])
+        now = time.strftime("%Y-%m-%d %H:%M")
         if low.startswith("you:"):
             request = line.split(":", 1)[1].strip()[:4000]
             if (
-                rows
-                and rows[-1].get("request", "").casefold() == request.casefold()
-                and not rows[-1].get("result")
+                turns
+                and turns[-1].get("request", "").casefold() == request.casefold()
+                and not turns[-1].get("result")
             ):
                 return
-            turn = {
+            turns.append({
                 "id": uuid.uuid4().hex,
                 "request": request,
                 "result": "",
-                "time": time.strftime("%Y-%m-%d %H:%M"),
+                "time": now,
                 "status": "pending",
-            }
-            rows.append(turn.copy())
-            chat_rows.append(turn.copy())
+            })
+            context.append({"role": "user", "text": request})
+            if str(chat.get("title") or "New chat") == "New chat":
+                chat["title"] = request[:52].rstrip() + ("…" if len(request) > 52 else "")
         elif (
             low.startswith(
                 (self._assistant_name.lower() + ":", "jarvis:", "j.a.r.v.i.s:")
             )
-            and rows
-            and rows[-1].get("status") == "pending"
+            and turns
+            and turns[-1].get("status") == "pending"
         ):
             result = line.split(":", 1)[1].strip()[:4000]
-            rows[-1]["result"] = result
-            rows[-1]["status"] = "complete"
-            rows[-1]["response_time"] = time.strftime("%Y-%m-%d %H:%M")
-            turn_id = rows[-1].get("id")
-            for chat_turn in reversed(chat_rows):
-                if chat_turn.get("id") == turn_id:
-                    chat_turn["result"] = result
-                    chat_turn["status"] = "complete"
-                    chat_turn["response_time"] = rows[-1]["response_time"]
-                    break
+            turns[-1]["result"] = result
+            turns[-1]["status"] = "complete"
+            turns[-1]["response_time"] = now
+            context.append({"role": "model", "text": result})
         elif (
-            rows
-            and rows[-1].get("status") == "pending"
+            chat_id is not None
+            and turns
+            and turns[-1].get("status") == "pending"
             and (
                 low.startswith(("err:", "[stderr]"))
                 or any(
                     word in low
                     for word in (
-                        "failed",
-                        "failure",
-                        "unavailable",
-                        "timed out",
-                        "could not",
-                        "exception",
+                        "failed", "failure", "unavailable",
+                        "timed out", "could not", "exception",
                     )
                 )
             )
         ):
-            rows[-1]["result"] = line[:4000]
-            rows[-1]["status"] = "error"
-            rows[-1]["response_time"] = time.strftime("%Y-%m-%d %H:%M")
-            turn_id = rows[-1].get("id")
-            for chat_turn in reversed(chat_rows):
-                if chat_turn.get("id") == turn_id:
-                    chat_turn["result"] = line[:4000]
-                    chat_turn["status"] = "error"
-                    chat_turn["response_time"] = rows[-1]["response_time"]
-                    break
+            turns[-1]["result"] = line[:4000]
+            turns[-1]["status"] = "error"
+            turns[-1]["response_time"] = now
         else:
             return
-        _write_json_list(_UI_HISTORY_FILE, "turns", rows[-100:])
-        _write_json_list(_UI_CHAT_FILE, "turns", chat_rows[-100:])
+
+        chat["turns"] = turns[-self._chat_store.MAX_TURNS :]
+        chat["context"] = context[-self._chat_store.MAX_CONTEXT_MESSAGES :]
+        self._chat_store.save_chat(chat, activate=False)
+        if target_id == self._active_chat_id:
+            self._active_chat = chat
+            _write_json_list(_UI_CHAT_FILE, "turns", chat["turns"][-100:])
+            self._refresh_chat()
         self._refresh_history()
-        self._refresh_chat()
 
     def _update_chat_scroll_button(self):
         if not hasattr(self, "_chat_view") or not hasattr(self, "_chat_latest_btn"):
@@ -15411,7 +15827,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             return
         scroll_bar = self._chat_view.verticalScrollBar()
         old_scroll = scroll_bar.value()
-        rows = _chat_turns()[-20:]
+        rows = self._active_chat_turns()[-20:]
         self._chat_view.set_response_times(
             {
                 str(row.get("id", "")): str(row.get("response_time") or row.get("time") or "")
@@ -15503,7 +15919,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         elif link.startswith(("copy-user:", "copy-answer:")):
             kind, turn_id = link.split(":", 1)
             row = next(
-                (r for r in _chat_turns() if str(r.get("id", "")) == turn_id),
+                (r for r in self._active_chat_turns() if str(r.get("id", "")) == turn_id),
                 None,
             )
             if row is not None:
@@ -15514,77 +15930,171 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                 )
                 QApplication.clipboard().setText(str(text))
 
+    def _notify_chat_switch(
+        self, chat: dict, *, force_reconnect: bool = False
+    ) -> None:
+        callback = getattr(self, "on_chat_switch", None)
+        if callback is None:
+            return
+        try:
+            args = (
+                str(chat.get("id") or ""),
+                str(chat.get("resume_handle") or "") or None,
+            )
+            if force_reconnect:
+                callback(*args, force_reconnect=True)
+            else:
+                callback(*args)
+        except Exception as exc:
+            self._append_activity(f"ERR: Chat session switch failed: {exc}")
+
+    def _switch_chat_item(self, item: QListWidgetItem, *_args) -> None:
+        chat_id = str(item.data(Qt.ItemDataRole.UserRole) or "")
+        if not chat_id or chat_id == self._active_chat_id:
+            self._toggle_chat_switcher(False)
+            return
+        chat = self._chat_store.set_active(chat_id)
+        if chat is None:
+            return
+        self._active_chat = chat
+        self._active_chat_id = chat_id
+        self._expanded_chat_turns.clear()
+        _write_json_list(_UI_CHAT_FILE, "turns", chat.get("turns", [])[-100:])
+        self._refresh_chat()
+        self._refresh_history()
+        self._toggle_chat_switcher(False)
+        self._notify_chat_switch(chat)
+
+    def _start_new_chat(self) -> None:
+        chat = self._chat_store.start_new_chat()
+        self._active_chat = chat
+        self._active_chat_id = str(chat.get("id") or "")
+        self._expanded_chat_turns.clear()
+        _write_json_list(_UI_CHAT_FILE, "turns", [])
+        self._refresh_chat()
+        self._refresh_history()
+        self._toggle_chat_switcher(False)
+        self._notify_chat_switch(chat)
+
+    def _toggle_chat_switcher(self, force_open: bool | None = None) -> None:
+        target_open = (
+            not self._chat_switcher_open if force_open is None else bool(force_open)
+        )
+        if target_open == self._chat_switcher_open:
+            return
+        panel = self._chat_switcher_panel
+        if self._chat_switcher_animation is not None:
+            self._chat_switcher_animation.stop()
+            self._chat_switcher_animation = None
+        if target_open:
+            self._refresh_history()
+            panel.show()
+        self._chat_switcher_open = target_open
+        self._chat_switcher_btn.setChecked(target_open)
+        start = panel.height() if panel.isVisible() else 0
+        end = 170 if target_open else 0
+        animation = QVariantAnimation(self)
+        animation.setDuration(160)
+        animation.setStartValue(start)
+        animation.setEndValue(end)
+        animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+        animation.valueChanged.connect(
+            lambda value, widget=panel: widget.setMaximumHeight(int(value))
+        )
+        if not target_open:
+            animation.finished.connect(panel.hide)
+        else:
+            animation.finished.connect(lambda: panel.setMaximumHeight(170))
+        self._chat_switcher_animation = animation
+        animation.start()
+
     def _delete_chat_turn(self, turn_id: str):
         if not turn_id:
             return
-        chat_rows = [r for r in _chat_turns() if str(r.get("id", "")) != turn_id]
-        conversation_rows = [r for r in _history_turns() if str(r.get("id", "")) != turn_id]
-        _write_json_list(_UI_CHAT_FILE, "turns", chat_rows[-100:])
-        _write_json_list(_UI_HISTORY_FILE, "turns", conversation_rows[-100:])
+        chat = self._chat_store.get_chat(self._active_chat_id)
+        if chat is None:
+            return
+        chat["turns"] = [
+            row for row in chat.get("turns", [])
+            if str(row.get("id") or "") != turn_id
+        ]
+        chat["context"] = self._chat_store._context_from_turns(chat["turns"])
+        chat["resume_handle"] = ""
+        self._chat_store.save_chat(
+            chat, activate=False, preserve_resume_handle=False
+        )
+        self._active_chat = chat
+        _write_json_list(_UI_CHAT_FILE, "turns", chat["turns"][-100:])
         self._refresh_chat()
         self._refresh_history()
+        self._notify_chat_switch(chat, force_reconnect=True)
 
     def _clear_chat(self):
+        chat = self._chat_store.clear_chat(self._active_chat_id)
+        if chat is None:
+            return
+        self._active_chat = chat
+        self._expanded_chat_turns.clear()
         _write_json_list(_UI_CHAT_FILE, "turns", [])
         self._refresh_chat()
+        self._refresh_history()
+        self._notify_chat_switch(chat, force_reconnect=True)
 
     def _clear_history(self):
         choice = QMessageBox.question(
             self,
             "Clear conversations",
-            "Delete previous conversations and clear the current chat? Saved memories will remain.",
+            "Delete all saved chats and clear the current chat? Saved memories will remain.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
         if choice != QMessageBox.StandardButton.Yes:
             return
+        chat = self._chat_store.clear_all()
+        self._active_chat = chat
+        self._active_chat_id = str(chat.get("id") or "")
+        self._expanded_chat_turns.clear()
         _write_json_list(_UI_HISTORY_FILE, "turns", [])
         _write_json_list(_UI_CHAT_FILE, "turns", [])
         self._refresh_chat()
         self._refresh_history()
+        self._notify_chat_switch(chat)
 
     def _refresh_history(self):
-        if not hasattr(self, "_history_list"):
-            return
-        self._history_list.clear()
-        rows = _history_turns()
-        for row in reversed(rows[-50:]):
-            request = str(row.get("request", ""))
-            result = str(row.get("result", "Awaiting a response…"))
-            stamp = str(row.get("time", ""))
-            status = str(row.get("status", ""))
-            item = QListWidgetItem()
-            item.setData(Qt.ItemDataRole.UserRole, str(row.get("id", "")))
-            holder = QWidget()
-            row_lay = QHBoxLayout(holder)
-            row_lay.setContentsMargins(5, 4, 3, 4)
-            row_lay.setSpacing(5)
-            copy = QLabel(
-                f"{stamp} · {status.upper()}\nYou: {request}\nJARVIS: {result}"
-            )
-            copy.setWordWrap(True)
-            copy.setTextFormat(Qt.TextFormat.PlainText)
-            copy.setFont(QFont(FONT_UI, 8))
-            copy.setStyleSheet(f"color:{C.TEXT}; background:transparent;")
-            row_lay.addWidget(copy, 1)
-            remove = QPushButton("×")
-            remove.setFixedSize(20, 20)
-            remove.setToolTip(
-                "Delete this turn from the current chat and Conversations; saved memories are unchanged"
-            )
-            remove.setStyleSheet(
-                f"QPushButton {{color:{C.TEXT_DIM}; background:transparent; border:1px solid {C.BORDER}; border-radius:4px;}} QPushButton:hover {{color:{C.RED}; border-color:{C.RED};}}"
-            )
-            remove.clicked.connect(
-                lambda _=False, tid=str(row.get("id", "")): self._delete_chat_turn(tid)
-            )
-            row_lay.addWidget(remove)
-            item.setSizeHint(holder.sizeHint())
-            item.setToolTip(f"You: {request}\nJARVIS: {result}")
-            self._history_list.addItem(item)
-            self._history_list.setItemWidget(item, holder)
-        if not rows:
-            self._history_list.addItem("No recent requests yet.")
+        chats = self._chat_store.list_chats()
+        for widget in (
+            getattr(self, "_history_list", None),
+            getattr(self, "_chat_switcher_list", None),
+        ):
+            if widget is None:
+                continue
+            widget.clear()
+            for chat in chats:
+                chat_id = str(chat.get("id") or "")
+                turns = list(chat.get("turns") or [])
+                title = str(chat.get("title") or "New chat")
+                preview = ""
+                for turn in turns:
+                    preview = str(turn.get("request") or "").strip()
+                    if preview:
+                        break
+                if len(preview) > 72:
+                    preview = preview[:69].rstrip() + "…"
+                updated = str(chat.get("updated_at") or chat.get("created_at") or "")
+                label = (
+                    f"{title}\n{preview or 'No messages yet'}"
+                    f" · {len(turns)} messages · {updated}"
+                )
+                item = QListWidgetItem(label)
+                item.setData(Qt.ItemDataRole.UserRole, chat_id)
+                if chat_id == self._active_chat_id:
+                    item.setForeground(QColor(C.PRI))
+                    item.setToolTip("Current chat")
+                else:
+                    item.setToolTip("Select to switch to this chat")
+                widget.addItem(item)
+        if not chats and hasattr(self, "_history_list"):
+            self._history_list.addItem("No saved chats yet.")
 
     def _refresh_tasks(self):
         if not hasattr(self, "_task_list"):
@@ -16211,6 +16721,35 @@ class JarvisUI:
     @on_audio_device_change.setter
     def on_audio_device_change(self, cb):
         self._win.on_audio_device_change = cb
+
+    @property
+    def on_chat_switch(self):
+        return self._win.on_chat_switch
+
+    @on_chat_switch.setter
+    def on_chat_switch(self, cb):
+        self._win.on_chat_switch = cb
+
+    @property
+    def active_chat_id(self) -> str:
+        return self._win._active_chat_id
+
+    def get_chat_resume_handle(self, chat_id: str | None = None) -> str | None:
+        return self._win._chat_store.get_resume_handle(chat_id)
+
+    def save_chat_resume_handle(
+        self, handle: str | None, chat_id: str | None = None
+    ) -> bool:
+        return self._win._chat_store.save_resume_handle(handle, chat_id)
+
+    def get_chat_context(
+        self, chat_id: str | None = None, *, limit: int = 24
+    ) -> list[dict[str, str]]:
+        return self._win._chat_store.get_context(chat_id, limit=limit)
+
+    def write_chat_log(self, text: str, chat_id: str | None = None) -> None:
+        target = str(chat_id or self._win._active_chat_id or "")
+        self._win._chat_log_sig.emit(str(text or ""), target)
 
     def show_confirm(self, title: str, detail: str) -> None:
         """Thread-safe: raise the irreversible-action gate. Called from action
