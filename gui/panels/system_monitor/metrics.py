@@ -150,17 +150,18 @@ class _SysMetrics:
             self.gpu_temp = float(temperature_c)
 
     def _get_gpu(self) -> float:
-        # nvidia-smi works for NVIDIA desktop drivers and headless systems,
-        # without calling Windows COM/NVML APIs from the polling thread.
+        # Windows GPU providers can enter COM/NVML code that is not safe to
+        # call from the sampler thread. Keep this probe disabled on Windows;
+        # CPU, memory, network and process metrics remain available.
+        if _OS == "Windows":
+            return -1.0
+
+        # nvidia-smi works on Linux/macOS desktop drivers and headless systems.
         smi = self._read_nvidia_smi()
         if smi is not None:
             gpu, used, total, temperature = smi
             self._set_gpu_details(used, total, temperature)
             return gpu
-
-        if _OS == "Windows":
-            self._set_gpu_details(-1.0, -1.0, -1.0)
-            return -1.0
 
         # pynvml — initialise once and reuse its device handle.
         if self._pynvml_ok is not False:
