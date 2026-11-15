@@ -60,9 +60,9 @@ class _SysMetrics:
         try:
             cpu_freq = psutil.cpu_freq()
             cpu_freq_mhz = float(cpu_freq.current) if cpu_freq else -1.0
-        except (OSError, RuntimeError, ValueError):
-            # Frequency probing is not supported on every host; CPU, memory,
-            # network and process metrics must continue updating independently.
+        except Exception:
+            # Frequency probing is optional and not supported on every host.
+            # Do not let a platform-specific psutil error suppress other data.
             cpu_freq_mhz = -1.0
 
         nc = psutil.net_io_counters()
