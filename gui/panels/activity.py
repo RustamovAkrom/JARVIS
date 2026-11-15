@@ -30,6 +30,12 @@ class ActivityPanel(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setObjectName("ActivityPanel")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setAutoFillBackground(True)
+        self.setStyleSheet(
+            f"QWidget#ActivityPanel {{ background:{C.PANEL}; border:0; }}"
+        )
         self._events: list[dict[str, str]] = []
 
         root = QVBoxLayout(self)
@@ -93,6 +99,11 @@ class ActivityPanel(QWidget):
 
         self._content_stack = QStackedWidget()
         self._content_stack.setObjectName("activity_content")
+        self._content_stack.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self._content_stack.setAutoFillBackground(True)
+        self._content_stack.setStyleSheet(
+            f"QStackedWidget#activity_content {{ background:{C.PANEL}; border:0; }}"
+        )
         self._content_stack.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
@@ -114,6 +125,11 @@ class ActivityPanel(QWidget):
 
         empty_state = QWidget()
         empty_state.setObjectName("activity_empty_state")
+        empty_state.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        empty_state.setAutoFillBackground(True)
+        empty_state.setStyleSheet(
+            f"QWidget#activity_empty_state {{ background:{C.PANEL}; border:0; }}"
+        )
         empty_state.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )

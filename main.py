@@ -347,8 +347,10 @@ def _describe_limits(has_vision: bool, has_mic: bool) -> str:
         out.append("- You have no sight at all in this build.")
     if has_mic:
         out.append(
-            "- You hear nothing while the microphone is muted, and you cannot "
-            "unmute it yourself."
+            "- The JARVIS Mute control affects microphone INPUT only. It stops "
+            "microphone audio from reaching you; it does not mute or unmute the "
+            "computer's SPEAKER OUTPUT. Use computer_settings action='mute' or "
+            "action='unmute' for speaker output."
         )
     return "\n".join(out)
 
