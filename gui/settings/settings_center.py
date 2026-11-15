@@ -36,7 +36,7 @@ def _center_style(glass_opacity: int = 100) -> str:
     # Settings text must remain readable over the dashboard. Windows 11 gets
     # a native Acrylic backdrop where supported; other platforms use a denser
     # glass surface rather than exposing the entire workspace through it.
-    dialog_surface = glass_rgba(C.BG, glass_opacity, minimum_alpha=215, maximum_alpha=255)
+    dialog_surface = glass_rgba(C.BG, glass_opacity, minimum_alpha=245, maximum_alpha=255)
     panel_surface = glass_rgba(C.PANEL, glass_opacity, minimum_alpha=225, maximum_alpha=255)
     title_surface = glass_rgba(C.DARK, glass_opacity, minimum_alpha=220, maximum_alpha=255)
     return f"""
@@ -110,8 +110,14 @@ class SettingsCenter(QDialog):
         self.setObjectName("SettingsCenter")
         self.setWindowTitle("JARVIS Settings")
         self.setWindowModality(Qt.WindowModality.NonModal)
+        # Keep the frameless dialog opaque at the native-window level.
+        # WA_TranslucentBackground leaves an unpainted client surface on some
+        # Windows/Qt combinations; DWM then fills it with the system light grey
+        # instead of the Settings stylesheet. Glass opacity is handled by the
+        # stylesheet surfaces below, not by making the top-level window native-
+        # transparent.
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, False)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self._glass_opacity = 100
         screen = QApplication.primaryScreen()
         available = screen.availableGeometry() if screen is not None else None
