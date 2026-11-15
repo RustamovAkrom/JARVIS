@@ -2302,7 +2302,13 @@ class PluginManagerOverlay(QWidget):
     configuration_requested = pyqtSignal(object)
     _OW = 420
 
-    def __init__(self, plugins: list[dict], settings_sections: list[dict] | None = None, parent=None):
+    def __init__(
+        self,
+        plugins: list[dict],
+        parent=None,
+        *,
+        settings_sections: list[dict] | None = None,
+    ):
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(f"""
@@ -5658,6 +5664,7 @@ class PluginSettingsOverlay(QWidget):
             QPushButton:hover {{ color: {C.TEXT}; border-color: {C.BORDER_B}; }}
         """)
         close_btn.clicked.connect(self.closed.emit)
+        close_btn.clicked.connect(self.hide)
         btn_row.addWidget(close_btn)
         root.addLayout(btn_row)
 
@@ -10853,7 +10860,7 @@ class MainWindow(QMainWindow):
     def _build_plugins_settings_page(self):
         plugins = self.get_plugins() if self.get_plugins else []
         sections = self.get_plugin_settings() if self.get_plugin_settings else []
-        manager = PluginManagerOverlay(plugins, sections)
+        manager = PluginManagerOverlay(plugins, settings_sections=sections)
         manager.configuration_requested.connect(self._open_plugin_configuration)
         return self._embed_settings_panels(
             ("Plugins", "Enable or disable plugins. Use the settings icon on a plugin row to configure only that plugin.", manager),

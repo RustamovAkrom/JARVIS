@@ -245,7 +245,7 @@ class SettingsComponentTests(unittest.TestCase):
         sections = [
             {"plugin": "configured", "namespace": "configured", "fields": [{"key": "endpoint", "type": "text"}]}
         ]
-        manager = PluginManagerOverlay(plugins, sections)
+        manager = PluginManagerOverlay(plugins, settings_sections=sections)
         configured_button = manager.findChild(QPushButton, "plugin_settings_configured")
         self.assertIsNotNone(configured_button)
         self.assertIsNone(manager.findChild(QPushButton, "plugin_settings_plain"))
