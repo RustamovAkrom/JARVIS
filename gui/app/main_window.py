@@ -15772,7 +15772,8 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             turns[-1]["response_time"] = now
             context.append({"role": "model", "text": result})
         elif (
-            turns
+            chat_id is not None
+            and turns
             and turns[-1].get("status") == "pending"
             and (
                 low.startswith(("err:", "[stderr]"))
