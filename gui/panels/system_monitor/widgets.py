@@ -147,11 +147,20 @@ class MetricGauge(QWidget):
 
 
 class MetricTrendChart(QWidget):
-    def __init__(self, title: str, empty_text: str, memory_label: str, parent=None):
+    def __init__(
+        self,
+        title: str,
+        empty_text: str,
+        memory_label: str,
+        parent=None,
+        *,
+        primary_label: str = "CPU",
+    ):
         super().__init__(parent)
         self._title = title
         self._empty_text = empty_text
         self._memory_label = memory_label
+        self._primary_label = primary_label
         self._samples: list[tuple[float, float]] = []
         self.setMinimumHeight(100)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
@@ -185,7 +194,10 @@ class MetricTrendChart(QWidget):
         )
 
         legend_x = W - 104
-        for color, label in ((C.GREEN, "CPU"), (C.ACC2, self._memory_label)):
+        for color, label in (
+            (C.GREEN, self._primary_label),
+            (C.ACC2, self._memory_label),
+        ):
             p.setPen(Qt.PenStyle.NoPen)
             p.setBrush(QBrush(qcol(color)))
             p.drawEllipse(QPointF(legend_x, 14), 2.5, 2.5)
