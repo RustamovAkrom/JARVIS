@@ -16020,7 +16020,9 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         ]
         chat["context"] = self._chat_store._context_from_turns(chat["turns"])
         chat["resume_handle"] = ""
-        self._chat_store.save_chat(chat, activate=False)
+        self._chat_store.save_chat(
+            chat, activate=False, preserve_resume_handle=False
+        )
         self._active_chat = chat
         _write_json_list(_UI_CHAT_FILE, "turns", chat["turns"][-100:])
         self._refresh_chat()
