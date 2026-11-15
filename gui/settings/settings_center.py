@@ -356,9 +356,12 @@ class SettingsCenter(QDialog):
         was_built = category_id in self._built_categories
         self._ensure_category_page(category_id)
         page = self._category_pages.get(category_id)
-        if page is None or self.pages.currentWidget() is page:
+        if page is None:
             return
-        self.pages.setCurrentWidget(page)
+        if self.pages.currentWidget() is not page:
+            self.pages.setCurrentWidget(page)
+        # Re-selecting an already visible category is still a revisit. Cached
+        # pages may contain controls whose values are refreshed from live config.
         if was_built:
             self._refresh_widget_state(page)
 
