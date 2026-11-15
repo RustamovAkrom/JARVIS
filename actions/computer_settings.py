@@ -91,17 +91,85 @@ def volume_down():
         )
 
 
-def volume_mute():
+def volume_mute_get() -> bool | None:
+    """Read the current output-mute state, or None when the OS cannot report it."""
+    try:
+        if _OS == "Windows":
+            return bool(_win_endpoint_volume().GetMute())
+        if _OS == "Darwin":
+            result = subprocess.run(
+                ["osascript", "-e", "output muted of (get volume settings)"],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=5,
+            )
+            value = result.stdout.strip().lower()
+            return value == "true" if value in {"true", "false"} else None
+        result = subprocess.run(
+            ["pactl", "get-sink-mute", "@DEFAULT_SINK@"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=5,
+        )
+        value = result.stdout.strip().lower()
+        if "yes" in value:
+            return True
+        if "no" in value:
+            return False
+    except Exception:
+        pass
+    return None
+
+
+def volume_mute(muted: bool | None = None) -> None:
+    """Set output mute explicitly; None means invert the current state.
+
+    The former implementation mapped both mute and unmute to a toggle key.
+    That made the semantic meaning depend on the previous state and could
+    leave Windows muted after an "unmute" command. Use each platform's
+    state-aware audio API so repeated mute/unmute commands are idempotent.
+    """
+    target = muted
+    if target is None:
+        current = volume_mute_get()
+        if current is None:
+            raise RuntimeError("The current output mute state could not be read.")
+        target = not current
+
     if _OS == "Windows":
-        pyautogui.press("volumemute")
+        _win_endpoint_volume().SetMute(bool(target), None)
     elif _OS == "Darwin":
-        subprocess.run(
-            ["osascript", "-e", "set volume with output muted"], capture_output=True
+        modifier = "with" if target else "without"
+        result = subprocess.run(
+            ["osascript", "-e", f"set volume {modifier} output muted"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=5,
         )
+        if result.returncode:
+            raise RuntimeError(result.stderr.strip() or "macOS rejected the mute change.")
     else:
-        subprocess.run(
-            ["pactl", "set-sink-mute", "@DEFAULT_SINK@", "toggle"], capture_output=True
+        result = subprocess.run(
+            [
+                "pactl",
+                "set-sink-mute",
+                "@DEFAULT_SINK@",
+                "1" if target else "0",
+            ],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=5,
         )
+        if result.returncode:
+            raise RuntimeError(result.stderr.strip() or "PulseAudio/PipeWire rejected the mute change.")
 
 
 def _win_endpoint_volume():
@@ -906,8 +974,8 @@ def shutdown_computer():
 ACTION_MAP: dict[str, callable] = {
     "volume_up": volume_up,
     "volume_down": volume_down,
-    "mute": volume_mute,
-    "unmute": volume_mute,
+    "mute": lambda: volume_mute(True),
+    "unmute": lambda: volume_mute(False),
     "toggle_mute": volume_mute,
     "brightness_up": brightness_up,
     "brightness_down": brightness_down,
@@ -1019,7 +1087,8 @@ _DANGEROUS_ACTIONS = set(_IRREVERSIBLE)
 _ALIASES = {
     "volume_up": ("louder", "raise volume", "turn it up", "increase volume"),
     "volume_down": ("quieter", "lower volume", "turn it down", "decrease volume"),
-    "mute": ("silence", "sound off", "no sound"),
+    "mute": ("silence", "sound off", "no sound", "turn sound off", "disable sound"),
+    "unmute": ("sound on", "turn sound on", "enable sound", "restore sound", "unmute audio", "enable audio"),
     "brightness_up": ("brighter", "raise brightness", "increase brightness"),
     "brightness_down": ("dimmer", "dim", "lower brightness", "decrease brightness"),
     "close_window": ("close this", "close it"),

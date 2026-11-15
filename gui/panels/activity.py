@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import (
     QListWidgetItem,
     QPushButton,
     QSizePolicy,
+    QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -90,23 +91,49 @@ class ActivityPanel(QWidget):
         controls.addWidget(clear_button)
         root.addLayout(controls)
 
+        self._content_stack = QStackedWidget()
+        self._content_stack.setObjectName("activity_content")
+        self._content_stack.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
+
         self.event_list = QListWidget()
         self.event_list.setObjectName("activity_events")
         self.event_list.setWordWrap(True)
         self.event_list.setUniformItemSizes(False)
+        self.event_list.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
         self.event_list.setStyleSheet(
             f"QListWidget {{ background:{C.PANEL2}; color:{C.TEXT}; "
             f"border:1px solid {C.BORDER}; border-radius:7px; padding:3px; }}"
             f"QListWidget::item {{ padding:5px 4px; border-bottom:1px solid {C.BORDER}; }}"
             f"QListWidget::item:selected {{ background:{C.PRI_GHO}; }}"
         )
-        root.addWidget(self.event_list, 1)
+        self._content_stack.addWidget(self.event_list)
 
+        empty_state = QWidget()
+        empty_state.setObjectName("activity_empty_state")
+        empty_state.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
+        empty_layout = QVBoxLayout(empty_state)
+        empty_layout.setContentsMargins(12, 12, 12, 12)
+        empty_layout.addStretch(1)
         self.empty_label = QLabel("No activity recorded in this session.")
+        self.empty_label.setObjectName("activity_empty_label")
         self.empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.empty_label.setWordWrap(True)
-        self.empty_label.setStyleSheet(f"color:{C.TEXT_DIM}; background:transparent;")
-        root.addWidget(self.empty_label)
+        self.empty_label.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum
+        )
+        self.empty_label.setStyleSheet(
+            f"color:{C.TEXT_DIM}; background:transparent; padding:10px;"
+        )
+        empty_layout.addWidget(self.empty_label)
+        empty_layout.addStretch(1)
+        self._content_stack.addWidget(empty_state)
+        root.addWidget(self._content_stack, 1)
 
         self.filter_box.currentIndexChanged.connect(self._render)
         self.search_input.textChanged.connect(self._render)
@@ -192,5 +219,15 @@ class ActivityPanel(QWidget):
             item.setToolTip(event["message"])
             item.setData(Qt.ItemDataRole.UserRole, event.copy())
             self.event_list.addItem(item)
-        self.empty_label.setVisible(not visible)
-        self.event_list.setVisible(bool(visible))
+        if visible:
+            self._content_stack.setCurrentWidget(self.event_list)
+        else:
+            if not self._events:
+                self.empty_label.setText("No activity recorded in this session.")
+            elif query:
+                self.empty_label.setText("No activity matches your search.")
+            elif selected != "all":
+                self.empty_label.setText("No events in this category.")
+            else:
+                self.empty_label.setText("No activity matches the current filters.")
+            self._content_stack.setCurrentWidget(self._content_stack.widget(1))
