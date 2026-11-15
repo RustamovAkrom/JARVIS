@@ -7751,6 +7751,9 @@ class MainWindow(QMainWindow):
         self._editor_tabs.currentChanged.connect(self._on_project_editor_tab_changed)
         self._center_views.addWidget(self._editor_tabs)
         self._main_splitter.addWidget(self._center_views)
+        self._main_splitter.splitterMoved.connect(
+            self._update_advanced_telemetry_visibility
+        )
 
         self._right_panel = self._build_right_panel()
         self._debug_panel = QWidget()
@@ -7773,6 +7776,7 @@ class MainWindow(QMainWindow):
         self._main_splitter.setStretchFactor(0, 0)
         self._main_splitter.setStretchFactor(1, 1)
         self._main_splitter.setSizes([_LEFT_W, 760])
+        QTimer.singleShot(0, self._update_advanced_telemetry_visibility)
 
         self._workspace_split = QSplitter(Qt.Orientation.Vertical)
         self._workspace_split.setChildrenCollapsible(True)
@@ -9124,6 +9128,19 @@ class MainWindow(QMainWindow):
             self._position_quick_drawer()
         self._fit_video()
 
+    def _update_advanced_telemetry_visibility(self, *_args):
+        panel = getattr(self, "_advanced_panel", None)
+        left = getattr(self, "_left_panel", None)
+        tabs = getattr(self, "_left_tabs", None)
+        if panel is None or left is None or tabs is None:
+            return
+        expanded = (
+            left.isVisible()
+            and left.width() >= 390
+            and tabs.currentWidget() is getattr(self, "_system_page", None)
+        )
+        panel.setVisible(expanded)
+
     def _update_metrics(self):
         snap = _metrics.snapshot()
 
@@ -9173,6 +9190,74 @@ class MainWindow(QMainWindow):
         proc_count = snap.get("process_count", 0)
         value = str(proc_count) if proc_count else "--"
         self._proc_lbl.setText(f"{self._tr('PROCESSES')}  {value}")
+
+        if hasattr(self, "_advanced_labels"):
+            cpu_frequency = float(snap.get("cpu_freq_mhz", -1.0))
+            if cpu_frequency >= 1000:
+                frequency_text = f"{cpu_frequency / 1000:.2f} GHz"
+            elif cpu_frequency > 0:
+                frequency_text = f"{cpu_frequency:.0f} MHz"
+            else:
+                frequency_text = "N/A"
+            physical = int(snap.get("cpu_cores_physical", 0) or 0)
+            logical = int(snap.get("cpu_cores_logical", 0) or 0)
+            self._advanced_labels["cpu"].setText(
+                f"{frequency_text} · {physical} cores / {logical} threads"
+            )
+
+            def _format_size(value):
+                number = max(0.0, float(value))
+                for unit in ("B", "KB", "MB", "GB", "TB"):
+                    if number < 1024 or unit == "TB":
+                        return f"{number:.1f} {unit}" if unit != "B" else f"{number:.0f} B"
+                    number /= 1024
+                return f"{number:.1f} TB"
+
+            total_memory = int(snap.get("mem_total_bytes", 0) or 0)
+            available_memory = int(snap.get("mem_available_bytes", 0) or 0)
+            if total_memory:
+                used_memory = max(0, total_memory - available_memory)
+                self._advanced_labels["memory"].setText(
+                    f"{_format_size(used_memory)} used / {_format_size(total_memory)} total"
+                    f" · {_format_size(available_memory)} available"
+                )
+            else:
+                self._advanced_labels["memory"].setText("N/A")
+
+            upload_bps = float(snap.get("net_upload_bps", 0.0) or 0.0)
+            download_bps = float(snap.get("net_download_bps", 0.0) or 0.0)
+
+            def _format_rate(value):
+                number = max(0.0, float(value))
+                if number < 1024 * 1024:
+                    return f"{number / 1024:.0f} KB/s"
+                return f"{number / (1024 * 1024):.2f} MB/s"
+
+            self._advanced_labels["network"].setText(
+                f"UPLOAD  {_format_rate(upload_bps)}   ·   "
+                f"DOWNLOAD  {_format_rate(download_bps)}"
+            )
+            # The chart uses a 20 MB/s reference scale; exact rates remain
+            # visible in the line above and are not clipped to that scale.
+            scale_bps = 20 * 1024 * 1024
+            self._network_trend_chart.set_values(
+                min(100.0, download_bps * 100.0 / scale_bps),
+                min(100.0, upload_bps * 100.0 / scale_bps),
+            )
+
+            gpu_used = float(snap.get("gpu_memory_used_mb", -1.0))
+            gpu_total = float(snap.get("gpu_memory_total_mb", -1.0))
+            gpu_temperature = float(snap.get("gpu_temp", -1.0))
+            gpu_parts = []
+            if gpu_used >= 0 and gpu_total > 0:
+                gpu_parts.append(f"VRAM  {gpu_used:.0f} / {gpu_total:.0f} MB")
+            else:
+                gpu_parts.append("VRAM  N/A")
+            if gpu_temperature >= 0:
+                gpu_parts.append(f"{gpu_temperature:.0f} °C")
+            else:
+                gpu_parts.append("Temperature  N/A")
+            self._advanced_labels["gpu"].setText("   ·   ".join(gpu_parts))
 
     def _build_header(self) -> QWidget:
         w = _WindowHeader(self)
@@ -9443,6 +9528,7 @@ class MainWindow(QMainWindow):
         """)
         panel_layout.addWidget(self._left_tabs)
         system_page = QWidget()
+        self._system_page = system_page
         system_layout = QVBoxLayout(system_page)
         system_layout.setContentsMargins(0, 0, 0, 0)
         system_layout.setSpacing(0)
@@ -9611,10 +9697,61 @@ class MainWindow(QMainWindow):
 
         lay.addWidget(info_panel)
 
+        # Advanced telemetry remains hidden at the default compact panel width.
+        # The existing gauges and load graph above are unchanged.
+        self._advanced_panel = QFrame()
+        self._advanced_panel.setObjectName("AdvancedTelemetry")
+        self._advanced_panel.setStyleSheet(
+            f"QFrame#AdvancedTelemetry {{ background:{C.PANEL2}; "
+            f"border:1px solid {C.BORDER}; border-radius:7px; }}"
+        )
+        advanced_layout = QVBoxLayout(self._advanced_panel)
+        advanced_layout.setContentsMargins(7, 7, 7, 7)
+        advanced_layout.setSpacing(4)
+        advanced_title = QLabel(self._tr("ADVANCED TELEMETRY"))
+        advanced_title.setFont(QFont(FONT_MONO, 7, QFont.Weight.Bold))
+        advanced_title.setStyleSheet(f"color:{C.PRI}; background:transparent;")
+        advanced_layout.addWidget(advanced_title)
+
+        self._advanced_labels = {}
+        advanced_rows = (
+            ("cpu", "CPU DETAILS"),
+            ("memory", "MEMORY"),
+            ("network", "NETWORK"),
+            ("gpu", "GPU / VRAM"),
+        )
+        for key, caption_text in advanced_rows:
+            caption = QLabel(self._tr(caption_text))
+            caption.setFont(QFont(FONT_MONO, 6, QFont.Weight.Bold))
+            caption.setStyleSheet(f"color:{C.TEXT_DIM}; background:transparent;")
+            advanced_layout.addWidget(caption)
+            value = QLabel("Collecting telemetry…")
+            value.setObjectName(f"advanced_{key}")
+            value.setWordWrap(True)
+            value.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+            value.setFont(QFont(FONT_MONO, 8))
+            value.setStyleSheet(f"color:{C.TEXT}; background:transparent;")
+            advanced_layout.addWidget(value)
+            self._advanced_labels[key] = value
+
+        self._network_trend_chart = MetricTrendChart(
+            self._tr("NETWORK TRAFFIC HISTORY"),
+            self._tr("COLLECTING NETWORK TRAFFIC"),
+            self._tr("UPLOAD"),
+            primary_label=self._tr("DOWNLOAD"),
+        )
+        self._network_trend_chart.setMinimumHeight(92)
+        advanced_layout.addWidget(self._network_trend_chart)
+        self._advanced_panel.hide()
+        lay.addWidget(self._advanced_panel)
+
         self._left_tabs.addTab(system_page, self._tr("SYSTEM"))
         self._build_project_explorer()
         self._activity_panel = ActivityPanel()
         self._left_tabs.addTab(self._activity_panel, self._tr("ACTIVITY"))
+        self._left_tabs.currentChanged.connect(
+            self._update_advanced_telemetry_visibility
+        )
         return w
 
     def _build_project_explorer(self):
