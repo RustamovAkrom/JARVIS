@@ -135,21 +135,29 @@ class _SysMetrics:
         except (OSError, ValueError, subprocess.SubprocessError):
             return None
 
+    def _set_gpu_details(
+        self, used_mb: float, total_mb: float, temperature_c: float
+    ) -> None:
+        """Publish the related GPU readings as one snapshot under the sampler lock."""
+        with self._lock:
+            self.gpu_memory_used_mb = float(used_mb)
+            self.gpu_memory_total_mb = float(total_mb)
+            self.gpu_temp = float(temperature_c)
+
     def _get_gpu(self) -> float:
-        # nvidia-smi works for both NVIDIA desktop drivers and headless systems
-        # and avoids calling Windows COM/NVML APIs from the polling thread.
+        # nvidia-smi works for NVIDIA desktop drivers and headless systems,
+        # without calling Windows COM/NVML APIs from the polling thread.
         smi = self._read_nvidia_smi()
         if smi is not None:
             gpu, used, total, temperature = smi
-            self.gpu_memory_used_mb = used
-            self.gpu_memory_total_mb = total
-            self.gpu_temp = temperature
+            self._set_gpu_details(used, total, temperature)
             return gpu
 
         if _OS == "Windows":
+            self._set_gpu_details(-1.0, -1.0, -1.0)
             return -1.0
 
-        # pynvml — subprocess-free; initialise once and reuse the handle.
+        # pynvml — initialise once and reuse its device handle.
         if self._pynvml_ok is not False:
             try:
                 if self._pynvml_h is None:
@@ -164,19 +172,20 @@ class _SysMetrics:
                 )
                 try:
                     memory = self._pynvml.nvmlDeviceGetMemoryInfo(self._pynvml_h)
-                    self.gpu_memory_used_mb = memory.used / (1024 * 1024)
-                    self.gpu_memory_total_mb = memory.total / (1024 * 1024)
+                    used_mb = memory.used / (1024 * 1024)
+                    total_mb = memory.total / (1024 * 1024)
                 except Exception:
-                    self.gpu_memory_used_mb = self.gpu_memory_total_mb = -1.0
+                    used_mb = total_mb = -1.0
                 try:
-                    self.gpu_temp = float(
+                    temperature = float(
                         self._pynvml.nvmlDeviceGetTemperature(
                             self._pynvml_h,
                             self._pynvml.NVML_TEMPERATURE_GPU,
                         )
                     )
                 except Exception:
-                    self.gpu_temp = -1.0
+                    temperature = -1.0
+                self._set_gpu_details(used_mb, total_mb, temperature)
                 return usage
             except Exception:
                 self._pynvml_ok = False
@@ -197,8 +206,10 @@ class _SysMetrics:
             nv, device = self._nv_unix
             usage = _Util()
             nv.nvmlDeviceGetUtilizationRates(device, ctypes.byref(usage))
+            self._set_gpu_details(-1.0, -1.0, -1.0)
             return float(usage.gpu)
         except Exception:
+            self._set_gpu_details(-1.0, -1.0, -1.0)
             return -1.0
 
     def _get_temp(self) -> float:
