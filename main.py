@@ -718,6 +718,8 @@ class JarvisLive:
         self.ui.on_audio_device_change = self._on_audio_device_change
         self._active_chat_id = str(getattr(self.ui, "active_chat_id", "") or "")
         self._session_chat_id = self._active_chat_id
+        self._pending_chat_commands: list[tuple[str, str]] = []
+        self._pending_chat_commands_lock = threading.Lock()
         self._resume_handle: str | None = self.ui.get_chat_resume_handle(
             self._active_chat_id
         )
@@ -1082,7 +1084,7 @@ class JarvisLive:
     def _on_text_command(self, text: str):
         if self.ui.auth_locked:
             return
-        if not self._loop or not self.session:
+        if not self._loop:
             return
         plan_marker = "[[JARVIS_PLAN_MODE]]"
         if plan_marker in str(text):
@@ -1101,6 +1103,28 @@ class JarvisLive:
                 "SYS: I'm asleep — say 'Hey Jarvis' or tap WAKE NOW first."
             )
             return
+
+        # A selected chat can change before the old Live TaskGroup has fully
+        # unwound. Never send a new message to that previous session. Keep it
+        # associated with the selected chat and flush it after that chat connects.
+        if (
+            self.session is None
+            or self._session_chat_id != self._active_chat_id
+        ):
+            chat_id = self._active_chat_id
+            with self._pending_chat_commands_lock:
+                if len(self._pending_chat_commands) >= 20:
+                    self.ui.write_log(
+                        "WARN: Chat is reconnecting and its pending message queue is full. "
+                        "Please send the message again after reconnect."
+                    )
+                    return
+                self._pending_chat_commands.append((chat_id, str(text)))
+            self.ui.write_log(
+                "SYS: Chat is reconnecting. Message queued for the selected conversation."
+            )
+            return
+
         asyncio.run_coroutine_threadsafe(
             self.session.send_client_content(
                 turns={"role": "user", "parts": [{"text": text}]}, turn_complete=True
@@ -3285,6 +3309,37 @@ class JarvisLive:
                     self._session_chat_id = self._active_chat_id
                     self._turn_chat_id = self._session_chat_id
                     self._restore_chat_session_log()
+
+                    # Flush only messages explicitly queued for this chat.
+                    # Messages queued for another chat remain isolated until
+                    # that chat is selected and its own session is connected.
+                    with self._pending_chat_commands_lock:
+                        ready_commands = [
+                            text
+                            for chat_id, text in self._pending_chat_commands
+                            if chat_id == self._session_chat_id
+                        ]
+                        self._pending_chat_commands = [
+                            (chat_id, text)
+                            for chat_id, text in self._pending_chat_commands
+                            if chat_id != self._session_chat_id
+                        ]
+                    for queued_text in ready_commands:
+                        try:
+                            await session.send_client_content(
+                                turns={
+                                    "role": "user",
+                                    "parts": [{"text": queued_text}],
+                                },
+                                turn_complete=True,
+                            )
+                        except Exception:
+                            with self._pending_chat_commands_lock:
+                                self._pending_chat_commands.insert(
+                                    0, (self._session_chat_id, queued_text)
+                                )
+                            raise
+
                     self.audio_in_queue = asyncio.Queue()
                     self.out_queue = asyncio.Queue(maxsize=200)
                     self._turn_done_event = asyncio.Event()
