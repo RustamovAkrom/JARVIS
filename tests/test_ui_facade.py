@@ -37,6 +37,11 @@ class UiFacadeTests(unittest.TestCase):
             self.assertEqual(window._left_tabs.count(), 3)
             self.assertEqual(window._left_tabs.tabText(2), "ACTIVITY")
             self.assertTrue(window._debug_toggle_btn.isHidden())
+            self.assertEqual(
+                window._work_tabs.tabBar().elideMode(),
+                Qt.TextElideMode.ElideNone,
+            )
+            self.assertTrue(window._work_tabs.usesScrollButtons())
             self.assertTrue(panel.testAttribute(Qt.WidgetAttribute.WA_StyledBackground))
             self.assertRegex(
                 panel.styleSheet(),
