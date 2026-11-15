@@ -259,15 +259,29 @@ class ChatStore:
             return dict(selected)
 
     def save_chat(
-        self, chat: dict[str, Any], *, activate: bool = False
+        self,
+        chat: dict[str, Any],
+        *,
+        activate: bool = False,
+        preserve_resume_handle: bool = True,
     ) -> dict[str, Any]:
-        """Persist a chat without changing the selected chat unless requested."""
+        """Persist chat content while preserving the latest session handle by default.
+
+        Resume handles are written independently by the Live receive loop. A UI
+        snapshot can be older than that write, so replacing the whole record must
+        not roll a newer handle back. Callers that intentionally invalidate a
+        handle (for example after deleting a turn) can opt out explicitly.
+        """
         with self._lock:
             data = self._read()
             normalised = self._normalise_chat(chat)
             normalised["updated_at"] = self._timestamp()
             for index, existing in enumerate(data["chats"]):
                 if existing["id"] == normalised["id"]:
+                    if preserve_resume_handle:
+                        normalised["resume_handle"] = str(
+                            existing.get("resume_handle") or ""
+                        )
                     data["chats"][index] = normalised
                     break
             else:
