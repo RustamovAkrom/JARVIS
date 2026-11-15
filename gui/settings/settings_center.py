@@ -350,7 +350,7 @@ class SettingsCenter(QDialog):
         was_built = category_id in self._built_categories
         self._ensure_category_page(category_id)
         page = self._category_pages.get(category_id)
-        if page is None:
+        if page is None or self.pages.currentWidget() is page:
             return
         self.pages.setCurrentWidget(page)
         if was_built:
@@ -383,17 +383,22 @@ class SettingsCenter(QDialog):
 
     def show_category(self, category_id: str) -> bool:
         """Select and build a category without opening a legacy window."""
-        # Search results replace the category rows, so clear the query before
-        # looking up the category item.
+        # Clearing a search normally rebuilds the navigation list and selects
+        # its first row. During a programmatic category jump that emits an
+        # intermediate page change, making Settings flash before the requested
+        # category appears. Suppress both signals and perform one final select.
+        search_blocked = self.search.blockSignals(True)
         self.search.clear()
+        self.search.blockSignals(search_blocked)
+
+        navigation_blocked = self.navigation.blockSignals(True)
+        self._populate_categories()
         item = self._category_rows.get(category_id)
         if item is None:
+            self.navigation.blockSignals(navigation_blocked)
             return False
-        # Block the list signal so this method owns exactly one page selection
-        # and can also handle a category that is already selected.
-        was_blocked = self.navigation.blockSignals(True)
         self.navigation.setCurrentItem(item)
-        self.navigation.blockSignals(was_blocked)
+        self.navigation.blockSignals(navigation_blocked)
         self._show_category_page(category_id)
         return True
 
