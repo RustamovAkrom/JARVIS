@@ -1618,6 +1618,7 @@ class JarvisLive:
         args = dict(fc.args or {})
 
         if self.ui.auth_locked:
+            self.ui.write_log(f"[TOOL BLOCKED] {name} · identity verification required")
             return types.FunctionResponse(
                 id=fc.id,
                 name=name,
@@ -1632,6 +1633,7 @@ class JarvisLive:
                 "web_search",
             }
             if name not in safe_plan_tools:
+                self.ui.write_log(f"[TOOL BLOCKED] {name} · plan mode is read-only")
                 return types.FunctionResponse(
                     id=fc.id,
                     name=name,
@@ -1647,6 +1649,9 @@ class JarvisLive:
             from memory.config_manager import get_computer_permissions
 
             if not get_computer_permissions().get("observe_screen", False):
+                self.ui.write_log(
+                    f"[TOOL BLOCKED] {name} · screen observation permission is disabled"
+                )
                 return types.FunctionResponse(
                     id=fc.id,
                     name=name,
@@ -1661,16 +1666,28 @@ class JarvisLive:
         self.ui.set_state("THINKING")
 
         if name == "save_memory":
-            category = args.get("category", "notes")
-            key = args.get("key", "")
-            value = args.get("value", "")
-            if key and value:
+            category = str(args.get("category", "notes") or "notes")
+            key = str(args.get("key", "") or "").strip()
+            value = str(args.get("value", "") or "").strip()
+            try:
+                if not key or not value:
+                    raise ValueError("A memory key and value are required.")
                 update_memory({category: {key: {"value": value}}})
                 print(f"[Memory] 💾 save_memory: {category}/{key} = {value}")
+            except Exception as exc:
+                elapsed = time.perf_counter() - tool_started_at
+                self.ui.write_log(
+                    f"[TOOL FAILED] {name} · {elapsed:.2f}s · {str(exc)[:180]}"
+                )
+                if not self.ui.muted:
+                    self.ui.set_state("LISTENING")
+                return types.FunctionResponse(
+                    id=fc.id,
+                    name=name,
+                    response={"error": f"Memory could not be saved: {exc}"},
+                )
             elapsed = time.perf_counter() - tool_started_at
-            self.ui.write_log(
-                f"[TOOL COMPLETE] {name} · {elapsed:.2f}s"
-            )
+            self.ui.write_log(f"[TOOL COMPLETE] {name} · {elapsed:.2f}s")
             if not self.ui.muted:
                 self.ui.set_state("LISTENING")
             return types.FunctionResponse(
@@ -2048,23 +2065,42 @@ class JarvisLive:
         elapsed = time.perf_counter() - tool_started_at
         result_text = str(result or "")
         result_lower = result_text.casefold()
-        failed = any(
-            marker in result_lower
-            for marker in (
-                " failed",
-                "failure",
-                "error:",
-                "permission denied",
-                "action cancelled",
-                "unknown tool",
-                "not available",
-                "could not",
-                "traceback",
-            )
+        # Tools from core/outcome.py report a canonical status. Preserve the
+        # distinction between a verified result, an unverified request, a
+        # confirmation question and work that has only just started.
+        status_match = re.search(
+            r"\bstatus=(done|unverified|failed|ask|started)\b",
+            result_lower,
         )
-        status = "FAILED" if failed else "COMPLETE"
+        canonical_status = status_match.group(1) if status_match else ""
+        status_labels = {
+            "done": "COMPLETE",
+            "unverified": "UNVERIFIED",
+            "failed": "FAILED",
+            "ask": "AWAITING USER",
+            "started": "STARTED",
+        }
+        if canonical_status:
+            status = status_labels[canonical_status]
+        else:
+            failed = any(
+                marker in result_lower
+                for marker in (
+                    " failed",
+                    "failure",
+                    "error:",
+                    "permission denied",
+                    "action cancelled",
+                    "unknown tool",
+                    "not available",
+                    "disabled",
+                    "could not",
+                    "traceback",
+                )
+            )
+            status = "FAILED" if failed else "COMPLETE"
         event = f"[TOOL {status}] {name} · {elapsed:.2f}s"
-        if failed and result_text:
+        if status in {"FAILED", "UNVERIFIED", "AWAITING USER"} and result_text:
             event += f" · {result_text[:180]}"
         self.ui.write_log(event)
 

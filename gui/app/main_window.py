@@ -7051,13 +7051,26 @@ class UpdatePanel(QWidget):
             f"color:{C.TEXT_DIM}; background:transparent;"
         )
         layout.addWidget(self._install_state)
+        platform_name = platform.system()
+        if platform_name == "Windows":
+            package_instruction = (
+                "On Windows, download the latest Windows Installer (.exe), "
+                "close JARVIS, run the installer and install the new version."
+            )
+        else:
+            package_instruction = (
+                f"Download the release package built for {platform_name}, close JARVIS, "
+                "then install or replace the application using that package's normal procedure."
+            )
+        user_data_path = _html.escape(str(PATHS.user_data_root))
         self._manual_update = QLabel(
             "<b>Manual update required</b><br>"
             "1. Open <a href='https://github.com/RustamovAkrom/JARVIS/releases/latest'>GitHub Releases</a> "
-            "and download the latest Windows Installer (.exe).<br>"
-            "2. Close JARVIS, run the installer and install the new version.<br>"
-            "3. JARVIS settings, memory and plugins are stored separately from application files. "
-            "Keep the user-data directory; do not choose an option that removes it."
+            "and download the package for this operating system.<br>"
+            f"2. {package_instruction}<br>"
+            "3. User settings, memory, plugins and profiles are stored outside the application files. "
+            "Do not remove or overwrite the user-data directory:<br>"
+            f"<code>{user_data_path}</code>"
         )
         self._manual_update.setWordWrap(True)
         self._manual_update.setOpenExternalLinks(True)
