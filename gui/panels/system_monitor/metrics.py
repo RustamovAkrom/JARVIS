@@ -57,8 +57,13 @@ class _SysMetrics:
         cpu = psutil.cpu_percent(interval=None)
         memory = psutil.virtual_memory()
         mem = memory.percent
-        cpu_freq = psutil.cpu_freq()
-        cpu_freq_mhz = float(cpu_freq.current) if cpu_freq else -1.0
+        try:
+            cpu_freq = psutil.cpu_freq()
+            cpu_freq_mhz = float(cpu_freq.current) if cpu_freq else -1.0
+        except (OSError, RuntimeError, ValueError):
+            # Frequency probing is not supported on every host; CPU, memory,
+            # network and process metrics must continue updating independently.
+            cpu_freq_mhz = -1.0
 
         nc = psutil.net_io_counters()
         now = time.time()
