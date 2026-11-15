@@ -177,6 +177,11 @@ class PluginRegistry:
                     "valid": rec.valid,
                     "error": rec.error,
                     "enabled": get_plugin_enabled(rec.name) if rec.valid else False,
+                    "settings_namespace": (
+                        str(rec.settings.get("namespace") or rec.name)
+                        if rec.settings
+                        else ""
+                    ),
                 }
             )
         return out

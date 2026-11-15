@@ -2319,12 +2319,23 @@ class PluginManagerOverlay(QWidget):
             }}
         """)
         self.setFixedWidth(self._OW)
-        self._configuration_by_plugin = {
-            str(section.get("plugin") or ""): section
+        schemas_by_namespace = {
+            str(section.get("namespace") or section.get("plugin") or ""): section
             for section in (settings_sections or [])
             if isinstance(section, dict)
-            and section.get("plugin")
-            and any(isinstance(field, dict) and field.get("key") for field in (section.get("fields") or []))
+            and (section.get("namespace") or section.get("plugin"))
+            and any(
+                isinstance(field, dict) and field.get("key")
+                for field in (section.get("fields") or [])
+            )
+        }
+        self._configuration_by_plugin = {
+            str(plugin.get("name") or ""): schemas_by_namespace[str(
+                plugin.get("settings_namespace") or ""
+            )]
+            for plugin in plugins
+            if plugin.get("name")
+            and plugin.get("settings_namespace") in schemas_by_namespace
         }
 
         lay = QVBoxLayout(self)
@@ -2412,7 +2423,8 @@ class PluginManagerOverlay(QWidget):
                     background:{C.PRI_GHO}; }}
             """)
             settings_btn.clicked.connect(
-                lambda _=False, schema=section: self.configuration_requested.emit(schema)
+                lambda _=False, schema=section, plugin_name=str(p.get("name") or ""):
+                    self.configuration_requested.emit({**schema, "plugin": plugin_name})
             )
             row.addWidget(settings_btn)
         return row
@@ -15190,10 +15202,11 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         if not isinstance(section, dict):
             return
         plugin_name = str(section.get("plugin") or section.get("namespace") or "Plugin")
+        dialog_key = str(section.get("namespace") or plugin_name)
         dialogs = getattr(self, "_plugin_settings_dialogs", None)
         if dialogs is None:
             dialogs = self._plugin_settings_dialogs = {}
-        current = dialogs.get(plugin_name)
+        current = dialogs.get(dialog_key)
         if current is not None:
             current.raise_()
             current.activateWindow()
@@ -15214,9 +15227,9 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         dialog_layout.addWidget(editor)
         editor.closed.connect(dialog.close)
         dialog.finished.connect(
-            lambda _result, key=plugin_name: dialogs.pop(key, None)
+            lambda _result, key=dialog_key: dialogs.pop(key, None)
         )
-        dialogs[plugin_name] = dialog
+        dialogs[dialog_key] = dialog
         dialog.show()
         dialog.raise_()
         dialog.activateWindow()
