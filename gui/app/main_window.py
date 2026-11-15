@@ -11150,11 +11150,19 @@ class MainWindow(QMainWindow):
             panel.setWordWrap(True)
         if isinstance(panel, ProvidersOverlay):
             panel.changed.connect(self._on_providers_applied)
-        return self._embed_settings_panels((
+        page = self._embed_settings_panels((
             "AI providers",
             "Choose Online cloud services or Offline models on this device. Configure voice recognition, the AI model and spoken responses inside each mode.",
             panel,
         ))
+        # Keep the provider form readable on wide displays without forcing a
+        # horizontal scroll. On narrower Settings windows it still follows the
+        # viewport because the page is width-expanding up to this cap.
+        page.setMaximumWidth(940)
+        page.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
+        )
+        return page
 
     def _build_plugins_settings_page(self):
         plugins = self.get_plugins() if self.get_plugins else []
