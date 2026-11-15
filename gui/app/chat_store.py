@@ -258,7 +258,10 @@ class ChatStore:
             self._write(data)
             return dict(selected)
 
-    def save_chat(self, chat: dict[str, Any]) -> dict[str, Any]:
+    def save_chat(
+        self, chat: dict[str, Any], *, activate: bool = False
+    ) -> dict[str, Any]:
+        """Persist a chat without changing the selected chat unless requested."""
         with self._lock:
             data = self._read()
             normalised = self._normalise_chat(chat)
@@ -269,7 +272,8 @@ class ChatStore:
                     break
             else:
                 data["chats"].append(normalised)
-            data["active_chat_id"] = normalised["id"]
+            if activate:
+                data["active_chat_id"] = normalised["id"]
             data["chats"] = data["chats"][-self.MAX_CHATS :]
             self._write(data)
             return dict(normalised)
