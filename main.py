@@ -1458,7 +1458,7 @@ class JarvisLive:
         # A valid Live handle restores the server context directly. If a chat
         # has no handle (first use, deleted turn, or expired handle), supply its
         # own saved transcript as reference context; never include another chat.
-        if not self._resume_handle:
+        if self._engine_caps is None and not self._resume_handle:
             try:
                 chat_context = self.ui.get_chat_context(
                     self._active_chat_id, limit=24
@@ -3201,7 +3201,14 @@ class JarvisLive:
             return registry.build(pid, cfg)
 
         engine = PipelineEngine(
-            part("llm"), part("stt"), part("tts"), config=config, log=self.ui.write_log
+            part("llm"),
+            part("stt"),
+            part("tts"),
+            config=config,
+            log=self.ui.write_log,
+            history=self.ui.get_chat_context(
+                self._active_chat_id, limit=40
+            ),
         )
         # Without push-to-talk nothing else knows when a sentence ended, so the
         # engine finds it in the audio. With push-to-talk the key release is the
@@ -3263,13 +3270,21 @@ class JarvisLive:
                 live_model = LIVE_MODEL
                 print(f"[JARVIS] Live model: {live_model}")
 
-                _resumed_with = self._resume_handle is not None
-
                 # Decided BEFORE the config is built, because the tool
                 # declarations depend on what the engine can serve. On a default
                 # install this returns None in a few microseconds and nothing
                 # below behaves any differently.
                 self._engine_caps = self._resolve_engine_caps()
+                if self._engine_caps is not None:
+                    # The local PipelineEngine owns its replayable history and
+                    # cannot resume a Gemini Live server session.
+                    self._resume_handle = None
+                    _resumed_with = False
+                else:
+                    self._resume_handle = self.ui.get_chat_resume_handle(
+                        self._active_chat_id
+                    )
+                    _resumed_with = self._resume_handle is not None
                 config = self._build_config()
 
                 # The conversation itself. `_open_session` gives back a Gemini
