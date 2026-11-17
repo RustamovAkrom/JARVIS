@@ -7897,6 +7897,7 @@ class MainWindow(QMainWindow):
         self._auth_lock_sig.connect(self._show_auth_lock)
         self._auth_face_result_sig.connect(self._finish_face_auth)
         self._cam_stop = threading.Event()
+        self._cam_thread = None
 
         # Camera preview overlay (child of central widget, positioned in resizeEvent)
         self._cam_preview = _CameraPreview(self.centralWidget())
@@ -8345,46 +8346,52 @@ class MainWindow(QMainWindow):
                 )
 
     def start_camera_stream(self) -> None:
+        current = self._cam_thread
+        if current is not None and current.is_alive():
+            return
         self._cam_stop.clear()
-        self._cam_stream_sig.emit(True)
-        t = threading.Thread(target=self._cam_loop, daemon=True, name="cam-stream")
-        t.start()
+        try:
+            self._cam_stream_sig.emit(True)
+        except RuntimeError:
+            return
+        self._cam_thread = threading.Thread(target=self._cam_loop, daemon=True, name="cam-stream")
+        self._cam_thread.start()
 
     def _cam_loop(self) -> None:
+        camera = None
         try:
             import cv2
+            from core.cameras import Camera
 
-            # Reuse camera index detected by screen_processor (cached in api_keys.json)
-            cam_idx = 0
-            try:
-                import json as _j
-
-                cfg = _j.loads((CONFIG_DIR / "api_keys.json").read_text())
-                cam_idx = int(cfg.get("camera_index", 0))
-            except Exception:
-                pass
-            try:
-                backend = cv2.CAP_DSHOW if _OS == "Windows" else cv2.CAP_ANY
-            except AttributeError:
-                backend = 0
-            cap = cv2.VideoCapture(cam_idx, backend)
-            if not cap.isOpened():
-                cap = cv2.VideoCapture(0)
-            if not cap.isOpened():
+            # Every webcam consumer leases the same managed capture. This
+            # prevents the HUD preview from racing Gesture Control or vision.
+            camera = Camera()
+            if not camera.open():
+                print(f"[Camera] Stream unavailable: {camera.last_error or 'camera could not be opened'}")
                 return
-            # warm-up frames
-            for _ in range(5):
-                cap.read()
-            while not self._cam_stop.wait(0.033) and cap.isOpened():
-                ret, frame = cap.read()
-                if ret and frame is not None:
-                    _, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 65])
-                    self._cam_frame_sig.emit(buf.tobytes())
-            cap.release()
+
+            while not self._cam_stop.is_set():
+                frame = camera.read(timeout=0.1)
+                if frame is None:
+                    continue
+                ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 65])
+                if ok:
+                    try:
+                        self._cam_frame_sig.emit(buf.tobytes())
+                    except RuntimeError:
+                        break
         except Exception as e:
-            print(f"[Camera] Stream error: {e}")
+            print(f"[Camera] Stream error: {type(e).__name__}: {e}")
         finally:
-            self._cam_stream_sig.emit(False)
+            if camera is not None:
+                try:
+                    camera.close()
+                except Exception:
+                    pass
+            try:
+                self._cam_stream_sig.emit(False)
+            except RuntimeError:
+                pass
 
     def stop_camera_stream(self) -> None:
         self._cam_stop.set()
@@ -16341,6 +16348,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                 self._native_cursor_applied = False
             except Exception as exc:
                 print(f"ERR: Could not restore the Windows system cursor — {exc}")
+        self._cam_stop.set()
         self._cursor_menu.hide()
         self._clipboard_panel.hide()
         if self._region_selector is not None:
@@ -16637,9 +16645,31 @@ class JarvisUI:
         self._stderr_mirror = _ConsoleMirror(sys.stderr, self._win, "stderr")
         sys.stdout, sys.stderr = self._stdout_mirror, self._stderr_mirror
         self._win._console_restore_callback = self._restore_console
+        self._app.aboutToQuit.connect(self._shutdown_camera_services)
         self._app.aboutToQuit.connect(self._restore_console)
         self.root = _RootShim(self._app)
         self._win.show()
+
+    def _shutdown_camera_services(self):
+        """Stop camera consumers before Qt destroys the main window."""
+        try:
+            from plugins import gesture_control
+            gesture_control.stop()
+        except Exception as exc:
+            print(f"[Shutdown] Gesture Control cleanup failed: {type(exc).__name__}: {exc}")
+
+        try:
+            from plugins import _hands
+            if not _hands.SERVICE.shutdown(timeout=2.5):
+                print("[Shutdown] Hand tracking worker did not stop before timeout.")
+        except Exception as exc:
+            print(f"[Shutdown] Hand service cleanup failed: {type(exc).__name__}: {exc}")
+
+        try:
+            from core import cameras
+            cameras.close_all()
+        except Exception as exc:
+            print(f"[Shutdown] Camera cleanup failed: {type(exc).__name__}: {exc}")
 
     def _restore_console(self):
         self._stdout_mirror.detach()

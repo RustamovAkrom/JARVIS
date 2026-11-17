@@ -9,9 +9,9 @@ Plugin — Gesture Control: control the assistant and the computer with your han
     🤏  pinch, move up or down     volume (a live bar on screen)
     👍 / 👎  thumbs up / down       yes / no to the question on screen
 
-While a hand is in view the HUD shows the camera with the hand's skeleton - you
-see that it is reading you; when the hands leave, the HUD is the HUD again.
-"Turn off gesture control" stops the camera. It can start with the assistant
+While Gesture Control is active, the HUD shows a live camera preview. When a
+hand is detected, its skeleton is drawn over the mirrored preview. "Turn off
+gesture control" stops the camera. It can start with the assistant
 (settings).
 
 Hands: _hands.py (local models, one shared camera - the one chosen in AUDIO &
@@ -37,7 +37,6 @@ except ImportError:             # loaded outside the package
 _NS = "gesture_control"
 _NAME = "gestures"
 _SHOW_FPS = 20
-_HIDE_AFTER = 1.5            # seconds without a hand before the HUD is the HUD again
 _VOLUME_DEADZONE = 0.04      # picture heights a pinch must move before it is a volume drag
 _VOLUME_PER_HEIGHT = 140.0   # percent per picture height
 
@@ -106,6 +105,20 @@ def _ui():
         return None
 
 
+def _hud_signals():
+    """Return live Qt signals, tolerating teardown between lookup and use."""
+    ui = _ui()
+    if ui is None:
+        return None, None
+    try:
+        win = getattr(ui, "_win", None)
+        if win is None:
+            return None, None
+        return getattr(win, "_cam_stream_sig", None), getattr(win, "_cam_frame_sig", None)
+    except RuntimeError:
+        return None, None
+
+
 class _Controller:
     def __init__(self):
         self.gestures = H.Gestures()
@@ -113,6 +126,7 @@ class _Controller:
         self.shown = False
         self.last_hand = 0.0
         self.last_show = 0.0
+        self._preview_thread: threading.Thread | None = None
         self.vol = None              # {"start": %, "y": y0, "hand": id, "moving": bool, "now": %}
         self.vol_sent = 0.0
         self.flash = ("", 0.0)       # (what happened, until)
@@ -201,27 +215,25 @@ class _Controller:
         self._volume(hands, t)
         if hands:
             self.last_hand = t
-        self._show(hands, frame, t)
 
     def _show(self, hands, frame, t) -> None:
         """The camera and the skeleton on the HUD while hands are in view."""
         if captured.is_set() or not _setting("show_hands", True) or H.screen_user() is not None:
             self._hide()                        # never over a view the hands move (_hands.on_screen)
             return
-        ui = _ui()
-        win = getattr(ui, "_win", None) if ui else None
-        stream, frame_sig = getattr(win, "_cam_stream_sig", None), getattr(win, "_cam_frame_sig", None)
+        stream, frame_sig = _hud_signals()
         if stream is None or frame_sig is None:
-            return
-        if not hands and t - self.last_hand > _HIDE_AFTER:
-            self._hide()
             return
         if t - self.last_show < 1.0 / _SHOW_FPS:
             return
         self.last_show = t
         if not self.shown:
-            stream.emit(True)
-            self.shown = True
+            try:
+                stream.emit(True)
+                self.shown = True
+            except RuntimeError:
+                self.shown = False
+                return
         img = (frame * 0.75).astype(frame.dtype)
         H.draw_hands(img, hands)
         if self.vol and self.vol.get("moving"):
@@ -231,16 +243,20 @@ class _Controller:
             _draw_badge(img)
         ok, buf = H.cv2.imencode(".jpg", img, [H.cv2.IMWRITE_JPEG_QUALITY, 70])
         if ok:
-            frame_sig.emit(buf.tobytes())
+            try:
+                frame_sig.emit(buf.tobytes())
+            except RuntimeError:
+                self.shown = False
 
     def _hide(self) -> None:
         if not self.shown:
             return
-        ui = _ui()
-        win = getattr(ui, "_win", None) if ui else None
-        stream = getattr(win, "_cam_stream_sig", None)
+        stream, _frame_sig = _hud_signals()
         if stream is not None:
-            stream.emit(False)
+            try:
+                stream.emit(False)
+            except RuntimeError:
+                pass
         self.shown = False
 
 
@@ -266,6 +282,33 @@ def _draw_badge(img) -> None:
 _controller = _Controller()
 
 
+def _preview_loop() -> None:
+    """Render the latest raw camera image separately from hand inference."""
+    while _controller.on:
+        try:
+            if captured.is_set() or not _setting("show_hands", True) or H.screen_user() is not None:
+                _controller._hide()
+                time.sleep(0.1)
+                continue
+
+            frame, frame_at = H.SERVICE.latest_camera_frame()
+            if frame is None or time.monotonic() - frame_at > 1.0:
+                time.sleep(0.05)
+                continue
+
+            hands, _tracked_frame, tracked_at = H.SERVICE.latest()
+            # Inference may run slower than the camera. Only draw landmarks
+            # while they still correspond closely to the current preview frame.
+            if not tracked_at or time.monotonic() - tracked_at > 0.6:
+                hands = []
+            mirrored = H.cv2.flip(frame, 1)
+            _controller._show(hands, mirrored, time.monotonic())
+            time.sleep(1.0 / _SHOW_FPS)
+        except Exception as exc:
+            print(f"[Gestures] preview failed: {type(exc).__name__}: {exc}", flush=True)
+            time.sleep(0.1)
+
+
 def start() -> tuple[bool, str]:
     if _controller.on:
         return True, "already on"
@@ -274,6 +317,10 @@ def start() -> tuple[bool, str]:
     H.SERVICE.subscribe(_controller)
     _controller.on = True
     threading.Thread(target=_follow_lock, daemon=True, name="gestures-lock").start()
+    _controller._preview_thread = threading.Thread(
+        target=_preview_loop, daemon=True, name="gestures-preview"
+    )
+    _controller._preview_thread.start()
     print("[Gestures] on", flush=True)
     return True, "on"
 
@@ -307,6 +354,10 @@ def stop() -> None:
     H.SERVICE.release(_NAME)
     _controller.on = False
     _controller._hide()
+    preview_thread = _controller._preview_thread
+    _controller._preview_thread = None
+    if preview_thread and preview_thread is not threading.current_thread():
+        preview_thread.join(timeout=1.0)
     print("[Gestures] off", flush=True)
 
 

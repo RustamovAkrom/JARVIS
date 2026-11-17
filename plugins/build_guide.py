@@ -86,6 +86,7 @@ import numpy as np
 
 from core.lazyimport import LazyModule, installed
 from core.runtime_paths import PATHS
+from core import cameras
 
 try:
     from plugins import _build_diagram as diagram
@@ -273,28 +274,19 @@ def _coords(value: Any, size: int) -> Optional[list]:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _open_camera():
-    try:
-        backend = cv2.CAP_DSHOW if platform.system() == "Windows" else cv2.CAP_ANY
-    except AttributeError:
-        backend = 0
+    """Acquire the configured webcam through the shared camera manager.
+
+    Gesture Control, vision capture and Build Guide must not open independent
+    VideoCapture handles for the same physical webcam.
+    """
     index = int(_config().get("camera_index", 0) or 0)
-    cap = cv2.VideoCapture(index, backend)
-    if not cap.isOpened() and index != 0:
-        cap = cv2.VideoCapture(0, backend)
-    if not cap.isOpened():
-        cap = cv2.VideoCapture(index)
-    if not cap.isOpened():
+    camera = cameras.Camera(index)
+    if not camera.open():
+        error = camera.last_error or "camera is unavailable"
+        camera.close()
+        _print(f"camera {index} could not be opened: {error}")
         return None
-    # More pixels than the default 640×480: the printing on a module is what the
-    # answer is built from. A camera that cannot do it keeps its own size.
-    for prop, value in ((cv2.CAP_PROP_FRAME_WIDTH, 1920), (cv2.CAP_PROP_FRAME_HEIGHT, 1080)):
-        try:
-            cap.set(prop, value)
-        except Exception:
-            pass
-    for _ in range(6):
-        cap.read()
-    return cap
+    return camera
 
 
 def _sharpness(frame) -> float:
@@ -364,9 +356,15 @@ def _scan_overlay(frame, phase: float):
 
 
 def _emit(frame_sig, frame) -> None:
-    ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
-    if ok:
-        frame_sig.emit(buf.tobytes())
+    if frame_sig is None:
+        return
+    try:
+        ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
+        if ok:
+            frame_sig.emit(buf.tobytes())
+    except RuntimeError:
+        # A Qt worker may finish while the main window is shutting down.
+        return
 
 
 class _CameraView:
@@ -389,8 +387,12 @@ class _CameraView:
 
     def start(self) -> None:
         if self.stream_sig:
-            self.stream_sig.emit(True)
-            self.open = True
+            try:
+                self.stream_sig.emit(True)
+                self.open = True
+            except RuntimeError:
+                self.stream_sig = None
+                self.frame_sig = None
 
     def frame(self, frame) -> None:
         if self.frame_sig is not None:
@@ -416,7 +418,10 @@ class _CameraView:
         self._stop.set()
         with self._lock:
             if self.open and self.stream_sig:
-                self.stream_sig.emit(False)
+                try:
+                    self.stream_sig.emit(False)
+                except RuntimeError:
+                    pass
             self.open = False
 
 
@@ -425,14 +430,6 @@ def _grab_camera(player, view: _CameraView) -> tuple[Optional[np.ndarray], str]:
     if not _HAS_CV2:
         return None, "OpenCV is not installed, so the camera cannot be read (pip install opencv-python)"
     cap = _open_camera()
-    if cap is None and player is not None:
-        # The HUD's own live camera holds the device on some platforms.
-        try:
-            player.stop_camera_stream()
-            time.sleep(1.2)
-        except Exception:
-            pass
-        cap = _open_camera()
     if cap is None:
         return None, "the camera could not be opened — another application may be using it"
 
@@ -443,8 +440,8 @@ def _grab_camera(player, view: _CameraView) -> tuple[Optional[np.ndarray], str]:
         t0 = time.time()
         end = t0 + seconds
         while time.time() < end:
-            ok, frame = cap.read()
-            if ok and frame is not None:
+            frame = cap.read(timeout=0.1)
+            if frame is not None:
                 view.frame(frame)
                 if time.time() >= end - 1.2:
                     score = _sharpness(frame)
@@ -457,11 +454,12 @@ def _grab_camera(player, view: _CameraView) -> tuple[Optional[np.ndarray], str]:
                 extended = True
             time.sleep(1.0 / _FPS)
         if best is None:
-            ok, frame = cap.read()
-            best = frame if ok else None
+            best = cap.read(timeout=0.5)
+            if best is None:
+                best = cap.read_latest()
     finally:
         try:
-            cap.release()
+            cap.close()
         except Exception:
             pass
     if best is None:

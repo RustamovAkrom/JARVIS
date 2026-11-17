@@ -597,6 +597,8 @@ class HandService:
         self._thread: threading.Thread | None = None
         self._frame = None
         self._frame_t = 0.0
+        self._raw_frame = None
+        self._raw_frame_t = 0.0
         self._new = threading.Event()
         self._latest = ([], None, 0.0)
         self.fps = 0.0
@@ -607,13 +609,30 @@ class HandService:
         if not models_present():
             self.error = "the hand models are missing from this installation"
             return False
-        with self._lock:
-            self._holders.add(name)
-            if self._thread is None or not self._thread.is_alive():
-                self._stop.clear()
-                self._thread = threading.Thread(target=self._run, daemon=True, name="hands")
-                self._thread.start()
-        return True
+
+        # A quick off/on must not attach a new holder to a worker that is
+        # already exiting. Wait outside the lock, then start a fresh worker.
+        while True:
+            with self._lock:
+                thread = self._thread
+                stopping = bool(thread and thread.is_alive() and self._stop.is_set())
+                if not stopping:
+                    self._holders.add(name)
+                    if thread is None or not thread.is_alive():
+                        self._stop.clear()
+                        self._thread = threading.Thread(
+                            target=self._run, daemon=True, name="hands"
+                        )
+                        self._thread.start()
+                    return True
+
+            if thread is threading.current_thread():
+                self.error = "hand tracking is still shutting down"
+                return False
+            thread.join(timeout=2.5)
+            if thread.is_alive():
+                self.error = "previous camera session is still stopping"
+                return False
 
     def release(self, name: str) -> None:
         with self._lock:
@@ -637,6 +656,23 @@ class HandService:
     def latest(self):
         return self._latest
 
+    def latest_camera_frame(self):
+        """Return the newest raw frame independently of hand inference."""
+        with self._lock:
+            frame, captured_at = self._raw_frame, self._raw_frame_t
+            return (frame.copy() if frame is not None else None), captured_at
+
+    def shutdown(self, timeout: float = 2.5) -> bool:
+        """Stop every hand consumer and wait briefly for the capture worker."""
+        with self._lock:
+            self._holders.clear()
+            self._stop.set()
+            thread = self._thread
+        if thread and thread is not threading.current_thread():
+            thread.join(timeout=max(0.0, float(timeout)))
+            return not thread.is_alive()
+        return True
+
     def _grab(self, cam) -> None:
         """Read the camera as fast as it delivers, keep only the newest frame."""
         while not self._stop.is_set():
@@ -644,7 +680,10 @@ class HandService:
             if frame is None:
                 time.sleep(0.2)
                 continue
-            self._frame, self._frame_t = frame, time.monotonic()
+            captured_at = time.monotonic()
+            with self._lock:
+                self._raw_frame, self._raw_frame_t = frame, captured_at
+            self._frame, self._frame_t = frame, captured_at
             self._new.set()
 
     def _run(self) -> None:
@@ -733,6 +772,9 @@ class HandService:
             cam.release()
             self.camera = None
             self._latest = ([], None, 0.0)
+            with self._lock:
+                self._raw_frame = None
+                self._raw_frame_t = 0.0
 
 
 SERVICE = HandService()
