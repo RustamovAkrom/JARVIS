@@ -103,7 +103,7 @@ class _Device:
                 )
             except Exception:
                 # Older OpenCV builds and some backends reject parameterized open.
-                cap = cv2.VideoCapture(self.index, backend)
+                cap = None
 
             if cap is None or not cap.isOpened():
                 if cap is not None:
