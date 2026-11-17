@@ -2338,30 +2338,33 @@ class PluginManagerOverlay(QWidget):
             and plugin.get("settings_namespace") in schemas_by_namespace
         }
 
-        lay = QVBoxLayout(self)
-        lay.setContentsMargins(20, 16, 20, 16)
-        lay.setSpacing(6)
+        self._layout = QVBoxLayout(self)
+        self._layout.setContentsMargins(20, 16, 20, 16)
+        self._layout.setSpacing(6)
+        self._embedded = False
 
         hdr = QLabel("🧩  PLUGIN MANAGER")
         hdr.setFont(QFont(FONT_MONO, 12, QFont.Weight.Bold))
         hdr.setStyleSheet(f"color: {C.PRI}; background: transparent;")
-        lay.addWidget(hdr)
+        self._layout.addWidget(hdr)
         sep = QFrame()
         sep.setFrameShape(QFrame.Shape.HLine)
         sep.setStyleSheet(f"color: {C.BORDER}; margin: 2px 0;")
-        lay.addWidget(sep)
+        self._layout.addWidget(sep)
 
         if not plugins:
             empty = QLabel("No plugins found in /plugins.")
             empty.setFont(QFont(FONT_MONO, 8))
             empty.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
-            lay.addWidget(empty)
+            self._layout.addWidget(empty)
 
         for p in plugins:
-            lay.addLayout(self._build_row(p))
+            self._layout.addLayout(self._build_row(p))
 
-        lay.addSpacing(4)
+        self._layout.addSpacing(4)
         close_btn = QPushButton("CLOSE")
+        self._close_button = close_btn
+        close_btn.setObjectName("plugin_manager_close")
         close_btn.setFixedHeight(30)
         close_btn.setFont(QFont(FONT_MONO, 9))
         close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -2373,8 +2376,31 @@ class PluginManagerOverlay(QWidget):
             QPushButton:hover {{ color: {C.TEXT}; border-color: {C.BORDER_B}; }}
         """)
         close_btn.clicked.connect(self.hide)
-        lay.addWidget(close_btn)
+        self._layout.addWidget(close_btn)
         self.adjustSize()
+
+    def set_embedded(self, embedded: bool = True) -> None:
+        """Fit the plugin list to the available Settings viewport."""
+        self._embedded = bool(embedded)
+        if self._embedded:
+            self.setStyleSheet("PluginManagerOverlay { background:transparent; border:0; }")
+            self.setMinimumWidth(0)
+            self.setMaximumWidth(16777215)
+            self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+            self._layout.setContentsMargins(0, 0, 0, 0)
+            self._close_button.hide()
+        else:
+            self.setStyleSheet(f"""
+                PluginManagerOverlay {{
+                    background: {C.PANEL};
+                    border: 1px solid {C.BORDER_B};
+                    border-radius: 6px;
+                }}
+            """)
+            self.setFixedWidth(self._OW)
+            self._layout.setContentsMargins(20, 16, 20, 16)
+            self._close_button.show()
+        self.updateGeometry()
 
     def _build_row(self, p: dict) -> QHBoxLayout:
         row = QHBoxLayout()
@@ -2387,7 +2413,9 @@ class PluginManagerOverlay(QWidget):
             f"color: {C.TEXT if p['valid'] else C.TEXT_DIM}; background: transparent;"
         )
         lbl.setToolTip(p["description"] if p["valid"] else p["error"])
-        lbl.setWordWrap(False)
+        lbl.setWordWrap(True)
+        lbl.setMinimumWidth(0)
+        lbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         row.addWidget(lbl, stretch=1)
 
         btn = QPushButton()
@@ -2412,7 +2440,7 @@ class PluginManagerOverlay(QWidget):
         if p.get("valid") and section is not None:
             settings_btn = QPushButton("⚙")
             settings_btn.setObjectName(f"plugin_settings_{p['name']}")
-            settings_btn.setFixedSize(26, 24)
+            settings_btn.setFixedSize(34, 26)
             settings_btn.setToolTip(f"Configure {p['name']}")
             settings_btn.setAccessibleName(f"Configure {p['name']}")
             settings_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -2948,6 +2976,10 @@ class AudioDeviceOverlay(_HudOverlay):
         self.picked.emit()
 
 
+class _MemoryForgetSignals(QObject):
+    finished = pyqtSignal(str, str, bool, str)
+
+
 class MemoryOverlay(_HudOverlay):
     """Everything JARVIS has stored about you, and when it learned it.
 
@@ -2961,6 +2993,10 @@ class MemoryOverlay(_HudOverlay):
     def __init__(self, parent=None, embedded: bool = False):
         super().__init__(parent)
         self._embedded = bool(embedded)
+        self._forget_signals = _MemoryForgetSignals(self)
+        self._forget_signals.finished.connect(self._on_forget_finished)
+        self._forget_threads: set[threading.Thread] = set()
+        self._forget_busy = False
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(f"""
             MemoryOverlay {{
@@ -3217,8 +3253,10 @@ class MemoryOverlay(_HudOverlay):
                         border:1px solid {C.BORDER}; border-radius:6px; }}
                     QPushButton:hover {{ color:{C.RED}; border-color:{C.RED}; }}
                 """)
+                rm.setObjectName("forget_memory_fact")
                 rm.clicked.connect(
-                    lambda _=False, c=r["category"], k=r["key"]: self._forget(c, k)
+                    lambda _=False, c=r["category"], k=r["key"], button=rm:
+                        self._forget(c, k, button)
                 )
                 top.addWidget(rm)
                 card_lay.addLayout(top)
@@ -3272,9 +3310,9 @@ class MemoryOverlay(_HudOverlay):
         # got it right: _settle is idempotent.
         QTimer.singleShot(0, lambda g=before: self._settle(g))
 
-    def _forget(self, category: str, key: str):
-        from memory.memory_manager import forget
-
+    def _forget(self, category: str, key: str, button=None):
+        if self._forget_busy:
+            return
         answer = QMessageBox.question(
             self,
             "Forget this saved fact?",
@@ -3285,12 +3323,40 @@ class MemoryOverlay(_HudOverlay):
         if answer != QMessageBox.StandardButton.Yes:
             return
 
-        forget(key, category)
-        # Rebuild on the NEXT event-loop turn, not inside this click handler.
-        # The rebuild destroys the very ✕ button that emitted this signal, and
-        # Qt is entitled to touch the sender after a slot returns; tearing it
-        # down mid-emission is how a widget ends up half-alive on screen.
+        self._forget_busy = True
+        if button is not None:
+            button.setEnabled(False)
+        worker = threading.Thread(
+            target=self._forget_worker,
+            args=(category, key),
+            daemon=True,
+            name="memory-forget",
+        )
+        self._forget_threads.add(worker)
+        worker.start()
+
+    def _forget_worker(self, category: str, key: str) -> None:
+        try:
+            from memory.memory_manager import forget
+            result = forget(key, category)
+            success = result.startswith("Forgotten:")
+        except Exception as exc:
+            success, result = False, f"{type(exc).__name__}: {exc}"
+        try:
+            self._forget_signals.finished.emit(category, key, success, result)
+        except RuntimeError:
+            pass
+
+    def _on_forget_finished(self, category: str, key: str, success: bool, result: str):
+        self._forget_busy = False
+        self._forget_threads = {worker for worker in self._forget_threads if worker.is_alive()}
         QTimer.singleShot(0, self._rebuild)
+        if not success:
+            QMessageBox.warning(
+                self,
+                "Memory was not changed",
+                result or f"Could not remove {category}/{key}.",
+            )
 
 
 class _ScrollSafeCombo(QComboBox):
@@ -9587,18 +9653,23 @@ class MainWindow(QMainWindow):
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        # The compact System tab scrolls with the wheel/trackpad; hide the
+        # native bar so it does not consume a permanent strip of the panel.
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setMinimumHeight(0)
         scroll.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
+        scroll.setStyleSheet(
+            "QScrollArea { background: transparent; border: none; }"
+            "QScrollBar:vertical { width:0; background:transparent; }"
+        )
         scroll.viewport().setAutoFillBackground(False)
         scroll.viewport().setStyleSheet("background: transparent; border: none;")
         body = QWidget()
         body.setAutoFillBackground(False)
         body.setStyleSheet("background: transparent;")
         lay = QVBoxLayout(body)
-        lay.setContentsMargins(10, 12, 10, 12)
-        lay.setSpacing(7)
+        lay.setContentsMargins(9, 10, 9, 10)
+        lay.setSpacing(8)
         scroll.setWidget(body)
         system_layout.addWidget(scroll)
 
@@ -9608,7 +9679,7 @@ class MainWindow(QMainWindow):
         hdr.setToolTip(
             self._tr("Live resource indicators; hover over a metric for details.")
         )
-        hdr.setFont(QFont(FONT_MONO, 8, QFont.Weight.Bold))
+        hdr.setFont(QFont(FONT_MONO, 9, QFont.Weight.Bold))
         hdr.setStyleSheet(f"color: {C.PRI}; background: transparent;")
         head_row.addWidget(hdr, 1)
         online = QLabel(f"● {self._tr('Online')}")
@@ -9678,8 +9749,8 @@ class MainWindow(QMainWindow):
             f"border:1px solid {C.BORDER}; border-radius:8px; }}"
         )
         gauge_layout = QVBoxLayout(gauge_surface)
-        gauge_layout.setContentsMargins(4, 4, 4, 4)
-        gauge_layout.setSpacing(0)
+        gauge_layout.setContentsMargins(6, 6, 6, 6)
+        gauge_layout.setSpacing(3)
         gauge_layout.addWidget(_gauge_row(self._gauge_cpu, self._gauge_mem))
         gauge_layout.addWidget(_gauge_row(self._gauge_net, self._gauge_gpu))
         gauge_layout.addWidget(_gauge_row(self._gauge_tmp))
@@ -9688,6 +9759,7 @@ class MainWindow(QMainWindow):
         self._trend_chart = MetricTrendChart(
             self._tr("LOAD HISTORY"), self._tr("COLLECTING TELEMETRY"), self._tr("MEM")
         )
+        self._trend_chart.setMinimumHeight(118)
         lay.addWidget(self._trend_chart, 1)
 
         details_rule = QFrame()
@@ -11875,6 +11947,9 @@ class MainWindow(QMainWindow):
                 if old != updated:
                     retheme_all_widgets(old, updated)
                 self._apply_design_system()
+                settings = getattr(self, "_settings_center", None)
+                if settings is not None:
+                    settings.refresh_theme()
         self._log.append_log("SYS: Appearance settings updated.")
         return True
 
@@ -15017,6 +15092,9 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         if apply_ui_accent(hex_color):
             retheme_all_widgets(old, current_palette())
             self._apply_design_system()
+            settings = getattr(self, "_settings_center", None)
+            if settings is not None:
+                settings.refresh_theme()
 
     def _preview_ui_opacity(self, opacity: int):
         value = max(60, min(100, int(opacity)))

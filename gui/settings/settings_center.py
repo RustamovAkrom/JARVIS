@@ -57,6 +57,13 @@ def _center_style(glass_opacity: int = 100) -> str:
         QLabel {{ color:{C.TEXT}; background:transparent; }}
         QLineEdit {{ background:{glass_rgba(C.PANEL2, glass_opacity, minimum_alpha=220)}; color:{C.WHITE}; border:1px solid {C.BORDER}; border-radius:6px; padding:8px 10px; }}
         QLineEdit:focus {{ border-color:{C.PRI}; }}
+        QComboBox {{ background:{glass_rgba(C.PANEL2, glass_opacity, minimum_alpha=220)}; color:{C.TEXT}; border:1px solid {C.BORDER}; border-radius:7px; padding:6px 30px 6px 10px; min-height:24px; }}
+        QComboBox:hover {{ border-color:{C.BORDER_B}; }}
+        QComboBox:focus {{ border-color:{C.PRI}; }}
+        QComboBox::drop-down {{ subcontrol-origin:padding; subcontrol-position:top right; width:26px; border-left:1px solid {C.BORDER}; border-top-right-radius:7px; border-bottom-right-radius:7px; }}
+        QComboBox QAbstractItemView {{ background:{C.PANEL2}; color:{C.TEXT}; selection-background-color:{C.PRI_GHO}; selection-color:{C.PRI}; border:1px solid {C.BORDER_B}; outline:0; padding:4px; }}
+        QComboBox QAbstractItemView::item {{ min-height:28px; padding:5px 8px; }}
+        QComboBox QAbstractItemView::item:hover {{ background:{C.PRI_GHO}; }}
         QListWidget {{ background:transparent; color:{C.TEXT_MED}; border:0; outline:0; }}
         QListWidget::item {{ padding:8px 9px; border-radius:5px; }}
         QListWidget::item:hover {{ background:{C.PRI_GHO}; color:{C.TEXT}; }}
