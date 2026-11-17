@@ -667,6 +667,9 @@ class JarvisLive:
         # reconnect: a dropped connection is not news about Wayland.
         self._platform_notes_shown = False
         self.ui = ui
+        from core import inputlock
+        self._inputlock = inputlock
+        self._inputlock.register_interface(self.ui)
         self.ui.on_plan_mode_change = self._set_plan_mode
         self._asst_name = "JARVI    S"  # updated each session from config
         self.session = None
@@ -3823,6 +3826,11 @@ class JarvisLive:
         if self._shutdown_requested:
             self.set_speaking(False)
             print("[JARVIS] Shutdown complete.")
+            try:
+                self._inputlock.clear()
+                self._inputlock.unregister_interface(self.ui)
+            except Exception:
+                pass
             self.ui.root.quit()
 
 

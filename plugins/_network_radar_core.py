@@ -1324,12 +1324,16 @@ class Net:
             self.version += 1
             if t == "net":
                 info = {k: v for k, v in m.items() if k != "t"}
-                if self.info.get("gw") and info.get("gw") != self.info.get("gw"):
-                    self.devs.clear()                 # another network: start over
+                old_gw = self.info.get("gw")
+                new_gw = info.get("gw")
+                if old_gw and new_gw != old_gw:
+                    self.devs.clear()
                     self.netkey = None
                     for h in self.hist.values():
                         h.clear()
                 self.info = info
+                # Router identity is also checked against the gateway ARP MAC
+                # in _dev(), because different LANs can reuse one gateway IP.
             elif t == "isp":
                 self.isp = {k: v for k, v in m.items() if k != "t"}
             elif t == "scan_start":
@@ -1358,7 +1362,7 @@ class Net:
                 cb()
             except Exception as exc:
                 _once("network radar callback", exc)
-        if told and ANNOUNCE is not None:
+        if told and self.store.watch and ANNOUNCE is not None:
             try:
                 ANNOUNCE(told)
             except Exception as exc:
@@ -1384,6 +1388,15 @@ class Net:
         d["gw"] = ip == self.info.get("gw")
         if d.get("lat") is None and d.get("arp") is not None and not d["self"]:
             d["lat_guess"] = d["arp"]
+        if d["gw"] and d.get("mac") and self.netkey and self.netkey.casefold() != str(d["mac"]).casefold():
+            # Same gateway IP but a different router: clear the previous LAN.
+            # Keep the current gateway record so the ordinary initialisation
+            # below can establish this router as the new network identity.
+            self.devs.clear()
+            self.devs[ip] = d
+            self.netkey = None
+            for history in self.hist.values():
+                history.clear()
         if d["gw"] and d.get("mac") and self.netkey is None:
             self.netkey = d["mac"]
             nets = self.store.data["nets"]

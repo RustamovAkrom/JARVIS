@@ -85,6 +85,7 @@ from typing import Any, Callable, Optional
 import numpy as np
 
 from core.lazyimport import LazyModule, installed
+from core.runtime_paths import PATHS
 
 try:
     from plugins import _build_diagram as diagram
@@ -95,9 +96,9 @@ cv2 = LazyModule("cv2")
 _HAS_CV2 = installed("cv2")
 
 _NS = "build_guide"
-BASE_DIR = Path(__file__).resolve().parent.parent
-OUT_DIR = BASE_DIR / "reports" / "build_guide"
-STATE_FILE = BASE_DIR / "memory" / "build_guide_cache.json"   # git-ignored pattern
+BASE_DIR = PATHS.resource_root
+OUT_DIR = PATHS.user_data_root / "reports" / "build_guide"
+STATE_FILE = PATHS.memory_dir / "build_guide_cache.json"
 KEEP_FILES = 30
 
 _FPS = 20
@@ -162,7 +163,7 @@ def _setting_float(key: str, default: float) -> float:
 
 def _config() -> dict:
     try:
-        return json.loads((BASE_DIR / "config" / "api_keys.json").read_text(encoding="utf-8"))
+        return json.loads(PATHS.api_config_file.read_text(encoding="utf-8"))
     except Exception:
         return {}
 
@@ -1149,6 +1150,23 @@ def _draw_photo(plan: dict, jpeg: Optional[bytes], *, marks=None, emphasis=None,
     numbered = [{**m, "n": i} for i, m in enumerate(marks, 1)]
     if not parts and not numbered:
         return None
+    if not _setting_bool("keep_photos", False):
+        # Qt's renderer needs a path, but the generated image need not remain
+        # on disk: read the result into memory before the temporary directory
+        # is removed.
+        import tempfile
+
+        with tempfile.TemporaryDirectory(prefix="jarvis-build-guide-") as temp_dir:
+            temp_path = Path(temp_dir) / "photo_marked.png"
+            result = diagram.annotate(jpeg, temp_path, parts=parts, marks=numbered,
+                                      accent=_accent(), emphasis=set(emphasis or ()))
+            if result and result.get("path") and Path(result["path"]).is_file():
+                result["image_bytes"] = Path(result["path"]).read_bytes()
+                result["path"] = ""
+            if result:
+                result["view"] = "photo"
+            return result
+
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     result = diagram.annotate(jpeg, OUT_DIR / f"photo_marked_{_stamp()}.png", parts=parts,
                               marks=numbered, accent=_accent(), emphasis=set(emphasis or ()))
@@ -1180,7 +1198,10 @@ def _show(player, plan: dict, picture: Optional[dict], panel: str) -> str:
     if not picture:
         return "none"
     try:
-        player.show_image(picture["path"], plan.get("title") or "")
+        if picture.get("image_bytes") is not None and callable(getattr(player, "show_image_bytes", None)):
+            player.show_image_bytes(picture["image_bytes"], plan.get("title") or "")
+        else:
+            player.show_image(picture["path"], plan.get("title") or "")
     except Exception:
         return "none"
     deadline = time.time() + 2.0
@@ -1312,7 +1333,12 @@ class _Glance:
             if self.view:
                 self.view.close()
             try:
-                self.player.show_image(picture["path"], plan.get("title") or "")
+                if picture.get("image_bytes") is not None and callable(
+                    getattr(self.player, "show_image_bytes", None)
+                ):
+                    self.player.show_image_bytes(picture["image_bytes"], plan.get("title") or "")
+                else:
+                    self.player.show_image(picture["path"], plan.get("title") or "")
                 self.player.show_content(_panel_title(plan),
                                          "⏳\n\n🧩 " + " · ".join(c["name"] for c in boxed))
             except Exception:

@@ -16908,6 +16908,24 @@ class JarvisUI:
         """Thread-safe: show a webcam frame in the small overlay (screen captures)."""
         self._win._camera_sig.emit(img_bytes)
 
+    def show_image(self, path: str, title: str = "") -> None:
+        """Read and display an image in the HUD preview overlay."""
+        try:
+            image_bytes = Path(path).read_bytes()
+        except OSError as exc:
+            print(f"[Image] Could not read image: {exc}")
+            return
+        self._win._camera_sig.emit(image_bytes)
+
+    def show_image_bytes(self, image_bytes: bytes, title: str = "") -> None:
+        """Display generated image bytes without retaining a persistent file."""
+        if image_bytes:
+            self._win._camera_sig.emit(bytes(image_bytes))
+
+    def video_state(self) -> dict:
+        """Expose the preview state for plugins waiting for visual output."""
+        return {"kind": "image" if self._win._cam_preview.isVisible() else ""}
+
     def show_video(
         self, source: str, title: str = "", muted: bool = True, audio_source: str = ""
     ) -> None:
