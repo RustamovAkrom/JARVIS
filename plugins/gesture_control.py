@@ -363,7 +363,7 @@ def _start_on_launch() -> None:
 def _enabled() -> bool:
     try:
         from memory.config_manager import get_plugin_enabled
-        return get_plugin_enabled(PLUGIN["name"], False)
+        return get_plugin_enabled(PLUGIN["name"])
     except Exception:
         return False
 

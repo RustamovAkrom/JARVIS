@@ -528,7 +528,7 @@ def names_match(wanted: str, shown: str) -> bool:
     w, s = fold(wanted), fold(shown)
     if not w or not s:
         return False
-    if w == s or w in s or s in w:
+    if name_in_phrase(w, s) or name_in_phrase(s, w):
         return True
     # A phone number typed with spaces/dashes against one saved without them.
     wd, sd = re.sub(r"\D", "", w), re.sub(r"\D", "", s)

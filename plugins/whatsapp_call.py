@@ -239,10 +239,9 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
     if action in ("hangup", "hang_up", "end", "end_call") or not contact:
         return _run_unconfirmed(parameters, player, session_memory)
     from core import confirm
-    from core.i18n import t
     return confirm.request(
-        key="whatsapp_call", title=t("confirm.call", to=contact), detail="",
-        run=lambda: _run_unconfirmed(parameters, player, session_memory), on_behalf=True)
+        key="whatsapp_call", title=f"Place a WhatsApp call to {contact}?", detail="",
+        run=lambda: _run_unconfirmed(parameters, player, session_memory))
 
 
 def _run_unconfirmed(parameters: dict, player=None, session_memory=None) -> str:

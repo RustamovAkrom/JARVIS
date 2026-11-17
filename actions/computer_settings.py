@@ -53,6 +53,21 @@ def _get_macos_wifi_interface() -> str:
     return "en0"
 
 
+def media_next() -> None:
+    """Send the operating-system media-next key."""
+    pyautogui.press("nexttrack")
+
+
+def media_previous() -> None:
+    """Send the operating-system media-previous key."""
+    pyautogui.press("prevtrack")
+
+
+def media_play_pause() -> None:
+    """Toggle playback through the operating-system media key."""
+    pyautogui.press("playpause")
+
+
 def volume_up():
     if _OS == "Windows":
         for _ in range(5):
