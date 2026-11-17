@@ -119,6 +119,29 @@ def _hud_signals():
         return None, None
 
 
+def _camera_preview_dismissed() -> bool:
+    """Whether the person explicitly closed the HUD camera surface."""
+    ui = _ui()
+    try:
+        win = getattr(ui, "_win", None) if ui is not None else None
+        state = getattr(win, "_cam_preview_dismissed", None)
+        return bool(state and state.is_set())
+    except RuntimeError:
+        return True
+
+
+def _reset_camera_preview_dismissed() -> None:
+    """A fresh Gesture Control session may show the preview again."""
+    ui = _ui()
+    try:
+        win = getattr(ui, "_win", None) if ui is not None else None
+        state = getattr(win, "_cam_preview_dismissed", None)
+        if state is not None:
+            state.clear()
+    except RuntimeError:
+        pass
+
+
 class _Controller:
     def __init__(self):
         self.gestures = H.Gestures()
@@ -218,8 +241,13 @@ class _Controller:
 
     def _show(self, hands, frame, t) -> None:
         """The camera and the skeleton on the HUD while hands are in view."""
-        if captured.is_set() or not _setting("show_hands", True) or H.screen_user() is not None:
-            self._hide()                        # never over a view the hands move (_hands.on_screen)
+        if (
+            captured.is_set()
+            or not _setting("show_hands", True)
+            or H.screen_user() is not None
+            or _camera_preview_dismissed()
+        ):
+            self._hide()
             return
         stream, frame_sig = _hud_signals()
         if stream is None or frame_sig is None:
@@ -286,7 +314,12 @@ def _preview_loop() -> None:
     """Render the latest raw camera image separately from hand inference."""
     while _controller.on:
         try:
-            if captured.is_set() or not _setting("show_hands", True) or H.screen_user() is not None:
+            if (
+                captured.is_set()
+                or not _setting("show_hands", True)
+                or H.screen_user() is not None
+                or _camera_preview_dismissed()
+            ):
                 _controller._hide()
                 time.sleep(0.1)
                 continue
@@ -315,6 +348,8 @@ def start() -> tuple[bool, str]:
     if not H.SERVICE.acquire(_NAME):
         return False, H.SERVICE.error or "the hand models are missing"
     H.SERVICE.subscribe(_controller)
+    _reset_camera_preview_dismissed()
+    _controller.shown = False
     _controller.on = True
     threading.Thread(target=_follow_lock, daemon=True, name="gestures-lock").start()
     _controller._preview_thread = threading.Thread(

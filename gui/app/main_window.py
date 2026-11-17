@@ -7502,7 +7502,7 @@ class MainWindow(QMainWindow):
             }}
             QPushButton:hover {{ color: {C.PRI}; }}
         """)
-        _cam_x.clicked.connect(self.stop_camera_stream)
+        _cam_x.clicked.connect(self._close_camera_preview)
         _cam_hdr.addWidget(_cam_x)
         _cam_v.addLayout(_cam_hdr)
         self._cam_live_lbl = QLabel()
@@ -7898,6 +7898,7 @@ class MainWindow(QMainWindow):
         self._auth_face_result_sig.connect(self._finish_face_auth)
         self._cam_stop = threading.Event()
         self._cam_thread = None
+        self._cam_preview_dismissed = threading.Event()
 
         # Camera preview overlay (child of central widget, positioned in resizeEvent)
         self._cam_preview = _CameraPreview(self.centralWidget())
@@ -8323,6 +8324,16 @@ class MainWindow(QMainWindow):
         )
 
     # --- Live camera stream in HUD area ------------------------------------
+    def _close_camera_preview(self) -> None:
+        """Dismiss the HUD camera surface without disabling Gesture Control."""
+        self._cam_preview_dismissed.set()
+        self._cam_stop.set()
+        try:
+            self._cam_stream_sig.emit(False)
+        except RuntimeError:
+            pass
+        self._cam_live_lbl.clear()
+
     def _on_cam_stream(self, start: bool) -> None:
         if start:
             self._hud_cam_stack.setCurrentIndex(1)
