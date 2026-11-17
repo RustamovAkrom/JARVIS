@@ -36,6 +36,20 @@ class SettingsComponentTests(unittest.TestCase):
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
 
+    def test_event_filter_is_safe_before_window_chrome_initialization(self):
+        # Some Qt test paths and teardown callbacks can reach eventFilter before
+        # MainWindow.__init__ has populated every UI-only attribute.
+        window = MainWindow.__new__(MainWindow)
+        QMainWindow.__init__(window)
+        child = QWidget(window)
+        window.__dict__.pop("_custom_chrome_enabled", None)
+        from PyQt6.QtCore import QEvent
+
+        self.assertFalse(
+            MainWindow.eventFilter(window, child, QEvent(QEvent.Type.User))
+        )
+        window.close()
+
     def test_setting_row_pairs_control_with_accessible_description(self):
         control = QCheckBox("Enabled")
         row = SettingRow("Wake word", "Listen for the configured wake phrase.", control)

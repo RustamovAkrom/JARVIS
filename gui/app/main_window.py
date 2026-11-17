@@ -9171,7 +9171,7 @@ class MainWindow(QMainWindow):
 
     def eventFilter(self, watched, event):
         if (
-            self._custom_chrome_enabled
+            getattr(self, "_custom_chrome_enabled", False)
             and event.type() == QEvent.Type.MouseButtonPress
             and event.button() == Qt.MouseButton.LeftButton
             and isinstance(watched, QWidget)
