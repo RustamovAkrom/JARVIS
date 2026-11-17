@@ -1095,6 +1095,12 @@ def _worker(player, stop: threading.Event, conf: dict) -> None:
 
         if call is None:
             unresolved_since = 0.0
+            # A completed ring must not poison de-duplication for the next
+            # call from the same caller (some transports reuse the same key).
+            with _lock:
+                completed_key = _state.pop("active_ring_key", None)
+                if completed_key:
+                    _state["seen"] = [key for key in _state["seen"] if key != completed_key]
             continue
 
         with _lock:
@@ -1121,6 +1127,7 @@ def _worker(player, stop: threading.Event, conf: dict) -> None:
         unresolved_since = 0.0
         with _lock:
             _state["seen"].append(call.key)
+            _state["active_ring_key"] = call.key
             del _state["seen"][:-20]
 
         try:
@@ -1160,10 +1167,11 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
     else:
         return _run_unconfirmed(parameters, player, session_memory)
     from core import confirm
-    from core.i18n import t
+    title = ("Send a WhatsApp message to the caller?" if action in _TALKS_TO_CALLER
+             else "Enable automatic WhatsApp replies?")
     message = str(p.get("message") or "").strip() or _guard_cfg().get("busy_message") or ""
     return confirm.request(
-        key="whatsapp_guard", title=t(key), detail=str(message)[:400],
+        key="whatsapp_guard", title=title, detail=str(message)[:400],
         run=lambda: _run_unconfirmed(parameters, player, session_memory))
 
 
@@ -1235,16 +1243,21 @@ def _run_unconfirmed(parameters: dict, player=None, session_memory=None) -> str:
                 "now'?")
 
     with _lock:
-        if _state["running"]:
+        already_running = _state["running"]
+        if already_running:
             _state["mode"] = mode
             if session_note:
                 _state["message"] = session_note
-            _panel(player)
-            return (f"The call guard was already running — switched it to "
-                    f"{mode.replace('_', ' ')} mode.")
-        stop = threading.Event()
-        _state.update({"running": True, "stop": stop, "mode": mode,
-                       "pending": None, "seen": [], "message": session_note})
+        else:
+            stop = threading.Event()
+            _state.update({"running": True, "stop": stop, "mode": mode,
+                           "pending": None, "seen": [], "active_ring_key": None,
+                           "message": session_note})
+
+    if already_running:
+        _panel(player)
+        return (f"The call guard was already running — switched it to "
+                f"{mode.replace('_', ' ')} mode.")
 
     thread = threading.Thread(target=_worker, args=(player, stop, conf),
                               daemon=True, name="whatsapp-guard")
@@ -1333,6 +1346,7 @@ def _decide(player, action: str, conf: dict, message: str = "") -> str:
         call = _state["pending"]
         pending_at = _state["pending_at"]
         transport = _state["transport"]
+        pending_key = call.key if call is not None else None
 
     if call is None or transport is None:
         return "There's no WhatsApp call waiting for an answer right now."
@@ -1376,9 +1390,16 @@ def _decide(player, action: str, conf: dict, message: str = "") -> str:
         fresh = None
 
     with _lock:
+        # Do not consume a newer pending ring that arrived while the
+        # transport was being queried.
+        if _state.get("pending") is None or _state["pending"].key != pending_key:
+            return "The pending WhatsApp call changed while I was checking it; no action was taken."
         _state["pending"] = None
 
     if fresh is None:
+        with _lock:
+            _state["pending_at"] = 0.0
+            _state["seen"] = [key for key in _state["seen"] if key != pending_key]
         _record(call.caller, "stopped ringing")
         _panel(player)
         return f"The call from {caller} has already stopped ringing."
@@ -1389,6 +1410,11 @@ def _decide(player, action: str, conf: dict, message: str = "") -> str:
                 f"button answers and which refuses, so I haven't touched it — "
                 f"you'll have to pick it up yourself. The controls it shows "
                 f"are: {', '.join(fresh.controls[:6]) or 'none I can read'}.")
+    if fresh.key != pending_key:
+        _record(call.caller, "call changed while awaiting decision")
+        _panel(player)
+        return (f"The call from {caller} ended or changed before I could act. "
+                "A different call is ringing now; no action was taken.")
     call = fresh
 
     if speak:
