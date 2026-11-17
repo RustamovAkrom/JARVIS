@@ -107,13 +107,28 @@ class _Device:
 
             if cap is None or not cap.isOpened():
                 if cap is not None:
-                    cap.release()
-                with self._condition:
-                    self._last_error = f"Camera {self.index} could not be opened"
-                    self._blocked_by = self._detect_blocking_process()
-                    self._capture = None
-                    self._condition.notify_all()
-                return False
+                    try:
+                        cap.release()
+                    except Exception:
+                        pass
+                # Some backends reject timeout properties by returning a closed
+                # capture instead of raising. Retry with the legacy signature.
+                try:
+                    cap = cv2.VideoCapture(self.index, backend)
+                except Exception:
+                    cap = None
+                if cap is None or not cap.isOpened():
+                    if cap is not None:
+                        try:
+                            cap.release()
+                        except Exception:
+                            pass
+                    with self._condition:
+                        self._last_error = f"Camera {self.index} could not be opened"
+                        self._blocked_by = self._detect_blocking_process()
+                        self._capture = None
+                        self._condition.notify_all()
+                    return False
 
             # MJPG commonly avoids USB bandwidth problems on Windows webcams.
             try:
