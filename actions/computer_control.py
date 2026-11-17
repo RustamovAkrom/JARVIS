@@ -645,6 +645,49 @@ def computer_control(
                 "The user can enable it in CONTROLS → COMPUTER PERMISSIONS."
             )
 
+    from memory.config_manager import get_computer_safety_settings
+    safety = get_computer_safety_settings()
+    application_actions = {
+        "screenshot", "screen_find", "screen_click", "focus_window",
+        "move", "scroll", "drag", "click", "left_click", "double_click",
+        "right_click", "type", "smart_type", "hotkey", "press",
+        "clear_field", "close_app",
+    }
+    if safety["application_rules_enabled"] and action in application_actions:
+        from core.computer_permissions import application_rule_decision
+        if action == "close_app":
+            target_application = str(params.get("app_name") or params.get("text") or "").strip()
+        elif action == "focus_window":
+            target_application = str(params.get("title") or "").strip()
+        else:
+            from core.appidentity import foreground_application
+            target_application = foreground_application()
+        allowed, reason = application_rule_decision(target_application, safety)
+        if not allowed:
+            return f"Application rule denied '{action}': {reason}"
+
+    microphone_locked = False
+    input_lock = None
+    microphone_gated_actions = {
+        "screenshot", "screen_find", "screen_click", "focus_window",
+        "move", "scroll", "drag", "click", "left_click", "double_click",
+        "right_click", "type", "smart_type", "hotkey", "press", "clear_field",
+    }
+    if safety["microphone_during_screen_actions"] and action in microphone_gated_actions:
+        try:
+            from core import inputlock as input_lock
+            microphone_locked = input_lock.hold(
+                "computer-screen-action",
+                title="SCREEN ACTION",
+                line="Microphone input is paused while JARVIS controls the screen.",
+                fallback=False,
+                tone="active",
+            )
+            if not microphone_locked:
+                return "Screen action paused: microphone protection could not be acquired."
+        except Exception as exc:
+            return f"Screen action paused: microphone protection could not start ({exc})."
+
     if player:
         # Terminal, not the HUD: the activity log is for the conversation and
         # for problems, not a receipt for every keystroke. See
@@ -760,6 +803,9 @@ def computer_control(
     except Exception as e:
         print(f"[ComputerControl] ❌ {action}: {e}")
         return f"computer_control '{action}' failed: {e}"
+    finally:
+        if microphone_locked and input_lock is not None:
+            input_lock.release("computer-screen-action")
 
 
 # ── Tool declaration (auto-discovered by core/action_loader.py) ──────────────

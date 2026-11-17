@@ -2268,7 +2268,7 @@ class JarvisLive:
                     )
 
         def callback(indata, frames, time_info, status):
-            if self.ui.auth_locked:
+            if self.ui.auth_locked or self._inputlock.is_held():
                 return
             # Keep the HUD's microphone meter tied to the actual input even
             # when speech is being gated from Gemini (wake-word sleep, JARVIS

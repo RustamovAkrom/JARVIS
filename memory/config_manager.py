@@ -1,4 +1,6 @@
 import json
+import re
+import time
 from pathlib import Path
 from pathlib import PurePosixPath, PureWindowsPath
 from core.runtime_paths import PATHS
@@ -358,19 +360,34 @@ COMPUTER_MODES = ("chat", "agent")
 COMPUTER_ACCESS_LEVELS = ("ask", "approve", "full")
 
 
-def get_computer_access_settings() -> dict[str, str]:
-    """Return the assistant's interaction mode and computer-access policy."""
+def get_computer_access_settings() -> dict[str, str | int | float]:
+    """Return the effective computer-access policy; Full Access always expires."""
     cfg = load_api_keys()
     mode = str(cfg.get("computer_mode", "chat")).lower()
     access = str(cfg.get("computer_access_level", "approve")).lower()
+    try:
+        expires_at = max(0.0, float(cfg.get("computer_access_expires_at", 0) or 0))
+    except (TypeError, ValueError):
+        expires_at = 0.0
+    remaining = max(0.0, expires_at - time.time()) if expires_at else 0.0
+    # Legacy Full Access with no expiry is expired rather than indefinite.
+    if access == "full" and remaining <= 0:
+        access = "approve"
     return {
         "mode": mode if mode in COMPUTER_MODES else "chat",
         "access_level": access if access in COMPUTER_ACCESS_LEVELS else "approve",
+        "expires_at": expires_at if access == "full" else 0.0,
+        "remaining_seconds": int(remaining) if access == "full" else 0,
     }
 
 
-def save_computer_access_settings(mode: str | None = None, access_level: str | None = None) -> None:
-    """Persist only recognized access options; legacy per-action permissions stay intact."""
+def save_computer_access_settings(
+    mode: str | None = None,
+    access_level: str | None = None,
+    *,
+    temporary_minutes: int | None = None,
+) -> None:
+    """Persist settings and attach a bounded deadline to Full Access."""
     updates = {}
     if mode is not None:
         mode = str(mode).lower()
@@ -380,6 +397,29 @@ def save_computer_access_settings(mode: str | None = None, access_level: str | N
         access_level = str(access_level).lower()
         if access_level in COMPUTER_ACCESS_LEVELS:
             updates["computer_access_level"] = access_level
+            if access_level != "full":
+                updates["computer_access_expires_at"] = 0.0
+    if access_level == "full":
+        if temporary_minutes is not None:
+            minutes = max(1, min(60, int(temporary_minutes)))
+            updates["computer_access_expires_at"] = time.time() + minutes * 60
+        else:
+            try:
+                expiry = float(load_api_keys().get("computer_access_expires_at", 0) or 0)
+            except (TypeError, ValueError):
+                expiry = 0.0
+            if expiry <= time.time():
+                updates["computer_access_expires_at"] = time.time() + 15 * 60
+    elif temporary_minutes is not None:
+        # Changing a duration alone only renews an already elevated grant.
+        current = load_api_keys()
+        try:
+            expiry = float(current.get("computer_access_expires_at", 0) or 0)
+        except (TypeError, ValueError):
+            expiry = 0.0
+        if str(current.get("computer_access_level", "")).lower() == "full" and expiry > time.time():
+            minutes = max(1, min(60, int(temporary_minutes)))
+            updates["computer_access_expires_at"] = time.time() + minutes * 60
     if updates:
         _patch_config(**updates)
 
@@ -478,6 +518,57 @@ def save_computer_permissions(values: dict) -> None:
         if isinstance(values.get(key), bool):
             current[key] = values[key]
     _patch_config(computer_permissions=current)
+
+
+def get_computer_safety_settings() -> dict:
+    """Read microphone gating and per-application scoping safeguards."""
+    cfg = load_api_keys().get("computer_safety", {})
+    cfg = cfg if isinstance(cfg, dict) else {}
+    mode = str(cfg.get("application_rule_mode", "blocklist") or "blocklist").lower()
+    if mode not in {"blocklist", "allowlist"}:
+        mode = "blocklist"
+    apps = cfg.get("applications", [])
+    if isinstance(apps, str):
+        apps = re.split(r"[,;\n]", apps)
+    if not isinstance(apps, (list, tuple, set)):
+        apps = []
+    return {
+        "microphone_during_screen_actions": bool(
+            cfg.get("microphone_during_screen_actions", True)
+        ),
+        "application_rules_enabled": bool(cfg.get("application_rules_enabled", False)),
+        "application_rule_mode": mode,
+        "applications": list(dict.fromkeys(
+            str(value).strip()[:120] for value in apps if str(value).strip()
+        ))[:64],
+    }
+
+
+def save_computer_safety_settings(values: dict) -> None:
+    """Persist only known safeguards, preserving unrelated settings."""
+    values = values if isinstance(values, dict) else {}
+    current = load_api_keys().get("computer_safety", {})
+    current = dict(current) if isinstance(current, dict) else {}
+    if "microphone_during_screen_actions" in values:
+        current["microphone_during_screen_actions"] = bool(
+            values["microphone_during_screen_actions"]
+        )
+    if "application_rules_enabled" in values:
+        current["application_rules_enabled"] = bool(values["application_rules_enabled"])
+    if "application_rule_mode" in values:
+        mode = str(values["application_rule_mode"] or "").strip().lower()
+        if mode in {"blocklist", "allowlist"}:
+            current["application_rule_mode"] = mode
+    if "applications" in values:
+        apps = values["applications"]
+        if isinstance(apps, str):
+            apps = re.split(r"[,;\n]", apps)
+        if not isinstance(apps, (list, tuple, set)):
+            apps = []
+        current["applications"] = list(dict.fromkeys(
+            str(value).strip()[:120] for value in apps if str(value).strip()
+        ))[:64]
+    _patch_config(computer_safety=current)
 
 
 def get_brief_enabled() -> bool:
