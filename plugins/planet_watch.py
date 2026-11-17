@@ -2047,9 +2047,9 @@ def _watch_loop(player, stop: threading.Event, cfg: dict) -> None:
                     _announce(player, fresh, cfg, home, units)
             for key in [k for k, t in w.alerted.items() if now - t > 6 * 3600]:
                 w.alerted.pop(key, None)
-        w.stop.wait(max(5.0, cfg["interval"] - (time.time() - started)))
+        stop.wait(max(5.0, cfg["interval"] - (time.time() - started)))
     with w.lock:
-        w.stop.set()
+        stop.set()
 
 
 def _announce(player, fresh: list, cfg: dict, home: dict, units: str) -> None:
