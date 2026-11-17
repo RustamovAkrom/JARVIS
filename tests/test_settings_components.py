@@ -48,7 +48,10 @@ class SettingsComponentTests(unittest.TestCase):
         self.assertFalse(
             MainWindow.eventFilter(window, child, QEvent(QEvent.Type.User))
         )
-        window.close()
+        # This instance intentionally skips MainWindow.__init__. Calling close()
+        # would enter the full-window closeEvent lifecycle, which is outside
+        # the eventFilter contract being tested and requires initialized UI state.
+        window.deleteLater()
 
     def test_security_page_exposes_enforced_safeguards_not_todo_placeholders(self):
         owner = QMainWindow()
