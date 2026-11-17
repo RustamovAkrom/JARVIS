@@ -76,20 +76,48 @@ def _load_cv():
 
 
 def _model_paths():
+    """Ensure both ONNX models exist without sharing temporary files.
+
+    Each process/thread downloads to its own temporary file. This matters on
+    Windows: the previous fixed ``<model>.download`` path let two concurrent
+    plugin actions open, truncate, replace, or unlink the same file, causing
+    WinError 32. The final model is published with an atomic replace.
+    """
+    import tempfile
+
     _DATA_DIR.mkdir(parents=True, exist_ok=True)
     try:
         os.chmod(_DATA_DIR, 0o700)
     except OSError:
         pass
+
     result = {}
     for filename, (url, minimum_size) in _MODELS.items():
         path = _DATA_DIR / filename
-        if not path.exists() or path.stat().st_size < minimum_size:
-            temporary = path.with_suffix(path.suffix + ".download")
-            request = urllib.request.Request(url, headers={"User-Agent": "JARVIS-Face-Activation/1.0"})
-            try:
-                with urllib.request.urlopen(request, timeout=60) as response, temporary.open("wb") as output:
-                    size = 0
+
+        try:
+            if path.is_file() and path.stat().st_size >= minimum_size:
+                result[filename] = path
+                continue
+        except OSError:
+            # A concurrent process may be publishing the model. Recheck below
+            # after our private download rather than trusting a transient stat.
+            pass
+
+        fd, temporary_name = tempfile.mkstemp(
+            prefix=f".{filename}.{os.getpid()}.",
+            suffix=".download",
+            dir=str(_DATA_DIR),
+        )
+        temporary = Path(temporary_name)
+        try:
+            request = urllib.request.Request(
+                url,
+                headers={"User-Agent": "JARVIS-Face-Activation/1.0"},
+            )
+            size = 0
+            with os.fdopen(fd, "wb") as output:
+                with urllib.request.urlopen(request, timeout=60) as response:
                     while True:
                         block = response.read(1024 * 1024)
                         if not block:
@@ -98,17 +126,55 @@ def _model_paths():
                         if size > 80_000_000:
                             raise RuntimeError("Face model download exceeded the size limit.")
                         output.write(block)
-                if size < minimum_size:
-                    raise RuntimeError(
-                        f"Downloaded face model {filename} is incomplete ({size} bytes; expected at least {minimum_size})."
-                    )
+                output.flush()
+                os.fsync(output.fileno())
+
+            if size < minimum_size:
+                raise RuntimeError(
+                    f"Downloaded face model {filename} is incomplete "
+                    f"({size} bytes; expected at least {minimum_size})."
+                )
+
+            # Another JARVIS process may have completed the same download while
+            # this one was reading. Keep its already-valid final file.
+            try:
+                if path.is_file() and path.stat().st_size >= minimum_size:
+                    result[filename] = path
+                    continue
+            except OSError:
+                pass
+
+            try:
                 temporary.replace(path)
-            finally:
+            except PermissionError:
+                # If another process won the race and published a valid model,
+                # a Windows sharing violation on the replace is harmless.
+                try:
+                    if path.is_file() and path.stat().st_size >= minimum_size:
+                        result[filename] = path
+                        continue
+                except OSError:
+                    pass
+                raise
+
+            result[filename] = path
+        finally:
+            # tempfile.mkstemp guarantees this path belongs to this invocation;
+            # never delete a shared <model>.download file owned by another call.
+            try:
                 temporary.unlink(missing_ok=True)
-        result[filename] = path
+            except PermissionError:
+                # Antivirus/indexing can briefly hold a just-closed download.
+                # Retry briefly; do not mask the original download/replace error.
+                for _ in range(5):
+                    time.sleep(0.1)
+                    try:
+                        temporary.unlink(missing_ok=True)
+                        break
+                    except PermissionError:
+                        continue
+
     return result
-
-
 def _engines(cv2, models):
     detector = cv2.FaceDetectorYN_create(str(models["yunet.onnx"]), "", (320, 320), 0.85, 0.3, 5000)
     recognizer = cv2.FaceRecognizerSF_create(str(models["sface.onnx"]), "")
