@@ -413,7 +413,7 @@ def _safe(job):
 
 def _on_gui_thread(job, timeout: float = 20.0):
     """Run `job` on the Qt thread and wait for its result."""
-    from PyQt6.QtCore import QObject, pyqtSignal
+    from PyQt6.QtCore import QObject, Qt, pyqtSignal, pyqtSlot
     from PyQt6.QtGui import QGuiApplication
 
     done = threading.Event()
@@ -422,18 +422,21 @@ def _on_gui_thread(job, timeout: float = 20.0):
     class _Bridge(QObject):
         fire = pyqtSignal()
 
+        @pyqtSlot()
+        def execute(self):
+            try:
+                box["result"] = job()
+            except Exception as exc:
+                box["error"] = exc
+            finally:
+                done.set()
+
     bridge = _Bridge()
-
-    def _slot():
-        try:
-            box["result"] = job()
-        finally:
-            done.set()
-
     bridge.moveToThread(QGuiApplication.instance().thread())
-    bridge.fire.connect(_slot)
+    bridge.fire.connect(bridge.execute, Qt.ConnectionType.QueuedConnection)
     bridge.fire.emit()
-    done.wait(timeout)
+    if not done.wait(timeout):
+        return None
     return box.get("result")
 
 
