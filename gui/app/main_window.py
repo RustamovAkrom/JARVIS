@@ -16653,6 +16653,14 @@ class JarvisUI:
     def _shutdown_camera_services(self):
         """Stop camera consumers before Qt destroys the main window."""
         try:
+            self._win.stop_camera_stream()
+            camera_thread = getattr(self._win, "_cam_thread", None)
+            if camera_thread is not None and camera_thread is not threading.current_thread():
+                camera_thread.join(timeout=1.5)
+        except Exception as exc:
+            print(f"[Shutdown] HUD camera cleanup failed: {type(exc).__name__}: {exc}")
+
+        try:
             from plugins import gesture_control
             gesture_control.stop()
         except Exception as exc:

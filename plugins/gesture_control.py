@@ -340,8 +340,15 @@ def _follow_lock() -> None:
             paused = True
         elif paused and not inputlock.held():
             time.sleep(1.0)                 # the lock's camera is let go first
-            H.SERVICE.acquire(_NAME)
-            paused = False
+            # Stop may have been requested while this worker slept. Do not
+            # reacquire the webcam after Gesture Control has been disabled.
+            if not _controller.on:
+                break
+            if H.SERVICE.acquire(_NAME):
+                paused = False
+            else:
+                print(f"[Gestures] could not resume after input lock: {H.SERVICE.error}")
+                break
         time.sleep(0.5)
     if paused:
         H.SERVICE.release(_NAME)
