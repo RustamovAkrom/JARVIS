@@ -1403,6 +1403,11 @@ def _decide(player, action: str, conf: dict, message: str = "") -> str:
         _record(call.caller, "stopped ringing")
         _panel(player)
         return f"The call from {caller} has already stopped ringing."
+    if fresh.key != pending_key:
+        _record(call.caller, "call changed while awaiting decision")
+        _panel(player)
+        return (f"The call from {caller} ended or changed before I could act. "
+                "A different call is ringing now; no action was taken.")
     if not fresh.identified:
         _record(call.caller, "controls unresolved")
         _panel(player)
@@ -1410,11 +1415,6 @@ def _decide(player, action: str, conf: dict, message: str = "") -> str:
                 f"button answers and which refuses, so I haven't touched it — "
                 f"you'll have to pick it up yourself. The controls it shows "
                 f"are: {', '.join(fresh.controls[:6]) or 'none I can read'}.")
-    if fresh.key != pending_key:
-        _record(call.caller, "call changed while awaiting decision")
-        _panel(player)
-        return (f"The call from {caller} ended or changed before I could act. "
-                "A different call is ringing now; no action was taken.")
     call = fresh
 
     if speak:
