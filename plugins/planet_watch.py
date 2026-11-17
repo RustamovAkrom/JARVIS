@@ -97,6 +97,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Optional
 
+from core.runtime_paths import PATHS
+
 import numpy as np
 
 try:
@@ -105,9 +107,9 @@ except ImportError:  # loaded outside the package
     import _planet_view as view  # type: ignore
 
 _NS = "planet_watch"
-BASE_DIR = Path(__file__).resolve().parent.parent
-CACHE_FILE = BASE_DIR / "memory" / "planet_watch_cache.json"
-OUT_DIR = BASE_DIR / "reports" / "planet_watch"
+BASE_DIR = PATHS.resource_root
+CACHE_FILE = PATHS.memory_dir / "planet_watch_cache.json"
+OUT_DIR = PATHS.user_data_root / "reports" / "planet_watch"
 _UA = "MarkJARVIS-planet_watch/1.0 (open-source desktop assistant plugin)"
 
 _EMSC = "https://www.seismicportal.eu/fdsnws/event/1/query"
@@ -2005,11 +2007,11 @@ def _is_new(q: dict, alerted: dict) -> bool:
     return not any(i in alerted for i in q.get("ids", [q["id"]]))
 
 
-def _watch_loop(player) -> None:
-    w, cfg, units = _watch, _watch.config, _units()
+def _watch_loop(player, stop: threading.Event, cfg: dict) -> None:
+    w, units = _watch, _units()
     home = {"lat": cfg["lat"], "lon": cfg["lon"], "label": cfg["label"]}
     first = True
-    while not w.stop.is_set():
+    while not stop.is_set():
         if cfg["until"] and time.time() >= cfg["until"]:
             _log(player, "Earthquake watch finished.")
             _say(player, "The earthquake watch the user asked for has just ended. Mention it in one "
@@ -2203,7 +2205,7 @@ def _globe(parameters: dict, player) -> str:
             st["title"], st["place"] = "ISS", None
     shown, facts = _present(st, player)
     live = None
-    if shown == "shown":
+    if shown in ("shown", "live"):
         if focus_iss and _num(parameters.get("live_minutes"), 0) > 0:
             live = _start_live(player, _num(parameters.get("live_minutes"), 0) * 60, "iss")
         elif _num(parameters.get("spin_seconds"), 0) > 0:
@@ -2314,7 +2316,7 @@ def _navigate(parameters: dict, player) -> str:
         st["place"] = None
     shown, facts = _present(st, player)
     spin = None
-    if shown == "shown" and _num(parameters.get("spin_seconds"), 0) > 0 and st["span"] >= MAP_SPAN:
+    if shown in ("shown", "live") and _num(parameters.get("spin_seconds"), 0) > 0 and st["span"] >= MAP_SPAN:
         spin = _start_live(player, _num(parameters.get("spin_seconds"), 0), "spin")
     facts.update(moved=", ".join(moved) or "redrawn", spinning_for_seconds=spin,
                  layers=", ".join(sorted(st["layers"] - {"weather"})))
@@ -2534,17 +2536,25 @@ def _quake_watch(parameters: dict, player) -> str:
            "radius_km": radius, "min_mag": min_mag, "global_min": global_min, "interval": interval,
            "until": time.time() + minutes * 60 if minutes > 0 else 0.0, "started": time.time()}
     with _watch.lock:
-        if _watch.running():
-            _watch.stop.set()
-            _watch.thread.join(timeout=2)
-        _watch.stop = threading.Event()
+        old_stop, old_thread = _watch.stop, _watch.thread
+        if old_thread and old_thread.is_alive():
+            old_stop.set()
+    # The worker may need _watch.lock to finish; never join while holding it.
+    if old_thread and old_thread.is_alive():
+        old_thread.join(timeout=2)
+        if old_thread.is_alive():
+            return _failed("the previous earthquake watch is still stopping; retry shortly")
+
+    new_stop = threading.Event()
+    with _watch.lock:
+        _watch.stop = new_stop
         _watch.config = cfg
         _watch.alerted.clear()
         _watch.spoken.clear()
         _watch.polls = _watch.failures = 0
         _watch.last_alert = None
-        _watch.thread = threading.Thread(target=_watch_loop, args=(player,), daemon=True,
-                                         name="planet-quake-watch")
+        _watch.thread = threading.Thread(target=_watch_loop, args=(player, new_stop, cfg),
+                                         daemon=True, name="planet-quake-watch")
         _watch.thread.start()
     _log(player, f"Earthquake watch on — M≥{min_mag:g} within {fmt_km(radius, units)}, "
                  f"every {interval:.0f} s.")
@@ -2575,7 +2585,7 @@ def _iss(parameters: dict, player) -> str:
     st = _new_state((state["lat"], state["lon"]), 6371.0, focus_iss=True, title="ISS",
                     layers=set(current) | {"iss"})
     shown, _ = _present(st, player, title="✦ ISS")
-    live = _start_live(player, _num(parameters.get("live_minutes"), 0) * 60, "iss") if shown == "shown" else None
+    live = _start_live(player, _num(parameters.get("live_minutes"), 0) * 60, "iss") if shown in ("shown", "live") else None
     facts = {"over_country": _country_below(state["lat"], state["lon"]),
              "position": f"{state['lat']:.2f}, {state['lon']:.2f}",
              "altitude": fmt_km(state["alt_km"], units), "speed": fmt_speed(state["speed_kmh"], units),
