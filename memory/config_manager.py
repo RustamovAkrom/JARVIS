@@ -681,6 +681,7 @@ def save_plugin_enabled(plugin_name: str, enabled: bool) -> None:
 PROVIDER_MODE_GEMINI = "gemini"  # integrated online conversation
 PROVIDER_MODE_PIPELINE = "pipeline"  # configurable voice/model/voice stack
 PROVIDER_ENVIRONMENTS = ("online", "offline")
+PROVIDER_SELECTIONS = ("online", "offline", "auto")
 _LOCAL_CATALOG_IDS = frozenset({"ollama", "lmstudio", "llamacpp", "vllm", "jan", "local", "piper", "system"})
 
 
@@ -719,13 +720,46 @@ def _legacy_provider_environment(block: dict) -> str:
     return "online"
 
 
-def get_provider_environment() -> str:
-    """Return the selected top-level AI environment: online or offline."""
+def get_provider_selection() -> str:
+    """Return the requested runtime policy: online, offline or auto."""
     block = get_providers()
+    value = str(block.get("selection") or "").strip().lower()
+    if value in PROVIDER_SELECTIONS:
+        return value
+    # Migrate installations that only stored the former two-state environment.
+    legacy = str(block.get("environment") or "").strip().lower()
+    return legacy if legacy in PROVIDER_ENVIRONMENTS else _legacy_provider_environment(block)
+
+
+def get_provider_environment() -> str:
+    """Return the currently resolved runtime environment, not the Auto policy."""
+    block = get_providers()
+    selection = get_provider_selection()
+    if selection in PROVIDER_ENVIRONMENTS:
+        return selection
     value = str(block.get("environment") or "").strip().lower()
     if value in PROVIDER_ENVIRONMENTS:
         return value
     return _legacy_provider_environment(block)
+
+
+def resolve_provider_environment(
+    selection: str,
+    *,
+    online_available: bool,
+    offline_ready: bool,
+) -> str:
+    """Resolve a user's Online/Offline/Auto choice without performing I/O."""
+    value = str(selection or "").strip().lower()
+    if value == "online":
+        return "online"
+    if value == "offline":
+        return "offline"
+    if value != "auto":
+        raise ValueError(f"Unsupported AI environment selection: {selection}")
+    if online_available or not offline_ready:
+        return "online"
+    return "offline"
 
 
 def get_online_provider_mode() -> str:
@@ -811,10 +845,18 @@ def _patch_providers(**fields) -> None:
 
 
 def save_provider_environment(environment: str) -> None:
-    """Persist the selected Online or Offline environment."""
+    """Persist an explicit runtime selection and its current active environment."""
     value = str(environment or "").strip().lower()
     if value not in PROVIDER_ENVIRONMENTS:
         raise ValueError(f"Unsupported AI environment: {environment}")
+    _patch_providers(environment=value, selection=value)
+
+
+def save_provider_runtime_environment(environment: str) -> None:
+    """Update Auto's last resolved environment without changing the user's policy."""
+    value = str(environment or "").strip().lower()
+    if value not in PROVIDER_ENVIRONMENTS:
+        raise ValueError(f"Unsupported runtime AI environment: {environment}")
     _patch_providers(environment=value)
 
 
@@ -829,6 +871,7 @@ def save_provider_mode(mode: str) -> None:
         value = PROVIDER_MODE_GEMINI
     _patch_providers(
         environment="online",
+        selection="online",
         mode=value,
         online_mode=value,
     )
@@ -911,6 +954,7 @@ def save_providers(
     environment: str = None,
     online_mode: str = None,
     pipelines: dict = None,
+    selection: str = None,
 ) -> None:
     """Persist one environment's engine, slots and credentials in one write.
 
@@ -928,6 +972,11 @@ def save_providers(
         if active_environment not in PROVIDER_ENVIRONMENTS:
             active_environment = "online"
         block["environment"] = active_environment
+        selected_mode = str(selection or block.get("selection") or "").strip().lower()
+        if selected_mode in PROVIDER_SELECTIONS:
+            block["selection"] = selected_mode
+        elif not block.get("selection"):
+            block["selection"] = active_environment
 
         if online_mode is not None:
             candidate = str(online_mode).strip().lower()
