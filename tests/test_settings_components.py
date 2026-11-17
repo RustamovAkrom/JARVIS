@@ -50,6 +50,45 @@ class SettingsComponentTests(unittest.TestCase):
         )
         window.close()
 
+    def test_security_page_exposes_enforced_safeguards_not_todo_placeholders(self):
+        owner = QMainWindow()
+        owner._tr = lambda text, **values: text
+        owner._save_computer_access_controls = lambda *_: None
+        owner._save_computer_permission_controls = lambda *_: None
+        owner._save_computer_safety_controls = lambda *_: None
+        owner._save_computer_temporary_access_duration = lambda *_: None
+        with (
+            patch("memory.config_manager.get_computer_access_settings", return_value={
+                "mode": "chat", "access_level": "approve", "remaining_seconds": 0
+            }),
+            patch("memory.config_manager.get_computer_permissions", return_value={
+                "observe_screen": True, "find_elements": False, "move_mouse": False,
+                "click": False, "type": False, "clipboard": False
+            }),
+            patch("memory.config_manager.get_computer_safety_settings", return_value={
+                "microphone_during_screen_actions": True,
+                "application_rules_enabled": False,
+                "application_rule_mode": "blocklist",
+                "applications": [],
+            }),
+        ):
+            page = MainWindow._build_permissions_settings_page(owner)
+
+        for name in (
+            "full_access_duration",
+            "microphone_during_screen_actions",
+            "application_rules_enabled",
+            "application_rule_mode",
+            "application_rules",
+        ):
+            self.assertIsNotNone(page.findChild(QWidget, name), name)
+        self.assertNotIn(
+            "PLANNED",
+            " ".join(label.text() for label in page.findChildren(QLabel)),
+        )
+        page.close()
+        owner.close()
+
     def test_setting_row_pairs_control_with_accessible_description(self):
         control = QCheckBox("Enabled")
         row = SettingRow("Wake word", "Listen for the configured wake phrase.", control)

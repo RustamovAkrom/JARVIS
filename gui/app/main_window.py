@@ -11368,6 +11368,7 @@ class MainWindow(QMainWindow):
             DEFAULT_COMPUTER_PERMISSIONS,
             get_computer_access_settings,
             get_computer_permissions,
+            get_computer_safety_settings,
         )
 
         page = QWidget()
@@ -11376,6 +11377,7 @@ class MainWindow(QMainWindow):
         layout.setSpacing(12)
         access = get_computer_access_settings()
         current = get_computer_permissions()
+        safety = get_computer_safety_settings()
         labels = {
             "observe_screen": ("Screen observation", "Allow screen capture only when you ask JARVIS to inspect the screen."),
             "find_elements": ("Find interface elements", "Allow JARVIS to identify visible controls before acting."),
@@ -11441,9 +11443,28 @@ class MainWindow(QMainWindow):
             "Ask every time; use the allowed switches; or grant all computer permissions.",
             self._computer_access_combo,
         ))
+        self._full_access_duration_combo = QComboBox()
+        self._full_access_duration_combo.setObjectName("full_access_duration")
+        for minutes in (5, 15, 30, 60):
+            self._full_access_duration_combo.addItem(f"{minutes} minutes", minutes)
+        remaining_minutes = max(
+            1, min(60, (int(access.get("remaining_seconds", 0)) + 59) // 60)
+        )
+        closest = min((5, 15, 30, 60), key=lambda value: abs(value - remaining_minutes))
+        self._full_access_duration_combo.setCurrentIndex(
+            max(0, self._full_access_duration_combo.findData(closest))
+        )
+        self._full_access_duration_combo.currentIndexChanged.connect(
+            self._save_computer_temporary_access_duration
+        )
+        access_section.add_row(SettingRow(
+            "Full access duration",
+            "Elevated access expires automatically. Choose the duration for each grant.",
+            self._full_access_duration_combo,
+        ))
         self._full_access_warning = QLabel(
             "Full access enables screen, pointer, click, keyboard, and clipboard capabilities. "
-            "Switch to Agent mode to use them. Shutdown, restart, Wi-Fi changes, "
+            "It expires automatically after the selected duration. Shutdown, restart, Wi-Fi changes, "
             "and closing apps still require confirmation."
         )
         self._full_access_warning.setWordWrap(True)
@@ -11490,19 +11511,65 @@ class MainWindow(QMainWindow):
             future.add_row(SettingRow(self._tr(title), self._tr(description), warning))
         layout.addWidget(future)
 
-        planned = SettingsSection(
-            "Planned safeguards · TODO",
-            "These controls are visible for planning; their enforcement is not implemented yet.",
+        safeguards = SettingsSection(
+            "Runtime safeguards",
+            "These policies are enforced by the computer-action dispatcher.",
         )
-        for title, description in (
-            ("Microphone during screen actions", "Limit when voice input can remain active."),
-            ("Per-application rules", "Choose which apps may be inspected or controlled."),
-            ("Temporary access", "Set an automatic expiry for elevated permissions."),
-        ):
-            placeholder = QLabel("PLANNED")
-            placeholder.setStyleSheet(f"color:{C.TEXT_DIM}; font-weight:700;")
-            planned.add_row(SettingRow(self._tr(title), self._tr(description), placeholder))
-        layout.addWidget(planned)
+        self._microphone_screen_actions_check = QCheckBox(self._tr("Pause microphone input"))
+        self._microphone_screen_actions_check.setObjectName("microphone_during_screen_actions")
+        self._microphone_screen_actions_check.setChecked(
+            safety["microphone_during_screen_actions"]
+        )
+        self._microphone_screen_actions_check.toggled.connect(
+            self._save_computer_safety_controls
+        )
+        safeguards.add_row(SettingRow(
+            "Microphone during screen actions",
+            "Pause microphone streaming and local wake-word input while JARVIS inspects or controls the screen.",
+            self._microphone_screen_actions_check,
+        ))
+
+        self._application_rules_enabled_check = QCheckBox(self._tr("Enable application rules"))
+        self._application_rules_enabled_check.setObjectName("application_rules_enabled")
+        self._application_rules_enabled_check.setChecked(safety["application_rules_enabled"])
+        self._application_rules_enabled_check.toggled.connect(
+            self._save_computer_safety_controls
+        )
+        safeguards.add_row(SettingRow(
+            "Per-application rules",
+            "Restrict which foreground or explicitly named applications JARVIS may inspect or control.",
+            self._application_rules_enabled_check,
+        ))
+
+        self._application_rule_mode_combo = QComboBox()
+        self._application_rule_mode_combo.setObjectName("application_rule_mode")
+        self._application_rule_mode_combo.addItem("Block listed applications", "blocklist")
+        self._application_rule_mode_combo.addItem("Allow only listed applications", "allowlist")
+        self._application_rule_mode_combo.setCurrentIndex(
+            max(0, self._application_rule_mode_combo.findData(safety["application_rule_mode"]))
+        )
+        self._application_rule_mode_combo.currentIndexChanged.connect(
+            self._save_computer_safety_controls
+        )
+        safeguards.add_row(SettingRow(
+            "Rule behaviour",
+            "Blocklist denies listed apps. Allowlist denies every app not listed.",
+            self._application_rule_mode_combo,
+        ))
+
+        self._application_rules_input = QLineEdit(", ".join(safety["applications"]))
+        self._application_rules_input.setObjectName("application_rules")
+        self._application_rules_input.setPlaceholderText("e.g. chrome.exe, discord, code")
+        self._application_rules_input.setClearButtonEnabled(True)
+        self._application_rules_input.editingFinished.connect(
+            self._save_computer_safety_controls
+        )
+        safeguards.add_row(SettingRow(
+            "Application names",
+            "Comma-separated process names. Unknown foreground apps are blocked when rules are enabled.",
+            self._application_rules_input,
+        ))
+        layout.addWidget(safeguards)
 
         authentication = SettingsSection(
             "Authentication integration",
@@ -11553,7 +11620,15 @@ class MainWindow(QMainWindow):
                 )
                 self._computer_access_combo.blockSignals(False)
                 access_level = "approve"
-        save_computer_access_settings(mode, access_level)
+        save_computer_access_settings(
+            mode,
+            access_level,
+            temporary_minutes=(
+                int(self._full_access_duration_combo.currentData())
+                if access_level == "full" and previous_level != "full"
+                else None
+            ),
+        )
         self._last_computer_access_level = access_level
         if not getattr(self, "_chat_plan_mode", False):
             self._chat_interaction_mode = mode
@@ -11582,6 +11657,40 @@ class MainWindow(QMainWindow):
                 check.setChecked(configured[permission])
             check.setEnabled(not is_full)
             check.blockSignals(False)
+        self._refresh_access_status()
+
+    def _save_computer_temporary_access_duration(self, *_):
+        from memory.config_manager import (
+            get_computer_access_settings,
+            save_computer_access_settings,
+        )
+
+        access = get_computer_access_settings()
+        if access["access_level"] != "full":
+            return
+        minutes = int(self._full_access_duration_combo.currentData() or 15)
+        save_computer_access_settings(temporary_minutes=minutes)
+        self._full_access_warning.setText(
+            f"Full access is active and will expire in approximately {minutes} minutes. "
+            "High-impact actions still require confirmation."
+        )
+        self._refresh_access_status()
+
+    def _save_computer_safety_controls(self, *_):
+        from memory.config_manager import save_computer_safety_settings
+
+        applications = [
+            value.strip()
+            for value in re.split(r"[,;\\n]", self._application_rules_input.text())
+            if value.strip()
+        ][:64]
+        save_computer_safety_settings({
+            "microphone_during_screen_actions": self._microphone_screen_actions_check.isChecked(),
+            "application_rules_enabled": self._application_rules_enabled_check.isChecked(),
+            "application_rule_mode": self._application_rule_mode_combo.currentData(),
+            "applications": applications,
+        })
+        self._append_activity("SYS: Computer safety safeguards updated.")
         self._refresh_access_status()
 
     def _build_workspace_settings_page(self):
