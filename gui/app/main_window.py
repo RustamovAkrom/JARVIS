@@ -13000,6 +13000,13 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             # The polling path may already have observed and disposed it.
             return
         try:
+            # Preserve the order of chunks already drained by the poller before
+            # appending the final bytes still buffered inside QProcess.
+            if session.pending_output:
+                self._append_terminal_output(
+                    session.pending_output, session_id=session_id
+                )
+                session.pending_output = ""
             remaining = bytes(process.readAllStandardOutput())
             if remaining:
                 self._append_terminal_output(
