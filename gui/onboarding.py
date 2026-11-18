@@ -22,6 +22,7 @@ from PyQt6.QtWidgets import (
     QLabel,
     QLineEdit,
     QPushButton,
+    QScrollArea,
     QSizePolicy,
     QStackedWidget,
     QTextBrowser,
@@ -217,7 +218,13 @@ class OnboardingDialog(QDialog):
         detail.setStyleSheet(f"color:{C.TEXT_MED};")
         self._labels[description] = detail
         layout.addWidget(detail)
-        self._stack.addWidget(page)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setWidget(page)
+        self._stack.addWidget(scroll)
         return page, layout
 
     def _build_language_page(self) -> None:
