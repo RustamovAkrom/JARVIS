@@ -760,14 +760,14 @@ def get_output_volume(name: str = "") -> Optional[int]:
     if endpoint is not None:
         try:
             return max(0, min(100, round(endpoint.GetMasterVolumeLevelScalar() * 100)))
-        except Exception as e:
-            print(f"[Audio] could not read '{name}' volume: {e}")
+        except Exception:
+            print("[Audio] could not read selected output volume; falling back to system level.")
     try:
         from actions.computer_settings import volume_get
 
         return volume_get()
-    except Exception as e:
-        print(f"[Audio] could not read the output volume: {e}")
+    except Exception:
+        print("[Audio] could not read the output volume.")
         return None
 
 
@@ -784,19 +784,16 @@ def set_output_volume(percent: int, name: str = "") -> bool:
         try:
             endpoint.SetMasterVolumeLevelScalar(percent / 100.0, None)
             return True
-        except Exception as e:
-            print(f"[Audio] could not set '{name}' volume: {e}")
+        except Exception:
+            print("[Audio] could not set selected output volume; falling back to system level.")
     if name:
-        print(
-            f"[Audio] '{name}' has no separate volume control here — "
-            f"setting the system level instead."
-        )
+        print("[Audio] selected output has no separate volume control here — setting the system level instead.")
     try:
         from actions.computer_settings import volume_set, volume_get
 
         volume_set(percent)
         now = volume_get()
         return now is None or abs(now - percent) <= 3
-    except Exception as e:
-        print(f"[Audio] could not set the output volume: {e}")
+    except Exception:
+        print("[Audio] could not set the output volume.")
         return False
