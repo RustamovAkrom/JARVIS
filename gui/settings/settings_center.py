@@ -472,13 +472,22 @@ class SettingsCenter(QDialog):
         labels.addWidget(detail)
         row_layout.addLayout(labels, 1)
 
-        selector = QComboBox()
+        selector = QTabBar()
         selector.setObjectName("provider_runtime_mode")
-        selector.addItems(["Online", "Offline", "Auto"])
+        selector.setExpanding(False)
+        selector.setUsesScrollButtons(False)
+        selector.setDrawBase(False)
+        for label in ("Online", "Offline", "Auto"):
+            selector.addTab(label)
         current = get_provider_selection()
         selector.setCurrentIndex({"online": 0, "offline": 1, "auto": 2}.get(current, 0))
-        selector.setMinimumWidth(150)
-        selector.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        selector.setStyleSheet(f"""
+            QTabBar::tab {{ color:{C.TEXT_MED}; background:{C.PANEL2};
+                border:1px solid {C.BORDER}; padding:8px 14px; }}
+            QTabBar::tab:selected {{ color:{C.PRI}; background:{C.PRI_GHO};
+                border-color:{C.PRI_DIM}; }}
+            QTabBar::tab:hover {{ color:{C.TEXT}; }}
+        """)
         row_layout.addWidget(selector)
         host_layout.insertWidget(0, row)
 
