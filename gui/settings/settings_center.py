@@ -283,10 +283,10 @@ class SettingsCenter(QDialog):
             page_layout.setContentsMargins(Space.XL, Space.XL, Space.XL, Space.XL)
             page_layout.setSpacing(Space.LG)
 
-            title = QLabel(category.title)
+            title = QLabel(self._tr(category.title))
             title.setFont(ui_font(TypeScale.TITLE, QFont.Weight.DemiBold))
             page_layout.addWidget(title)
-            description = QLabel(category.description)
+            description = QLabel(self._tr(category.description))
             description.setFont(ui_font(TypeScale.BODY))
             description.setWordWrap(True)
             description.setStyleSheet(f"color:{C.TEXT_MED};")
@@ -343,7 +343,8 @@ class SettingsCenter(QDialog):
         self.navigation.clear()
         self._category_rows.clear()
         for category in CATEGORIES:
-            item = QListWidgetItem(category.title)
+            item = QListWidgetItem(self._tr(category.title))
+            item.setToolTip(self._tr(category.description))
             item.setData(Qt.ItemDataRole.UserRole, ("category", category.id))
             self.navigation.addItem(item)
             self._category_rows[category.id] = item
