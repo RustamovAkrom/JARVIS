@@ -413,6 +413,75 @@ class CursorAssistantUiTests(unittest.TestCase):
             window.deleteLater()
             self.app.processEvents()
 
+    def test_workspace_focus_hides_center_and_restores_previous_layout(self):
+        root = QSplitter(Qt.Orientation.Horizontal)
+        workspace = QSplitter(Qt.Orientation.Vertical)
+        main_splitter = QSplitter(Qt.Orientation.Horizontal)
+        left = QWidget()
+        center = QWidget()
+        right = QWidget()
+        bottom = QTabWidget()
+        bottom.addTab(QWidget(), "Terminal")
+        left.setMinimumWidth(150)
+        right.setMinimumWidth(250)
+        main_splitter.addWidget(left)
+        main_splitter.addWidget(center)
+        workspace.addWidget(main_splitter)
+        workspace.addWidget(bottom)
+        root.addWidget(workspace)
+        root.addWidget(right)
+        root.resize(1200, 700)
+        root.setSizes([800, 400])
+        main_splitter.setSizes([200, 600])
+        workspace.setSizes([700, 0])
+        root.show()
+        self.app.processEvents()
+
+        focus_button = QCheckBox()
+        right_button = QCheckBox()
+        owner = type(
+            "WorkspaceOwner",
+            (),
+            {
+                "_workspace_focus_active": False,
+                "_workspace_focus_state": None,
+                "_reading_mode": False,
+                "_focus_workspace_btn": focus_button,
+                "_right_toggle_btn": right_button,
+                "_main_splitter": main_splitter,
+                "_root_splitter": root,
+                "_workspace_split": workspace,
+                "_left_panel": left,
+                "_center_views": center,
+                "_right_panel": right,
+                "_bottom_tabs": bottom,
+                "_update_advanced_telemetry_visibility": Mock(),
+                "_refresh_workspace_settings_state": Mock(),
+            },
+        )()
+        original_root_sizes = root.sizes()
+        try:
+            MainWindow._set_workspace_focus_mode(owner, True)
+            self.app.processEvents()
+            self.assertTrue(left.isVisible())
+            self.assertFalse(center.isVisible())
+            self.assertTrue(right.isVisible())
+            self.assertFalse(bottom.isVisible())
+            self.assertTrue(owner._workspace_focus_active)
+            self.assertTrue(focus_button.isChecked())
+            self.assertGreater(root.sizes()[1], root.sizes()[0])
+
+            MainWindow._set_workspace_focus_mode(owner, False)
+            self.app.processEvents()
+            self.assertTrue(center.isVisible())
+            self.assertFalse(owner._workspace_focus_active)
+            self.assertFalse(focus_button.isChecked())
+            self.assertEqual(root.sizes(), original_root_sizes)
+        finally:
+            root.close()
+            root.deleteLater()
+            self.app.processEvents()
+
     def test_project_editor_saves_changes_to_the_open_file(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "main.py"
