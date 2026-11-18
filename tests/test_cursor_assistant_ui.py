@@ -440,6 +440,7 @@ class CursorAssistantUiTests(unittest.TestCase):
         self.app.processEvents()
 
         focus_button = QCheckBox()
+        left_button = QCheckBox()
         right_button = QCheckBox()
         owner = type(
             "WorkspaceOwner",
@@ -449,6 +450,7 @@ class CursorAssistantUiTests(unittest.TestCase):
                 "_workspace_focus_state": None,
                 "_reading_mode": False,
                 "_focus_workspace_btn": focus_button,
+                "_left_toggle_btn": left_button,
                 "_right_toggle_btn": right_button,
                 "_main_splitter": main_splitter,
                 "_root_splitter": root,
