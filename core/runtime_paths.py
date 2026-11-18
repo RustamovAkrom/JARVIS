@@ -18,6 +18,50 @@ from pathlib import Path
 APP_ID = "JARVIS"
 
 
+def _load_dotenv(source_root: Path) -> None:
+    """Load local development settings without overriding process environment.
+
+    Source checkouts create a git-ignored DEBUG=true file on first run. Frozen
+    builds deliberately ignore .env and always use external user-data storage.
+    """
+    if getattr(sys, "frozen", False):
+        return
+
+    env_file = source_root / ".env"
+    if not env_file.exists() and "DEBUG" not in os.environ:
+        try:
+            env_file.write_text(
+                "# Local JARVIS development settings. This file is git-ignored.\n"
+                "DEBUG=true\n",
+                encoding="utf-8",
+            )
+        except OSError:
+            pass
+
+    try:
+        lines = env_file.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return
+
+    for line in lines:
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key, value = key.strip(), value.strip()
+        if not key or not key.replace("_", "").isalnum():
+            continue
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+            value = value[1:-1]
+        os.environ.setdefault(key, value)
+
+
+def _env_bool(value: object, *, default: bool = False) -> bool:
+    if value is None:
+        return default
+    return str(value).strip().casefold() in {"1", "true", "yes", "on"}
+
+
 def _source_root() -> Path:
     return Path(__file__).resolve().parent.parent
 
@@ -43,6 +87,7 @@ class RuntimePaths:
     app_root: Path
     resource_root: Path
     user_data_root: Path
+    debug: bool = False
 
     @property
     def config_dir(self) -> Path:
@@ -112,6 +157,9 @@ def _resolve_paths(
     executable = Path(executable or sys.executable).resolve()
     frozen = bool(getattr(sys, "frozen", False)) if frozen is None else frozen
     system = sys.platform if system is None else system
+    # Debug source runs are writable in the checkout. Frozen builds must
+    # never write into a replaceable installation or PyInstaller bundle.
+    debug = _env_bool(env.get("DEBUG"), default=False) and not frozen
 
     if not frozen:
         mode = "source"
@@ -133,6 +181,8 @@ def _resolve_paths(
     explicit = env.get("JARVIS_PROFILE_DIR") or env.get("JARVIS_DATA_DIR")
     if explicit:
         user_data_root = Path(explicit).expanduser().resolve()
+    elif mode == "source" and debug:
+        user_data_root = app_root
     else:
         base = _local_data_root(env, system) / APP_ID
         profile = env.get("JARVIS_PROFILE", "").strip()
@@ -152,10 +202,14 @@ def _resolve_paths(
             user_data_root = base / "profiles" / "portable"
         else:
             user_data_root = base
-    return RuntimePaths(mode, app_root, resource_root, user_data_root.resolve())
+    return RuntimePaths(
+        mode, app_root, resource_root, user_data_root.resolve(), debug=debug
+    )
 
 
-PATHS = _resolve_paths()
+_SOURCE_ROOT = _source_root()
+_load_dotenv(_SOURCE_ROOT)
+PATHS = _resolve_paths(source_root=_SOURCE_ROOT)
 
 # Keep model and browser caches out of the source tree and replaceable bundle.
 os.environ.setdefault("HF_HOME", str(PATHS.cache_dir / "huggingface"))
@@ -189,7 +243,7 @@ def configure_logging(paths: RuntimePaths = PATHS) -> logging.Logger:
             logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
         )
         logger.addHandler(handler)
-    logger.setLevel(logging.INFO)
+    logger.setLevel(logging.DEBUG if paths.debug else logging.INFO)
     logger.propagate = False
     if fallback_message:
         logger.warning(fallback_message)
@@ -206,6 +260,12 @@ def migrate_legacy_user_data(
     """
     copied: list[Path] = []
     candidates = []
+    if paths.debug and paths.mode == "source":
+        # Previous source builds stored mutable files in AppData. Copy only
+        # missing files into the checkout and retain the original profile.
+        candidates.append(
+            _local_data_root() / APP_ID / "profiles" / "development"
+        )
     if paths.mode == "source":
         candidates.append(paths.app_root)
     else:
