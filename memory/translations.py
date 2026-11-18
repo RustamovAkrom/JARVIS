@@ -323,6 +323,7 @@ _TRANSLATIONS = {
         "Fall back to {provider}": "Переключиться на {provider}",
         "INSTALL {package}": "УСТАНОВИТЬ {package}",
         "↻ REFRESH": "↻ ОБНОВИТЬ",
+        "I consent to sending voice audio to Google Gemini.": "Я согласен(на) отправлять голосовые данные в Google Gemini.",
     },
     "uz": {
         "CONTROLS": "BOSHQARUV",
@@ -640,6 +641,7 @@ _TRANSLATIONS = {
         "Fall back to {provider}": "{provider}’ga o‘tish",
         "INSTALL {package}": "{package}’ni O‘RNATISH",
         "↻ REFRESH": "↻ YANGILASH",
+        "I consent to sending voice audio to Google Gemini.": "Rozilik bildiraman: ovoz audiosi Google Gemini’ga yuboriladi.",
     },
 }
 
