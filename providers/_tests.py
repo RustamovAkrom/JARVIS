@@ -38,6 +38,7 @@ import sys
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
+from urllib.parse import urlparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -1290,7 +1291,7 @@ def test_panel_settings_survive():
             )
             check(
                 "cloud endpoint is filled from its preset",
-                "api.groq.com" in get_provider_config("openai_compat").get("base_url", ""),
+                urlparse(get_provider_config("openai_compat").get("base_url", "")).hostname == "api.groq.com",
                 str(get_provider_config("openai_compat")),
             )
 
