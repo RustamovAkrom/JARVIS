@@ -9,7 +9,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 from PIL import Image
-from PyQt6.QtCore import QEvent, QPoint, QPointF, Qt
+from PyQt6.QtCore import QEvent, QPoint, QPointF, QProcess, Qt
 from PyQt6.QtGui import QColor, QImage, QMouseEvent
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import (
@@ -483,6 +483,42 @@ class CursorAssistantUiTests(unittest.TestCase):
             root.close()
             root.deleteLater()
             self.app.processEvents()
+
+    def test_qprocess_terminal_finished_schedules_restart_without_blocking(self):
+        from gui.app.main_window import _QProcessTerminal
+
+        process = QProcess()
+        session = type(
+            "TerminalSession",
+            (),
+            {
+                "pty": _QProcessTerminal(process),
+                "closing": False,
+                "restart_pending": True,
+            },
+        )()
+        owner = type(
+            "TerminalOwner",
+            (),
+            {
+                "_terminal_sessions": {"terminal-1": session},
+                "_append_terminal_output": Mock(),
+                "_remove_terminal_session": Mock(),
+                "_start_terminal_process": Mock(),
+            },
+        )()
+
+        with patch("ui.QTimer.singleShot") as single_shot:
+            MainWindow._on_qprocess_terminal_finished(
+                owner, "terminal-1", process
+            )
+
+        self.assertIsNone(session.pty)
+        self.assertFalse(session.restart_pending)
+        single_shot.assert_called_once()
+        self.assertEqual(single_shot.call_args.args[0], 120)
+        single_shot.call_args.args[1]()
+        owner._start_terminal_process.assert_called_once_with("terminal-1")
 
     def test_project_editor_saves_changes_to_the_open_file(self):
         with tempfile.TemporaryDirectory() as folder:
