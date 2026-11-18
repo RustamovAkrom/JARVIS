@@ -12636,7 +12636,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             1500, lambda sid=session_id: self._force_close_terminal_session(sid)
         )
 
-        def _force_close_terminal_session(self, session_id: str):
+    def _force_close_terminal_session(self, session_id: str):
         session = self._terminal_sessions.get(session_id)
         if session is None or not session.closing or session.pty is None:
             return
@@ -12702,7 +12702,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         session.pty = None
         self._remove_terminal_session(session_id)
 
-        def _close_terminal_panel(self):
+    def _close_terminal_panel(self):
         self._bottom_tabs.hide()
         self._terminal_toggle_btn.setChecked(False)
         for session_id in tuple(self._terminal_sessions):
@@ -13104,7 +13104,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             ),
         )
 
-        def _interrupt_terminal(self):
+    def _interrupt_terminal(self):
         """Send the terminal's interrupt character without browser copy handling."""
         session = self._active_terminal_session()
         if session is not None and session.pty is not None:

@@ -62,3 +62,6 @@ logs/
 downloads/
 screenshots/
 DIAMOND HILLS/
+
+# Local credentials
+api_key.json
