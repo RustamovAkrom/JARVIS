@@ -9287,9 +9287,12 @@ class MainWindow(QMainWindow):
         self._right_toggle_btn.setFont(QFont(FONT_UI, 8, QFont.Weight.Bold))
         self._right_toggle_btn.setCheckable(True)
         self._right_toggle_btn.setChecked(True)
-        self._right_toggle_btn.setToolTip("Show or hide the right panel")
+        self._right_toggle_btn.setToolTip(
+            self._tr("Focus the right workspace while keeping the left sidebar visible")
+        )
+        self._right_toggle_btn.setAccessibleName(self._tr("Toggle workspace focus"))
         self._right_toggle_btn.setStyleSheet(self._drawer_btn.styleSheet())
-        self._right_toggle_btn.clicked.connect(lambda: self._toggle_side_panel(2))
+        self._right_toggle_btn.clicked.connect(self._toggle_workspace_focus)
         self._content_toggle_btn = QPushButton()
         self._content_toggle_btn.setIcon(
             QIcon(str(BASE_DIR / "assets" / "icons" / "layout-panel.svg"))
@@ -9303,20 +9306,6 @@ class MainWindow(QMainWindow):
         nav.addWidget(self._content_toggle_btn)
 
         nav.addWidget(self._right_toggle_btn)
-
-        self._focus_workspace_btn = QPushButton("FOCUS")
-        self._focus_workspace_btn.setCheckable(True)
-        self._focus_workspace_btn.setFixedSize(48, 28)
-        self._focus_workspace_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._focus_workspace_btn.setToolTip(
-            self._tr("Focus the right workspace while keeping the left sidebar visible")
-        )
-        self._focus_workspace_btn.setAccessibleName(
-            self._tr("Toggle workspace focus")
-        )
-        self._focus_workspace_btn.setStyleSheet(self._drawer_btn.styleSheet())
-        self._focus_workspace_btn.clicked.connect(self._toggle_workspace_focus)
-        nav.addWidget(self._focus_workspace_btn)
 
         self._fullscreen_toggle_btn = QPushButton()
         self._fullscreen_toggle_btn.setCheckable(True)
@@ -14001,10 +13990,10 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
     def _set_workspace_focus_mode(self, enabled: bool):
         enabled = bool(enabled)
         if enabled == self._workspace_focus_active:
-            self._focus_workspace_btn.setChecked(enabled)
+            self._right_toggle_btn.setChecked(enabled)
             return
         if self._reading_mode:
-            self._focus_workspace_btn.setChecked(self._workspace_focus_active)
+            self._right_toggle_btn.setChecked(self._workspace_focus_active)
             return
 
         if enabled:
@@ -14067,7 +14056,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             self._workspace_focus_state = None
             self._workspace_focus_active = False
 
-        self._focus_workspace_btn.setChecked(self._workspace_focus_active)
+        self._right_toggle_btn.setChecked(self._workspace_focus_active)
         self._update_advanced_telemetry_visibility()
         self._refresh_workspace_settings_state()
 
@@ -14107,7 +14096,9 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             sizes[other_index] = max(other_min, available - restored)
             splitter.setSizes(sizes)
             self._side_restore_width[index] = restored
-        button.setChecked(panel.isVisible())
+        button.setChecked(
+            self._workspace_focus_active if index == 2 else panel.isVisible()
+        )
         self._update_advanced_telemetry_visibility()
         self._refresh_workspace_settings_state()
 
