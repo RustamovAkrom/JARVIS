@@ -17,6 +17,7 @@ from PyQt6.QtWidgets import (
     QSplitter,
     QCheckBox,
     QComboBox,
+    QTabWidget,
     QMainWindow,
     QScrollArea,
     QWidget,
