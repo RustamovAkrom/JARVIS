@@ -23,6 +23,7 @@ from PyQt6.QtWidgets import (
     QLineEdit,
     QPushButton,
     QScrollArea,
+    QSizeGrip,
     QSizePolicy,
     QStackedWidget,
     QTextBrowser,
@@ -89,6 +90,61 @@ class _GeminiKeyCheck(QThread):
             self.message = f"Could not verify the key: {type(exc).__name__}."
 
 
+class _OnboardingTitleBar(QFrame):
+    """Frameless, theme-matched title bar for the setup wizard."""
+
+    closeRequested = pyqtSignal()
+
+    def __init__(self, parent: QDialog):
+        super().__init__(parent)
+        self._drag_offset = None
+        self.setObjectName("OnboardingTitleBar")
+        self.setFixedHeight(34)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(10, 0, 4, 0)
+        layout.setSpacing(8)
+
+        title = QLabel("J.A.R.V.I.S.  /  INITIALIZATION")
+        title.setFont(QFont("Segoe UI", 8, QFont.Weight.DemiBold))
+        title.setStyleSheet(f"color:{C.TEXT_MED}; background:transparent;")
+        layout.addWidget(title)
+        layout.addStretch(1)
+
+        close = QPushButton("×")
+        close.setObjectName("OnboardingClose")
+        close.setFixedSize(28, 26)
+        close.setCursor(Qt.CursorShape.PointingHandCursor)
+        close.setToolTip("Close setup")
+        close.clicked.connect(self.closeRequested)
+        layout.addWidget(close)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._drag_offset = (
+                event.globalPosition().toPoint()
+                - self.window().frameGeometry().topLeft()
+            )
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if (
+            self._drag_offset is not None
+            and event.buttons() & Qt.MouseButton.LeftButton
+        ):
+            self.window().move(
+                event.globalPosition().toPoint() - self._drag_offset
+            )
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        self._drag_offset = None
+        super().mouseReleaseEvent(event)
+
+
 class OnboardingDialog(QDialog):
     """Four-step first-run wizard; reconfiguration mode only asks for a new key."""
 
@@ -102,6 +158,9 @@ class OnboardingDialog(QDialog):
         reconfigure: bool = False,
     ):
         super().__init__(parent)
+        self.setWindowFlags(
+            Qt.WindowType.Dialog | Qt.WindowType.FramelessWindowHint
+        )
         self._language = language if language in LANGUAGES else "en"
         self._reconfigure = bool(reconfigure)
         self._step = 3 if self._reconfigure else 0
@@ -116,7 +175,32 @@ class OnboardingDialog(QDialog):
         self.setMinimumSize(620, 620)
         self.resize(740, 720)
         self.setStyleSheet(f"""
-            QDialog {{ background:{C.BG}; color:{C.TEXT}; }}
+            QDialog {{
+                background:{C.BG}; color:{C.TEXT};
+                border:1px solid {C.BORDER_B}; border-radius:10px;
+            }}
+            QFrame#OnboardingTitleBar {{
+                background:{C.BG};
+                border:none;
+                border-bottom:1px solid {C.BORDER};
+                border-top-left-radius:10px;
+                border-top-right-radius:10px;
+            }}
+            QPushButton#OnboardingClose {{
+                background:transparent; color:{C.TEXT_MED};
+                border:1px solid transparent; border-radius:6px;
+                padding:0; font-size:16px;
+            }}
+            QPushButton#OnboardingClose:hover {{
+                background:{C.PRI_GHO}; color:{C.PRI};
+                border-color:{C.BORDER_B};
+            }}
+            QStackedWidget, QScrollArea, QWidget#OnboardingPage {{
+                background:{C.BG}; border:none;
+            }}
+            QScrollArea QWidget#qt_scrollarea_viewport {{
+                background:{C.BG}; border:none;
+            }}
             QFrame#OnboardingCard {{
                 background:{C.PANEL}; border:1px solid {C.BORDER_B};
                 border-radius:14px;
@@ -128,7 +212,35 @@ class OnboardingDialog(QDialog):
                 padding:9px 11px; min-height:24px;
             }}
             QLineEdit:focus, QComboBox:focus {{ border-color:{C.PRI}; }}
-            QCheckBox {{ color:{C.TEXT}; spacing:9px; }}
+            QCheckBox {{ color:{C.TEXT}; spacing:9px; background:transparent; }}
+            QCheckBox::indicator {{
+                width:16px; height:16px;
+                background:{C.PANEL2};
+                border:1px solid {C.BORDER_B};
+                border-radius:4px;
+            }}
+            QCheckBox::indicator:hover {{ border-color:{C.PRI}; }}
+            QCheckBox::indicator:checked {{
+                background:{C.PRI_DIM};
+                border:1px solid {C.PRI};
+            }}
+            QComboBox QAbstractItemView {{
+                background:{C.PANEL2}; color:{C.TEXT};
+                border:1px solid {C.BORDER_B};
+                selection-background-color:{C.PRI_GHO};
+                selection-color:{C.PRI};
+                outline:0;
+            }}
+            QScrollBar:vertical {{
+                background:transparent; width:8px; margin:2px;
+            }}
+            QScrollBar::handle:vertical {{
+                background:{C.BORDER_B}; border-radius:4px; min-height:24px;
+            }}
+            QScrollBar::handle:vertical:hover {{ background:{C.PRI_DIM}; }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+                height:0; border:none; background:transparent;
+            }}
             QTextBrowser {{
                 background:{C.PANEL2}; color:{C.TEXT};
                 border:1px solid {C.BORDER}; border-radius:8px;
@@ -149,8 +261,12 @@ class OnboardingDialog(QDialog):
         """)
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(18, 18, 18, 18)
-        root.setSpacing(12)
+        root.setContentsMargins(12, 8, 12, 10)
+        root.setSpacing(10)
+
+        self._title_bar = _OnboardingTitleBar(self)
+        self._title_bar.closeRequested.connect(self.reject)
+        root.addWidget(self._title_bar)
 
         header = QFrame()
         header.setObjectName("OnboardingCard")
@@ -192,6 +308,7 @@ class OnboardingDialog(QDialog):
         self._next_btn.setObjectName("OnboardingPrimary")
         self._next_btn.clicked.connect(self._next)
         footer.addWidget(self._next_btn)
+        footer.addWidget(QSizeGrip(self), 0, Qt.AlignmentFlag.AlignBottom)
         root.addLayout(footer)
 
         self._agreement_check.stateChanged.connect(self._update_navigation)
@@ -205,6 +322,9 @@ class OnboardingDialog(QDialog):
 
     def _page(self, title: str, description: str) -> tuple[QWidget, QVBoxLayout]:
         page = QWidget()
+        page.setObjectName("OnboardingPage")
+        page.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        page.setStyleSheet(f"background:{C.BG};")
         layout = QVBoxLayout(page)
         layout.setContentsMargins(4, 4, 4, 4)
         layout.setSpacing(12)
@@ -223,6 +343,10 @@ class OnboardingDialog(QDialog):
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setStyleSheet(
+            f"QScrollArea {{ background:{C.BG}; border:none; }}"
+        )
+        scroll.viewport().setStyleSheet(f"background:{C.BG}; border:none;")
         scroll.setWidget(page)
         self._stack.addWidget(scroll)
         return page, layout
