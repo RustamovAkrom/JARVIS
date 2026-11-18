@@ -7638,7 +7638,9 @@ class MainWindow(QMainWindow):
         """)
 
         self._left_panel = self._build_left_panel()
-        self._left_panel.setMinimumWidth(200)
+        # Keep the side panel usable while allowing the center HUD to reclaim
+        # most of the workspace on narrower windows.
+        self._left_panel.setMinimumWidth(150)
         self._main_splitter.addWidget(self._left_panel)
 
         # Center column: HUD + resizable content panel via QSplitter
@@ -7935,7 +7937,7 @@ class MainWindow(QMainWindow):
         self._center_split.setCollapsible(1, True)
         self._center_split.setCollapsible(2, True)
         self._center_views = QStackedWidget()
-        self._center_views.setMinimumWidth(320)
+        self._center_views.setMinimumWidth(240)
         self._center_views.addWidget(self._center_split)
         self._editor_tabs = QTabWidget()
         self._editor_tabs.setDocumentMode(True)
@@ -7978,7 +7980,9 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(0, self._update_advanced_telemetry_visibility)
 
         self._workspace_split = QSplitter(Qt.Orientation.Vertical)
-        self._workspace_split.setMinimumWidth(545)
+        # Do not reserve a fixed 545 px for the workspace: the root splitter
+        # must remain freely resizable on compact windows and high-DPI screens.
+        self._workspace_split.setMinimumWidth(0)
         self._workspace_split.setChildrenCollapsible(True)
         self._workspace_split.setHandleWidth(8)
         self._workspace_split.setStyleSheet(
@@ -13443,9 +13447,10 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         self._chat_add_button.setFixedSize(38, 34)
         self._chat_add_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self._chat_add_button.setToolTip(self._tr("Add a file, set a goal, or choose the current mode"))
-        menu_chevron = QUrl.fromLocalFile(
-            str(BASE_DIR / "assets" / "icons" / "chevron-down.svg")
-        ).toString()
+        # QSS treats file: URLs as relative paths on some Windows Qt builds,
+        # producing <app-root>/file:/<app-root>/... and a missing-icon warning.
+        # Give the stylesheet the native absolute path instead.
+        menu_chevron = (BASE_DIR / "assets" / "icons" / "chevron-down.svg").as_posix()
         self._chat_menu_chevron = menu_chevron
         self._chat_add_button.setStyleSheet(
             f"QToolButton {{ background:transparent; color:{C.TEXT_MED}; "
