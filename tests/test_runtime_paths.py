@@ -106,6 +106,38 @@ class RuntimePathTests(unittest.TestCase):
             root / "local" / "JARVIS" / "profiles" / "portable",
         )
 
+    def test_debug_mode_imports_legacy_appdata_files_into_checkout(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            checkout = root / "checkout"
+            appdata = root / "local"
+            legacy = appdata / "JARVIS" / "profiles" / "development"
+            (legacy / "config").mkdir(parents=True)
+            (legacy / "memory").mkdir()
+            (legacy / "config" / "api_keys.json").write_text(
+                '{"gemini_api_key":"legacy-key"}', encoding="utf-8"
+            )
+            (legacy / "memory" / "long_term.json").write_text(
+                '{"notes":{"old":"kept"}}', encoding="utf-8"
+            )
+            paths = _resolve_paths(
+                source_root=checkout,
+                frozen=False,
+                env={"DEBUG": "true"},
+                system="win32",
+            )
+            with patch("core.runtime_paths._local_data_root", return_value=appdata):
+                copied = migrate_legacy_user_data(paths, home=root / "empty-home")
+
+            self.assertEqual(len(copied), 2)
+            self.assertEqual(
+                paths.api_config_file.read_text(encoding="utf-8"),
+                '{"gemini_api_key":"legacy-key"}',
+            )
+            self.assertTrue(paths.long_term_memory_file.exists())
+            self.assertTrue((legacy / "config" / "api_keys.json").exists())
+
     def test_legacy_migration_copies_without_overwriting_or_deleting(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
