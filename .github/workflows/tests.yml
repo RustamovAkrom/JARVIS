@@ -8,6 +8,9 @@ on:
     branches: [main, v2]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   unittest:
     name: ${{ matrix.os }} / Python 3.14
