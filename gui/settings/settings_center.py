@@ -3,10 +3,11 @@
 import ctypes
 import platform
 
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QFont, QKeySequence, QShortcut
 from PyQt6.QtWidgets import (
     QApplication,
+    QComboBox,
     QDialog,
     QFrame,
     QHBoxLayout,
@@ -19,6 +20,7 @@ from PyQt6.QtWidgets import (
     QScrollArea,
     QSizeGrip,
     QStackedWidget,
+    QTabBar,
     QVBoxLayout,
     QWidget,
 )
@@ -427,9 +429,93 @@ class SettingsCenter(QDialog):
             self._built_categories.add(category_id)
             return
         content = builder()
+        if category_id == "integrations":
+            self._add_provider_policy_control(content)
+            self._fit_provider_content(content)
         layout.insertWidget(max(0, layout.count() - 1), content)
         self._apply_glass_to_widget(content)
         self._built_categories.add(category_id)
+
+    def _add_provider_policy_control(self, content: QWidget) -> None:
+        """Expose the runtime policy separately from the profile being edited."""
+        from memory.config_manager import get_provider_selection, save_providers
+
+        host_layout = content.layout()
+        if host_layout is None:
+            return
+
+        row = QFrame(content)
+        row.setObjectName("ProviderRuntimePolicy")
+        row.setStyleSheet(
+            f"QFrame#ProviderRuntimePolicy {{ background:{C.PANEL}; "
+            f"border:1px solid {C.BORDER}; border-radius:{Radius.MD}px; }}"
+        )
+        row_layout = QHBoxLayout(row)
+        row_layout.setContentsMargins(Space.MD, Space.SM, Space.MD, Space.SM)
+        row_layout.setSpacing(Space.MD)
+
+        labels = QVBoxLayout()
+        heading = QLabel("Runtime mode")
+        heading.setFont(ui_font(TypeScale.BODY, QFont.Weight.DemiBold))
+        detail = QLabel(
+            "Auto prefers Online and falls back to Offline only when the local "
+            "AI model and its configured dependencies are ready."
+        )
+        detail.setWordWrap(True)
+        detail.setStyleSheet(f"color:{C.TEXT_MED};")
+        labels.addWidget(heading)
+        labels.addWidget(detail)
+        row_layout.addLayout(labels, 1)
+
+        selector = QComboBox()
+        selector.setObjectName("provider_runtime_mode")
+        selector.addItems(["Online", "Offline", "Auto"])
+        current = get_provider_selection()
+        selector.setCurrentIndex({"online": 0, "offline": 1, "auto": 2}.get(current, 0))
+        selector.setMinimumWidth(150)
+        selector.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        row_layout.addWidget(selector)
+        host_layout.insertWidget(0, row)
+
+        status = QLabel("")
+        status.setWordWrap(True)
+        status.setStyleSheet(f"color:{C.TEXT_MED};")
+        host_layout.insertWidget(1, status)
+
+        profile_tabs = content.findChildren(QTabBar)
+        def apply_policy(index: int) -> None:
+            selection = ("online", "offline", "auto")[index]
+            save_providers(selection=selection)
+            if selection in ("online", "offline") and profile_tabs:
+                profile_tabs[0].setCurrentIndex(0 if selection == "online" else 1)
+            status.setText(
+                "Automatic switching is enabled. Offline is selected only when "
+                "its local profile passes readiness checks."
+                if selection == "auto"
+                else f"{selection.title()} mode is selected. The profile tabs below "
+                     "remain available for editing either configuration."
+            )
+            self._fit_provider_content(content)
+
+        selector.currentIndexChanged.connect(apply_policy)
+        apply_policy(selector.currentIndex())
+
+    @staticmethod
+    def _fit_provider_content(content: QWidget) -> None:
+        """Let the Settings page own scrolling instead of nesting scrollbars."""
+        def fit() -> None:
+            for area in content.findChildren(QScrollArea):
+                area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+                area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+                area.setMaximumHeight(16777215)
+                area.setSizePolicy(
+                    QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
+                )
+                body = area.widget()
+                if body is not None:
+                    body.adjustSize()
+                    area.setMinimumHeight(body.sizeHint().height() + 12)
+        QTimer.singleShot(0, fit)
 
     @staticmethod
     def _focus_entry(page: QWidget, entry: SettingEntry, focus: bool = True):
