@@ -62,6 +62,7 @@ class SettingsComponentTests(unittest.TestCase):
             _access_status_button=QToolButton(),
             _chat_plan_mode=False,
             _chat_interaction_mode="agent",
+            _open_permissions_settings=lambda: None,
         )
         saved = {
             "observe_screen": True,
