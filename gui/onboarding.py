@@ -195,6 +195,7 @@ class OnboardingDialog(QDialog):
         root.addLayout(footer)
 
         self._agreement_check.stateChanged.connect(self._update_navigation)
+        self._cloud_voice_check.stateChanged.connect(self._update_navigation)
         self._language_combo.currentIndexChanged.connect(self._language_changed)
         self._retranslate()
         self._show_step()
@@ -238,6 +239,9 @@ class OnboardingDialog(QDialog):
         layout.addWidget(self._agreement_browser, 1)
         self._agreement_check = QCheckBox()
         layout.addWidget(self._agreement_check)
+        self._cloud_voice_check = QCheckBox()
+        self._cloud_voice_check.setWordWrap(True)
+        layout.addWidget(self._cloud_voice_check)
 
     def _build_permissions_page(self) -> None:
         _, layout = self._page("Choose what JARVIS may access", "These optional computer-control permissions start disabled. You can change them later in Settings.")
@@ -335,6 +339,11 @@ class OnboardingDialog(QDialog):
             else self._t("Continue")
         )
         self._agreement_check.setText(self._t("I have read and agree to these terms."))
+        self._cloud_voice_check.setText(
+            self._t(
+                "I understand that voice audio is sent to Google when Gemini Live voice mode is active."
+            )
+        )
         self._agreement_browser.setHtml(self._agreement_html())
         for key, title, description in _PERMISSION_ITEMS:
             self._permission_checks[key].setText(self._t(title))
@@ -376,7 +385,11 @@ class OnboardingDialog(QDialog):
 
     def _update_navigation(self, *_args) -> None:
         self._next_btn.setEnabled(
-            self._step != 1 or self._agreement_check.isChecked()
+            self._step != 1
+            or (
+                self._agreement_check.isChecked()
+                and self._cloud_voice_check.isChecked()
+            )
         )
 
     def _back(self) -> None:
@@ -385,7 +398,10 @@ class OnboardingDialog(QDialog):
             self._show_step()
 
     def _next(self) -> None:
-        if self._step == 1 and not self._agreement_check.isChecked():
+        if self._step == 1 and not (
+            self._agreement_check.isChecked()
+            and self._cloud_voice_check.isChecked()
+        ):
             return
         if self._step < 3:
             self._step += 1
@@ -436,7 +452,8 @@ class OnboardingDialog(QDialog):
             "gemini_api_key": self._api_input.text().strip(),
             "ui_language": self._language,
             "computer_permissions": permissions,
-            "terms_accepted": self._accepted_terms or self._agreement_check.isChecked(),
+            "terms_accepted": self._agreement_check.isChecked(),
+            "cloud_voice_consent": self._cloud_voice_check.isChecked(),
             "agreement_version": AGREEMENT_VERSION,
             "privacy_notice_version": PRIVACY_NOTICE_VERSION,
             "reconfigure": self._reconfigure,
