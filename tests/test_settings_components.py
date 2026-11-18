@@ -494,7 +494,7 @@ class SettingsComponentTests(unittest.TestCase):
             "Terms of use and privacy",
             "Choose what JARVIS may access",
             "Connect Google Gemini",
-            "I understand that voice audio is sent to Google when Gemini Live voice mode is active.",
+            "I consent to sending voice audio to Google Gemini.",
             "AI providers",
             "Runtime mode",
         )
