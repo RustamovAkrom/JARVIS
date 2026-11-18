@@ -741,7 +741,10 @@ def computer_control(
         if action == "random_data":
             dt = params.get("type", "name")
             result = _random_data(dt)
-            print(f"[ComputerControl] 🎲 random {dt} → {result}")
+            if dt == "password":
+                print(f"[ComputerControl] 🎲 random {dt} → [REDACTED]")
+            else:
+                print(f"[ComputerControl] 🎲 random {dt} → {result}")
             return result
 
         if action == "user_data":
