@@ -45,6 +45,27 @@ _ok = _fail = 0
 _failures: list[str] = []
 
 
+def _sanitize_log_detail(detail) -> str:
+    text = str(detail)
+    lower = text.lower()
+    secret_markers = (
+        "password",
+        "passwd",
+        "api_key",
+        "apikey",
+        "token",
+        "secret",
+        "authorization",
+        "bearer ",
+        "private_key",
+    )
+    if any(marker in lower for marker in secret_markers):
+        return "[REDACTED SENSITIVE DETAIL]"
+    if len(text) > 300:
+        return text[:300] + "...[truncated]"
+    return text
+
+
 def check(name: str, cond, detail: str = "") -> None:
     global _ok, _fail
     if cond:
@@ -53,7 +74,7 @@ def check(name: str, cond, detail: str = "") -> None:
     else:
         _fail += 1
         _failures.append(name)
-        print(f"  FAIL  {name}   {detail}")
+        print(f"  FAIL  {name}   {_sanitize_log_detail(detail)}")
 
 
 def section(title: str) -> None:
