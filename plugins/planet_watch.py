@@ -314,7 +314,7 @@ def _ask(question: str, **facts) -> str:
 
 def _accent() -> str:
     try:
-        cfg = json.loads((BASE_DIR / "config" / "api_keys.json").read_text(encoding="utf-8"))
+        cfg = json.loads(PATHS.api_config_file.read_text(encoding="utf-8"))
         colour = str(cfg.get("ui_color") or "")
         if re.fullmatch(r"#[0-9a-fA-F]{6}", colour):
             return colour
