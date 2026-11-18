@@ -64,6 +64,7 @@ from typing import Any, Callable, Optional
 
 from PyQt6 import sip
 from PyQt6.QtCore import QPointF, QRectF, Qt
+from core.runtime_paths import PATHS
 from PyQt6.QtGui import (QBrush, QConicalGradient, QFontMetricsF, QGuiApplication, QPainter,
                          QPainterPath, QPen, QPixmap, QRadialGradient)
 
@@ -76,7 +77,7 @@ _q, _mix, _once = lb._q, lb._mix, lb._once
 BG, TEXT, DIM, WARN, HOT = lb.BG, lb.TEXT, lb.DIM, lb.WARN, lb.HOT
 UP_COL = (186, 120, 255)                       # upload, the internet line
 
-MEMORY_DIR = lb.BASE_DIR / "memory"
+MEMORY_DIR = PATHS.memory_dir
 STORE_FILE = MEMORY_DIR / "network_radar_cache.json"
 OUI_FILE = MEMORY_DIR / "network_radar_oui_cache.json"
 
