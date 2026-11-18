@@ -19,6 +19,7 @@ import string
 import threading
 import time
 from pathlib import Path
+from urllib.parse import parse_qsl, urlencode, quote
 from core.runtime_paths import PATHS
 
 _DEPS_OK = False
@@ -1323,9 +1324,19 @@ class DashboardServer:
 
         @bounce.get("/{path:path}")
         async def _to_https(path: str, request: Request):
-            query = f"?{request.url.query}" if request.url.query else ""
+            raw_path = (path or "").replace("\\", "/").strip()
+            first_segment = raw_path.split("/", 1)[0]
+            if "://" in raw_path or raw_path.startswith("//") or ":" in first_segment:
+                safe_path = "/"
+            else:
+                safe_path = "/" + quote(raw_path.lstrip("/"), safe="/")
+
+            q_items = parse_qsl(request.url.query, keep_blank_values=True)
+            safe_query = urlencode(q_items, doseq=True)
+            query = f"?{safe_query}" if safe_query else ""
+
             return RedirectResponse(
-                f"https://{self._ip}:{SECURE_PORT}/{path}{query}", status_code=307
+                f"https://{self._ip}:{SECURE_PORT}{safe_path}{query}", status_code=307
             )
 
         cfg = uvicorn.Config(bounce, host="0.0.0.0", port=PORT, log_level="warning")
