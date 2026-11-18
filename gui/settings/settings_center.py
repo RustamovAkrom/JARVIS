@@ -319,6 +319,7 @@ class SettingsCenter(QDialog):
             scroll = QScrollArea()
             scroll.setWidgetResizable(True)
             scroll.setFrameShape(QFrame.Shape.NoFrame)
+            scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
             scroll.setStyleSheet(
                 "QScrollArea { background:transparent; border:0; }"
                 "QScrollArea::viewport { background:transparent; border:0; }"
@@ -443,6 +444,7 @@ class SettingsCenter(QDialog):
         host_layout = content.layout()
         if host_layout is None:
             return
+        provider_panels = content.findChildren(QWidget, "ProvidersOverlay")
 
         row = QFrame(content)
         row.setObjectName("ProviderRuntimePolicy")
@@ -486,6 +488,10 @@ class SettingsCenter(QDialog):
         def apply_policy(index: int) -> None:
             selection = ("online", "offline", "auto")[index]
             save_providers(selection=selection)
+            for provider_panel in provider_panels:
+                changed = getattr(provider_panel, "changed", None)
+                if changed is not None:
+                    changed.emit()
             if selection in ("online", "offline") and profile_tabs:
                 profile_tabs[0].setCurrentIndex(0 if selection == "online" else 1)
             status.setText(
@@ -498,6 +504,8 @@ class SettingsCenter(QDialog):
             self._fit_provider_content(content)
 
         selector.currentIndexChanged.connect(apply_policy)
+        for tab in profile_tabs:
+            tab.currentChanged.connect(lambda _index: self._fit_provider_content(content))
         apply_policy(selector.currentIndex())
 
     @staticmethod
