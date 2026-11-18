@@ -14226,6 +14226,10 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             QTimer.singleShot(0, self._ensure_terminal_session)
 
     def _toggle_reading_mode(self):
+        if not self._reading_mode and self._workspace_focus_active:
+            # Reading mode has its own complete layout snapshot; leave focus
+            # mode first so its saved state is the normal workspace layout.
+            self._set_workspace_focus_mode(False)
         if not self._reading_mode:
             current_main = self._main_splitter.sizes()
             if current_main and current_main[0] > 0:
