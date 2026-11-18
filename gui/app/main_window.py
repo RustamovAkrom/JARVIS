@@ -11199,7 +11199,7 @@ class MainWindow(QMainWindow):
         # Keep the provider form readable on wide displays without forcing a
         # horizontal scroll. On narrower Settings windows it still follows the
         # viewport because the page is width-expanding up to this cap.
-        page.setMaximumWidth(940)
+        page.setMinimumWidth(0)
         page.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
         )
