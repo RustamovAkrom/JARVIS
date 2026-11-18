@@ -47,7 +47,7 @@ def _load_dotenv(source_root: Path) -> None:
             )
             if not has_debug_setting and "DEBUG" not in os.environ:
                 with env_file.open("a", encoding="utf-8") as stream:
-                    stream.write("\\nDEBUG=true\\n")
+                    stream.write("\nDEBUG=true\n")
     except OSError:
         pass
 
