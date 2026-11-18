@@ -751,7 +751,7 @@ def computer_control(
             if not value:
                 value = _random_data(field)
                 print(
-                    f"[ComputerControl] ⚠️ No '{field}' in memory, using random: {value}"
+                    f"[ComputerControl] ⚠️ No '{field}' in memory, using random fallback value [REDACTED]"
                 )
             return value
 
