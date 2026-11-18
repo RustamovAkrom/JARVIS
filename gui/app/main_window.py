@@ -6896,6 +6896,7 @@ class _QProcessTerminal:
     def dispose(self) -> None:
         if self.isalive():
             self.kill()
+            self._process.waitForFinished(1000)
         self._process.deleteLater()
 
 
