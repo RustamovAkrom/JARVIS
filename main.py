@@ -2714,11 +2714,9 @@ class JarvisLive:
             # cost the user their voice. Fall back to the default and say so.
             if _spk_dev is None:
                 raise
-            print(
-                f"[JARVIS] ⚠️  Output device '{_spk_name}' failed: {_e} — using default"
-            )
+            print("[JARVIS] ⚠️  Selected output device unavailable — using default")
             self.ui.write_log(
-                f"SYS: Speaker '{_spk_name}' unavailable — using system default."
+                "SYS: Selected speaker unavailable — using system default."
             )
             stream = _open_spk(None)
 
