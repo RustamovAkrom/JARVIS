@@ -2,23 +2,56 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from core.runtime_paths import _resolve_paths, migrate_legacy_user_data
+from core.runtime_paths import (
+    _load_dotenv,
+    _resolve_paths,
+    migrate_legacy_user_data,
+)
 
 
 class RuntimePathTests(unittest.TestCase):
-    def test_source_mode_uses_isolated_local_profile(self):
+    def test_source_mode_uses_appdata_when_debug_is_false(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
             paths = _resolve_paths(
                 source_root=root / "checkout",
                 frozen=False,
-                env={"LOCALAPPDATA": str(root / "local")},
+                env={"DEBUG": "false", "LOCALAPPDATA": str(root / "local")},
                 system="win32",
             )
         self.assertEqual(paths.mode, "source")
+        self.assertFalse(paths.debug)
         self.assertEqual(
             paths.user_data_root, root / "local" / "JARVIS" / "profiles" / "development"
         )
+
+    def test_source_debug_mode_uses_repository_config_and_memory(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            checkout = root / "checkout"
+            paths = _resolve_paths(
+                source_root=checkout,
+                frozen=False,
+                env={"DEBUG": "true", "LOCALAPPDATA": str(root / "local")},
+                system="win32",
+            )
+        self.assertTrue(paths.debug)
+        self.assertEqual(paths.user_data_root, checkout)
+        self.assertEqual(paths.config_dir, checkout / "config")
+        self.assertEqual(paths.memory_dir, checkout / "memory")
+        self.assertEqual(paths.api_config_file, checkout / "config" / "api_keys.json")
+        self.assertEqual(paths.long_term_memory_file, checkout / "memory" / "long_term.json")
+
+    def test_source_checkout_creates_gitignored_env_with_debug_enabled(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            with patch.dict("os.environ", {}, clear=True):
+                _load_dotenv(root)
+                env_file = root / ".env"
+                self.assertTrue(env_file.is_file())
+                self.assertIn("DEBUG=true", env_file.read_text(encoding="utf-8"))
+                self.assertEqual(__import__("os").environ.get("DEBUG"), "true")
 
     def test_shared_profile_can_be_selected_in_every_mode(self):
         with tempfile.TemporaryDirectory() as temporary:
