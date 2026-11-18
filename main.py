@@ -2681,6 +2681,11 @@ class JarvisLive:
                         )
                         await self._flush_pending_vision()
         except Exception as e:
+            # Shutdown is an intentional control-flow signal: the supervisor
+            # consumes it after the goodbye has finished. Do not report it as a
+            # receive failure or print a traceback for a normal user action.
+            if _is_shutdown_signal(e):
+                raise
             # Let the session supervisor handle expected Live policy closes.
             # Printing a traceback here happens before TaskGroup wraps and
             # forwards the exception to the reconnect logic below.
