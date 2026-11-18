@@ -310,6 +310,7 @@ class OnboardingDialog(QDialog):
             ("Local data and credentials", "Settings, memories and logs are stored in your local JARVIS profile. Your Gemini API key is stored in the local configuration file. Protect your device account and do not share that file."),
             ("Computer access", "Screen capture, pointer, keyboard and clipboard capabilities are optional. Keep them disabled unless needed. JARVIS must operate within the permissions you grant; review sensitive actions before confirming them."),
             ("Limitations and third-party terms", "AI output may be incorrect or incomplete. Verify important information and review actions before changing files, accounts or systems. You must follow Google's Gemini terms and applicable laws. You can revoke your API key in Google AI Studio."),
+            ("Your choices and local data", "You can change optional computer permissions in Settings, clear saved conversations and memories using the available controls, and remove local JARVIS profile data from your device. Removing profile data may delete settings, conversations, memories and logs."),
             ("Notice", "This is a basic in-app agreement and privacy notice, not a substitute for a complete published EULA or privacy policy."),
         )
         parts = []
