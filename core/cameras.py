@@ -86,14 +86,16 @@ class _Device:
         return cv2.CAP_V4L2 if hasattr(cv2, "CAP_V4L2") else cv2.CAP_ANY
 
     def _open_capture(self) -> bool:
-        """Open/reopen the camera. Caller serializes access via _condition."""
-        cap = None
+        """Open/reopen the camera, falling back when a backend rejects open options."""
         try:
             backend = self._backend()
-            # The timeout properties are supported by recent OpenCV builds;
-            # retry without them for older builds/backends.
+            cap = None
+
+            # AVFoundation and some OpenCV builds report an unsuccessful open
+            # instead of raising when timeout properties are unsupported. Treat
+            # both outcomes identically and retry with the portable signature.
             try:
-                cap = cv2.VideoCapture(
+                candidate = cv2.VideoCapture(
                     self.index,
                     backend,
                     [
@@ -101,38 +103,41 @@ class _Device:
                         cv2.CAP_PROP_READ_TIMEOUT_MSEC, _OPEN_READ_TIMEOUT_MS,
                     ],
                 )
-            except Exception:
-                # Older OpenCV builds and some backends reject parameterized open.
-                cap = None
+                if candidate is not None and candidate.isOpened():
+                    cap = candidate
+                elif candidate is not None:
+                    candidate.release()
+            except (TypeError, ValueError, cv2.error):
+                # Older bindings may reject the parameterized constructor.
+                pass
 
-            if cap is None or not cap.isOpened():
-                if cap is not None:
-                    try:
-                        cap.release()
-                    except Exception:
-                        pass
-                # Some backends reject timeout properties by returning a closed
-                # capture instead of raising. Retry with the legacy signature.
+            if cap is None:
                 try:
-                    cap = cv2.VideoCapture(self.index, backend)
+                    candidate = cv2.VideoCapture(self.index, backend)
                 except Exception:
-                    cap = None
-                if cap is None or not cap.isOpened():
-                    if cap is not None:
+                    candidate = None
+                if candidate is None or not candidate.isOpened():
+                    if candidate is not None:
                         try:
-                            cap.release()
+                            candidate.release()
                         except Exception:
                             pass
                     with self._condition:
-                        self._last_error = f"Camera {self.index} could not be opened"
+                        self._last_error = (
+                            f"Camera {self.index} could not be opened "
+                            f"with backend {backend}"
+                        )
                         self._blocked_by = self._detect_blocking_process()
                         self._capture = None
                         self._condition.notify_all()
                     return False
+                cap = candidate
 
-            # MJPG commonly avoids USB bandwidth problems on Windows webcams.
+            # Keep camera configuration best-effort: many macOS cameras do not
+            # support MJPG or the requested resolution/FPS.
             try:
-                cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
+                if platform.system() != "Darwin":
+                    cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
                 cap.set(cv2.CAP_PROP_FRAME_WIDTH, _DEFAULT_WIDTH)
                 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, _DEFAULT_HEIGHT)
                 cap.set(cv2.CAP_PROP_FPS, _DEFAULT_FPS)
@@ -153,11 +158,6 @@ class _Device:
                 old.release()
             return True
         except Exception as exc:
-            if cap is not None:
-                try:
-                    cap.release()
-                except Exception:
-                    pass
             with self._condition:
                 self._capture = None
                 self._last_error = f"{type(exc).__name__}: {exc}"
