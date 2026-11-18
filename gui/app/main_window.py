@@ -7102,6 +7102,52 @@ class _TerminalBridge(QObject):
         self._owner._terminal_client_ready(self._session_id)
 
 
+
+class _QProcessTerminal:
+    """Qt-managed Windows shell adapter used by the existing xterm bridge."""
+
+    def __init__(self, process: QProcess):
+        self._process = process
+
+    def read(self, blocking: bool = False) -> str:
+        del blocking
+        return bytes(self._process.readAllStandardOutput()).decode(
+            "utf-8", errors="replace"
+        )
+
+    def write(self, data: str) -> None:
+        if self.isalive():
+            self._process.write(str(data).encode("utf-8", errors="replace"))
+
+    def isalive(self) -> bool:
+        return self._process.state() != QProcess.ProcessState.NotRunning
+
+    @property
+    def pid(self) -> int:
+        return int(self._process.processId())
+
+    def set_size(self, columns: int, rows: int) -> None:
+        del columns, rows
+
+    def terminate(self) -> None:
+        if self.isalive():
+            self._process.terminate()
+
+    def kill(self) -> None:
+        if self.isalive():
+            self._process.kill()
+            self._process.waitForFinished(1000)
+
+    def wait_for_finished(self, timeout_ms: int = 1000) -> None:
+        if self.isalive():
+            self._process.waitForFinished(timeout_ms)
+
+    def dispose(self) -> None:
+        if self.isalive():
+            self.kill()
+        self._process.deleteLater()
+
+
 @dataclass
 class _TerminalSession:
     session_id: str
@@ -7117,6 +7163,7 @@ class _TerminalSession:
     client_is_ready: bool = False
     output_buffer: str = ""
     pending_output: str = ""
+
 
 
 class _UpdateSignals(QObject):
@@ -12561,22 +12608,29 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             self._remove_terminal_session(session_id)
             return
         session.closing = True
-        self._terminal_write("\x03", session_id, allow_closing=True)
-        QTimer.singleShot(
-            180,
-            lambda sid=session_id: (
-                self._terminal_write("exit\r", sid, allow_closing=True)
-                if sid in self._terminal_sessions
-                and self._terminal_sessions[sid].closing
-                and self._terminal_sessions[sid].pty is not None
-                else None
-            ),
-        )
+        if isinstance(session.pty, _QProcessTerminal):
+            shell = session.pty
+            shell.terminate()
+            QTimer.singleShot(
+                700, lambda process=shell: process.kill() if process.isalive() else None
+            )
+        else:
+            self._terminal_write("\x03", session_id, allow_closing=True)
+            QTimer.singleShot(
+                180,
+                lambda sid=session_id: (
+                    self._terminal_write("exit\r", sid, allow_closing=True)
+                    if sid in self._terminal_sessions
+                    and self._terminal_sessions[sid].closing
+                    and self._terminal_sessions[sid].pty is not None
+                    else None
+                ),
+            )
         QTimer.singleShot(
             1500, lambda sid=session_id: self._force_close_terminal_session(sid)
         )
 
-    def _force_close_terminal_session(self, session_id: str):
+        def _force_close_terminal_session(self, session_id: str):
         session = self._terminal_sessions.get(session_id)
         if session is None or not session.closing or session.pty is None:
             return
@@ -12626,10 +12680,14 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                     else:
                         os.kill(pty.pid, signal.SIGKILL)
                         detail = ""
+                    if isinstance(pty, _QProcessTerminal):
+                        pty.wait_for_finished(1000)
                     if pty.isalive():
                         raise OSError(
                             detail or f"taskkill could not stop PID {pty.pid}"
                         )
+                if isinstance(pty, _QProcessTerminal):
+                    pty.dispose()
         except (OSError, subprocess.SubprocessError) as exc:
             self._append_activity(
                 f"ERR: Could not stop terminal process {session_id}: {exc}"
@@ -12638,7 +12696,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         session.pty = None
         self._remove_terminal_session(session_id)
 
-    def _close_terminal_panel(self):
+        def _close_terminal_panel(self):
         self._bottom_tabs.hide()
         self._terminal_toggle_btn.setChecked(False)
         for session_id in tuple(self._terminal_sessions):
@@ -12993,7 +13051,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             session.view.setFocus()
 
     def _restart_terminal(self):
-        """Start a fresh shell while keeping the terminal panel open."""
+        """Restart the active shell without restarting the JARVIS application."""
         session = self._active_terminal_session()
         if session is None:
             return
@@ -13010,8 +13068,13 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         session.view.page().runJavaScript(
             "window.clearTerminal && window.clearTerminal()"
         )
-        # Interrupt a running foreground command, then exit its shell. The
-        # normal PTY poller detects its exit and starts the replacement shell.
+        if isinstance(session.pty, _QProcessTerminal):
+            shell = session.pty
+            shell.terminate()
+            QTimer.singleShot(
+                700, lambda process=shell: process.kill() if process.isalive() else None
+            )
+            return
         session_id = session.session_id
         self._terminal_write("\x03", session_id)
         QTimer.singleShot(
@@ -13024,7 +13087,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             ),
         )
 
-    def _interrupt_terminal(self):
+        def _interrupt_terminal(self):
         """Send the terminal's interrupt character without browser copy handling."""
         session = self._active_terminal_session()
         if session is not None and session.pty is not None:
@@ -13037,49 +13100,54 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             return
         try:
             if platform.system() == "Windows":
-                from winpty import PTY
-
-                session.pty = PTY(100, 24)
+                # Use Qt-managed processes instead of the native WinPTY
+                # extension, which can destabilize the desktop process on
+                # some Windows/Python combinations.
                 if session.shell_kind.startswith("kali:"):
-                    wsl = shutil.which("wsl.exe") or shutil.which("wsl")
-                    distro = session.shell_kind.partition(":")[2] or "kali-linux"
-                    if not wsl:
+                    program = shutil.which("wsl.exe") or shutil.which("wsl")
+                    if not program:
                         raise FileNotFoundError("WSL is not available")
+                    distro = session.shell_kind.partition(":")[2] or "kali-linux"
                     drive, remainder = os.path.splitdrive(session.cwd)
                     linux_cwd = (
                         f"/mnt/{drive.rstrip(':').lower()}/{remainder.replace(chr(92), '/').lstrip('/')}"
                         if drive
                         else "~"
                     )
-                    session.pty.spawn(
-                        wsl,
-                        cmdline=f'-d {distro} --cd "{linux_cwd}"',
-                        cwd=session.cwd,
-                    )
+                    arguments = [
+                        "-d", distro, "--cd", linux_cwd, "--exec", "bash", "-i"
+                    ]
                 elif session.shell_kind == "cmd":
-                    command_prompt = os.environ.get("COMSPEC") or shutil.which("cmd.exe")
-                    if not command_prompt:
+                    program = os.environ.get("COMSPEC") or shutil.which("cmd.exe")
+                    if not program:
                         raise FileNotFoundError("Command Prompt is not available")
-                    session.pty.spawn(command_prompt, cmdline="/Q /D", cwd=session.cwd)
+                    arguments = ["/Q", "/D", "/K"]
                 elif session.shell_kind == "powershell":
-                    powershell = shutil.which("pwsh") or shutil.which("powershell.exe")
-                    if not powershell:
+                    program = shutil.which("pwsh") or shutil.which("powershell.exe")
+                    if not program:
                         raise FileNotFoundError("PowerShell is not available")
-                    session.pty.spawn(
-                        powershell, cmdline="-NoLogo -NoProfile", cwd=session.cwd
-                    )
+                    arguments = ["-NoLogo", "-NoProfile", "-NoExit"]
                 else:
-                    powershell = shutil.which("pwsh") or shutil.which("powershell.exe")
-                    if powershell:
-                        session.pty.spawn(
-                            powershell, cmdline="-NoLogo -NoProfile", cwd=session.cwd
-                        )
+                    program = shutil.which("pwsh") or shutil.which("powershell.exe")
+                    if program:
+                        arguments = ["-NoLogo", "-NoProfile", "-NoExit"]
                     else:
-                        session.pty.spawn(
-                            os.environ.get("COMSPEC", "cmd.exe"),
-                            cmdline="/Q /D",
-                            cwd=session.cwd,
-                        )
+                        program = os.environ.get("COMSPEC") or shutil.which("cmd.exe")
+                        if not program:
+                            raise FileNotFoundError("No supported Windows shell was found")
+                        arguments = ["/Q", "/D", "/K"]
+
+                process = QProcess(self)
+                process.setProcessChannelMode(
+                    QProcess.ProcessChannelMode.MergedChannels
+                )
+                process.setWorkingDirectory(session.cwd)
+                process.start(program, arguments)
+                if not process.waitForStarted(3000):
+                    detail = process.errorString() or "Windows shell failed to start"
+                    process.deleteLater()
+                    raise RuntimeError(detail)
+                session.pty = _QProcessTerminal(process)
             else:
                 import pty as _pty
 
@@ -13181,6 +13249,8 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                         os.close(pty["fd"])
                     except OSError:
                         pass
+                elif isinstance(pty, _QProcessTerminal):
+                    pty.dispose()
                 session.pty = None
                 if session.closing:
                     self._remove_terminal_session(session_id)
@@ -13193,6 +13263,8 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             self._append_terminal_output(
                 f"\r\n[terminal read error: {exc}]\r\n", session_id=session_id
             )
+            if isinstance(pty, _QProcessTerminal):
+                pty.dispose()
             session.pty = None
             if session.closing:
                 self._remove_terminal_session(session_id)
