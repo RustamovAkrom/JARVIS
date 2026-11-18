@@ -7961,7 +7961,7 @@ class MainWindow(QMainWindow):
         self._project_open_sig.connect(self._open_project_from_assistant)
         self._state_sig.connect(self._apply_state)
         self._content_sig.connect(self._show_content)
-        self._reconfig_sig.connect(self._show_setup)
+        self._reconfig_sig.connect(self._show_reconfigure_setup)
         self._camera_sig.connect(self._show_camera_frame)
         self._confirm_sig.connect(self._show_confirm_banner)
         self._confirm_hide_sig.connect(self._hide_confirm_banner)
@@ -7992,11 +7992,14 @@ class MainWindow(QMainWindow):
         self._clipboard_panel.action_requested.connect(self._on_clipboard_action)
         QApplication.clipboard().dataChanged.connect(self._on_clipboard_changed)
 
-        self._overlay: SetupOverlay | None = None
+        self._overlay = None
+        self._setup_dialog = None
         self._settings_center = None
         self._ready = self._check_config()
         if not self._ready:
-            self._show_setup()
+            # Run onboarding after the main window has been shown. QDialog.exec()
+            # then owns a normal Qt event loop instead of covering an unshown parent.
+            QTimer.singleShot(0, self._show_setup)
         elif self._language_missing:
             QTimer.singleShot(0, self._show_initial_language_picker)
 
@@ -16504,43 +16507,113 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         except Exception:
             return False
 
-    def _show_setup(self):
-        ov = SetupOverlay(self.centralWidget(), language=self._ui_language)
-        cw = self.centralWidget()
-        ow, oh = min(660, cw.width() - 20), min(470, cw.height() - 20)
-        ov.setGeometry(
-            (cw.width() - ow) // 2,
-            (cw.height() - oh) // 2,
-            ow,
-            oh,
-        )
-        ov.done.connect(self._on_setup_done)
-        ov.show()
-        self._overlay = ov
+    def _show_setup(self, reconfigure: bool = False) -> None:
+        """Show the first-run wizard, or only the API-key step when reconfiguring."""
+        from gui.onboarding import OnboardingDialog
 
-    def _on_setup_done(self, key: str, os_name: str, language: str):
-        os.makedirs(CONFIG_DIR, exist_ok=True)
-        config = _read_full_config()
-        config.update(
-            {
-                "gemini_api_key": key,
-                "os_system": os_name,
-                "ui_language": language if language in LANGUAGES else "en",
-            }
+        current = self._setup_dialog
+        if current is not None and current.isVisible():
+            current.raise_()
+            current.activateWindow()
+            return
+
+        dialog = OnboardingDialog(
+            self,
+            language=self._ui_language,
+            reconfigure=reconfigure,
         )
-        update_json(API_FILE, lambda current: current.update(config))
-        self._ui_language = config["ui_language"]
-        self._language_missing = False
+        dialog.completed.connect(self._on_setup_done)
+        dialog.rejected.connect(self._on_setup_cancelled)
+        self._setup_dialog = dialog
+        self._overlay = dialog
+        dialog.exec()
+        self._setup_dialog = None
+        self._overlay = None
+
+    def _show_reconfigure_setup(self) -> None:
+        self._show_setup(reconfigure=True)
+
+    def _on_setup_cancelled(self) -> None:
+        """Do not leave the background startup worker waiting forever."""
+        if not self._ready:
+            self.close()
+            QApplication.quit()
+
+    def _on_setup_done(self, payload: dict) -> None:
+        """Persist the verified key and explicit first-run choices atomically."""
+        from datetime import datetime, timezone
+
+        if not isinstance(payload, dict):
+            return
+        key = str(payload.get("gemini_api_key") or "").strip()
+        if not key:
+            QMessageBox.warning(
+                self,
+                self._tr("Setup"),
+                self._tr("A Gemini API key is required to start JARVIS."),
+            )
+            return
+
+        reconfigure = bool(payload.get("reconfigure"))
+        language = str(payload.get("ui_language") or self._ui_language)
+        if language not in LANGUAGES:
+            language = "en"
+
+        detected_os = {
+            "Windows": "windows",
+            "Darwin": "mac",
+            "Linux": "linux",
+        }.get(platform.system(), "linux")
+
+        updates = {"gemini_api_key": key}
+        if not reconfigure:
+            permissions = payload.get("computer_permissions")
+            permissions = permissions if isinstance(permissions, dict) else {}
+            allowed_permissions = {
+                name: bool(permissions.get(name, False))
+                for name in (
+                    "observe_screen", "find_elements", "move_mouse",
+                    "click", "type", "clipboard",
+                )
+            }
+            updates.update(
+                {
+                    "os_system": detected_os,
+                    "ui_language": language,
+                    "computer_permissions": allowed_permissions,
+                    "terms_accepted": bool(payload.get("terms_accepted")),
+                    "agreement_version": str(payload.get("agreement_version") or ""),
+                    "privacy_notice_version": str(
+                        payload.get("privacy_notice_version") or ""
+                    ),
+                    "terms_accepted_at": datetime.now(timezone.utc).isoformat(),
+                    "onboarding_completed": True,
+                }
+            )
+
+        try:
+            update_json(API_FILE, lambda current: current.update(updates))
+        except Exception as exc:
+            QMessageBox.critical(
+                self,
+                self._tr("Setup could not be saved"),
+                self._tr("Could not save setup settings: {error}", error=exc),
+            )
+            self._ready = False
+            QTimer.singleShot(0, self._show_setup)
+            return
+
+        if not reconfigure:
+            self._ui_language = language
+            self._language_missing = False
         self._ready = True
-        if self._overlay:
-            self._overlay.hide()
-            self._overlay = None
         self._apply_state("LISTENING")
         self._assistant_name = (
             _read_full_config().get("assistant_name", "JARVIS") or "JARVIS"
         )
         self._log.append_log(
-            f"SYS: Initialised. OS={os_name.upper()}. {self._assistant_name} online."
+            f"SYS: Initialised. OS={detected_os.upper()}. "
+            f"{self._assistant_name} online."
         )
 
     def closeEvent(self, event):
