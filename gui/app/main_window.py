@@ -7546,6 +7546,8 @@ class MainWindow(QMainWindow):
         self._reading_saved_layout = None
         self._side_restore_width = {0: _LEFT_W, 2: _RIGHT_W}
         self._workspace_split_sizes = None
+        self._workspace_focus_active = False
+        self._workspace_focus_state = None
         self._terminal_sessions: dict[str, _TerminalSession] = {}
         self._terminal_active_id = ""
         self._terminal_sequence = 0
@@ -9555,6 +9557,20 @@ class MainWindow(QMainWindow):
         nav.addWidget(self._content_toggle_btn)
 
         nav.addWidget(self._right_toggle_btn)
+
+        self._focus_workspace_btn = QPushButton("FOCUS")
+        self._focus_workspace_btn.setCheckable(True)
+        self._focus_workspace_btn.setFixedSize(48, 28)
+        self._focus_workspace_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._focus_workspace_btn.setToolTip(
+            self._tr("Focus the right workspace while keeping the left sidebar visible")
+        )
+        self._focus_workspace_btn.setAccessibleName(
+            self._tr("Toggle workspace focus")
+        )
+        self._focus_workspace_btn.setStyleSheet(self._drawer_btn.styleSheet())
+        self._focus_workspace_btn.clicked.connect(self._toggle_workspace_focus)
+        nav.addWidget(self._focus_workspace_btn)
 
         self._fullscreen_toggle_btn = QPushButton()
         self._fullscreen_toggle_btn.setCheckable(True)
@@ -13080,9 +13096,10 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
     def _restart_terminal(self):
         """Restart the active shell without restarting the JARVIS application."""
         session = self._active_terminal_session()
-        if session is None:
+        if session is None or session.closing:
             return
         if session.pty is None:
+            session.restart_pending = False
             session.view.page().runJavaScript(
                 "window.clearTerminal && window.clearTerminal()"
             )
@@ -13288,13 +13305,23 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                     )
         except Exception as exc:
             self._append_terminal_output(
-                f"\r\n[terminal read error: {exc}]\r\n", session_id=session_id
+                f"\\r\\n[terminal read error: {exc}]\\r\\n", session_id=session_id
             )
             if isinstance(pty, _QProcessTerminal):
                 pty.dispose()
             session.pty = None
             if session.closing:
                 self._remove_terminal_session(session_id)
+            elif session.restart_pending:
+                session.restart_pending = False
+                QTimer.singleShot(
+                    120,
+                    lambda sid=session_id: self._start_terminal_process(sid)
+                    if sid in self._terminal_sessions
+                    and not self._terminal_sessions[sid].closing
+                    and self._terminal_sessions[sid].pty is None
+                    else None,
+                )
 
     def _terminal_write(
         self, data: str, session_id: str | None = None, allow_closing: bool = False
@@ -14182,9 +14209,78 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             )
             self._content_expand_btn.setToolTip("Give results more space")
 
+    def _toggle_workspace_focus(self):
+        """Expand the right workspace while retaining the left sidebar."""
+        self._set_workspace_focus_mode(not self._workspace_focus_active)
+
+    def _set_workspace_focus_mode(self, enabled: bool):
+        enabled = bool(enabled)
+        if enabled == self._workspace_focus_active:
+            self._focus_workspace_btn.setChecked(enabled)
+            return
+        if self._reading_mode:
+            self._focus_workspace_btn.setChecked(self._workspace_focus_active)
+            return
+
+        if enabled:
+            main_sizes = self._main_splitter.sizes()
+            root_sizes = self._root_splitter.sizes()
+            workspace_sizes = self._workspace_split.sizes()
+            left_width = (
+                main_sizes[0]
+                if main_sizes and main_sizes[0] > 0
+                else self._left_panel.width()
+            )
+            self._workspace_focus_state = {
+                "root_sizes": root_sizes,
+                "main_sizes": main_sizes,
+                "workspace_sizes": workspace_sizes,
+                "bottom_visible": self._bottom_tabs.isVisible(),
+                "bottom_index": self._bottom_tabs.currentIndex(),
+            }
+            self._center_views.hide()
+            self._bottom_tabs.hide()
+            self._right_panel.show()
+            self._right_toggle_btn.setChecked(True)
+
+            available = max(
+                1, self._root_splitter.width() - self._root_splitter.handleWidth()
+            )
+            left_min = max(1, self._left_panel.minimumWidth())
+            right_min = max(1, self._right_panel.minimumWidth())
+            left_width = min(
+                max(left_min, int(left_width)),
+                max(left_min, available - right_min),
+            )
+            self._root_splitter.setSizes([left_width, max(1, available - left_width)])
+            self._workspace_focus_active = True
+        else:
+            state = self._workspace_focus_state or {}
+            self._center_views.show()
+            if state.get("bottom_visible", False):
+                self._bottom_tabs.setCurrentIndex(int(state.get("bottom_index", 0)))
+                self._bottom_tabs.show()
+            root_sizes = state.get("root_sizes")
+            if root_sizes:
+                self._root_splitter.setSizes(root_sizes)
+            main_sizes = state.get("main_sizes")
+            if main_sizes:
+                self._main_splitter.setSizes(main_sizes)
+            workspace_sizes = state.get("workspace_sizes")
+            if workspace_sizes:
+                self._workspace_split.setSizes(workspace_sizes)
+            self._workspace_focus_state = None
+            self._workspace_focus_active = False
+
+        self._focus_workspace_btn.setChecked(self._workspace_focus_active)
+        self._update_advanced_telemetry_visibility()
+        self._refresh_workspace_settings_state()
+
     def _toggle_side_panel(self, index: int):
         if self._reading_mode or index not in (0, 2):
             return
+        if self._workspace_focus_active:
+            self._set_workspace_focus_mode(False)
         panel = self._left_panel if index == 0 else self._right_panel
         button = self._left_toggle_btn if index == 0 else self._right_toggle_btn
         splitter = self._main_splitter if index == 0 else self._root_splitter
