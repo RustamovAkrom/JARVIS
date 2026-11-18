@@ -16,6 +16,8 @@ from PyQt6.QtWidgets import (
 )
 
 from gui.components.settings import SettingRow, SettingsSection
+from gui.onboarding import OnboardingDialog
+from memory.translations import translate, translate_from
 from gui.settings.categories.general import GeneralSettingsPage
 from gui.settings.categories.identity import AssistantIdentityPage
 from gui.settings.registry import CATEGORIES, ENTRIES, search_entries
@@ -465,6 +467,58 @@ class SettingsComponentTests(unittest.TestCase):
             self.assertEqual(applied, [True])
             self.assertTrue(panel.isVisible())
             panel.close()
+
+
+    def test_onboarding_requires_terms_and_cloud_voice_consent(self):
+        dialog = OnboardingDialog(language="en")
+        self.assertEqual(dialog._stack.count(), 4)
+
+        dialog._step = 1
+        dialog._update_navigation()
+        self.assertFalse(dialog._next_btn.isEnabled())
+
+        dialog._agreement_check.setChecked(True)
+        self.assertFalse(dialog._next_btn.isEnabled())
+        dialog._cloud_voice_check.setChecked(True)
+        self.assertTrue(dialog._next_btn.isEnabled())
+
+        dialog._language_combo.setCurrentIndex(
+            dialog._language_combo.findData("ru")
+        )
+        self.assertEqual(dialog._labels["Choose your interface language"].text(),
+                         "Выберите язык интерфейса")
+        dialog.reject()
+
+    def test_onboarding_and_settings_strings_have_ru_and_uz_translations(self):
+        keys = (
+            "Terms of use and privacy",
+            "Choose what JARVIS may access",
+            "Connect Google Gemini",
+            "I understand that voice audio is sent to Google when Gemini Live voice mode is active.",
+            "AI providers",
+            "Runtime mode",
+        )
+        for key in keys:
+            with self.subTest(key=key):
+                self.assertNotEqual(translate(key, "ru"), key)
+                self.assertNotEqual(translate(key, "uz"), key)
+
+    def test_translate_from_converts_already_rendered_text(self):
+        self.assertEqual(
+            translate_from("Выберите язык интерфейса", "ru", "uz"),
+            "Interfeys tilini tanlang",
+        )
+        self.assertEqual(
+            translate_from("Выберите язык интерфейса", "ru", "en"),
+            "Choose your interface language",
+        )
+
+    def test_settings_navigation_uses_selected_locale(self):
+        with patch("memory.config_manager.get_ui_language", return_value="ru"):
+            center = SettingsCenter()
+        self.assertEqual(center._category_rows["integrations"].text(), "AI-провайдеры")
+        self.assertEqual(center.search.placeholderText(), "Поиск настроек")
+        center.close()
 
 
 if __name__ == "__main__":
