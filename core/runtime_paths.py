@@ -29,8 +29,8 @@ def _load_dotenv(source_root: Path) -> None:
         return
 
     env_file = source_root / ".env"
-    if not env_file.exists():
-        try:
+    try:
+        if not env_file.exists():
             env_file.write_text(
                 "# Local JARVIS development settings. This file is git-ignored.\n"
                 "# true: store config/ and memory/ in this source checkout.\n"
@@ -38,8 +38,18 @@ def _load_dotenv(source_root: Path) -> None:
                 "DEBUG=true\n",
                 encoding="utf-8",
             )
-        except OSError:
-            pass
+        else:
+            existing_lines = env_file.read_text(encoding="utf-8").splitlines()
+            has_debug_setting = any(
+                line.strip().partition("=")[0].strip().casefold() == "debug"
+                for line in existing_lines
+                if "=" in line and not line.strip().startswith("#")
+            )
+            if not has_debug_setting and "DEBUG" not in os.environ:
+                with env_file.open("a", encoding="utf-8") as stream:
+                    stream.write("\\nDEBUG=true\\n")
+    except OSError:
+        pass
 
     try:
         lines = env_file.read_text(encoding="utf-8").splitlines()
