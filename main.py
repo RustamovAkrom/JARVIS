@@ -3521,12 +3521,7 @@ class JarvisLive:
                         self._awake = True
                         self.ui.set_state("LISTENING")
                         self.ui.write_log("SYS: JARVIS online.")
-                    print(
-                        "[LiveDiag][GATES] "
-                        f"muted={self.ui.muted} wake_enabled={self._wake_enabled} "
-                        f"awake={self._awake} ptt_enabled={self._ptt_enabled} "
-                        f"ptt_held={self._ptt_held} phone_active={self._phone_active}"
-                    )
+                    print("[LiveDiag][GATES] Gate state initialized.")
 
                     try:
                         from core.background_tasks import get_background_task_manager
