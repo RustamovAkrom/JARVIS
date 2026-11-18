@@ -12061,6 +12061,7 @@ class MainWindow(QMainWindow):
                 settings = getattr(self, "_settings_center", None)
                 if settings is not None:
                     settings.refresh_theme()
+                self._refresh_access_status()
         self._log.append_log("SYS: Appearance settings updated.")
         return True
 
@@ -15211,6 +15212,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             settings = getattr(self, "_settings_center", None)
             if settings is not None:
                 settings.refresh_theme()
+            self._refresh_access_status()
 
     def _preview_ui_opacity(self, opacity: int):
         value = max(60, min(100, int(opacity)))
@@ -15277,6 +15279,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                 if old != updated:
                     retheme_all_widgets(old, updated)
                 self._apply_design_system()
+            self._refresh_access_status()
 
         self._log.append_log(f"SYS: Identity updated — {display}")
         if color_changed:
