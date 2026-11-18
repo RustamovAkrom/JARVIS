@@ -53,6 +53,7 @@ SAFETY
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
@@ -222,6 +223,32 @@ def _rel(vault: Path, path: Path) -> str:
         return str(path.relative_to(vault)).replace(os.sep, "/")
     except Exception:
         return path.name
+
+
+def _redact_sensitive_text(text: str) -> str:
+    """Best-effort redaction for obvious credential-like fields before persisting."""
+    if not text:
+        return ""
+
+    redacted = text
+    patterns = [
+        r'(?i)\b(password|pass|passwd|api[_-]?key|token|secret|auth)\b\s*[:=]\s*([^\s,;]+)',
+        r'(?i)\b(authorization)\b\s*[:=]\s*(bearer\s+)?([^\s,;]+)',
+    ]
+    for pat in patterns:
+        redacted = re.sub(pat, lambda m: f"{m.group(1)}: [REDACTED]", redacted)
+
+    try:
+        parsed = json.loads(redacted)
+        if isinstance(parsed, dict):
+            for k in list(parsed.keys()):
+                if re.search(r'(?i)(password|pass|passwd|api[_-]?key|token|secret|auth)', str(k)):
+                    parsed[k] = "[REDACTED]"
+            redacted = json.dumps(parsed, ensure_ascii=False)
+    except Exception:
+        pass
+
+    return redacted
 
 
 # ── note lookup ──────────────────────────────────────────────────────────────
@@ -557,7 +584,7 @@ def _do_create(vault: Path, note: str, content: str, player) -> str:
         )
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        body = (content or "").strip()
+        body = _redact_sensitive_text((content or "").strip())
         path.write_text(
             f"# {path.stem}\n\n{body}\n" if body else f"# {path.stem}\n",
             encoding="utf-8",
@@ -571,7 +598,7 @@ def _do_create(vault: Path, note: str, content: str, player) -> str:
 
 
 def _append_to(vault: Path, path: Path, content: str, player, what: str) -> str:
-    body = (content or "").strip()
+    body = _redact_sensitive_text((content or "").strip())
     if not body:
         return "What should I write in it?"
     existed = path.exists()
