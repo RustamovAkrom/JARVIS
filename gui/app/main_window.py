@@ -4511,10 +4511,12 @@ class ProvidersOverlay(_HudOverlay):
 
         if missing_voice:
             self._footer.setText(
-                self._tr("AI model is selected. Missing voice services is optional: you can type instead of speaking or read the answer.")
-                + " " + self._tr("Missing") + " " + self._tr(" and ").join(
-                    self._tr(item) for item in missing_voice
-                ) + "."
+                self._tr(
+                    "AI model is selected. Missing {services} is optional: you can type instead of speaking or read the answer.",
+                    services=self._tr(" and ").join(
+                        self._tr(item) for item in missing_voice
+                    ),
+                )
             )
         elif self._environment == "offline":
             self._footer.setText(
