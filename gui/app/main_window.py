@@ -14019,12 +14019,16 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                 "root_sizes": root_sizes,
                 "main_sizes": main_sizes,
                 "workspace_sizes": workspace_sizes,
+                "left_visible": self._left_panel.isVisible(),
+                "right_visible": self._right_panel.isVisible(),
                 "bottom_visible": self._bottom_tabs.isVisible(),
                 "bottom_index": self._bottom_tabs.currentIndex(),
             }
+            self._left_panel.show()
             self._center_views.hide()
             self._bottom_tabs.hide()
             self._right_panel.show()
+            self._left_toggle_btn.setChecked(True)
             self._right_toggle_btn.setChecked(True)
 
             available = max(
@@ -14041,6 +14045,12 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         else:
             state = self._workspace_focus_state or {}
             self._center_views.show()
+            if not state.get("left_visible", True):
+                self._left_panel.hide()
+            if not state.get("right_visible", True):
+                self._right_panel.hide()
+            self._left_toggle_btn.setChecked(self._left_panel.isVisible())
+            self._right_toggle_btn.setChecked(self._right_panel.isVisible())
             if state.get("bottom_visible", False):
                 self._bottom_tabs.setCurrentIndex(int(state.get("bottom_index", 0)))
                 self._bottom_tabs.show()
