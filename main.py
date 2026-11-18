@@ -2366,7 +2366,7 @@ class JarvisLive:
             _mic_name = get_input_device()
             _mic_dev = audio_devices.resolve(_mic_name, "input")
             if _mic_dev is not None:
-                print(f"[JARVIS] 🎤 Input device: {_mic_name}")
+                print("[JARVIS] 🎤 Input device selected (custom)")
             try:
                 _mic_stream = _open_mic(_mic_dev)
             except Exception as _e:
@@ -2376,9 +2376,9 @@ class JarvisLive:
                 # mean the assistant cannot hear at all.
                 if _mic_dev is None:
                     raise
-                print(f"[JARVIS] ⚠️  Mic '{_mic_name}' failed: {_e} — using default")
+                print(f"[JARVIS] ⚠️  Selected mic failed: {_e} — using default")
                 self.ui.write_log(
-                    f"SYS: Microphone '{_mic_name}' unavailable — using system default."
+                    "SYS: Selected microphone unavailable — using system default."
                 )
                 _mic_stream = _open_mic(None)
 
