@@ -324,6 +324,8 @@ _TRANSLATIONS = {
         "INSTALL {package}": "УСТАНОВИТЬ {package}",
         "↻ REFRESH": "↻ ОБНОВИТЬ",
         "I consent to sending voice audio to Google Gemini.": "Я согласен(на) отправлять голосовые данные в Google Gemini.",
+        "JARVIS — Setup": "JARVIS — Настройка",
+        "⌃ LESS": "⌃ МЕНЬШЕ",
     },
     "uz": {
         "CONTROLS": "BOSHQARUV",
@@ -642,6 +644,8 @@ _TRANSLATIONS = {
         "INSTALL {package}": "{package}’ni O‘RNATISH",
         "↻ REFRESH": "↻ YANGILASH",
         "I consent to sending voice audio to Google Gemini.": "Rozilik bildiraman: ovoz audiosi Google Gemini’ga yuboriladi.",
+        "JARVIS — Setup": "JARVIS — Sozlash",
+        "⌃ LESS": "⌃ KAMROQ",
     },
 }
 
