@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import (
     QLabel,
     QMainWindow,
     QPushButton,
+    QToolButton,
     QWidget,
 )
 
@@ -27,8 +28,8 @@ from gui.app.main_window import (
     MemoryOverlay,
     ProvidersOverlay,
 )
-from gui.themes.styles import glass_rgba
-from gui.themes.tokens import Radius, Space
+from gui.themes.styles import glass_rgba, menu_qss
+from gui.themes.tokens import C, Radius, Space
 from gui.themes.typography import FONT_MONO, FONT_UI, TypeScale, mono_font, ui_font
 
 
@@ -53,6 +54,43 @@ class SettingsComponentTests(unittest.TestCase):
         # would enter the full-window closeEvent lifecycle, which is outside
         # the eventFilter contract being tested and requires initialized UI state.
         window.deleteLater()
+
+    def test_agent_permissions_popup_uses_current_theme_surface(self):
+        from types import SimpleNamespace
+
+        owner = SimpleNamespace(
+            _access_status_button=QToolButton(),
+            _chat_plan_mode=False,
+            _chat_interaction_mode="agent",
+        )
+        saved = {
+            "observe_screen": True,
+            "find_elements": True,
+            "move_mouse": True,
+            "click": True,
+            "type": True,
+            "clipboard": False,
+        }
+        with (
+            patch("memory.config_manager.get_computer_access_settings", return_value={
+                "mode": "agent", "access_level": "approve"
+            }),
+            patch("memory.config_manager.get_computer_permissions", return_value=saved),
+            patch("memory.config_manager.get_configured_computer_permissions", return_value=saved),
+            patch("memory.config_manager.get_provider_environment", return_value="online"),
+            patch("memory.config_manager.get_ui_opacity", return_value=100),
+        ):
+            MainWindow._refresh_access_status(owner)
+
+        menu = owner._access_status_button.menu()
+        self.assertIsNotNone(menu)
+        self.assertIn(f"background-color:{C.PANEL}", menu.styleSheet())
+        self.assertIn(f"color:{C.TEXT}", menu.styleSheet())
+        self.assertIn(f"background-color:{C.PRI_GHO}", menu.styleSheet())
+        self.assertIn("QMenu::item:disabled", menu.styleSheet())
+        self.assertIn(f"background-color:{C.PANEL}", menu_qss())
+        menu.close()
+        owner._access_status_button.close()
 
     def test_security_page_exposes_enforced_safeguards_not_todo_placeholders(self):
         owner = QMainWindow()
