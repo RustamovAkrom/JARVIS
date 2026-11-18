@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QProcess, Qt
 from PyQt6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -24,6 +24,7 @@ from gui.settings.registry import CATEGORIES, ENTRIES, search_entries
 from gui.settings.settings_center import SettingsCenter
 from gui.app.main_window import (
     PluginManagerOverlay,
+    _QProcessTerminal,
     AudioDeviceOverlay,
     HueWheel,
     MainWindow,
@@ -468,6 +469,30 @@ class SettingsComponentTests(unittest.TestCase):
             self.assertTrue(panel.isVisible())
             panel.close()
 
+
+    def test_onboarding_uses_frameless_jarvis_theme(self):
+        dialog = OnboardingDialog(language="en")
+        self.assertTrue(
+            dialog.windowFlags() & Qt.WindowType.FramelessWindowHint
+        )
+        self.assertEqual(dialog._title_bar.height(), 34)
+        self.assertIn("QCheckBox::indicator", dialog.styleSheet())
+        self.assertIn("QWidget#OnboardingPage", dialog.styleSheet())
+        dialog.close()
+
+    def test_qprocess_terminal_adapter_reads_shell_output_without_winpty(self):
+        process = QProcess()
+        process.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
+        process.start(
+            __import__("sys").executable,
+            ["-c", "print('qprocess-terminal-ok')"],
+        )
+        self.assertTrue(process.waitForStarted(3000))
+        self.assertTrue(process.waitForFinished(5000))
+        terminal = _QProcessTerminal(process)
+        self.assertFalse(terminal.isalive())
+        self.assertIn("qprocess-terminal-ok", terminal.read())
+        terminal.dispose()
 
     def test_onboarding_requires_terms_and_cloud_voice_consent(self):
         dialog = OnboardingDialog(language="en")
