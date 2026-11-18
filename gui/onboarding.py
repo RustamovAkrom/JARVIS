@@ -104,10 +104,15 @@ class _OnboardingTitleBar(QFrame):
         layout.setContentsMargins(10, 0, 4, 0)
         layout.setSpacing(8)
 
-        title = QLabel("J.A.R.V.I.S.  /  INITIALIZATION")
-        title.setFont(QFont("Segoe UI", 8, QFont.Weight.DemiBold))
-        title.setStyleSheet(f"color:{C.TEXT_MED}; background:transparent;")
-        layout.addWidget(title)
+        self._title_label = QLabel()
+        self._title_label.setFont(QFont("Segoe UI", 8, QFont.Weight.DemiBold))
+        self._title_label.setAttribute(
+            Qt.WidgetAttribute.WA_TransparentForMouseEvents, True
+        )
+        self._title_label.setStyleSheet(
+            f"color:{C.TEXT_MED}; background:transparent;"
+        )
+        layout.addWidget(self._title_label)
         layout.addStretch(1)
 
         close = QPushButton("×")
@@ -453,6 +458,12 @@ class OnboardingDialog(QDialog):
 
     def _retranslate(self) -> None:
         self.setWindowTitle(self._t("JARVIS — Setup"))
+        self._title_bar._title_label.setText(
+            self._t("J.A.R.V.I.S.  /  INITIALIZATION")
+        )
+        self._title_bar.findChild(QPushButton, "OnboardingClose").setToolTip(
+            self._t("Close setup")
+        )
         for key, widget in self._labels.items():
             widget.setText(self._t(key))
         self._header_title.setText(
