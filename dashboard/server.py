@@ -1216,7 +1216,7 @@ class DashboardServer:
                         dest.unlink(missing_ok=True)
                     except Exception:
                         pass
-                    return JSONResponse({"error": str(exc)}, status_code=500)
+                    return JSONResponse({"error": "Internal server error"}, status_code=500)
 
                 asyncio.create_task(
                     self.broadcast(
