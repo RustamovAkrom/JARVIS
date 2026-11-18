@@ -16578,6 +16578,16 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             return
 
         reconfigure = bool(payload.get("reconfigure"))
+        if not reconfigure and not (
+            bool(payload.get("terms_accepted"))
+            and bool(payload.get("cloud_voice_consent"))
+        ):
+            QMessageBox.warning(
+                self,
+                self._tr("Setup"),
+                self._tr("Accept the terms and cloud voice processing notice to continue."),
+            )
+            return
         language = str(payload.get("ui_language") or self._ui_language)
         if language not in LANGUAGES:
             language = "en"
@@ -16605,6 +16615,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                     "ui_language": language,
                     "computer_permissions": allowed_permissions,
                     "terms_accepted": bool(payload.get("terms_accepted")),
+                    "cloud_voice_consent": bool(payload.get("cloud_voice_consent")),
                     "agreement_version": str(payload.get("agreement_version") or ""),
                     "privacy_notice_version": str(
                         payload.get("privacy_notice_version") or ""
