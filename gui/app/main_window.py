@@ -2993,6 +2993,12 @@ class MemoryOverlay(_HudOverlay):
 
     _OW = 560
 
+    def _tr(self, text: str, **values) -> str:
+        """Translate a memory-panel label using the active interface locale."""
+        from memory.config_manager import get_ui_language
+
+        return _translate(text, get_ui_language(), **values)
+
     def __init__(self, parent=None, embedded: bool = False):
         super().__init__(parent)
         self._embedded = bool(embedded)
