@@ -3292,7 +3292,7 @@ class MemoryOverlay(_HudOverlay):
             scroll.setWidget(inner)
             self._lay.addWidget(scroll)
 
-        close = QPushButton("CLOSE")
+        close = QPushButton(self._tr("CLOSE"))
         close.setFixedHeight(30)
         close.setFont(QFont(FONT_MONO, 9))
         close.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -3447,6 +3447,7 @@ class ProvidersOverlay(_HudOverlay):
     def __init__(self, parent=None, embedded: bool = False):
         super().__init__(parent)
         self._embedded = bool(embedded)
+        self._ui_language = get_ui_language()
         # Imported HERE, on the click — never at startup. See the class docstring.
         from memory.config_manager import (
             get_online_provider_mode,
@@ -3456,6 +3457,7 @@ class ProvidersOverlay(_HudOverlay):
             get_provider_mode,
             get_sidecar_first,
             get_sidecar_provider,
+            get_ui_language,
         )
         from providers import registry
 
@@ -3559,8 +3561,8 @@ class ProvidersOverlay(_HudOverlay):
         self._category_tabs.setExpanding(True)
         self._category_tabs.setUsesScrollButtons(False)
         self._category_tabs.setDrawBase(False)
-        self._category_tabs.addTab("Online")
-        self._category_tabs.addTab("Offline")
+        self._category_tabs.addTab(self._tr("Online"))
+        self._category_tabs.addTab(self._tr("Offline"))
         self._category_tabs.setCurrentIndex(0 if self._environment == "online" else 1)
         self._category_tabs.setStyleSheet(f"""
             QTabBar::tab {{ color:{C.TEXT_MED}; background:transparent; border:0;
@@ -3592,6 +3594,13 @@ class ProvidersOverlay(_HudOverlay):
         engine_row.addWidget(self._gemini_mode_card, 1)
         engine_row.addWidget(self._cloud_mode_card, 1)
         outer.addWidget(self._online_engine_box)
+        self._mode_description = QLabel()
+        self._mode_description.setWordWrap(True)
+        self._mode_description.setMinimumWidth(0)
+        self._mode_description.setStyleSheet(
+            f"color:{C.TEXT_MED}; background:transparent;"
+        )
+        outer.addWidget(self._mode_description)
 
         # ── Body ────────────────────────────────────────────────────────────
         self._scroll = QScrollArea()
@@ -3630,7 +3639,7 @@ class ProvidersOverlay(_HudOverlay):
 
         row = QHBoxLayout()
         row.setSpacing(8)
-        apply_btn = QPushButton("▸  SAVE  &  APPLY")
+        apply_btn = QPushButton("▸  " + self._tr("SAVE  &  APPLY"))
         self._apply_btn = apply_btn
         apply_btn.setFixedHeight(34)
         apply_btn.setFont(QFont(FONT_MONO, 9, QFont.Weight.Bold))
@@ -3708,12 +3717,18 @@ class ProvidersOverlay(_HudOverlay):
                 self._scroll.show()
 
     # ── pieces ───────────────────────────────────────────────────────────────
+    def _tr(self, text: str, **values) -> str:
+        return _translate(text, self._ui_language, **values)
+
     def _mode_card(self, title: str, body: str, value: str) -> QPushButton:
         b = QPushButton()
         b.setCheckable(True)
-        b.setMinimumHeight(84)
+        b.setMinimumWidth(0)
+        b.setMinimumHeight(54)
+        b.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         b.setCursor(Qt.CursorShape.PointingHandCursor)
-        b.setText(f"{title}\n{body}")
+        b.setText(self._tr(title))
+        b.setToolTip(self._tr(body))
         b.setFont(QFont(FONT_UI, 9, QFont.Weight.DemiBold))
         b.setStyleSheet(f"""
             QPushButton {{ background:{C.PANEL}; color:{C.TEXT_MED};
@@ -3737,7 +3752,7 @@ class ProvidersOverlay(_HudOverlay):
             self._category_tabs.blockSignals(True)
             self._category_tabs.setCurrentIndex(index)
             self._category_tabs.blockSignals(False)
-            self._category_description.setText(labels[self._environment])
+            self._category_description.setText(self._tr(labels[self._environment]))
         if hasattr(self, "_online_engine_box"):
             self._online_engine_box.setVisible(self._environment == "online")
             self._gemini_mode_card.setChecked(
@@ -3746,6 +3761,13 @@ class ProvidersOverlay(_HudOverlay):
             self._cloud_mode_card.setChecked(
                 self._environment == "online" and self._mode == "pipeline"
             )
+            mode_text = (
+                "One online service handles voice input, answers and spoken replies."
+                if self._mode == "gemini"
+                else "Choose separate cloud services for speech recognition, the AI model and spoken responses."
+            )
+            self._mode_description.setText(self._tr(mode_text))
+            self._mode_description.setVisible(self._environment == "online")
 
     def _initial_provider_category(self) -> str:
         return self._environment
@@ -3932,7 +3954,7 @@ class ProvidersOverlay(_HudOverlay):
     def _label(
         self, text: str, size: int = 8, colour: str = None, bold: bool = False
     ) -> QLabel:
-        lb = QLabel(text)
+        lb = QLabel(self._tr(text))
         lb.setWordWrap(True)
         lb.setFont(
             QFont(FONT_MONO, size, QFont.Weight.Bold if bold else QFont.Weight.Normal)
@@ -3972,7 +3994,7 @@ class ProvidersOverlay(_HudOverlay):
         return w
 
     def _btn(self, text: str, slot, colour: str = None) -> QPushButton:
-        b = QPushButton(text)
+        b = QPushButton(self._tr(text))
         b.setFixedHeight(25)
         b.setFont(QFont(FONT_MONO, 7, QFont.Weight.Bold))
         b.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -4105,23 +4127,23 @@ class ProvidersOverlay(_HudOverlay):
         self._update_footer()
 
     def _slot_box(self, slot: str, num: str, name: str, what: str) -> QWidget:
-        head = self._label(f"{num}  {name}", 9, C.PRI, bold=True)
+        head = self._label(f"{num}  {self._tr(name)}", 9, C.PRI, bold=True)
         w, lay = self._box([head, self._label(what, 7, C.TEXT_DIM)])
 
         entries = self._catalog(slot)
         box = self._combo()
-        box.addItem("— not set —", ("", ""))
+        box.addItem(self._tr("— not set —"), ("", ""))
         for pid, eid, entry, decl in entries:
             label = entry["label"]
             if entry.get("local") is True:
-                label = f"{label}  ·  On this device"
+                label = f"{label}  ·  {self._tr('On this device')}"
             elif entry.get("local") is False:
-                label = f"{label}  ·  Online"
+                label = f"{label}  ·  {self._tr('Online')}"
             else:
                 label = str(label)
             note = entry.get("note") or ""
             if not decl.get("_available", True):
-                note = (note + " · needs install").strip(" ·")
+                note = (note + " · " + self._tr("needs install")).strip(" ·")
             box.addItem(f"{label}{'   —  ' + note if note else ''}", (pid, eid))
 
         pid_now = self._pipe.get(slot, "")
@@ -4471,13 +4493,13 @@ class ProvidersOverlay(_HudOverlay):
 
         if self._environment == "online" and self._mode == "gemini":
             self._footer.setText(
-                "Gemini Live is ready. No separate speech or model setup is required."
+                self._tr("Gemini Live is ready. No separate speech or model setup is required.")
             )
             return
 
         if not self._pipe.get("llm"):
             self._footer.setText(
-                "Choose an AI model before applying this setup. Voice input and output are optional."
+                self._tr("Choose an AI model before applying this setup. Voice input and output are optional.")
             )
             return
 
@@ -4489,17 +4511,18 @@ class ProvidersOverlay(_HudOverlay):
 
         if missing_voice:
             self._footer.setText(
-                "AI model is selected. Missing "
-                + " and ".join(missing_voice)
-                + " is optional: you can type instead of speaking or read the answer."
+                self._tr("AI model is selected. Missing voice services is optional: you can type instead of speaking or read the answer.")
+                + " " + self._tr("Missing") + " " + self._tr(" and ").join(
+                    self._tr(item) for item in missing_voice
+                ) + "."
             )
         elif self._environment == "offline":
             self._footer.setText(
-                "Local setup selected. Save & Apply reconnects JARVIS using these models."
+                self._tr("Local setup selected. Save & Apply reconnects JARVIS using these models.")
             )
         else:
             self._footer.setText(
-                "Online setup selected. Save & Apply reconnects JARVIS using these services."
+                self._tr("Online setup selected. Save & Apply reconnects JARVIS using these services.")
             )
 
     # ── actions ──────────────────────────────────────────────────────────────
