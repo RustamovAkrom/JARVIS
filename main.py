@@ -2693,7 +2693,7 @@ class JarvisLive:
         _spk_name = get_output_device()
         _spk_dev = audio_devices.resolve(_spk_name, "output")
         if _spk_dev is not None:
-            print(f"[JARVIS] 🔊 Output device: {_spk_name}")
+            print("[JARVIS] 🔊 Output device: custom device selected")
 
         def _open_spk(dev):
             st = sd.RawOutputStream(
@@ -2714,11 +2714,9 @@ class JarvisLive:
             # cost the user their voice. Fall back to the default and say so.
             if _spk_dev is None:
                 raise
-            print(
-                f"[JARVIS] ⚠️  Output device '{_spk_name}' failed: {_e} — using default"
-            )
+            print("[JARVIS] ⚠️  Selected output device unavailable — using default")
             self.ui.write_log(
-                f"SYS: Speaker '{_spk_name}' unavailable — using system default."
+                "SYS: Selected speaker unavailable — using system default."
             )
             stream = _open_spk(None)
 
@@ -3521,12 +3519,7 @@ class JarvisLive:
                         self._awake = True
                         self.ui.set_state("LISTENING")
                         self.ui.write_log("SYS: JARVIS online.")
-                    print(
-                        "[LiveDiag][GATES] "
-                        f"muted={self.ui.muted} wake_enabled={self._wake_enabled} "
-                        f"awake={self._awake} ptt_enabled={self._ptt_enabled} "
-                        f"ptt_held={self._ptt_held} phone_active={self._phone_active}"
-                    )
+                    print("[LiveDiag][GATES] Gate state initialized.")
 
                     try:
                         from core.background_tasks import get_background_task_manager

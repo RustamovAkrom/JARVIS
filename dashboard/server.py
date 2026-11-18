@@ -12,6 +12,7 @@ Install deps:  pip install fastapi "uvicorn[standard]" cryptography
 import asyncio
 import base64
 import hashlib
+import json
 import re
 import secrets
 import socket
@@ -1044,6 +1045,10 @@ class DashboardServer:
                 )
             )
 
+            tok_js = json.dumps(tok)
+            key_js = json.dumps(key)
+            dev_tok_js = json.dumps(dev_tok)
+
             return HTMLResponse(f"""<!DOCTYPE html>
 <html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width">
 <style>
@@ -1053,9 +1058,9 @@ class DashboardServer:
 </style></head>
 <body>
 <script>
-  sessionStorage.setItem('jarvis_token','{tok}');
-  sessionStorage.setItem('jarvis_key','{key}');
-  localStorage.setItem('jarvis_device_token','{dev_tok}');
+  sessionStorage.setItem('jarvis_token', {tok_js});
+  sessionStorage.setItem('jarvis_key', {key_js});
+  localStorage.setItem('jarvis_device_token', {dev_tok_js});
   setTimeout(function(){{location.replace('/')}},400);
 </script>
 <p>Connecting to JARVIS…</p>
