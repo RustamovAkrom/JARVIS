@@ -3447,7 +3447,6 @@ class ProvidersOverlay(_HudOverlay):
     def __init__(self, parent=None, embedded: bool = False):
         super().__init__(parent)
         self._embedded = bool(embedded)
-        self._ui_language = get_ui_language()
         # Imported HERE, on the click — never at startup. See the class docstring.
         from memory.config_manager import (
             get_online_provider_mode,
@@ -3460,6 +3459,8 @@ class ProvidersOverlay(_HudOverlay):
             get_ui_language,
         )
         from providers import registry
+
+        self._ui_language = get_ui_language()
 
         self._registry = registry
         # Resolve credentials against the tab being edited, not the globally
@@ -3652,7 +3653,7 @@ class ProvidersOverlay(_HudOverlay):
         apply_btn.clicked.connect(self._apply)
         row.addWidget(apply_btn, 2)
 
-        close = QPushButton("CLOSE")
+        close = QPushButton(self._tr("CLOSE"))
         self._close_button = close
         close.setFixedHeight(34)
         close.setFont(QFont(FONT_MONO, 9))
