@@ -16643,8 +16643,57 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             return
 
         if not reconfigure:
+            previous_language = self._ui_language
             self._ui_language = language
             self._language_missing = False
+            if previous_language != language:
+                from memory.translations import translate_from
+
+                for widget in self.findChildren(QWidget):
+                    if isinstance(widget, QLabel):
+                        widget.setText(
+                            translate_from(widget.text(), previous_language, language)
+                        )
+                    elif isinstance(widget, (QPushButton, QCheckBox, QToolButton)):
+                        widget.setText(
+                            translate_from(widget.text(), previous_language, language)
+                        )
+                    if isinstance(widget, QLineEdit):
+                        widget.setPlaceholderText(
+                            translate_from(
+                                widget.placeholderText(), previous_language, language
+                            )
+                        )
+                    if isinstance(widget, QComboBox):
+                        blocked = widget.blockSignals(True)
+                        for index in range(widget.count()):
+                            widget.setItemText(
+                                index,
+                                translate_from(
+                                    widget.itemText(index), previous_language, language
+                                ),
+                            )
+                        widget.blockSignals(blocked)
+                    elif isinstance(widget, QTabBar):
+                        blocked = widget.blockSignals(True)
+                        for index in range(widget.count()):
+                            widget.setTabText(
+                                index,
+                                translate_from(
+                                    widget.tabText(index), previous_language, language
+                                ),
+                            )
+                        widget.blockSignals(blocked)
+                    if widget.__class__.__name__ == "ProvidersOverlay":
+                        widget._ui_language = language
+                if self._settings_center is not None:
+                    self._settings_center.setWindowTitle(
+                        translate_from(
+                            self._settings_center.windowTitle(),
+                            previous_language,
+                            language,
+                        )
+                    )
         self._ready = True
         self._apply_state("LISTENING")
         self._assistant_name = (
