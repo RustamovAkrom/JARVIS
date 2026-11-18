@@ -328,6 +328,7 @@ class OnboardingDialog(QDialog):
         )
 
     def _retranslate(self) -> None:
+        self.setWindowTitle(self._t("JARVIS — Setup"))
         for key, widget in self._labels.items():
             widget.setText(self._t(key))
         self._header_title.setText(
