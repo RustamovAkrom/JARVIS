@@ -7140,9 +7140,10 @@ class _QProcessTerminal:
             self._process.terminate()
 
     def kill(self) -> None:
+        # Never block the Qt GUI thread waiting for a shell process to exit.
+        # QProcess.finished drives the terminal-session cleanup asynchronously.
         if self.isalive():
             self._process.kill()
-            self._process.waitForFinished(1000)
 
     def wait_for_finished(self, timeout_ms: int = 1000) -> None:
         if self.isalive():
@@ -13186,6 +13187,10 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                     QProcess.ProcessChannelMode.MergedChannels
                 )
                 process.setWorkingDirectory(session.cwd)
+                process.finished.connect(
+                    lambda *_args, sid=session_id, proc=process:
+                    self._on_qprocess_terminal_finished(sid, proc)
+                )
                 process.start(program, arguments)
                 if not process.waitForStarted(3000):
                     detail = process.errorString() or "Windows shell failed to start"
@@ -13222,6 +13227,41 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             session.pty = None
             self._append_terminal_output(
                 f"\r\nCould not start terminal: {exc}\r\n", session_id=session_id
+            )
+
+    def _on_qprocess_terminal_finished(self, session_id: str, process: QProcess):
+        """Finish a Windows terminal process without blocking the UI thread."""
+        session = self._terminal_sessions.get(session_id)
+        if session is None:
+            return
+        terminal = session.pty
+        if not isinstance(terminal, _QProcessTerminal) or terminal._process is not process:
+            # The polling path may already have observed and disposed it.
+            return
+        try:
+            remaining = bytes(process.readAllStandardOutput())
+            if remaining:
+                self._append_terminal_output(
+                    remaining.decode("utf-8", errors="replace"),
+                    session_id=session_id,
+                )
+        except RuntimeError:
+            # QProcess can already be in Qt's destruction phase during shutdown.
+            pass
+        session.pty = None
+        terminal.dispose()
+        if session.closing:
+            self._remove_terminal_session(session_id)
+            return
+        if session.restart_pending:
+            session.restart_pending = False
+            QTimer.singleShot(
+                120,
+                lambda sid=session_id: self._start_terminal_process(sid)
+                if sid in self._terminal_sessions
+                and not self._terminal_sessions[sid].closing
+                and self._terminal_sessions[sid].pty is None
+                else None,
             )
 
     def _poll_terminal_output(self):
