@@ -347,7 +347,7 @@ class OnboardingDialog(QDialog):
         self._agreement_check.setText(self._t("I have read and agree to these terms."))
         self._cloud_voice_check.setText(
             self._t(
-                "I understand that voice audio is sent to Google when Gemini Live voice mode is active."
+                "I consent to sending voice audio to Google Gemini."
             )
         )
         self._agreement_browser.setHtml(self._agreement_html())
