@@ -184,6 +184,7 @@ class OnboardingDialog(QDialog):
                 background:{C.BG}; color:{C.TEXT};
                 border:1px solid {C.BORDER_B}; border-radius:10px;
             }}
+            QSizeGrip {{ background:transparent; }}
             QFrame#OnboardingTitleBar {{
                 background:{C.BG};
                 border:none;
