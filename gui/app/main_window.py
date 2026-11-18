@@ -12925,12 +12925,15 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                     lambda *_args, sid=session_id, proc=process:
                     self._on_qprocess_terminal_finished(sid, proc)
                 )
-                process.start(program, arguments)
-                if not process.waitForStarted(3000):
-                    detail = process.errorString() or "Windows shell failed to start"
-                    process.deleteLater()
-                    raise RuntimeError(detail)
+                process.errorOccurred.connect(
+                    lambda error, sid=session_id, proc=process:
+                    self._on_qprocess_terminal_error(sid, proc, error)
+                )
+                # Starting a shell is asynchronous. waitForStarted() blocks the
+                # GUI thread on the first terminal open and can make the whole
+                # JARVIS window appear to restart or hang on slower machines.
                 session.pty = _QProcessTerminal(process)
+                process.start(program, arguments)
             else:
                 import pty as _pty
 
@@ -12962,6 +12965,30 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             self._append_terminal_output(
                 f"\r\nCould not start terminal: {exc}\r\n", session_id=session_id
             )
+
+    def _on_qprocess_terminal_error(
+        self, session_id: str, process: QProcess, error: QProcess.ProcessError
+    ):
+        """Report a failed shell launch without blocking or restarting JARVIS."""
+        if error != QProcess.ProcessError.FailedToStart:
+            return
+        session = self._terminal_sessions.get(session_id)
+        if session is None:
+            return
+        terminal = session.pty
+        if not isinstance(terminal, _QProcessTerminal) or terminal._process is not process:
+            return
+        detail = process.errorString() or "Windows shell failed to start"
+        session.pty = None
+        terminal.dispose()
+        self._append_terminal_output(
+            f"\\r\\nCould not start terminal: {detail}\\r\\n",
+            session_id=session_id,
+        )
+        if session.closing:
+            self._remove_terminal_session(session_id)
+        else:
+            session.restart_pending = False
 
     def _on_qprocess_terminal_finished(self, session_id: str, process: QProcess):
         """Finish a Windows terminal process without blocking the UI thread."""
