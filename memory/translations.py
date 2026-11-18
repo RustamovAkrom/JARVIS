@@ -609,3 +609,15 @@ def translate(text: str, language: str = "en", **values) -> str:
     language = language if language in LANGUAGES else "en"
     result = _TRANSLATIONS.get(language, {}).get(text, text)
     return result.format(**values) if values else result
+
+
+def translate_from(text: str, source_language: str, target_language: str) -> str:
+    """Translate already-rendered UI text when the user changes language in-place."""
+    if not isinstance(text, str) or not text:
+        return text
+    source_language = source_language if source_language in LANGUAGES else "en"
+    reverse = {}
+    for source, translated in _TRANSLATIONS.get(source_language, {}).items():
+        reverse.setdefault(translated, source)
+    source_text = reverse.get(text, text)
+    return translate(source_text, target_language)
