@@ -111,7 +111,13 @@ class SettingsCenter(QDialog):
     """A single reusable settings window; setting actions are injected by owner."""
 
     action_requested = pyqtSignal(str)
-    closed = pyqtSignal()
+    closed = pyqtSignal(str)
+
+    def _tr(self, text: str, **values) -> str:
+        from memory.config_manager import get_ui_language
+        from memory.translations import translate
+
+        return translate(text, get_ui_language(), **values)
 
     def __init__(self, parent=None, page_builders: dict[str, object] | None = None):
         super().__init__(parent)
@@ -186,14 +192,14 @@ class SettingsCenter(QDialog):
         side = QVBoxLayout(sidebar)
         side.setContentsMargins(Space.MD, Space.MD, Space.MD, Space.MD)
         side.setSpacing(Space.SM)
-        brand = QLabel("SETTINGS")
+        brand = QLabel(self._tr("SETTINGS"))
         brand.setFont(ui_font(TypeScale.SECTION, QFont.Weight.DemiBold))
         side.addWidget(brand)
         self.search = QLineEdit()
-        self.search.setPlaceholderText("Search settings")
+        self.search.setPlaceholderText(self._tr("Search settings"))
         self.search.setClearButtonEnabled(True)
-        self.search.setToolTip("Search by setting, category, description, or keyword")
-        self.search.setAccessibleName("Search settings")
+        self.search.setToolTip(self._tr("Search by setting, category, description, or keyword"))
+        self.search.setAccessibleName(self._tr("Search settings"))
         side.addWidget(self.search)
         self.navigation = QListWidget()
         self.navigation.setAccessibleName("Settings categories and results")
@@ -327,7 +333,8 @@ class SettingsCenter(QDialog):
             scroll.setWidget(page)
             self.pages.addWidget(scroll)
             self._category_pages[category.id] = scroll
-            item = QListWidgetItem(category.title)
+            item = QListWidgetItem(self._tr(category.title))
+            item.setToolTip(self._tr(category.description))
             item.setData(Qt.ItemDataRole.UserRole, ("category", category.id))
             self.navigation.addItem(item)
             self._category_rows[category.id] = item
@@ -352,12 +359,14 @@ class SettingsCenter(QDialog):
             return
         for index, entry in enumerate(self._search_entries):
             category = next(item for item in CATEGORIES if item.id == entry.category_id)
-            result = QListWidgetItem(f"{entry.title}  ·  {category.title}")
-            result.setToolTip(entry.description)
+            result = QListWidgetItem(
+                f"{self._tr(entry.title)}  ·  {self._tr(category.title)}"
+            )
+            result.setToolTip(self._tr(entry.description))
             result.setData(Qt.ItemDataRole.UserRole, ("result", index))
             self.navigation.addItem(result)
         if not self._search_entries:
-            self.navigation.addItem(QListWidgetItem("No matching settings"))
+            self.navigation.addItem(QListWidgetItem(self._tr("No matching settings")))
         elif self.navigation.count():
             self.navigation.setCurrentRow(0)
 
@@ -460,12 +469,12 @@ class SettingsCenter(QDialog):
         row_layout.setSpacing(Space.MD)
 
         labels = QVBoxLayout()
-        heading = QLabel("Runtime mode")
+        heading = QLabel(self._tr("Runtime mode"))
         heading.setFont(ui_font(TypeScale.BODY, QFont.Weight.DemiBold))
-        detail = QLabel(
+        detail = QLabel(self._tr(
             "Auto prefers Online and falls back to Offline only when the local "
             "AI model and its configured dependencies are ready."
-        )
+        ))
         detail.setWordWrap(True)
         detail.setStyleSheet(f"color:{C.TEXT_MED};")
         labels.addWidget(heading)
@@ -478,7 +487,7 @@ class SettingsCenter(QDialog):
         selector.setUsesScrollButtons(False)
         selector.setDrawBase(False)
         for label in ("Online", "Offline", "Auto"):
-            selector.addTab(label)
+            selector.addTab(self._tr(label))
         current = get_provider_selection()
         selector.setCurrentIndex({"online": 0, "offline": 1, "auto": 2}.get(current, 0))
         selector.setStyleSheet(f"""
@@ -496,7 +505,9 @@ class SettingsCenter(QDialog):
         status.setStyleSheet(f"color:{C.TEXT_MED};")
         host_layout.insertWidget(1, status)
 
-        profile_tabs = content.findChildren(QTabBar)
+        profile_tabs = [
+            tab for tab in content.findChildren(QTabBar) if tab is not selector
+        ]
         def apply_policy(index: int, *, persist: bool = True) -> None:
             selection = ("online", "offline", "auto")[index]
             if persist:
@@ -508,11 +519,16 @@ class SettingsCenter(QDialog):
             if selection in ("online", "offline") and profile_tabs:
                 profile_tabs[0].setCurrentIndex(0 if selection == "online" else 1)
             status.setText(
-                "Automatic switching is enabled. Offline is selected only when "
-                "its local profile passes readiness checks."
+                self._tr(
+                    "Automatic switching is enabled. Offline is selected only when "
+                    "its local profile passes readiness checks."
+                )
                 if selection == "auto"
-                else f"{selection.title()} mode is selected. The profile tabs below "
-                     "remain available for editing either configuration."
+                else self._tr(
+                    "{mode} mode is selected. The profile tabs below remain available "
+                    "for editing either configuration.",
+                    mode=self._tr(selection.title()),
+                )
             )
             self._fit_provider_content(content)
 
