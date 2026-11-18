@@ -6412,6 +6412,262 @@ class CommandPalette(QWidget):
         self.hide()
 
 
+class MiniOrb(QWidget):
+    """Compact always-on-top JARVIS interface used in place of the main window."""
+
+    def __init__(self, owner):
+        # Deliberately parentless: hiding the full window must not hide this one.
+        super().__init__(
+            None,
+            Qt.WindowType.Tool
+            | Qt.WindowType.WindowStaysOnTopHint
+            | Qt.WindowType.FramelessWindowHint,
+        )
+        self.owner = owner
+        self._phase = 0.0
+        self._collapsed = False
+        self._last_muted = None
+        self.setWindowTitle("JARVIS Mini")
+        self.setObjectName("MiniOrb")
+        root = QVBoxLayout(self)
+        self._root_layout = root
+        root.setContentsMargins(6, 5, 6, 5)
+        root.setSpacing(4)
+        bar = QHBoxLayout()
+        bar.setSpacing(4)
+        self.orb = _MiniOrbPaint(self)
+        self.orb.clicked.connect(self._expand)
+        bar.addWidget(self.orb)
+        self.title = _MiniOrbTitle(self)
+        self.title.setText("JARVIS")
+        self.title.setFont(QFont(FONT_MONO, 8, QFont.Weight.Bold))
+        self.title.setToolTip("Drag to move JARVIS Mini")
+        bar.addWidget(self.title)
+        self.status = QLabel("• READY")
+        self.status.setFont(QFont(FONT_MONO, 7))
+        bar.addWidget(self.status)
+        bar.addStretch(1)
+        self.full_button = self._icon_button(
+            "fullscreen.svg",
+            "Return to the full JARVIS interface",
+            owner._restore_full_window,
+        )
+        bar.addWidget(self.full_button)
+        self.mic = self._icon_button(
+            "microphone.svg", "Mute microphone", owner._toggle_mute
+        )
+        bar.addWidget(self.mic)
+        self.stop_button = self._icon_button(
+            "stop.svg", "Interrupt JARVIS", owner._do_interrupt
+        )
+        bar.addWidget(self.stop_button)
+        self.collapse_button = self._icon_button(
+            "collapse.svg",
+            "Collapse to a small floating orb",
+            lambda: self._set_collapsed(True),
+        )
+        bar.addWidget(self.collapse_button)
+        self.close_button = self._icon_button(
+            "close.svg", "Hide JARVIS Mini", self.hide
+        )
+        bar.addWidget(self.close_button)
+        root.addLayout(bar)
+
+        row = QHBoxLayout()
+        row.setSpacing(4)
+        self.prompt = QLineEdit()
+        self.prompt.setPlaceholderText("Ask JARVIS…")
+        self.prompt.returnPressed.connect(self._send)
+        self.prompt.setFixedHeight(27)
+        row.addWidget(self.prompt, 1)
+        self.attach_button = self._icon_button(
+            "attach.svg", "Attach a file", self._attach
+        )
+        row.addWidget(self.attach_button)
+        self.send_button = self._icon_button("send.svg", "Send message", self._send)
+        row.addWidget(self.send_button)
+        root.addLayout(row)
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._tick)
+        self._timer.start(40)
+        self._tick()
+        self._apply_theme()
+        self.setFixedSize(292, 68)
+        screen = QApplication.primaryScreen().availableGeometry()
+        self.move(
+            screen.right() - self.width() - 24, screen.bottom() - self.height() - 48
+        )
+
+    def _icon_button(self, filename: str, hint: str, callback) -> QPushButton:
+        button = QPushButton()
+        icon = QIcon(str(BASE_DIR / "assets" / "icons" / filename))
+        button._mini_original_icon = icon
+        button.setIcon(icon)
+        button.setIconSize(QSize(15, 15))
+        button.setFixedSize(25, 25)
+        button.setCursor(Qt.CursorShape.PointingHandCursor)
+        button.setToolTip(hint)
+        button.setAccessibleName(hint)
+        button.clicked.connect(callback)
+        return button
+
+    def _apply_theme(self):
+        self.setStyleSheet(
+            f"QWidget#MiniOrb {{ background:{C.PANEL}; color:{C.TEXT}; "
+            f"border:1px solid {C.BORDER}; border-radius:8px; }}"
+            f"QLineEdit {{ background:{C.PANEL2}; color:{C.TEXT}; "
+            f"border:1px solid {C.BORDER}; border-radius:5px; padding:3px 6px; }}"
+            f"QLineEdit:focus {{ border-color:{C.PRI_DIM}; }}"
+            f"QPushButton {{ background:{C.PANEL2}; color:{C.PRI}; "
+            f"border:1px solid {C.BORDER}; border-radius:5px; padding:0; }}"
+            f"QPushButton:hover {{ background:{C.PRI_GHO}; border-color:{C.PRI_DIM}; }}"
+        )
+        self.title.setStyleSheet(f"color:{C.PRI}; border:none; background:transparent;")
+        self.status.setStyleSheet(
+            f"color:{C.TEXT_DIM}; border:none; background:transparent;"
+        )
+        for button in self.findChildren(QPushButton):
+            original = button._mini_original_icon
+            button.setIcon(
+                _tint_icon(original, C.PRI) if C.PANEL == "#ffffff" else original
+            )
+        self._update_mic_button(force=True)
+
+    def _update_mic_button(self, force: bool = False):
+        muted = self.owner._muted
+        if muted == self._last_muted and not force:
+            return
+        self._last_muted = muted
+        icon_name = "microphone-muted.svg" if muted else "microphone.svg"
+        icon = QIcon(str(BASE_DIR / "assets" / "icons" / icon_name))
+        self.mic._mini_original_icon = icon
+        self.mic.setIcon(
+            _tint_icon(icon, C.MUTED_C if muted else C.GREEN)
+            if C.PANEL == "#ffffff"
+            else icon
+        )
+        self.mic.setToolTip("Unmute microphone" if muted else "Mute microphone")
+        self.mic.setAccessibleName(self.mic.toolTip())
+
+    def _set_collapsed(self, collapsed: bool):
+        if self._collapsed == collapsed:
+            return
+        bottom_right = self.frameGeometry().bottomRight()
+        self._collapsed = collapsed
+        for widget in (
+            self.title,
+            self.status,
+            self.full_button,
+            self.mic,
+            self.stop_button,
+            self.collapse_button,
+            self.close_button,
+            self.prompt,
+            self.attach_button,
+            self.send_button,
+        ):
+            widget.setVisible(not collapsed)
+        if collapsed:
+            self.orb.setFixedSize(30, 30)
+            self.orb.setToolTip("Open JARVIS Mini")
+            self._root_layout.setContentsMargins(5, 5, 5, 5)
+            self._root_layout.setSpacing(0)
+            self.setFixedSize(42, 42)
+        else:
+            self.orb.setFixedSize(22, 22)
+            self.orb.setToolTip("JARVIS is ready")
+            self._root_layout.setContentsMargins(6, 5, 6, 5)
+            self._root_layout.setSpacing(4)
+            self.setFixedSize(292, 68)
+        self.move(
+            bottom_right.x() - self.width() + 1, bottom_right.y() - self.height() + 1
+        )
+
+    def _expand(self):
+        if self._collapsed:
+            self._set_collapsed(False)
+            self.prompt.setFocus()
+
+    def _tick(self):
+        self._phase = (self._phase + 0.08) % (math.pi * 2)
+        self.orb.update()
+        self._update_mic_button()
+        state = getattr(getattr(self.owner, "hud", None), "state", "READY")
+        self.status.setText(f"• {state}")
+
+    def _send(self):
+        text = self.prompt.text().strip()
+        if text:
+            self.prompt.clear()
+            self.owner._dispatch_text(text)
+
+    def _attach(self):
+        path, _ = QFileDialog.getOpenFileName(self, "Attach a file")
+        if path:
+            self.owner._on_file_selected(path)
+
+
+class _MiniOrbTitle(QLabel):
+    def __init__(self, owner):
+        super().__init__(owner)
+        self._owner = owner
+        self._drag_offset = None
+        self.setCursor(Qt.CursorShape.SizeAllCursor)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._drag_offset = (
+                event.globalPosition().toPoint() - self._owner.frameGeometry().topLeft()
+            )
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if (
+            self._drag_offset is not None
+            and event.buttons() & Qt.MouseButton.LeftButton
+        ):
+            self._owner.move(event.globalPosition().toPoint() - self._drag_offset)
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        self._drag_offset = None
+        super().mouseReleaseEvent(event)
+
+
+class _MiniOrbPaint(QWidget):
+    clicked = pyqtSignal()
+
+    def __init__(self, mini):
+        super().__init__(mini)
+        self.mini = mini
+        self.setFixedSize(22, 22)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        center = QPointF(self.width() / 2, self.height() / 2)
+        pulse = 1.0 + 0.12 * math.sin(self.mini._phase)
+        p.setPen(QPen(QColor(C.PRI), 1.2))
+        p.setBrush(QColor(0, 70, 85, 150))
+        p.drawEllipse(center, 9 * pulse, 9 * pulse)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(C.GREEN))
+        p.drawEllipse(center, 3.2, 3.2)
+        p.end()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.clicked.emit()
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+
 class ContentReaderWindow(QWidget):
     """Detachable, resizable reader for news, search results and tool output."""
 
@@ -6884,10 +7140,9 @@ class _QProcessTerminal:
             self._process.terminate()
 
     def kill(self) -> None:
-        # Never block the Qt GUI thread waiting for a shell process to exit.
-        # QProcess.finished drives the terminal-session cleanup asynchronously.
         if self.isalive():
             self._process.kill()
+            self._process.waitForFinished(1000)
 
     def wait_for_finished(self, timeout_ms: int = 1000) -> None:
         if self.isalive():
@@ -6896,7 +7151,6 @@ class _QProcessTerminal:
     def dispose(self) -> None:
         if self.isalive():
             self.kill()
-            self._process.waitForFinished(1000)
         self._process.deleteLater()
 
 
@@ -7292,8 +7546,6 @@ class MainWindow(QMainWindow):
         self._reading_saved_layout = None
         self._side_restore_width = {0: _LEFT_W, 2: _RIGHT_W}
         self._workspace_split_sizes = None
-        self._workspace_focus_active = False
-        self._workspace_focus_state = None
         self._terminal_sessions: dict[str, _TerminalSession] = {}
         self._terminal_active_id = ""
         self._terminal_sequence = 0
@@ -9286,13 +9538,10 @@ class MainWindow(QMainWindow):
         self._right_toggle_btn.setFixedSize(28, 28)
         self._right_toggle_btn.setFont(QFont(FONT_UI, 8, QFont.Weight.Bold))
         self._right_toggle_btn.setCheckable(True)
-        self._right_toggle_btn.setChecked(False)
-        self._right_toggle_btn.setToolTip(
-            self._tr("Focus the right workspace while keeping the left sidebar visible")
-        )
-        self._right_toggle_btn.setAccessibleName(self._tr("Toggle workspace focus"))
+        self._right_toggle_btn.setChecked(True)
+        self._right_toggle_btn.setToolTip("Show or hide the right panel")
         self._right_toggle_btn.setStyleSheet(self._drawer_btn.styleSheet())
-        self._right_toggle_btn.clicked.connect(self._toggle_workspace_focus)
+        self._right_toggle_btn.clicked.connect(lambda: self._toggle_side_panel(2))
         self._content_toggle_btn = QPushButton()
         self._content_toggle_btn.setIcon(
             QIcon(str(BASE_DIR / "assets" / "icons" / "layout-panel.svg"))
@@ -12831,10 +13080,9 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
     def _restart_terminal(self):
         """Restart the active shell without restarting the JARVIS application."""
         session = self._active_terminal_session()
-        if session is None or session.closing:
+        if session is None:
             return
         if session.pty is None:
-            session.restart_pending = False
             session.view.page().runJavaScript(
                 "window.clearTerminal && window.clearTerminal()"
             )
@@ -12917,36 +13165,16 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                         arguments = ["/Q", "/D", "/K"]
 
                 process = QProcess(self)
-                if platform.system() == "Windows":
-                    # The shell is rendered inside JARVIS by the terminal view.
-                    # Without CREATE_NO_WINDOW, launching cmd.exe from a
-                    # pythonw/GUI process can create a second console window
-                    # and a separate Terminal taskbar icon on first startup.
-                    def _hide_terminal_console(args):
-                        args.flags |= getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
-
-                    set_modifier = getattr(
-                        process, "setCreateProcessArgumentsModifier", None
-                    )
-                    if callable(set_modifier):
-                        set_modifier(_hide_terminal_console)
                 process.setProcessChannelMode(
                     QProcess.ProcessChannelMode.MergedChannels
                 )
                 process.setWorkingDirectory(session.cwd)
-                process.finished.connect(
-                    lambda *_args, sid=session_id, proc=process:
-                    self._on_qprocess_terminal_finished(sid, proc)
-                )
-                process.errorOccurred.connect(
-                    lambda error, sid=session_id, proc=process:
-                    self._on_qprocess_terminal_error(sid, proc, error)
-                )
-                # Starting a shell is asynchronous. waitForStarted() blocks the
-                # GUI thread on the first terminal open and can make the whole
-                # JARVIS window appear to restart or hang on slower machines.
-                session.pty = _QProcessTerminal(process)
                 process.start(program, arguments)
+                if not process.waitForStarted(3000):
+                    detail = process.errorString() or "Windows shell failed to start"
+                    process.deleteLater()
+                    raise RuntimeError(detail)
+                session.pty = _QProcessTerminal(process)
             else:
                 import pty as _pty
 
@@ -12977,72 +13205,6 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             session.pty = None
             self._append_terminal_output(
                 f"\r\nCould not start terminal: {exc}\r\n", session_id=session_id
-            )
-
-    def _on_qprocess_terminal_error(
-        self, session_id: str, process: QProcess, error: QProcess.ProcessError
-    ):
-        """Report a failed shell launch without blocking or restarting JARVIS."""
-        if error != QProcess.ProcessError.FailedToStart:
-            return
-        session = self._terminal_sessions.get(session_id)
-        if session is None:
-            return
-        terminal = session.pty
-        if not isinstance(terminal, _QProcessTerminal) or terminal._process is not process:
-            return
-        detail = process.errorString() or "Windows shell failed to start"
-        session.pty = None
-        terminal.dispose()
-        self._append_terminal_output(
-            f"\\r\\nCould not start terminal: {detail}\\r\\n",
-            session_id=session_id,
-        )
-        if session.closing:
-            self._remove_terminal_session(session_id)
-        else:
-            session.restart_pending = False
-
-    def _on_qprocess_terminal_finished(self, session_id: str, process: QProcess):
-        """Finish a Windows terminal process without blocking the UI thread."""
-        session = self._terminal_sessions.get(session_id)
-        if session is None:
-            return
-        terminal = session.pty
-        if not isinstance(terminal, _QProcessTerminal) or terminal._process is not process:
-            # The polling path may already have observed and disposed it.
-            return
-        try:
-            # Preserve the order of chunks already drained by the poller before
-            # appending the final bytes still buffered inside QProcess.
-            if session.pending_output:
-                self._append_terminal_output(
-                    session.pending_output, session_id=session_id
-                )
-                session.pending_output = ""
-            remaining = bytes(process.readAllStandardOutput())
-            if remaining:
-                self._append_terminal_output(
-                    remaining.decode("utf-8", errors="replace"),
-                    session_id=session_id,
-                )
-        except RuntimeError:
-            # QProcess can already be in Qt's destruction phase during shutdown.
-            pass
-        session.pty = None
-        terminal.dispose()
-        if session.closing:
-            self._remove_terminal_session(session_id)
-            return
-        if session.restart_pending:
-            session.restart_pending = False
-            QTimer.singleShot(
-                120,
-                lambda sid=session_id: self._start_terminal_process(sid)
-                if sid in self._terminal_sessions
-                and not self._terminal_sessions[sid].closing
-                and self._terminal_sessions[sid].pty is None
-                else None,
             )
 
     def _poll_terminal_output(self):
@@ -13126,23 +13288,13 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                     )
         except Exception as exc:
             self._append_terminal_output(
-                f"\\r\\n[terminal read error: {exc}]\\r\\n", session_id=session_id
+                f"\r\n[terminal read error: {exc}]\r\n", session_id=session_id
             )
             if isinstance(pty, _QProcessTerminal):
                 pty.dispose()
             session.pty = None
             if session.closing:
                 self._remove_terminal_session(session_id)
-            elif session.restart_pending:
-                session.restart_pending = False
-                QTimer.singleShot(
-                    120,
-                    lambda sid=session_id: self._start_terminal_process(sid)
-                    if sid in self._terminal_sessions
-                    and not self._terminal_sessions[sid].closing
-                    and self._terminal_sessions[sid].pty is None
-                    else None,
-                )
 
     def _terminal_write(
         self, data: str, session_id: str | None = None, allow_closing: bool = False
@@ -14030,88 +14182,9 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             )
             self._content_expand_btn.setToolTip("Give results more space")
 
-    def _toggle_workspace_focus(self):
-        """Expand the right workspace while retaining the left sidebar."""
-        self._set_workspace_focus_mode(not self._workspace_focus_active)
-
-    def _set_workspace_focus_mode(self, enabled: bool):
-        enabled = bool(enabled)
-        if enabled == self._workspace_focus_active:
-            self._right_toggle_btn.setChecked(enabled)
-            return
-        if self._reading_mode:
-            self._right_toggle_btn.setChecked(self._workspace_focus_active)
-            return
-
-        if enabled:
-            main_sizes = self._main_splitter.sizes()
-            root_sizes = self._root_splitter.sizes()
-            workspace_sizes = self._workspace_split.sizes()
-            left_width = (
-                main_sizes[0]
-                if main_sizes and main_sizes[0] > 0
-                else self._left_panel.width()
-            )
-            self._workspace_focus_state = {
-                "root_sizes": root_sizes,
-                "main_sizes": main_sizes,
-                "workspace_sizes": workspace_sizes,
-                "left_visible": self._left_panel.isVisible(),
-                "right_visible": self._right_panel.isVisible(),
-                "bottom_visible": self._bottom_tabs.isVisible(),
-                "bottom_index": self._bottom_tabs.currentIndex(),
-            }
-            self._left_panel.show()
-            self._center_views.hide()
-            self._bottom_tabs.hide()
-            self._right_panel.show()
-            self._left_toggle_btn.setChecked(True)
-            self._right_toggle_btn.setChecked(True)
-
-            available = max(
-                1, self._root_splitter.width() - self._root_splitter.handleWidth()
-            )
-            left_min = max(1, self._left_panel.minimumWidth())
-            right_min = max(1, self._right_panel.minimumWidth())
-            left_width = min(
-                max(left_min, int(left_width)),
-                max(left_min, available - right_min),
-            )
-            self._root_splitter.setSizes([left_width, max(1, available - left_width)])
-            self._workspace_focus_active = True
-        else:
-            state = self._workspace_focus_state or {}
-            self._center_views.show()
-            if not state.get("left_visible", True):
-                self._left_panel.hide()
-            if not state.get("right_visible", True):
-                self._right_panel.hide()
-            self._left_toggle_btn.setChecked(self._left_panel.isVisible())
-            self._right_toggle_btn.setChecked(self._right_panel.isVisible())
-            if state.get("bottom_visible", False):
-                self._bottom_tabs.setCurrentIndex(int(state.get("bottom_index", 0)))
-                self._bottom_tabs.show()
-            root_sizes = state.get("root_sizes")
-            if root_sizes:
-                self._root_splitter.setSizes(root_sizes)
-            main_sizes = state.get("main_sizes")
-            if main_sizes:
-                self._main_splitter.setSizes(main_sizes)
-            workspace_sizes = state.get("workspace_sizes")
-            if workspace_sizes:
-                self._workspace_split.setSizes(workspace_sizes)
-            self._workspace_focus_state = None
-            self._workspace_focus_active = False
-
-        self._right_toggle_btn.setChecked(self._workspace_focus_active)
-        self._update_advanced_telemetry_visibility()
-        self._refresh_workspace_settings_state()
-
     def _toggle_side_panel(self, index: int):
         if self._reading_mode or index not in (0, 2):
             return
-        if self._workspace_focus_active:
-            self._set_workspace_focus_mode(False)
         panel = self._left_panel if index == 0 else self._right_panel
         button = self._left_toggle_btn if index == 0 else self._right_toggle_btn
         splitter = self._main_splitter if index == 0 else self._root_splitter
@@ -14143,9 +14216,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             sizes[other_index] = max(other_min, available - restored)
             splitter.setSizes(sizes)
             self._side_restore_width[index] = restored
-        button.setChecked(
-            self._workspace_focus_active if index == 2 else panel.isVisible()
-        )
+        button.setChecked(panel.isVisible())
         self._update_advanced_telemetry_visibility()
         self._refresh_workspace_settings_state()
 
@@ -14275,10 +14346,6 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             QTimer.singleShot(0, self._ensure_terminal_session)
 
     def _toggle_reading_mode(self):
-        if not self._reading_mode and self._workspace_focus_active:
-            # Reading mode has its own complete layout snapshot; leave focus
-            # mode first so its saved state is the normal workspace layout.
-            self._set_workspace_focus_mode(False)
         if not self._reading_mode:
             current_main = self._main_splitter.sizes()
             if current_main and current_main[0] > 0:
