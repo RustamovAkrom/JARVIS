@@ -790,7 +790,7 @@ def call(
                     f"{_UNAVAILABLE_SECONDS // 60} minutes"
                 )
             else:
-                print(f"[Gemini] {model}: {type(e).__name__}: {msg[:140]}")
+                print(f"[Gemini] request failed ({type(e).__name__})")
     return None
 
 
