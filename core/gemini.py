@@ -774,23 +774,24 @@ def call(
             return cl.models.generate_content(**kwargs)
         except Exception as e:
             msg = str(e)
+            log_model = "provider" if model.startswith(PROVIDER_PREFIX) else model
             if is_quota_error(msg):
                 _cool(model)
                 print(
-                    f"[Gemini] {model}: out of quota — skipping it for "
+                    f"[Gemini] {log_model}: out of quota — skipping it for "
                     f"{_COOLDOWN_SECONDS // 60} minutes"
                 )
             elif is_gone_error(msg):
                 _cool(model, _GONE_SECONDS)
-                print(f"[Gemini] {model}: unavailable to this key — set aside")
+                print(f"[Gemini] {log_model}: unavailable to this key — set aside")
             elif is_unavailable_error(msg):
                 _cool(model, _UNAVAILABLE_SECONDS)
                 print(
-                    f"[Gemini] {model}: not answering — resting it for "
+                    f"[Gemini] {log_model}: not answering — resting it for "
                     f"{_UNAVAILABLE_SECONDS // 60} minutes"
                 )
             else:
-                print(f"[Gemini] {model}: {type(e).__name__}: {msg[:140]}")
+                print(f"[Gemini] {log_model}: {type(e).__name__}: {msg[:140]}")
     return None
 
 
