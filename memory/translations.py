@@ -326,6 +326,8 @@ _TRANSLATIONS = {
         "I consent to sending voice audio to Google Gemini.": "Я согласен(на) отправлять голосовые данные в Google Gemini.",
         "JARVIS — Setup": "JARVIS — Настройка",
         "⌃ LESS": "⌃ МЕНЬШЕ",
+        "J.A.R.V.I.S.  /  INITIALIZATION": "J.A.R.V.I.S.  /  ИНИЦИАЛИЗАЦИЯ",
+        "Close setup": "Закрыть настройку",
     },
     "uz": {
         "CONTROLS": "BOSHQARUV",
@@ -646,6 +648,8 @@ _TRANSLATIONS = {
         "I consent to sending voice audio to Google Gemini.": "Rozilik bildiraman: ovoz audiosi Google Gemini’ga yuboriladi.",
         "JARVIS — Setup": "JARVIS — Sozlash",
         "⌃ LESS": "⌃ KAMROQ",
+        "J.A.R.V.I.S.  /  INITIALIZATION": "J.A.R.V.I.S.  /  ISHGA TUSHIRISH",
+        "Close setup": "Sozlashni yopish",
     },
 }
 
