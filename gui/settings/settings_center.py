@@ -516,7 +516,7 @@ class SettingsCenter(QDialog):
             )
             self._fit_provider_content(content)
 
-        selector.currentIndexChanged.connect(
+        selector.currentChanged.connect(
             lambda index: apply_policy(index, persist=True)
         )
         for tab in profile_tabs:
