@@ -3520,17 +3520,17 @@ class ProvidersOverlay(_HudOverlay):
                                  0 if self._embedded else 22, 0 if self._embedded else 18)
         outer.setSpacing(10)
 
-        title = QLabel("AI setup")
+        title = QLabel(self._tr("AI setup"))
         self._title_label = title
         title.setFont(QFont(FONT_MONO, 13, QFont.Weight.Bold))
         title.setStyleSheet(f"color: {C.PRI}; background: transparent;")
         if not self._embedded:
             outer.addWidget(title)
 
-        sub = QLabel(
+        sub = QLabel(self._tr(
             "Choose where JARVIS runs its AI. "
             "Choose Online for cloud services or Offline for models on this device."
-        )
+        ))
         sub.setWordWrap(True)
         sub.setFont(QFont(FONT_MONO, 8))
         self._subtitle_label = sub
@@ -4376,7 +4376,7 @@ class ProvidersOverlay(_HudOverlay):
         if f.kind == "secret":
             w.setEchoMode(QLineEdit.EchoMode.Password)
         if f.hint:
-            w.setPlaceholderText(f.hint[:64])
+            w.setPlaceholderText(self._tr(f.hint[:64]))
         return w
 
     def _toggle_more(self, pid: str) -> None:
@@ -5890,7 +5890,7 @@ class PluginSettingsOverlay(QWidget):
 
     def _style_toggle(self, btn: QPushButton):
         on = btn.isChecked()
-        btn.setText("ON" if on else "OFF")
+        btn.setText(self._tr("ON" if on else "OFF"))
         if on:
             btn.setStyleSheet(
                 f"QPushButton {{ background: {C.PRI_GHO}; color: {C.PRI}; "
