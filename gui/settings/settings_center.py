@@ -488,13 +488,14 @@ class SettingsCenter(QDialog):
         host_layout.insertWidget(1, status)
 
         profile_tabs = content.findChildren(QTabBar)
-        def apply_policy(index: int) -> None:
+        def apply_policy(index: int, *, persist: bool = True) -> None:
             selection = ("online", "offline", "auto")[index]
-            save_providers(selection=selection)
-            for provider_panel in provider_panels:
-                changed = getattr(provider_panel, "changed", None)
-                if changed is not None:
-                    changed.emit()
+            if persist:
+                save_providers(selection=selection)
+                for provider_panel in provider_panels:
+                    changed = getattr(provider_panel, "changed", None)
+                    if changed is not None:
+                        changed.emit()
             if selection in ("online", "offline") and profile_tabs:
                 profile_tabs[0].setCurrentIndex(0 if selection == "online" else 1)
             status.setText(
@@ -506,10 +507,12 @@ class SettingsCenter(QDialog):
             )
             self._fit_provider_content(content)
 
-        selector.currentIndexChanged.connect(apply_policy)
+        selector.currentIndexChanged.connect(
+            lambda index: apply_policy(index, persist=True)
+        )
         for tab in profile_tabs:
             tab.currentChanged.connect(lambda _index: self._fit_provider_content(content))
-        apply_policy(selector.currentIndex())
+        apply_policy(selector.currentIndex(), persist=False)
 
     @staticmethod
     def _fit_provider_content(content: QWidget) -> None:
