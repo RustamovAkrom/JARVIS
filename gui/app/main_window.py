@@ -80,6 +80,7 @@ from PyQt6.QtGui import (
     QLinearGradient,
     QPainter,
     QPainterPath,
+    QPalette,
     QDesktopServices,
     QImage,
     QPen,
@@ -230,6 +231,7 @@ _OS = platform.system()  # "Windows" | "Darwin" | "Linux"
 from gui.themes.typography import FONT_MONO, FONT_UI, R_L, R_S
 from gui.themes.styles import (
     glass_rgba,
+    menu_qss,
     _card_qss,
     _combo_qss,
     _ghost_qss,
@@ -12059,6 +12061,7 @@ class MainWindow(QMainWindow):
                 settings = getattr(self, "_settings_center", None)
                 if settings is not None:
                     settings.refresh_theme()
+                self._refresh_access_status()
         self._log.append_log("SYS: Appearance settings updated.")
         return True
 
@@ -13548,13 +13551,18 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         )
 
         menu = QMenu(button)
-        menu.setStyleSheet(
-            f"QMenu {{ background:{glass_rgba(C.PANEL, glass_opacity)}; color:{C.TEXT}; "
-            f"border:1px solid {C.BORDER_B}; padding:7px; }}"
-            f"QMenu::item {{ padding:7px 18px; border-radius:4px; }}"
-            f"QMenu::item:selected {{ background:{C.PRI_GHO}; color:{C.PRI}; }}"
-            f"QMenu::separator {{ height:1px; background:{C.BORDER}; margin:5px 7px; }}"
-        )
+        # Force Qt to paint the popup with the application palette instead of
+        # the native Windows menu surface (which can remain white regardless
+        # of the parent widget's stylesheet).
+        menu.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        menu.setAutoFillBackground(True)
+        menu_palette = menu.palette()
+        menu_palette.setColor(QPalette.ColorRole.Window, QColor(C.PANEL))
+        menu_palette.setColor(QPalette.ColorRole.Base, QColor(C.PANEL))
+        menu_palette.setColor(QPalette.ColorRole.WindowText, QColor(C.TEXT))
+        menu_palette.setColor(QPalette.ColorRole.Text, QColor(C.TEXT))
+        menu.setPalette(menu_palette)
+        menu.setStyleSheet(menu_qss())
         mode_action = menu.addAction(f"Current mode  ·  {mode.title()}")
         mode_action.setEnabled(False)
         policy_action = menu.addAction(f"Approval policy  ·  {policy}")
@@ -15204,6 +15212,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             settings = getattr(self, "_settings_center", None)
             if settings is not None:
                 settings.refresh_theme()
+            self._refresh_access_status()
 
     def _preview_ui_opacity(self, opacity: int):
         value = max(60, min(100, int(opacity)))
@@ -15270,6 +15279,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                 if old != updated:
                     retheme_all_widgets(old, updated)
                 self._apply_design_system()
+            self._refresh_access_status()
 
         self._log.append_log(f"SYS: Identity updated — {display}")
         if color_changed:

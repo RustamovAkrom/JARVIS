@@ -46,6 +46,27 @@ def glass_surface_style(
         f"{border_rule} border-radius:{radius}px; }}"
     )
 
+
+def menu_qss() -> str:
+    """Return an opaque, theme-aware stylesheet for native Qt popup menus.
+
+    QMenu can otherwise fall back to the platform palette for its popup
+    surface, which is commonly white on Windows even when the parent window
+    uses a dark palette. Keep the popup fully opaque and style disabled rows
+    explicitly because most entries in the permissions summary are disabled.
+    """
+    return (
+        f"QMenu {{ background-color:{C.PANEL}; color:{C.TEXT}; "
+        f"border:1px solid {C.BORDER_B}; padding:7px; }}"
+        f"QMenu::item {{ color:{C.TEXT}; background-color:transparent; "
+        f"padding:7px 18px; border-radius:4px; }}"
+        f"QMenu::item:disabled {{ color:{C.TEXT_MED}; "
+        f"background-color:{C.PANEL}; }}"
+        f"QMenu::item:selected {{ color:{C.PRI}; background-color:{C.PRI_GHO}; }}"
+        f"QMenu::separator {{ height:1px; background-color:{C.BORDER}; "
+        f"margin:5px 7px; }}"
+    )
+
 def _card_qss(name: str) -> str:
     return (
         f"QWidget#{name} {{ background: {C.PANEL}; border: 1px solid {C.BORDER};"
