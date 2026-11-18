@@ -57,6 +57,7 @@ Thumbs.db
 desktop.ini
 
 # ── Runtime output ────────────────────────────────────────────────────────────
+*.lock
 *.log
 logs/
 downloads/
