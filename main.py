@@ -3286,8 +3286,8 @@ class JarvisLive:
                 elif slot == "stt":
                     if str(cfg.get("backend") or "local").strip().lower() != "local":
                         return False
-                    from providers import stt_whisper
-                    if not stt_whisper.available():
+                    from importlib.util import find_spec
+                    if find_spec("faster_whisper") is None:
                         return False
                 elif slot == "tts":
                     from providers import tts_piper
