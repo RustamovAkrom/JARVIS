@@ -3968,6 +3968,8 @@ class ProvidersOverlay(_HudOverlay):
     def _combo(self) -> QComboBox:
         box = _ScrollSafeCombo()
         box.setFont(QFont(FONT_MONO, 8))
+        box.setMinimumWidth(0)
+        box.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         box.setFixedHeight(29)
         box.setStyleSheet(
             f"QComboBox {{ background: {C.DARK}; color: {C.TEXT}; "
