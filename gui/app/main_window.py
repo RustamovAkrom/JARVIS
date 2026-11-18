@@ -82,6 +82,7 @@ from PyQt6.QtGui import (
     QPainterPath,
     QPalette,
     QDesktopServices,
+    QAction,
     QImage,
     QPen,
     QPixmap,
@@ -16658,6 +16659,24 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                         widget.setText(
                             translate_from(widget.text(), previous_language, language)
                         )
+                    if widget.toolTip():
+                        widget.setToolTip(
+                            translate_from(
+                                widget.toolTip(), previous_language, language
+                            )
+                        )
+                    if widget.accessibleName():
+                        widget.setAccessibleName(
+                            translate_from(
+                                widget.accessibleName(), previous_language, language
+                            )
+                        )
+                    if widget.windowTitle():
+                        widget.setWindowTitle(
+                            translate_from(
+                                widget.windowTitle(), previous_language, language
+                            )
+                        )
                     if isinstance(widget, QLineEdit):
                         widget.setPlaceholderText(
                             translate_from(
@@ -16684,8 +16703,41 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                                 ),
                             )
                         widget.blockSignals(blocked)
+                    elif isinstance(widget, QTabWidget):
+                        for index in range(widget.count()):
+                            widget.setTabText(
+                                index,
+                                translate_from(
+                                    widget.tabText(index), previous_language, language
+                                ),
+                            )
+                    elif isinstance(widget, QListWidget):
+                        for index in range(widget.count()):
+                            item = widget.item(index)
+                            item.setText(
+                                translate_from(
+                                    item.text(), previous_language, language
+                                )
+                            )
+                            item.setToolTip(
+                                translate_from(
+                                    item.toolTip(), previous_language, language
+                                )
+                            )
                     if widget.__class__.__name__ == "ProvidersOverlay":
                         widget._ui_language = language
+                for action in self.findChildren(QAction):
+                    action.setText(
+                        translate_from(
+                            action.text(), previous_language, language
+                        )
+                    )
+                    if action.toolTip():
+                        action.setToolTip(
+                            translate_from(
+                                action.toolTip(), previous_language, language
+                            )
+                        )
                 if self._settings_center is not None:
                     self._settings_center.setWindowTitle(
                         translate_from(
