@@ -3683,8 +3683,10 @@ class ProvidersOverlay(_HudOverlay):
             # second scroll area with its own viewport and horizontal range.
             if self._scroll.parentWidget() is self:
                 body_index = self._outer_layout.indexOf(self._scroll)
-                self._body.setParent(self)
-                self._outer_layout.insertWidget(max(0, body_index), self._body, 1)
+                body = self._scroll.takeWidget()
+                if body is not None:
+                    body.setParent(self)
+                    self._outer_layout.insertWidget(max(0, body_index), body, 1)
                 self._scroll.hide()
         else:
             self.setStyleSheet(f"""
@@ -3701,7 +3703,7 @@ class ProvidersOverlay(_HudOverlay):
             self._close_button.show()
             if self._body.parentWidget() is self:
                 self._outer_layout.removeWidget(self._body)
-                self._body.setParent(self._scroll)
+                self._body.setParent(None)
                 self._scroll.setWidget(self._body)
                 self._scroll.show()
 
