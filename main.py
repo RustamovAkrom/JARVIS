@@ -3217,10 +3217,10 @@ class JarvisLive:
                 get_pipeline,
                 get_provider_config,
             )
-            if not socket.create_connection(
+            with socket.create_connection(
                 ("generativelanguage.googleapis.com", 443), timeout=1.5
             ):
-                return False
+                pass
             if get_online_provider_mode() == "gemini":
                 return bool(get_gemini_key())
             from providers import registry
@@ -3266,11 +3266,30 @@ class JarvisLive:
                     return False
                 if registry.missing_fields(pid, cfg):
                     return False
-                provider = registry.build(pid, cfg)
-                probe = getattr(provider, "probe", None)
-                if probe is not None:
-                    ok, _message = probe()
-                    if not ok:
+                # Readiness checks must not warm or download models. In
+                # particular Piper.probe() downloads and loads a voice, which
+                # is too expensive and surprising for a periodic Auto check.
+                if slot == "llm":
+                    provider = registry.build(pid, cfg)
+                    list_models = getattr(provider, "models", None)
+                    if list_models is None:
+                        return False
+                    available_models = list_models(timeout=3.0)
+                    selected_model = str(cfg.get("model") or "").strip()
+                    if not selected_model or selected_model not in available_models:
+                        return False
+                elif slot == "stt":
+                    if str(cfg.get("backend") or "local").strip().lower() != "local":
+                        return False
+                    from providers import stt_whisper
+                    if not stt_whisper.available():
+                        return False
+                elif slot == "tts":
+                    from providers import tts_piper
+                    if not tts_piper.available():
+                        return False
+                    voice = str(cfg.get("voice") or "").strip()
+                    if voice and voice not in tts_piper.installed():
                         return False
             return True
         except Exception as exc:
@@ -3511,6 +3530,11 @@ class JarvisLive:
                 self._engine_caps = self._resolve_engine_caps()
                 from memory.config_manager import get_provider_environment
                 self._connected_environment = get_provider_environment()
+                # _resolve_engine_caps falls back to Gemini when the selected
+                # pipeline cannot start. Track the engine actually connected,
+                # otherwise Auto would incorrectly believe Offline is active.
+                if self._engine_caps is None and self._connected_environment == "offline":
+                    self._connected_environment = "online"
                 if self._engine_caps is not None:
                     # The local PipelineEngine owns its replayable history and
                     # cannot resume a Gemini Live server session.
