@@ -495,6 +495,7 @@ class CursorAssistantUiTests(unittest.TestCase):
                 "pty": _QProcessTerminal(process),
                 "closing": False,
                 "restart_pending": True,
+                "pending_output": "earlier terminal output",
             },
         )()
         owner = type(
@@ -515,6 +516,10 @@ class CursorAssistantUiTests(unittest.TestCase):
 
         self.assertIsNone(session.pty)
         self.assertFalse(session.restart_pending)
+        self.assertEqual(session.pending_output, "")
+        owner._append_terminal_output.assert_called_once_with(
+            "earlier terminal output", session_id="terminal-1"
+        )
         single_shot.assert_called_once()
         self.assertEqual(single_shot.call_args.args[0], 120)
         single_shot.call_args.args[1]()
