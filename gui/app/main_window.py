@@ -10401,6 +10401,7 @@ class MainWindow(QMainWindow):
             _read_full_config().get("development_mode", False)
         )
         self._debug_toggle_btn.setVisible(self._development_mode)
+        self._terminal_toggle_btn.setVisible(self._development_mode)
         self._work_tabs.setCurrentIndex(0)
         lay.addWidget(self._work_tabs, stretch=1)
         self._refresh_chat()
@@ -13040,15 +13041,26 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             self._hide_bottom_panel()
             self._terminal_toggle_btn.setChecked(False)
             return
-        if not self._terminal_sessions:
-            self._new_terminal("default")
-            return
         self._show_bottom_panel(1)
-        session = self._active_terminal_session()
-        if session is not None and session.client_is_ready and session.pty is None:
+        # Build QWebEngineView only after the tab/layout event has completed.
+        # This avoids re-entrant WebEngine initialization from a toolbar click.
+        QTimer.singleShot(0, self._ensure_terminal_session)
+
+    def _ensure_terminal_session(self):
+        if (
+            not self._bottom_tabs.isVisible()
+            or self._bottom_tabs.currentWidget() is not self._terminal_panel
+        ):
+            return
+        if not self._terminal_sessions:
+            session = self._add_terminal_session("default")
+        else:
+            session = self._active_terminal_session()
+        if session is None:
+            return
+        if session.client_is_ready and session.pty is None:
             self._start_terminal_process(session.session_id)
-        if session is not None:
-            session.view.setFocus()
+        QTimer.singleShot(0, session.view.setFocus)
 
     def _restart_terminal(self):
         """Restart the active shell without restarting the JARVIS application."""
@@ -14314,16 +14326,8 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         visible = self._bottom_tabs.isVisible()
         self._debug_toggle_btn.setChecked(visible and index == 0)
         self._terminal_toggle_btn.setChecked(visible and index == 1)
-        if visible and index == 1 and not self._terminal_sessions:
-            session = self._add_terminal_session("default")
-            if session.client_is_ready:
-                self._start_terminal_process(session.session_id)
-        elif visible and index == 1:
-            session = self._active_terminal_session()
-            if session is not None and session.client_is_ready and session.pty is None:
-                self._start_terminal_process(session.session_id)
-            if session is not None:
-                QTimer.singleShot(0, session.view.setFocus)
+        if visible and index == 1:
+            QTimer.singleShot(0, self._ensure_terminal_session)
 
     def _toggle_reading_mode(self):
         if not self._reading_mode:
@@ -15981,11 +15985,18 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         debug_button = getattr(self, "_debug_toggle_btn", None)
         if debug_button is not None:
             debug_button.setVisible(bool(self._development_mode))
+        terminal_button = getattr(self, "_terminal_toggle_btn", None)
+        if terminal_button is not None:
+            terminal_button.setVisible(bool(self._development_mode))
         if (
             not self._development_mode
             and getattr(self, "_bottom_tabs", None) is not None
             and self._bottom_tabs.isVisible()
-            and self._bottom_tabs.currentWidget() is getattr(self, "_debug_panel", None)
+            and self._bottom_tabs.currentWidget()
+            in (
+                getattr(self, "_debug_panel", None),
+                getattr(self, "_terminal_panel", None),
+            )
         ):
             self._hide_bottom_panel()
         if not hasattr(self, "_dev_mode_btn"):
