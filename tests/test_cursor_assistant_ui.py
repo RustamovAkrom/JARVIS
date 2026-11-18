@@ -439,7 +439,6 @@ class CursorAssistantUiTests(unittest.TestCase):
         root.show()
         self.app.processEvents()
 
-        focus_button = QCheckBox()
         left_button = QCheckBox()
         right_button = QCheckBox()
         owner = type(
@@ -449,7 +448,6 @@ class CursorAssistantUiTests(unittest.TestCase):
                 "_workspace_focus_active": False,
                 "_workspace_focus_state": None,
                 "_reading_mode": False,
-                "_focus_workspace_btn": focus_button,
                 "_left_toggle_btn": left_button,
                 "_right_toggle_btn": right_button,
                 "_main_splitter": main_splitter,
@@ -472,14 +470,14 @@ class CursorAssistantUiTests(unittest.TestCase):
             self.assertTrue(right.isVisible())
             self.assertFalse(bottom.isVisible())
             self.assertTrue(owner._workspace_focus_active)
-            self.assertTrue(focus_button.isChecked())
+            self.assertTrue(right_button.isChecked())
             self.assertGreater(root.sizes()[1], root.sizes()[0])
 
             MainWindow._set_workspace_focus_mode(owner, False)
             self.app.processEvents()
             self.assertTrue(center.isVisible())
             self.assertFalse(owner._workspace_focus_active)
-            self.assertFalse(focus_button.isChecked())
+            self.assertFalse(right_button.isChecked())
             self.assertEqual(root.sizes(), original_root_sizes)
         finally:
             root.close()
