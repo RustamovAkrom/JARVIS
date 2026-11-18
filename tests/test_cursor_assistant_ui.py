@@ -14,6 +14,7 @@ from PyQt6.QtGui import QColor, QImage, QMouseEvent
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import (
     QApplication,
+    QSplitter,
     QCheckBox,
     QComboBox,
     QMainWindow,
