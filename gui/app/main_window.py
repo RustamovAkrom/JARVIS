@@ -9286,7 +9286,7 @@ class MainWindow(QMainWindow):
         self._right_toggle_btn.setFixedSize(28, 28)
         self._right_toggle_btn.setFont(QFont(FONT_UI, 8, QFont.Weight.Bold))
         self._right_toggle_btn.setCheckable(True)
-        self._right_toggle_btn.setChecked(True)
+        self._right_toggle_btn.setChecked(False)
         self._right_toggle_btn.setToolTip(
             self._tr("Focus the right workspace while keeping the left sidebar visible")
         )
