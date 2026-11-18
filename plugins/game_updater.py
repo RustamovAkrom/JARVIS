@@ -192,6 +192,16 @@ def _setting_bool(key: str, default: bool = False) -> bool:
     return str(val).strip().lower() in ("1", "true", "yes", "on")
 
 
+def _redact_sensitive_text(text: str) -> str:
+    """Mask common secret-bearing key/value fragments before logging."""
+    s = str(text)
+    return re.sub(
+        r'(?i)\b(password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key|refresh[_-]?token)\b(\s*[:=]\s*)([^\s,;]+)',
+        r"\1\2[REDACTED]",
+        s,
+    )
+
+
 def _log(msg: str) -> None:
     """A status line that cannot take the process down.
 
@@ -201,7 +211,8 @@ def _log(msg: str) -> None:
     console — cp1254 in Turkey, cp1251 in Russia, cp932 in Japan — printing one
     of the emoji below then raises UnicodeEncodeError, and the scheduled update
     dies on its first log line rather than on anything to do with games."""
-    line = f"[GameUpdater] {msg}"
+    safe_msg = _redact_sensitive_text(msg)
+    line = f"[GameUpdater] {safe_msg}"
     try:
         print(line)
     except UnicodeEncodeError:
