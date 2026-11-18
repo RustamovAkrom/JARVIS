@@ -1,7 +1,8 @@
 """Central paths for source, installed, and portable JARVIS runtimes.
 
-Application resources are read from the source tree or PyInstaller bundle;
-mutable user data is always kept outside those replaceable locations.
+Application resources are read from the source tree or PyInstaller bundle.
+Source checkouts use the repository for mutable data when DEBUG=true; packaged
+builds and DEBUG=false source runs keep mutable data in the user profile.
 """
 
 from __future__ import annotations
@@ -28,10 +29,12 @@ def _load_dotenv(source_root: Path) -> None:
         return
 
     env_file = source_root / ".env"
-    if not env_file.exists() and "DEBUG" not in os.environ:
+    if not env_file.exists():
         try:
             env_file.write_text(
                 "# Local JARVIS development settings. This file is git-ignored.\n"
+                "# true: store config/ and memory/ in this source checkout.\n"
+                "# false: store mutable data in the OS user-data directory.\n"
                 "DEBUG=true\n",
                 encoding="utf-8",
             )
@@ -263,8 +266,12 @@ def migrate_legacy_user_data(
     if paths.debug and paths.mode == "source":
         # Previous source builds stored mutable files in AppData. Copy only
         # missing files into the checkout and retain the original profile.
-        candidates.append(
-            _local_data_root() / APP_ID / "profiles" / "development"
+        app_data_root = _local_data_root() / APP_ID
+        candidates.extend(
+            (
+                app_data_root / "profiles" / "development",
+                app_data_root,  # compatibility with releases before profiles
+            )
         )
     if paths.mode == "source":
         candidates.append(paths.app_root)
