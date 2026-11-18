@@ -12917,6 +12917,19 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                         arguments = ["/Q", "/D", "/K"]
 
                 process = QProcess(self)
+                if platform.system() == "Windows":
+                    # The shell is rendered inside JARVIS by the terminal view.
+                    # Without CREATE_NO_WINDOW, launching cmd.exe from a
+                    # pythonw/GUI process can create a second console window
+                    # and a separate Terminal taskbar icon on first startup.
+                    def _hide_terminal_console(args):
+                        args.flags |= getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+
+                    set_modifier = getattr(
+                        process, "setCreateProcessArgumentsModifier", None
+                    )
+                    if callable(set_modifier):
+                        set_modifier(_hide_terminal_console)
                 process.setProcessChannelMode(
                     QProcess.ProcessChannelMode.MergedChannels
                 )
