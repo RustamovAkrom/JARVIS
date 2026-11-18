@@ -639,6 +639,14 @@ def _provider_first() -> bool:
     return _provider_settings()[1]
 
 
+def _safe_model_label(model: str) -> str:
+    """Return a log-safe model/provider label without leaking config values."""
+    value = str(model or "")
+    if value.startswith(PROVIDER_PREFIX):
+        return f"{PROVIDER_PREFIX}<redacted>"
+    return value
+
+
 def _to_openai_messages(contents, config) -> tuple[list[dict], Optional[float]]:
     """REST `contents` -> OpenAI `messages`, with the system instruction split
     out of the config where one was given.
@@ -774,23 +782,24 @@ def call(
             return cl.models.generate_content(**kwargs)
         except Exception as e:
             msg = str(e)
+            safe_model = _safe_model_label(model)
             if is_quota_error(msg):
                 _cool(model)
                 print(
-                    f"[Gemini] {model}: out of quota — skipping it for "
+                    f"[Gemini] {safe_model}: out of quota — skipping it for "
                     f"{_COOLDOWN_SECONDS // 60} minutes"
                 )
             elif is_gone_error(msg):
                 _cool(model, _GONE_SECONDS)
-                print(f"[Gemini] {model}: unavailable to this key — set aside")
+                print(f"[Gemini] {safe_model}: unavailable to this key — set aside")
             elif is_unavailable_error(msg):
                 _cool(model, _UNAVAILABLE_SECONDS)
                 print(
-                    f"[Gemini] {model}: not answering — resting it for "
+                    f"[Gemini] {safe_model}: not answering — resting it for "
                     f"{_UNAVAILABLE_SECONDS // 60} minutes"
                 )
             else:
-                print(f"[Gemini] {model}: {type(e).__name__}: {msg[:140]}")
+                print(f"[Gemini] {safe_model}: {type(e).__name__}: {msg[:140]}")
     return None
 
 
