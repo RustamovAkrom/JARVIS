@@ -4284,7 +4284,7 @@ class ProvidersOverlay(_HudOverlay):
         for _key, (w, f) in shown.items():
             lay.addWidget(
                 self._label(
-                    f.label + ("" if f.required else "   (optional)"), 7, C.TEXT_DIM
+                    self._tr(f.label) + ("" if f.required else "   " + self._tr("(optional)")), 7, C.TEXT_DIM
                 )
             )
             lay.addWidget(w)
@@ -4320,7 +4320,7 @@ class ProvidersOverlay(_HudOverlay):
         if not decl.get("_available", True) and decl.get("install"):
             brow.addWidget(
                 self._btn(
-                    f"INSTALL {decl['install']}",
+                    self._tr("INSTALL {package}", package=decl["install"]),
                     lambda _=0, p=pid: self._install(p),
                     C.ACC2,
                 )
@@ -4407,7 +4407,7 @@ class ProvidersOverlay(_HudOverlay):
 
         self._sidecar_combo = self._combo()
         self._sidecar_combo.addItem(
-            "Gemini only  —  the way it has always been", ("", "")
+            self._tr("Gemini only  —  the way it has always been"), ("", "")
         )
         for pid, eid, entry, decl in self._catalog("llm"):
             mark = (
@@ -4416,7 +4416,8 @@ class ProvidersOverlay(_HudOverlay):
                 else ("AI" if entry.get("local") is False else "  ")
             )
             self._sidecar_combo.addItem(
-                f"{mark}  Fall back to {entry['label']}", (pid, eid)
+                f"{mark}  {self._tr('Fall back to {provider}', provider=entry['label'])}",
+                (pid, eid),
             )
         i = self._sidecar_combo.findData((cur_pid, cur_eid)) if cur_pid else 0
         if cur_pid and i < 0:
@@ -4429,9 +4430,12 @@ class ProvidersOverlay(_HudOverlay):
         lay.addWidget(self._sidecar_combo)
 
         self._first_combo = self._combo()
-        self._first_combo.addItem("Try Gemini first  —  faster", "after")
         self._first_combo.addItem(
-            "Try the other one first  —  keeps more on your machine", "before"
+            self._tr("Try Gemini first  —  faster"), "after"
+        )
+        self._first_combo.addItem(
+            self._tr("Try the other one first  —  keeps more on your machine"),
+            "before",
         )
         self._first_combo.setCurrentIndex(1 if self._sidecar_first else 0)
         lay.addWidget(self._first_combo)
@@ -4445,7 +4449,7 @@ class ProvidersOverlay(_HudOverlay):
             if self._mode == "pipeline" and cur_pid == self._pipe.get("llm"):
                 lay.addWidget(
                     self._label(
-                        "Uses the model you chose for ② THINKING.", 7, C.TEXT_DIM
+                        self._tr("Uses the model you chose for ② THINKING."), 7, C.TEXT_DIM
                     )
                 )
             else:
@@ -4453,8 +4457,10 @@ class ProvidersOverlay(_HudOverlay):
         else:
             lay.addWidget(
                 self._label(
-                    "Left as it is, these keep using Gemini and stop working when "
-                    "its text quota runs out.",
+                    self._tr(
+                        "Left as it is, these keep using Gemini and stop working when "
+                        "its text quota runs out."
+                    ),
                     7,
                     C.TEXT_DIM,
                 )
