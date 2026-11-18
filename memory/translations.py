@@ -18,6 +18,8 @@ _TRANSLATIONS = {
         "Screenshot  ×": "Скриншот  ×",
         "Attach a file, or drop it into the message field": "Прикрепить файл или перетащить его в поле сообщения",
         "New terminal sessions start in the selected folder.": "Новые терминалы запускаются в выбранной папке.",
+        "Focus the right workspace while keeping the left sidebar visible": "Развернуть правую рабочую область, сохранив левую боковую панель.",
+        "Toggle workspace focus": "Переключить режим фокусировки рабочей области.",
         "Choose a system pointer style; selecting one enables the custom pointer.": "Выберите вид указателя. При выборе включится пользовательский курсор.",
         "Choosing a style applies it to the Windows system pointer.": "Выбранный стиль применяется к системному указателю Windows.",
         "Set the custom pointer size.": "Настроить размер пользовательского указателя.",
@@ -330,6 +332,8 @@ _TRANSLATIONS = {
         "Close setup": "Закрыть настройку",
     },
     "uz": {
+        "Focus the right workspace while keeping the left sidebar visible": "Chap yon panelni saqlagan holda o‘ng ish maydonini kengaytirish.",
+        "Toggle workspace focus": "Ish maydoni fokus rejimini almashtirish.",
         "CONTROLS": "BOSHQARUV",
         "EVERYDAY": "ASOSIY",
         "CURSOR ASSISTANT": "KURSOR YORDAMCHISI",
