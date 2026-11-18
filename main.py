@@ -3206,13 +3206,133 @@ class JarvisLive:
     # the import below raises ImportError, which is caught and reported as
     # "providers are not installed" — the assistant then runs exactly as it did
     # before any of this existed.
+    def _online_profile_available(self) -> bool:
+        """Check the configured Online route without blocking the UI/session loop."""
+        import socket
+
+        try:
+            from memory.config_manager import (
+                get_gemini_key,
+                get_online_provider_mode,
+                get_pipeline,
+                get_provider_config,
+            )
+            if not socket.create_connection(
+                ("generativelanguage.googleapis.com", 443), timeout=1.5
+            ):
+                return False
+            if get_online_provider_mode() == "gemini":
+                return bool(get_gemini_key())
+            from providers import registry
+            pid = str(get_pipeline("online").get("llm") or "").strip()
+            if not pid:
+                return False
+            cfg = get_provider_config(pid, "online")
+            if registry.missing_fields(pid, cfg):
+                return False
+            provider = registry.build(pid, cfg)
+            probe = getattr(provider, "probe", None)
+            return bool(probe()[0]) if probe else True
+        except Exception:
+            return False
+
+    def _offline_profile_ready(self) -> bool:
+        """Require a usable local LLM and every configured local speech component."""
+        try:
+            from memory.config_manager import get_pipeline, get_provider_config
+            from providers import registry
+
+            pipeline = get_pipeline("offline")
+            if not str(pipeline.get("llm") or "").strip():
+                return False
+
+            for slot in ("llm", "stt", "tts"):
+                pid = str(pipeline.get(slot) or "").strip()
+                if not pid:
+                    if slot == "llm":
+                        return False
+                    continue
+                declaration = registry.get_declaration(pid)
+                if not declaration or not declaration.get("_available", True):
+                    return False
+                cfg = get_provider_config(pid, "offline")
+                catalog_id = str(cfg.get("catalog") or "").strip()
+                catalog = declaration.get("catalog") or ()
+                selected = next(
+                    (entry for entry in catalog if entry.get("id") == catalog_id),
+                    None,
+                )
+                if selected is not None and selected.get("local") is not True:
+                    return False
+                if registry.missing_fields(pid, cfg):
+                    return False
+                provider = registry.build(pid, cfg)
+                probe = getattr(provider, "probe", None)
+                if probe is not None:
+                    ok, _message = probe()
+                    if not ok:
+                        return False
+            return True
+        except Exception as exc:
+            print(f"[JARVIS] Offline readiness check failed: {exc}")
+            return False
+
+    def _resolve_auto_environment(self) -> str:
+        from memory.config_manager import (
+            get_provider_selection,
+            resolve_provider_environment,
+            save_provider_runtime_environment,
+        )
+
+        if get_provider_selection() != "auto":
+            from memory.config_manager import get_provider_environment
+            return get_provider_environment()
+
+        resolved = resolve_provider_environment(
+            "auto",
+            online_available=self._online_profile_available(),
+            offline_ready=self._offline_profile_ready(),
+        )
+        save_provider_runtime_environment(resolved)
+        return resolved
+
     def _engine_mode(self) -> str:
         try:
-            from memory.config_manager import get_provider_mode
-
+            from memory.config_manager import (
+                get_provider_mode,
+                get_provider_selection,
+            )
+            if get_provider_selection() == "auto":
+                self._resolve_auto_environment()
             return get_provider_mode()
-        except Exception:
+        except Exception as exc:
+            print(f"[JARVIS] Could not resolve AI provider mode: {exc}")
             return "gemini"
+
+    async def _watch_auto_provider(self) -> None:
+        """Re-evaluate Auto periodically and reconnect only when its route changes."""
+        from memory.config_manager import (
+            get_provider_environment,
+            get_provider_selection,
+        )
+
+        while True:
+            await asyncio.sleep(15)
+            if get_provider_selection() != "auto":
+                continue
+            try:
+                resolved = await asyncio.to_thread(self._resolve_auto_environment)
+                connected = getattr(self, "_connected_environment", "online")
+                if resolved != connected:
+                    self.ui.write_log(
+                        f"SYS: Auto switched to {resolved.title()} — reconnecting."
+                    )
+                    self.request_reconnect(
+                        keep_context=True, reason=f"Auto switched to {resolved}"
+                    )
+                    return
+            except Exception as exc:
+                print(f"[JARVIS] Auto provider check failed: {exc}")
 
     def _resolve_engine_caps(self):
         """What the chosen engine can do — or None for Gemini Live.
@@ -3389,6 +3509,8 @@ class JarvisLive:
                 # install this returns None in a few microseconds and nothing
                 # below behaves any differently.
                 self._engine_caps = self._resolve_engine_caps()
+                from memory.config_manager import get_provider_environment
+                self._connected_environment = get_provider_environment()
                 if self._engine_caps is not None:
                     # The local PipelineEngine owns its replayable history and
                     # cannot resume a Gemini Live server session.
@@ -3559,6 +3681,7 @@ class JarvisLive:
                         )
 
                     tg.create_task(self._watch_reconnect())
+                    tg.create_task(self._watch_auto_provider())
                     tg.create_task(self._watch_stall())
                     tg.create_task(self._send_realtime())
                     tg.create_task(self._listen_audio())
