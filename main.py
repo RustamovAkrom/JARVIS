@@ -3217,22 +3217,27 @@ class JarvisLive:
                 get_pipeline,
                 get_provider_config,
             )
-            with socket.create_connection(
-                ("generativelanguage.googleapis.com", 443), timeout=1.5
-            ):
-                pass
             if get_online_provider_mode() == "gemini":
-                return bool(get_gemini_key())
-            from providers import registry
-            pid = str(get_pipeline("online").get("llm") or "").strip()
-            if not pid:
-                return False
-            cfg = get_provider_config(pid, "online")
-            if registry.missing_fields(pid, cfg):
-                return False
-            provider = registry.build(pid, cfg)
-            probe = getattr(provider, "probe", None)
-            return bool(probe()[0]) if probe else True
+                if not get_gemini_key():
+                    return False
+                host, port = "generativelanguage.googleapis.com", 443
+            else:
+                from urllib.parse import urlsplit
+                from providers import registry
+                pid = str(get_pipeline("online").get("llm") or "").strip()
+                if not pid:
+                    return False
+                cfg = get_provider_config(pid, "online")
+                if registry.missing_fields(pid, cfg):
+                    return False
+                endpoint = urlsplit(str(cfg.get("base_url") or ""))
+                if not endpoint.hostname:
+                    return False
+                host = endpoint.hostname
+                port = endpoint.port or (443 if endpoint.scheme == "https" else 80)
+            with socket.create_connection((host, port), timeout=1.5):
+                pass
+            return True
         except Exception:
             return False
 
@@ -3289,7 +3294,7 @@ class JarvisLive:
                     if not tts_piper.available():
                         return False
                     voice = str(cfg.get("voice") or "").strip()
-                    if voice and voice not in tts_piper.installed():
+                    if not voice or voice not in tts_piper.installed():
                         return False
             return True
         except Exception as exc:
