@@ -444,7 +444,10 @@ class SettingsCenter(QDialog):
         host_layout = content.layout()
         if host_layout is None:
             return
-        provider_panels = content.findChildren(QWidget, "ProvidersOverlay")
+        provider_panels = [
+            child for child in content.findChildren(QWidget)
+            if child.__class__.__name__ == "ProvidersOverlay"
+        ]
 
         row = QFrame(content)
         row.setObjectName("ProviderRuntimePolicy")
