@@ -9576,7 +9576,9 @@ class MainWindow(QMainWindow):
         self._terminal_toggle_btn.setIconSize(QSize(16, 16))
         self._terminal_toggle_btn.setFixedSize(28, 28)
         self._terminal_toggle_btn.setCheckable(True)
-        self._terminal_toggle_btn.setToolTip("Show or hide the terminal")
+        self._terminal_toggle_btn.setToolTip(
+            self._tr("Show or hide the terminal")
+        )
         self._terminal_toggle_btn.setStyleSheet(self._drawer_btn.styleSheet())
         self._terminal_toggle_btn.clicked.connect(self._toggle_terminal_panel)
         self._terminal_toggle_btn.hide()
@@ -15995,13 +15997,15 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             not self._development_mode
             and getattr(self, "_bottom_tabs", None) is not None
             and self._bottom_tabs.isVisible()
-            and self._bottom_tabs.currentWidget()
-            in (
-                getattr(self, "_debug_panel", None),
-                getattr(self, "_terminal_panel", None),
-            )
         ):
-            self._hide_bottom_panel()
+            if self._bottom_tabs.currentWidget() is getattr(
+                self, "_terminal_panel", None
+            ):
+                self._close_terminal_panel()
+            elif self._bottom_tabs.currentWidget() is getattr(
+                self, "_debug_panel", None
+            ):
+                self._hide_bottom_panel()
         if not hasattr(self, "_dev_mode_btn"):
             return
         state = "ON" if self._development_mode else "OFF"
