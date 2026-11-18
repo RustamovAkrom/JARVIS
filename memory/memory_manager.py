@@ -1,14 +1,16 @@
 import json
 import re
 from datetime import datetime
-from threading import Lock
+from threading import RLock
 from pathlib import Path
 from core.runtime_paths import PATHS
 from core.user_data import atomic_write_text, file_lock
 
 BASE_DIR = PATHS.user_data_root
 MEMORY_PATH = PATHS.long_term_memory_file
-_lock = Lock()
+# update_memory() and forget() call load_memory() while holding this lock.
+# Reentrancy is required for these in-process read-modify-write operations.
+_lock = RLock()
 MAX_VALUE_LENGTH = 380
 
 # ── Why there are two very different numbers here ────────────────────────────

@@ -67,11 +67,21 @@ def _ghost_qss() -> str:
 def _combo_qss() -> str:
     return (
         f"QComboBox {{ background: {C.PANEL2}; color: {C.TEXT}; border: 1px solid {C.BORDER};"
-        f" border-radius: 5px; padding: 5px 8px; }}"
+        f" border-radius: 7px; padding: 6px 30px 6px 10px; min-height: 24px; }}"
         f"QComboBox:hover {{ border-color: {C.BORDER_B}; }}"
+        f"QComboBox:focus {{ border-color: {C.PRI}; }}"
+        f"QComboBox:disabled {{ color: {C.TEXT_DIM}; background: {C.PANEL}; }}"
+        f"QComboBox::drop-down {{ subcontrol-origin: padding; subcontrol-position: top right;"
+        f" width: 26px; border-left: 1px solid {C.BORDER}; border-top-right-radius: 7px;"
+        f" border-bottom-right-radius: 7px; background: {C.PANEL}; }}"
+        f"QComboBox::drop-down:hover {{ background: {C.PRI_GHO}; }}"
         f"QComboBox QAbstractItemView {{ background: {C.PANEL2}; color: {C.TEXT};"
         f" selection-background-color: {C.PRI_GHO}; selection-color: {C.PRI};"
-        f" border: 1px solid {C.BORDER}; outline: 0; }}"
+        f" border: 1px solid {C.BORDER_B}; outline: 0; padding: 4px; }}"
+        f"QComboBox QAbstractItemView::item {{ min-height: 28px; padding: 5px 8px; }}"
+        f"QComboBox QAbstractItemView::item:hover {{ background: {C.PRI_GHO}; }}"
+        f"QComboBox QAbstractItemView::item:selected {{ color: {C.PRI};"
+        f" background: {C.PRI_GHO}; }}"
     )
 
 

@@ -313,6 +313,30 @@ def is_gone_error(err: str) -> bool:
     )
 
 
+def is_key_error(err: str) -> bool:
+    """Return True only for errors that invalidate the shared API credential.
+
+    A generic 403/permission error is not necessarily a bad key: access may be
+    denied for one model while another model remains usable. Those failures are
+    handled by is_gone_error() and the per-model cooldown instead.
+    """
+    low = str(err or "").lower()
+    padded = f" {low} "
+    markers = (
+        "api_key_invalid",
+        "api key not valid",
+        "invalid api key",
+        "invalid api_key",
+        "unauthenticated",
+        "authentication failed",
+        "invalid authentication",
+        "api key expired",
+        "no gemini api key is configured",
+        "no api key configured",
+        "missing api key",
+    )
+    return any(marker in low for marker in markers) or "401" in low
+
 def live_model() -> str:
     """The Live model to open the conversation with: the first rung that is not
     resting. If every one is resting the ladder is used from the top anyway —
@@ -355,6 +379,22 @@ def _cooling(model: str) -> bool:
         _cooldown.pop(model, None)
         return False
 
+
+def usable_rungs(models) -> list[str]:
+    """Return non-cooling model names in their original ladder order.
+
+    The caller owns ladder policy (tier, Live and provider exclusions). This
+    helper only applies the shared cooldown state and does not mutate input.
+    """
+    if models is None:
+        return []
+    if isinstance(models, str):
+        models = (models,)
+    return [
+        model
+        for model in models
+        if isinstance(model, str) and model and not _cooling(model)
+    ]
 
 def api_key(refresh: bool = False) -> str:
     """The Gemini key from config/api_keys.json. Cached; never raises."""

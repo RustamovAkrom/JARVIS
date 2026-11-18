@@ -665,6 +665,47 @@ def wait_for_launch(
     return None
 
 
+def foreground_application() -> str:
+    """Return the foreground process name, or empty when desktop APIs deny access.
+
+    Application allowlists must treat an empty result as denied; this function
+    never guesses which window is active.
+    """
+    try:
+        if _OS == "Windows":
+            import ctypes
+            from ctypes import wintypes
+
+            user32 = ctypes.WinDLL("user32", use_last_error=True)
+            hwnd = user32.GetForegroundWindow()
+            if not hwnd:
+                return ""
+            pid = wintypes.DWORD()
+            user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+            if not pid.value or not _PSUTIL:
+                return ""
+            return psutil.Process(int(pid.value)).name()
+        if _OS == "Darwin":
+            result = subprocess.run(
+                ["osascript", "-e",
+                 'tell application "System Events" to get name of first process whose frontmost is true'],
+                capture_output=True, text=True, encoding="utf-8",
+                errors="replace", timeout=1.5,
+            )
+            return result.stdout.strip() if result.returncode == 0 else ""
+        # X11. Wayland may deny global window inspection; then fail closed.
+        result = subprocess.run(
+            ["xdotool", "getactivewindow", "getwindowpid"],
+            capture_output=True, text=True, encoding="utf-8",
+            errors="replace", timeout=1.0,
+        )
+        if result.returncode != 0 or not _PSUTIL:
+            return ""
+        return psutil.Process(int(result.stdout.strip())).name()
+    except Exception:
+        return ""
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 #  Closing
 # ─────────────────────────────────────────────────────────────────────────────

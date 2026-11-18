@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import io
 import json
+import time
 
 import numpy as np
 
@@ -111,20 +112,23 @@ def _cv2_backend() -> int:
 
 
 def _probe_camera(index: int, backend: int, warmup: int = 5) -> bool:
-
+    """Probe through the shared camera manager instead of stealing the webcam."""
     if not _CV2:
         return False
-    cap = cv2.VideoCapture(index, backend)
-    if not cap.isOpened():
-        cap.release()
-        return False
-    for _ in range(warmup):
-        cap.read()
-    ret, frame = cap.read()
-    cap.release()
-    if not ret or frame is None:
-        return False
-    return bool(np.mean(frame) > 8)
+
+    from core.cameras import Camera
+
+    camera = Camera(index)
+    try:
+        if not camera.open():
+            return False
+        frame = None
+        deadline = time.monotonic() + max(1.0, warmup * 0.25)
+        while time.monotonic() < deadline and frame is None:
+            frame = camera.read(timeout=0.25)
+        return frame is not None and bool(np.mean(frame) > 8)
+    finally:
+        camera.close()
 
 
 def _detect_camera_index() -> int:
@@ -156,21 +160,35 @@ def _capture_camera() -> tuple[bytes, str]:
             "OpenCV (cv2) is not installed. Run: pip install opencv-python"
         )
 
+    from core.cameras import Camera
+
     index = _get_camera_index()
-    backend = _cv2_backend()
-    cap = cv2.VideoCapture(index, backend)
+    camera = Camera(index)
+    frame = None
+    try:
+        if not camera.open():
+            reason = camera.last_error or "the device is unavailable"
+            raise RuntimeError(f"Camera index {index} could not be opened: {reason}")
 
-    if not cap.isOpened():
-        raise RuntimeError(f"Camera index {index} could not be opened.")
+        # Warm up with fresh frames from the shared stream. Other consumers
+        # keep their leases and continue reading from the same physical device.
+        deadline = time.monotonic() + 3.0
+        for _ in range(5):
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            candidate = camera.read(timeout=min(0.5, remaining))
+            if candidate is not None:
+                frame = candidate
+        if frame is None:
+            frame = camera.read(timeout=1.0)
+        if frame is None:
+            frame = camera.read_latest()
+    finally:
+        camera.close()
 
-    for _ in range(10):
-        cap.read()
-
-    ret, frame = cap.read()
-    cap.release()
-
-    if not ret or frame is None:
-        raise RuntimeError("Camera returned no frame.")
+    if frame is None:
+        raise RuntimeError("Camera opened but returned no frame.")
 
     if _PIL:
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)

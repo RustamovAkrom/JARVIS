@@ -234,6 +234,86 @@ class ProviderEnvironmentTests(unittest.TestCase):
         self.assertEqual(providers["pipeline_offline"]["llm"], "ollama")
         self.assertEqual(providers["pipeline"]["llm"], "")
 
+    def test_auto_selection_resolves_based_on_network_and_offline_readiness(self):
+        self.assertEqual(
+            config_manager.resolve_provider_environment(
+                "auto", online_available=True, offline_ready=True
+            ),
+            "online",
+        )
+        self.assertEqual(
+            config_manager.resolve_provider_environment(
+                "auto", online_available=False, offline_ready=True
+            ),
+            "offline",
+        )
+        # No configured offline LLM: Auto must not select an unusable profile.
+        self.assertEqual(
+            config_manager.resolve_provider_environment(
+                "auto", online_available=False, offline_ready=False
+            ),
+            "online",
+        )
+
+    def test_forced_selection_ignores_other_availability(self):
+        self.assertEqual(
+            config_manager.resolve_provider_environment(
+                "offline", online_available=True, offline_ready=True
+            ),
+            "offline",
+        )
+        self.assertEqual(
+            config_manager.resolve_provider_environment(
+                "online", online_available=False, offline_ready=True
+            ),
+            "online",
+        )
+
+    def test_get_provider_selection_migrates_legacy_two_state_config(self):
+        for block, expected in (
+            ({"environment": "offline"}, "offline"),
+            ({"mode": "pipeline", "pipeline": {"llm": "ollama"},
+              "creds": {"ollama": {"catalog": "ollama"}}}, "offline"),
+            ({"environment": "online"}, "online"),
+        ):
+            with self.subTest(block=block), patch.object(
+                config_manager, "load_api_keys", return_value={"providers": block}
+            ):
+                self.assertEqual(config_manager.get_provider_selection(), expected)
+
+    def test_auto_policy_keeps_last_resolved_runtime_environment(self):
+        providers = {"selection": "auto", "environment": "offline"}
+        with patch.object(
+            config_manager, "load_api_keys", return_value={"providers": providers}
+        ):
+            self.assertEqual(config_manager.get_provider_selection(), "auto")
+            self.assertEqual(config_manager.get_provider_environment(), "offline")
+
+    def test_saving_auto_selection_preserves_both_provider_profiles(self):
+        data = {
+            "providers": {
+                "selection": "online",
+                "environment": "online",
+                "pipeline_online": {"llm": "groq"},
+                "pipeline_offline": {"llm": "ollama"},
+            }
+        }
+
+        def apply_update(update):
+            update(data)
+
+        with patch.object(config_manager, "_update_config", side_effect=apply_update):
+            config_manager.save_providers(
+                environment="online",
+                selection="auto",
+                pipeline={"llm": "groq"},
+            )
+
+        providers = data["providers"]
+        self.assertEqual(providers["selection"], "auto")
+        self.assertEqual(providers["pipeline_online"]["llm"], "groq")
+        self.assertEqual(providers["pipeline_offline"]["llm"], "ollama")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -200,10 +200,16 @@ def resolve(accepted: bool, key: Optional[str] = None) -> None:
 
 
 def pending_title() -> str:
-    """'' when nothing is waiting. Lets an action avoid stacking two banners."""
+    """Return the current confirmation title, or an empty string."""
     with _lock:
-        if _pending is None:
-            return ""
-        if time.monotonic() - _pending.at > TIMEOUT_SECONDS:
+        if _pending is None or time.monotonic() - _pending.at > TIMEOUT_SECONDS:
             return ""
         return _pending.title
+
+
+def pending_since() -> Optional[float]:
+    """Return the monotonic timestamp at which the current confirmation appeared."""
+    with _lock:
+        if _pending is None or time.monotonic() - _pending.at > TIMEOUT_SECONDS:
+            return None
+        return _pending.at

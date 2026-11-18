@@ -8,6 +8,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QApplication,
     QCheckBox,
+    QLabel,
     QMainWindow,
     QPushButton,
     QWidget,
@@ -35,6 +36,62 @@ class SettingsComponentTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
+
+    def test_event_filter_is_safe_before_window_chrome_initialization(self):
+        # Some Qt test paths and teardown callbacks can reach eventFilter before
+        # MainWindow.__init__ has populated every UI-only attribute.
+        window = MainWindow.__new__(MainWindow)
+        QMainWindow.__init__(window)
+        child = QWidget(window)
+        window.__dict__.pop("_custom_chrome_enabled", None)
+        from PyQt6.QtCore import QEvent
+
+        self.assertFalse(
+            MainWindow.eventFilter(window, child, QEvent(QEvent.Type.User))
+        )
+        # This instance intentionally skips MainWindow.__init__. Calling close()
+        # would enter the full-window closeEvent lifecycle, which is outside
+        # the eventFilter contract being tested and requires initialized UI state.
+        window.deleteLater()
+
+    def test_security_page_exposes_enforced_safeguards_not_todo_placeholders(self):
+        owner = QMainWindow()
+        owner._tr = lambda text, **values: text
+        owner._save_computer_access_controls = lambda *_: None
+        owner._save_computer_permission_controls = lambda *_: None
+        owner._save_computer_safety_controls = lambda *_: None
+        owner._save_computer_temporary_access_duration = lambda *_: None
+        with (
+            patch("memory.config_manager.get_computer_access_settings", return_value={
+                "mode": "chat", "access_level": "approve", "remaining_seconds": 0
+            }),
+            patch("memory.config_manager.get_computer_permissions", return_value={
+                "observe_screen": True, "find_elements": False, "move_mouse": False,
+                "click": False, "type": False, "clipboard": False
+            }),
+            patch("memory.config_manager.get_computer_safety_settings", return_value={
+                "microphone_during_screen_actions": True,
+                "application_rules_enabled": False,
+                "application_rule_mode": "blocklist",
+                "applications": [],
+            }),
+        ):
+            page = MainWindow._build_permissions_settings_page(owner)
+
+        for name in (
+            "full_access_duration",
+            "microphone_during_screen_actions",
+            "application_rules_enabled",
+            "application_rule_mode",
+            "application_rules",
+        ):
+            self.assertIsNotNone(page.findChild(QWidget, name), name)
+        self.assertNotIn(
+            "PLANNED",
+            " ".join(label.text() for label in page.findChildren(QLabel)),
+        )
+        page.close()
+        owner.close()
 
     def test_setting_row_pairs_control_with_accessible_description(self):
         control = QCheckBox("Enabled")

@@ -6,6 +6,45 @@ dispatcher and the action implementation cannot drift apart.
 
 from __future__ import annotations
 
+import re
+
+
+def _normalise_application_name(value: str) -> str:
+    name = str(value or "").strip().casefold()
+    name = re.sub(r"\.exe$", "", name)
+    return re.sub(r"[^a-z0-9]+", "", name)
+
+
+def application_rule_decision(
+    application: str | None,
+    settings: dict | None,
+) -> tuple[bool, str]:
+    """Apply an allowlist/blocklist; unknown targets fail closed."""
+    settings = settings if isinstance(settings, dict) else {}
+    if not settings.get("application_rules_enabled", False):
+        return True, ""
+    target = _normalise_application_name(application or "")
+    if not target:
+        return False, "Cannot identify the target application; the action is blocked."
+    raw = settings.get("applications", [])
+    if isinstance(raw, str):
+        raw = re.split(r"[,;\n]", raw)
+    if not isinstance(raw, (list, tuple, set)):
+        raw = []
+    rules = {_normalise_application_name(item) for item in raw}
+    rules.discard("")
+    matched = any(
+        target == rule or target.endswith(rule) or rule.endswith(target)
+        for rule in rules
+    )
+    mode = str(settings.get("application_rule_mode", "blocklist")).lower()
+    if mode == "allowlist" and not matched:
+        return False, f"'{application}' is not in the allowed applications list."
+    if mode != "allowlist" and matched:
+        return False, f"'{application}' is blocked by the application rules."
+    return True, ""
+
+
 COMPUTER_CONTROL_ALIASES = {
     "quit_app": "close_app",
     "close_application": "close_app",

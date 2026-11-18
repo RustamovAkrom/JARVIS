@@ -1,4 +1,6 @@
 import json
+import re
+import time
 from pathlib import Path
 from pathlib import PurePosixPath, PureWindowsPath
 from core.runtime_paths import PATHS
@@ -358,19 +360,34 @@ COMPUTER_MODES = ("chat", "agent")
 COMPUTER_ACCESS_LEVELS = ("ask", "approve", "full")
 
 
-def get_computer_access_settings() -> dict[str, str]:
-    """Return the assistant's interaction mode and computer-access policy."""
+def get_computer_access_settings() -> dict[str, str | int | float]:
+    """Return the effective computer-access policy; Full Access always expires."""
     cfg = load_api_keys()
     mode = str(cfg.get("computer_mode", "chat")).lower()
     access = str(cfg.get("computer_access_level", "approve")).lower()
+    try:
+        expires_at = max(0.0, float(cfg.get("computer_access_expires_at", 0) or 0))
+    except (TypeError, ValueError):
+        expires_at = 0.0
+    remaining = max(0.0, expires_at - time.time()) if expires_at else 0.0
+    # Legacy Full Access with no expiry is expired rather than indefinite.
+    if access == "full" and remaining <= 0:
+        access = "approve"
     return {
         "mode": mode if mode in COMPUTER_MODES else "chat",
         "access_level": access if access in COMPUTER_ACCESS_LEVELS else "approve",
+        "expires_at": expires_at if access == "full" else 0.0,
+        "remaining_seconds": int(remaining) if access == "full" else 0,
     }
 
 
-def save_computer_access_settings(mode: str | None = None, access_level: str | None = None) -> None:
-    """Persist only recognized access options; legacy per-action permissions stay intact."""
+def save_computer_access_settings(
+    mode: str | None = None,
+    access_level: str | None = None,
+    *,
+    temporary_minutes: int | None = None,
+) -> None:
+    """Persist settings and attach a bounded deadline to Full Access."""
     updates = {}
     if mode is not None:
         mode = str(mode).lower()
@@ -380,6 +397,29 @@ def save_computer_access_settings(mode: str | None = None, access_level: str | N
         access_level = str(access_level).lower()
         if access_level in COMPUTER_ACCESS_LEVELS:
             updates["computer_access_level"] = access_level
+            if access_level != "full":
+                updates["computer_access_expires_at"] = 0.0
+    if access_level == "full":
+        if temporary_minutes is not None:
+            minutes = max(1, min(60, int(temporary_minutes)))
+            updates["computer_access_expires_at"] = time.time() + minutes * 60
+        else:
+            try:
+                expiry = float(load_api_keys().get("computer_access_expires_at", 0) or 0)
+            except (TypeError, ValueError):
+                expiry = 0.0
+            if expiry <= time.time():
+                updates["computer_access_expires_at"] = time.time() + 15 * 60
+    elif temporary_minutes is not None:
+        # Changing a duration alone only renews an already elevated grant.
+        current = load_api_keys()
+        try:
+            expiry = float(current.get("computer_access_expires_at", 0) or 0)
+        except (TypeError, ValueError):
+            expiry = 0.0
+        if str(current.get("computer_access_level", "")).lower() == "full" and expiry > time.time():
+            minutes = max(1, min(60, int(temporary_minutes)))
+            updates["computer_access_expires_at"] = time.time() + minutes * 60
     if updates:
         _patch_config(**updates)
 
@@ -478,6 +518,57 @@ def save_computer_permissions(values: dict) -> None:
         if isinstance(values.get(key), bool):
             current[key] = values[key]
     _patch_config(computer_permissions=current)
+
+
+def get_computer_safety_settings() -> dict:
+    """Read microphone gating and per-application scoping safeguards."""
+    cfg = load_api_keys().get("computer_safety", {})
+    cfg = cfg if isinstance(cfg, dict) else {}
+    mode = str(cfg.get("application_rule_mode", "blocklist") or "blocklist").lower()
+    if mode not in {"blocklist", "allowlist"}:
+        mode = "blocklist"
+    apps = cfg.get("applications", [])
+    if isinstance(apps, str):
+        apps = re.split(r"[,;\n]", apps)
+    if not isinstance(apps, (list, tuple, set)):
+        apps = []
+    return {
+        "microphone_during_screen_actions": bool(
+            cfg.get("microphone_during_screen_actions", True)
+        ),
+        "application_rules_enabled": bool(cfg.get("application_rules_enabled", False)),
+        "application_rule_mode": mode,
+        "applications": list(dict.fromkeys(
+            str(value).strip()[:120] for value in apps if str(value).strip()
+        ))[:64],
+    }
+
+
+def save_computer_safety_settings(values: dict) -> None:
+    """Persist only known safeguards, preserving unrelated settings."""
+    values = values if isinstance(values, dict) else {}
+    current = load_api_keys().get("computer_safety", {})
+    current = dict(current) if isinstance(current, dict) else {}
+    if "microphone_during_screen_actions" in values:
+        current["microphone_during_screen_actions"] = bool(
+            values["microphone_during_screen_actions"]
+        )
+    if "application_rules_enabled" in values:
+        current["application_rules_enabled"] = bool(values["application_rules_enabled"])
+    if "application_rule_mode" in values:
+        mode = str(values["application_rule_mode"] or "").strip().lower()
+        if mode in {"blocklist", "allowlist"}:
+            current["application_rule_mode"] = mode
+    if "applications" in values:
+        apps = values["applications"]
+        if isinstance(apps, str):
+            apps = re.split(r"[,;\n]", apps)
+        if not isinstance(apps, (list, tuple, set)):
+            apps = []
+        current["applications"] = list(dict.fromkeys(
+            str(value).strip()[:120] for value in apps if str(value).strip()
+        ))[:64]
+    _patch_config(computer_safety=current)
 
 
 def get_brief_enabled() -> bool:
@@ -590,6 +681,7 @@ def save_plugin_enabled(plugin_name: str, enabled: bool) -> None:
 PROVIDER_MODE_GEMINI = "gemini"  # integrated online conversation
 PROVIDER_MODE_PIPELINE = "pipeline"  # configurable voice/model/voice stack
 PROVIDER_ENVIRONMENTS = ("online", "offline")
+PROVIDER_SELECTIONS = ("online", "offline", "auto")
 _LOCAL_CATALOG_IDS = frozenset({"ollama", "lmstudio", "llamacpp", "vllm", "jan", "local", "piper", "system"})
 
 
@@ -628,13 +720,46 @@ def _legacy_provider_environment(block: dict) -> str:
     return "online"
 
 
-def get_provider_environment() -> str:
-    """Return the selected top-level AI environment: online or offline."""
+def get_provider_selection() -> str:
+    """Return the requested runtime policy: online, offline or auto."""
     block = get_providers()
+    value = str(block.get("selection") or "").strip().lower()
+    if value in PROVIDER_SELECTIONS:
+        return value
+    # Migrate installations that only stored the former two-state environment.
+    legacy = str(block.get("environment") or "").strip().lower()
+    return legacy if legacy in PROVIDER_ENVIRONMENTS else _legacy_provider_environment(block)
+
+
+def get_provider_environment() -> str:
+    """Return the currently resolved runtime environment, not the Auto policy."""
+    block = get_providers()
+    selection = get_provider_selection()
+    if selection in PROVIDER_ENVIRONMENTS:
+        return selection
     value = str(block.get("environment") or "").strip().lower()
     if value in PROVIDER_ENVIRONMENTS:
         return value
     return _legacy_provider_environment(block)
+
+
+def resolve_provider_environment(
+    selection: str,
+    *,
+    online_available: bool,
+    offline_ready: bool,
+) -> str:
+    """Resolve a user's Online/Offline/Auto choice without performing I/O."""
+    value = str(selection or "").strip().lower()
+    if value == "online":
+        return "online"
+    if value == "offline":
+        return "offline"
+    if value != "auto":
+        raise ValueError(f"Unsupported AI environment selection: {selection}")
+    if online_available or not offline_ready:
+        return "online"
+    return "offline"
 
 
 def get_online_provider_mode() -> str:
@@ -720,10 +845,18 @@ def _patch_providers(**fields) -> None:
 
 
 def save_provider_environment(environment: str) -> None:
-    """Persist the selected Online or Offline environment."""
+    """Persist an explicit runtime selection and its current active environment."""
     value = str(environment or "").strip().lower()
     if value not in PROVIDER_ENVIRONMENTS:
         raise ValueError(f"Unsupported AI environment: {environment}")
+    _patch_providers(environment=value, selection=value)
+
+
+def save_provider_runtime_environment(environment: str) -> None:
+    """Update Auto's last resolved environment without changing the user's policy."""
+    value = str(environment or "").strip().lower()
+    if value not in PROVIDER_ENVIRONMENTS:
+        raise ValueError(f"Unsupported runtime AI environment: {environment}")
     _patch_providers(environment=value)
 
 
@@ -738,6 +871,7 @@ def save_provider_mode(mode: str) -> None:
         value = PROVIDER_MODE_GEMINI
     _patch_providers(
         environment="online",
+        selection="online",
         mode=value,
         online_mode=value,
     )
@@ -820,6 +954,7 @@ def save_providers(
     environment: str = None,
     online_mode: str = None,
     pipelines: dict = None,
+    selection: str = None,
 ) -> None:
     """Persist one environment's engine, slots and credentials in one write.
 
@@ -837,6 +972,11 @@ def save_providers(
         if active_environment not in PROVIDER_ENVIRONMENTS:
             active_environment = "online"
         block["environment"] = active_environment
+        selected_mode = str(selection or block.get("selection") or "").strip().lower()
+        if selected_mode in PROVIDER_SELECTIONS:
+            block["selection"] = selected_mode
+        elif not block.get("selection"):
+            block["selection"] = active_environment
 
         if online_mode is not None:
             candidate = str(online_mode).strip().lower()

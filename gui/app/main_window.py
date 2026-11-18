@@ -2338,30 +2338,33 @@ class PluginManagerOverlay(QWidget):
             and plugin.get("settings_namespace") in schemas_by_namespace
         }
 
-        lay = QVBoxLayout(self)
-        lay.setContentsMargins(20, 16, 20, 16)
-        lay.setSpacing(6)
+        self._layout = QVBoxLayout(self)
+        self._layout.setContentsMargins(20, 16, 20, 16)
+        self._layout.setSpacing(6)
+        self._embedded = False
 
         hdr = QLabel("🧩  PLUGIN MANAGER")
         hdr.setFont(QFont(FONT_MONO, 12, QFont.Weight.Bold))
         hdr.setStyleSheet(f"color: {C.PRI}; background: transparent;")
-        lay.addWidget(hdr)
+        self._layout.addWidget(hdr)
         sep = QFrame()
         sep.setFrameShape(QFrame.Shape.HLine)
         sep.setStyleSheet(f"color: {C.BORDER}; margin: 2px 0;")
-        lay.addWidget(sep)
+        self._layout.addWidget(sep)
 
         if not plugins:
             empty = QLabel("No plugins found in /plugins.")
             empty.setFont(QFont(FONT_MONO, 8))
             empty.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
-            lay.addWidget(empty)
+            self._layout.addWidget(empty)
 
         for p in plugins:
-            lay.addLayout(self._build_row(p))
+            self._layout.addLayout(self._build_row(p))
 
-        lay.addSpacing(4)
+        self._layout.addSpacing(4)
         close_btn = QPushButton("CLOSE")
+        self._close_button = close_btn
+        close_btn.setObjectName("plugin_manager_close")
         close_btn.setFixedHeight(30)
         close_btn.setFont(QFont(FONT_MONO, 9))
         close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -2373,8 +2376,31 @@ class PluginManagerOverlay(QWidget):
             QPushButton:hover {{ color: {C.TEXT}; border-color: {C.BORDER_B}; }}
         """)
         close_btn.clicked.connect(self.hide)
-        lay.addWidget(close_btn)
+        self._layout.addWidget(close_btn)
         self.adjustSize()
+
+    def set_embedded(self, embedded: bool = True) -> None:
+        """Fit the plugin list to the available Settings viewport."""
+        self._embedded = bool(embedded)
+        if self._embedded:
+            self.setStyleSheet("PluginManagerOverlay { background:transparent; border:0; }")
+            self.setMinimumWidth(0)
+            self.setMaximumWidth(16777215)
+            self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+            self._layout.setContentsMargins(0, 0, 0, 0)
+            self._close_button.hide()
+        else:
+            self.setStyleSheet(f"""
+                PluginManagerOverlay {{
+                    background: {C.PANEL};
+                    border: 1px solid {C.BORDER_B};
+                    border-radius: 6px;
+                }}
+            """)
+            self.setFixedWidth(self._OW)
+            self._layout.setContentsMargins(20, 16, 20, 16)
+            self._close_button.show()
+        self.updateGeometry()
 
     def _build_row(self, p: dict) -> QHBoxLayout:
         row = QHBoxLayout()
@@ -2387,7 +2413,9 @@ class PluginManagerOverlay(QWidget):
             f"color: {C.TEXT if p['valid'] else C.TEXT_DIM}; background: transparent;"
         )
         lbl.setToolTip(p["description"] if p["valid"] else p["error"])
-        lbl.setWordWrap(False)
+        lbl.setWordWrap(True)
+        lbl.setMinimumWidth(0)
+        lbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         row.addWidget(lbl, stretch=1)
 
         btn = QPushButton()
@@ -2412,7 +2440,7 @@ class PluginManagerOverlay(QWidget):
         if p.get("valid") and section is not None:
             settings_btn = QPushButton("⚙")
             settings_btn.setObjectName(f"plugin_settings_{p['name']}")
-            settings_btn.setFixedSize(26, 24)
+            settings_btn.setFixedSize(34, 26)
             settings_btn.setToolTip(f"Configure {p['name']}")
             settings_btn.setAccessibleName(f"Configure {p['name']}")
             settings_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -2948,6 +2976,10 @@ class AudioDeviceOverlay(_HudOverlay):
         self.picked.emit()
 
 
+class _MemoryForgetSignals(QObject):
+    finished = pyqtSignal(str, str, bool, str)
+
+
 class MemoryOverlay(_HudOverlay):
     """Everything JARVIS has stored about you, and when it learned it.
 
@@ -2961,6 +2993,10 @@ class MemoryOverlay(_HudOverlay):
     def __init__(self, parent=None, embedded: bool = False):
         super().__init__(parent)
         self._embedded = bool(embedded)
+        self._forget_signals = _MemoryForgetSignals(self)
+        self._forget_signals.finished.connect(self._on_forget_finished)
+        self._forget_threads: set[threading.Thread] = set()
+        self._forget_busy = False
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(f"""
             MemoryOverlay {{
@@ -3217,8 +3253,10 @@ class MemoryOverlay(_HudOverlay):
                         border:1px solid {C.BORDER}; border-radius:6px; }}
                     QPushButton:hover {{ color:{C.RED}; border-color:{C.RED}; }}
                 """)
+                rm.setObjectName("forget_memory_fact")
                 rm.clicked.connect(
-                    lambda _=False, c=r["category"], k=r["key"]: self._forget(c, k)
+                    lambda _=False, c=r["category"], k=r["key"], button=rm:
+                        self._forget(c, k, button)
                 )
                 top.addWidget(rm)
                 card_lay.addLayout(top)
@@ -3272,9 +3310,9 @@ class MemoryOverlay(_HudOverlay):
         # got it right: _settle is idempotent.
         QTimer.singleShot(0, lambda g=before: self._settle(g))
 
-    def _forget(self, category: str, key: str):
-        from memory.memory_manager import forget
-
+    def _forget(self, category: str, key: str, button=None):
+        if self._forget_busy:
+            return
         answer = QMessageBox.question(
             self,
             "Forget this saved fact?",
@@ -3285,12 +3323,40 @@ class MemoryOverlay(_HudOverlay):
         if answer != QMessageBox.StandardButton.Yes:
             return
 
-        forget(key, category)
-        # Rebuild on the NEXT event-loop turn, not inside this click handler.
-        # The rebuild destroys the very ✕ button that emitted this signal, and
-        # Qt is entitled to touch the sender after a slot returns; tearing it
-        # down mid-emission is how a widget ends up half-alive on screen.
+        self._forget_busy = True
+        if button is not None:
+            button.setEnabled(False)
+        worker = threading.Thread(
+            target=self._forget_worker,
+            args=(category, key),
+            daemon=True,
+            name="memory-forget",
+        )
+        self._forget_threads.add(worker)
+        worker.start()
+
+    def _forget_worker(self, category: str, key: str) -> None:
+        try:
+            from memory.memory_manager import forget
+            result = forget(key, category)
+            success = result.startswith("Forgotten:")
+        except Exception as exc:
+            success, result = False, f"{type(exc).__name__}: {exc}"
+        try:
+            self._forget_signals.finished.emit(category, key, success, result)
+        except RuntimeError:
+            pass
+
+    def _on_forget_finished(self, category: str, key: str, success: bool, result: str):
+        self._forget_busy = False
+        self._forget_threads = {worker for worker in self._forget_threads if worker.is_alive()}
         QTimer.singleShot(0, self._rebuild)
+        if not success:
+            QMessageBox.warning(
+                self,
+                "Memory was not changed",
+                result or f"Could not remove {category}/{key}.",
+            )
 
 
 class _ScrollSafeCombo(QComboBox):
@@ -7502,7 +7568,7 @@ class MainWindow(QMainWindow):
             }}
             QPushButton:hover {{ color: {C.PRI}; }}
         """)
-        _cam_x.clicked.connect(self.stop_camera_stream)
+        _cam_x.clicked.connect(self._close_camera_preview)
         _cam_hdr.addWidget(_cam_x)
         _cam_v.addLayout(_cam_hdr)
         self._cam_live_lbl = QLabel()
@@ -7897,6 +7963,8 @@ class MainWindow(QMainWindow):
         self._auth_lock_sig.connect(self._show_auth_lock)
         self._auth_face_result_sig.connect(self._finish_face_auth)
         self._cam_stop = threading.Event()
+        self._cam_thread = None
+        self._cam_preview_dismissed = threading.Event()
 
         # Camera preview overlay (child of central widget, positioned in resizeEvent)
         self._cam_preview = _CameraPreview(self.centralWidget())
@@ -8322,6 +8390,16 @@ class MainWindow(QMainWindow):
         )
 
     # --- Live camera stream in HUD area ------------------------------------
+    def _close_camera_preview(self) -> None:
+        """Dismiss the HUD camera surface without disabling Gesture Control."""
+        self._cam_preview_dismissed.set()
+        self._cam_stop.set()
+        try:
+            self._cam_stream_sig.emit(False)
+        except RuntimeError:
+            pass
+        self._cam_live_lbl.clear()
+
     def _on_cam_stream(self, start: bool) -> None:
         if start:
             self._hud_cam_stack.setCurrentIndex(1)
@@ -8345,46 +8423,52 @@ class MainWindow(QMainWindow):
                 )
 
     def start_camera_stream(self) -> None:
+        current = self._cam_thread
+        if current is not None and current.is_alive():
+            return
         self._cam_stop.clear()
-        self._cam_stream_sig.emit(True)
-        t = threading.Thread(target=self._cam_loop, daemon=True, name="cam-stream")
-        t.start()
+        try:
+            self._cam_stream_sig.emit(True)
+        except RuntimeError:
+            return
+        self._cam_thread = threading.Thread(target=self._cam_loop, daemon=True, name="cam-stream")
+        self._cam_thread.start()
 
     def _cam_loop(self) -> None:
+        camera = None
         try:
             import cv2
+            from core.cameras import Camera
 
-            # Reuse camera index detected by screen_processor (cached in api_keys.json)
-            cam_idx = 0
-            try:
-                import json as _j
-
-                cfg = _j.loads((CONFIG_DIR / "api_keys.json").read_text())
-                cam_idx = int(cfg.get("camera_index", 0))
-            except Exception:
-                pass
-            try:
-                backend = cv2.CAP_DSHOW if _OS == "Windows" else cv2.CAP_ANY
-            except AttributeError:
-                backend = 0
-            cap = cv2.VideoCapture(cam_idx, backend)
-            if not cap.isOpened():
-                cap = cv2.VideoCapture(0)
-            if not cap.isOpened():
+            # Every webcam consumer leases the same managed capture. This
+            # prevents the HUD preview from racing Gesture Control or vision.
+            camera = Camera()
+            if not camera.open():
+                print(f"[Camera] Stream unavailable: {camera.last_error or 'camera could not be opened'}")
                 return
-            # warm-up frames
-            for _ in range(5):
-                cap.read()
-            while not self._cam_stop.wait(0.033) and cap.isOpened():
-                ret, frame = cap.read()
-                if ret and frame is not None:
-                    _, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 65])
-                    self._cam_frame_sig.emit(buf.tobytes())
-            cap.release()
+
+            while not self._cam_stop.is_set():
+                frame = camera.read(timeout=0.1)
+                if frame is None:
+                    continue
+                ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 65])
+                if ok:
+                    try:
+                        self._cam_frame_sig.emit(buf.tobytes())
+                    except RuntimeError:
+                        break
         except Exception as e:
-            print(f"[Camera] Stream error: {e}")
+            print(f"[Camera] Stream error: {type(e).__name__}: {e}")
         finally:
-            self._cam_stream_sig.emit(False)
+            if camera is not None:
+                try:
+                    camera.close()
+                except Exception:
+                    pass
+            try:
+                self._cam_stream_sig.emit(False)
+            except RuntimeError:
+                pass
 
     def stop_camera_stream(self) -> None:
         self._cam_stop.set()
@@ -9087,7 +9171,7 @@ class MainWindow(QMainWindow):
 
     def eventFilter(self, watched, event):
         if (
-            self._custom_chrome_enabled
+            getattr(self, "_custom_chrome_enabled", False)
             and event.type() == QEvent.Type.MouseButtonPress
             and event.button() == Qt.MouseButton.LeftButton
             and isinstance(watched, QWidget)
@@ -9569,18 +9653,23 @@ class MainWindow(QMainWindow):
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        # The compact System tab scrolls with the wheel/trackpad; hide the
+        # native bar so it does not consume a permanent strip of the panel.
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setMinimumHeight(0)
         scroll.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
+        scroll.setStyleSheet(
+            "QScrollArea { background: transparent; border: none; }"
+            "QScrollBar:vertical { width:0; background:transparent; }"
+        )
         scroll.viewport().setAutoFillBackground(False)
         scroll.viewport().setStyleSheet("background: transparent; border: none;")
         body = QWidget()
         body.setAutoFillBackground(False)
         body.setStyleSheet("background: transparent;")
         lay = QVBoxLayout(body)
-        lay.setContentsMargins(10, 12, 10, 12)
-        lay.setSpacing(7)
+        lay.setContentsMargins(9, 10, 9, 10)
+        lay.setSpacing(8)
         scroll.setWidget(body)
         system_layout.addWidget(scroll)
 
@@ -9590,7 +9679,7 @@ class MainWindow(QMainWindow):
         hdr.setToolTip(
             self._tr("Live resource indicators; hover over a metric for details.")
         )
-        hdr.setFont(QFont(FONT_MONO, 8, QFont.Weight.Bold))
+        hdr.setFont(QFont(FONT_MONO, 9, QFont.Weight.Bold))
         hdr.setStyleSheet(f"color: {C.PRI}; background: transparent;")
         head_row.addWidget(hdr, 1)
         online = QLabel(f"● {self._tr('Online')}")
@@ -9660,8 +9749,8 @@ class MainWindow(QMainWindow):
             f"border:1px solid {C.BORDER}; border-radius:8px; }}"
         )
         gauge_layout = QVBoxLayout(gauge_surface)
-        gauge_layout.setContentsMargins(4, 4, 4, 4)
-        gauge_layout.setSpacing(0)
+        gauge_layout.setContentsMargins(6, 6, 6, 6)
+        gauge_layout.setSpacing(3)
         gauge_layout.addWidget(_gauge_row(self._gauge_cpu, self._gauge_mem))
         gauge_layout.addWidget(_gauge_row(self._gauge_net, self._gauge_gpu))
         gauge_layout.addWidget(_gauge_row(self._gauge_tmp))
@@ -9670,6 +9759,7 @@ class MainWindow(QMainWindow):
         self._trend_chart = MetricTrendChart(
             self._tr("LOAD HISTORY"), self._tr("COLLECTING TELEMETRY"), self._tr("MEM")
         )
+        self._trend_chart.setMinimumHeight(118)
         lay.addWidget(self._trend_chart, 1)
 
         details_rule = QFrame()
@@ -11278,6 +11368,7 @@ class MainWindow(QMainWindow):
             DEFAULT_COMPUTER_PERMISSIONS,
             get_computer_access_settings,
             get_computer_permissions,
+            get_computer_safety_settings,
         )
 
         page = QWidget()
@@ -11286,6 +11377,7 @@ class MainWindow(QMainWindow):
         layout.setSpacing(12)
         access = get_computer_access_settings()
         current = get_computer_permissions()
+        safety = get_computer_safety_settings()
         labels = {
             "observe_screen": ("Screen observation", "Allow screen capture only when you ask JARVIS to inspect the screen."),
             "find_elements": ("Find interface elements", "Allow JARVIS to identify visible controls before acting."),
@@ -11351,9 +11443,28 @@ class MainWindow(QMainWindow):
             "Ask every time; use the allowed switches; or grant all computer permissions.",
             self._computer_access_combo,
         ))
+        self._full_access_duration_combo = QComboBox()
+        self._full_access_duration_combo.setObjectName("full_access_duration")
+        for minutes in (5, 15, 30, 60):
+            self._full_access_duration_combo.addItem(f"{minutes} minutes", minutes)
+        remaining_minutes = max(
+            1, min(60, (int(access.get("remaining_seconds", 0)) + 59) // 60)
+        )
+        closest = min((5, 15, 30, 60), key=lambda value: abs(value - remaining_minutes))
+        self._full_access_duration_combo.setCurrentIndex(
+            max(0, self._full_access_duration_combo.findData(closest))
+        )
+        self._full_access_duration_combo.currentIndexChanged.connect(
+            self._save_computer_temporary_access_duration
+        )
+        access_section.add_row(SettingRow(
+            "Full access duration",
+            "Elevated access expires automatically. Choose the duration for each grant.",
+            self._full_access_duration_combo,
+        ))
         self._full_access_warning = QLabel(
             "Full access enables screen, pointer, click, keyboard, and clipboard capabilities. "
-            "Switch to Agent mode to use them. Shutdown, restart, Wi-Fi changes, "
+            "It expires automatically after the selected duration. Shutdown, restart, Wi-Fi changes, "
             "and closing apps still require confirmation."
         )
         self._full_access_warning.setWordWrap(True)
@@ -11400,19 +11511,65 @@ class MainWindow(QMainWindow):
             future.add_row(SettingRow(self._tr(title), self._tr(description), warning))
         layout.addWidget(future)
 
-        planned = SettingsSection(
-            "Planned safeguards · TODO",
-            "These controls are visible for planning; their enforcement is not implemented yet.",
+        safeguards = SettingsSection(
+            "Runtime safeguards",
+            "These policies are enforced by the computer-action dispatcher.",
         )
-        for title, description in (
-            ("Microphone during screen actions", "Limit when voice input can remain active."),
-            ("Per-application rules", "Choose which apps may be inspected or controlled."),
-            ("Temporary access", "Set an automatic expiry for elevated permissions."),
-        ):
-            placeholder = QLabel("PLANNED")
-            placeholder.setStyleSheet(f"color:{C.TEXT_DIM}; font-weight:700;")
-            planned.add_row(SettingRow(self._tr(title), self._tr(description), placeholder))
-        layout.addWidget(planned)
+        self._microphone_screen_actions_check = QCheckBox(self._tr("Pause microphone input"))
+        self._microphone_screen_actions_check.setObjectName("microphone_during_screen_actions")
+        self._microphone_screen_actions_check.setChecked(
+            safety["microphone_during_screen_actions"]
+        )
+        self._microphone_screen_actions_check.toggled.connect(
+            self._save_computer_safety_controls
+        )
+        safeguards.add_row(SettingRow(
+            "Microphone during screen actions",
+            "Pause microphone streaming and local wake-word input while JARVIS inspects or controls the screen.",
+            self._microphone_screen_actions_check,
+        ))
+
+        self._application_rules_enabled_check = QCheckBox(self._tr("Enable application rules"))
+        self._application_rules_enabled_check.setObjectName("application_rules_enabled")
+        self._application_rules_enabled_check.setChecked(safety["application_rules_enabled"])
+        self._application_rules_enabled_check.toggled.connect(
+            self._save_computer_safety_controls
+        )
+        safeguards.add_row(SettingRow(
+            "Per-application rules",
+            "Restrict which foreground or explicitly named applications JARVIS may inspect or control.",
+            self._application_rules_enabled_check,
+        ))
+
+        self._application_rule_mode_combo = QComboBox()
+        self._application_rule_mode_combo.setObjectName("application_rule_mode")
+        self._application_rule_mode_combo.addItem("Block listed applications", "blocklist")
+        self._application_rule_mode_combo.addItem("Allow only listed applications", "allowlist")
+        self._application_rule_mode_combo.setCurrentIndex(
+            max(0, self._application_rule_mode_combo.findData(safety["application_rule_mode"]))
+        )
+        self._application_rule_mode_combo.currentIndexChanged.connect(
+            self._save_computer_safety_controls
+        )
+        safeguards.add_row(SettingRow(
+            "Rule behaviour",
+            "Blocklist denies listed apps. Allowlist denies every app not listed.",
+            self._application_rule_mode_combo,
+        ))
+
+        self._application_rules_input = QLineEdit(", ".join(safety["applications"]))
+        self._application_rules_input.setObjectName("application_rules")
+        self._application_rules_input.setPlaceholderText("e.g. chrome.exe, discord, code")
+        self._application_rules_input.setClearButtonEnabled(True)
+        self._application_rules_input.editingFinished.connect(
+            self._save_computer_safety_controls
+        )
+        safeguards.add_row(SettingRow(
+            "Application names",
+            "Comma-separated process names. Unknown foreground apps are blocked when rules are enabled.",
+            self._application_rules_input,
+        ))
+        layout.addWidget(safeguards)
 
         authentication = SettingsSection(
             "Authentication integration",
@@ -11463,7 +11620,15 @@ class MainWindow(QMainWindow):
                 )
                 self._computer_access_combo.blockSignals(False)
                 access_level = "approve"
-        save_computer_access_settings(mode, access_level)
+        save_computer_access_settings(
+            mode,
+            access_level,
+            temporary_minutes=(
+                int(self._full_access_duration_combo.currentData())
+                if access_level == "full" and previous_level != "full"
+                else None
+            ),
+        )
         self._last_computer_access_level = access_level
         if not getattr(self, "_chat_plan_mode", False):
             self._chat_interaction_mode = mode
@@ -11492,6 +11657,40 @@ class MainWindow(QMainWindow):
                 check.setChecked(configured[permission])
             check.setEnabled(not is_full)
             check.blockSignals(False)
+        self._refresh_access_status()
+
+    def _save_computer_temporary_access_duration(self, *_):
+        from memory.config_manager import (
+            get_computer_access_settings,
+            save_computer_access_settings,
+        )
+
+        access = get_computer_access_settings()
+        if access["access_level"] != "full":
+            return
+        minutes = int(self._full_access_duration_combo.currentData() or 15)
+        save_computer_access_settings(temporary_minutes=minutes)
+        self._full_access_warning.setText(
+            f"Full access is active and will expire in approximately {minutes} minutes. "
+            "High-impact actions still require confirmation."
+        )
+        self._refresh_access_status()
+
+    def _save_computer_safety_controls(self, *_):
+        from memory.config_manager import save_computer_safety_settings
+
+        applications = [
+            value.strip()
+            for value in re.split(r"[,;\\n]", self._application_rules_input.text())
+            if value.strip()
+        ][:64]
+        save_computer_safety_settings({
+            "microphone_during_screen_actions": self._microphone_screen_actions_check.isChecked(),
+            "application_rules_enabled": self._application_rules_enabled_check.isChecked(),
+            "application_rule_mode": self._application_rule_mode_combo.currentData(),
+            "applications": applications,
+        })
+        self._append_activity("SYS: Computer safety safeguards updated.")
         self._refresh_access_status()
 
     def _build_workspace_settings_page(self):
@@ -11857,6 +12056,9 @@ class MainWindow(QMainWindow):
                 if old != updated:
                     retheme_all_widgets(old, updated)
                 self._apply_design_system()
+                settings = getattr(self, "_settings_center", None)
+                if settings is not None:
+                    settings.refresh_theme()
         self._log.append_log("SYS: Appearance settings updated.")
         return True
 
@@ -14999,6 +15201,9 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         if apply_ui_accent(hex_color):
             retheme_all_widgets(old, current_palette())
             self._apply_design_system()
+            settings = getattr(self, "_settings_center", None)
+            if settings is not None:
+                settings.refresh_theme()
 
     def _preview_ui_opacity(self, opacity: int):
         value = max(60, min(100, int(opacity)))
@@ -16341,6 +16546,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                 self._native_cursor_applied = False
             except Exception as exc:
                 print(f"ERR: Could not restore the Windows system cursor — {exc}")
+        self._cam_stop.set()
         self._cursor_menu.hide()
         self._clipboard_panel.hide()
         if self._region_selector is not None:
@@ -16637,9 +16843,39 @@ class JarvisUI:
         self._stderr_mirror = _ConsoleMirror(sys.stderr, self._win, "stderr")
         sys.stdout, sys.stderr = self._stdout_mirror, self._stderr_mirror
         self._win._console_restore_callback = self._restore_console
+        self._app.aboutToQuit.connect(self._shutdown_camera_services)
         self._app.aboutToQuit.connect(self._restore_console)
         self.root = _RootShim(self._app)
         self._win.show()
+
+    def _shutdown_camera_services(self):
+        """Stop camera consumers before Qt destroys the main window."""
+        try:
+            self._win.stop_camera_stream()
+            camera_thread = getattr(self._win, "_cam_thread", None)
+            if camera_thread is not None and camera_thread is not threading.current_thread():
+                camera_thread.join(timeout=1.5)
+        except Exception as exc:
+            print(f"[Shutdown] HUD camera cleanup failed: {type(exc).__name__}: {exc}")
+
+        try:
+            from plugins import gesture_control
+            gesture_control.stop()
+        except Exception as exc:
+            print(f"[Shutdown] Gesture Control cleanup failed: {type(exc).__name__}: {exc}")
+
+        try:
+            from plugins import _hands
+            if not _hands.SERVICE.shutdown(timeout=2.5):
+                print("[Shutdown] Hand tracking worker did not stop before timeout.")
+        except Exception as exc:
+            print(f"[Shutdown] Hand service cleanup failed: {type(exc).__name__}: {exc}")
+
+        try:
+            from core import cameras
+            cameras.close_all()
+        except Exception as exc:
+            print(f"[Shutdown] Camera cleanup failed: {type(exc).__name__}: {exc}")
 
     def _restore_console(self):
         self._stdout_mirror.detach()
@@ -16907,6 +17143,24 @@ class JarvisUI:
     def show_camera_frame(self, img_bytes: bytes):
         """Thread-safe: show a webcam frame in the small overlay (screen captures)."""
         self._win._camera_sig.emit(img_bytes)
+
+    def show_image(self, path: str, title: str = "") -> None:
+        """Read and display an image in the HUD preview overlay."""
+        try:
+            image_bytes = Path(path).read_bytes()
+        except OSError as exc:
+            print(f"[Image] Could not read image: {exc}")
+            return
+        self._win._camera_sig.emit(image_bytes)
+
+    def show_image_bytes(self, image_bytes: bytes, title: str = "") -> None:
+        """Display generated image bytes without retaining a persistent file."""
+        if image_bytes:
+            self._win._camera_sig.emit(bytes(image_bytes))
+
+    def video_state(self) -> dict:
+        """Expose the preview state for plugins waiting for visual output."""
+        return {"kind": "image" if self._win._cam_preview.isVisible() else ""}
 
     def show_video(
         self, source: str, title: str = "", muted: bool = True, audio_source: str = ""

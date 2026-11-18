@@ -7,6 +7,7 @@
 # ── Secrets. Committing any of these publishes them. ──────────────────────────
 /config/api_keys.json
 config/certs/
+reports/
 config/whatsapp_web/
 config/ui_tasks.json
 config/api_keyss_old.json
