@@ -758,6 +758,11 @@ def call(
     cl = None
     tried = [m for m in ladder if not _cooling(m)] or list(ladder)
     for model in tried:
+        safe_model = (
+            f"{PROVIDER_PREFIX}<redacted>"
+            if model.startswith(PROVIDER_PREFIX)
+            else model
+        )
         try:
             if model == LIVE:
                 reply = _live_call(contents, config, timeout_ms, resolved_key)
@@ -777,20 +782,20 @@ def call(
             if is_quota_error(msg):
                 _cool(model)
                 print(
-                    f"[Gemini] {model}: out of quota — skipping it for "
+                    f"[Gemini] {safe_model}: out of quota — skipping it for "
                     f"{_COOLDOWN_SECONDS // 60} minutes"
                 )
             elif is_gone_error(msg):
                 _cool(model, _GONE_SECONDS)
-                print(f"[Gemini] {model}: unavailable to this key — set aside")
+                print(f"[Gemini] {safe_model}: unavailable to this key — set aside")
             elif is_unavailable_error(msg):
                 _cool(model, _UNAVAILABLE_SECONDS)
                 print(
-                    f"[Gemini] {model}: not answering — resting it for "
+                    f"[Gemini] {safe_model}: not answering — resting it for "
                     f"{_UNAVAILABLE_SECONDS // 60} minutes"
                 )
             else:
-                print(f"[Gemini] {model}: {type(e).__name__}: {msg[:140]}")
+                print(f"[Gemini] {safe_model}: {type(e).__name__}: {msg[:140]}")
     return None
 
 
