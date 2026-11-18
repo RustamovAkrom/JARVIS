@@ -299,6 +299,10 @@ _TRANSLATIONS = {
         "CLOSE": "ЗАКРЫТЬ",
         "AI providers": "AI-провайдеры",
         "Choose Online cloud services or Offline models on this device. Configure voice recognition, the AI model and spoken responses inside each mode.": "Выберите облачные сервисы Online или локальные модели Offline. В каждом режиме настройте распознавание речи, AI-модель и голосовые ответы.",
+        "JARVIS selected this language from your operating system. You can change it now; it will be used throughout JARVIS.": "JARVIS выбрал этот язык на основе языка вашей операционной системы. Вы можете изменить его сейчас; он будет использоваться во всём приложении.",
+        "AI model is selected. Missing {services} is optional: you can type instead of speaking or read the answer.": "AI-модель выбрана. Отсутствие {services} не мешает работе: вместо речи можно вводить текст, а ответ — читать.",
+        "Use cloud services. Choose Gemini Live for one integrated service, or configure hosted AI and speech providers below.": "Используйте облачные сервисы. Выберите Gemini Live как единый сервис или настройте отдельные облачные AI- и речевые сервисы ниже.",
+        "Use AI and speech models running on this computer. Download the required models once; after setup, the conversation can run without a cloud AI provider.": "Используйте AI- и речевые модели на этом компьютере. Загрузите необходимые модели один раз — после настройки диалог будет работать без облачного AI-провайдера.",
     },
     "uz": {
         "CONTROLS": "BOSHQARUV",
@@ -592,6 +596,10 @@ _TRANSLATIONS = {
         "CLOSE": "YOPISH",
         "AI providers": "AI provayderlari",
         "Choose Online cloud services or Offline models on this device. Configure voice recognition, the AI model and spoken responses inside each mode.": "Onlayn bulut xizmatlari yoki ushbu qurilmadagi oflayn modellarni tanlang. Har bir rejimda nutqni aniqlash, AI modeli va ovozli javoblarni sozlang.",
+        "JARVIS selected this language from your operating system. You can change it now; it will be used throughout JARVIS.": "JARVIS ushbu tilni operatsion tizimingiz tiliga qarab tanladi. Uni hozir o‘zgartirishingiz mumkin; u butun ilovada ishlatiladi.",
+        "AI model is selected. Missing {services} is optional: you can type instead of speaking or read the answer.": "AI modeli tanlangan. {services} bo‘lmasa ham ishlash mumkin: gapirish o‘rniga matn yozing yoki javobni o‘qing.",
+        "Use cloud services. Choose Gemini Live for one integrated service, or configure hosted AI and speech providers below.": "Bulut xizmatlaridan foydalaning. Yagona xizmat uchun Gemini Live’ni tanlang yoki quyida alohida bulut AI va nutq provayderlarini sozlang.",
+        "Use AI and speech models running on this computer. Download the required models once; after setup, the conversation can run without a cloud AI provider.": "Ushbu kompyuterda ishlaydigan AI va nutq modellaridan foydalaning. Kerakli modellarni bir marta yuklab oling; sozlangandan so‘ng suhbat bulut AI provayderisiz ishlaydi.",
     },
 }
 
