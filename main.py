@@ -2693,7 +2693,7 @@ class JarvisLive:
         _spk_name = get_output_device()
         _spk_dev = audio_devices.resolve(_spk_name, "output")
         if _spk_dev is not None:
-            print(f"[JARVIS] 🔊 Output device: {_spk_name}")
+            print("[JARVIS] 🔊 Output device: custom device selected")
 
         def _open_spk(dev):
             st = sd.RawOutputStream(
