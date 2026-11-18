@@ -111,7 +111,7 @@ class SettingsCenter(QDialog):
     """A single reusable settings window; setting actions are injected by owner."""
 
     action_requested = pyqtSignal(str)
-    closed = pyqtSignal(str)
+    closed = pyqtSignal()
 
     def _tr(self, text: str, **values) -> str:
         from memory.config_manager import get_ui_language
