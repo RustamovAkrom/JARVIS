@@ -16752,6 +16752,13 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                             language,
                         )
                     )
+                language_combo = getattr(self, "_ui_language_combo", None)
+                if isinstance(language_combo, QComboBox):
+                    blocked = language_combo.blockSignals(True)
+                    language_combo.setCurrentIndex(
+                        max(0, language_combo.findData(language))
+                    )
+                    language_combo.blockSignals(blocked)
         self._ready = True
         self._apply_state("LISTENING")
         self._assistant_name = (
