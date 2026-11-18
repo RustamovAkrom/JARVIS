@@ -109,7 +109,6 @@ class OnboardingDialog(QDialog):
         self._permission_descriptions: dict[str, QLabel] = {}
         self._labels: dict[str, QLabel] = {}
         self._buttons: dict[str, QPushButton] = {}
-        self._accepted_terms = False
 
         self.setWindowTitle("JARVIS — Setup")
         self.setModal(True)
@@ -240,7 +239,6 @@ class OnboardingDialog(QDialog):
         self._agreement_check = QCheckBox()
         layout.addWidget(self._agreement_check)
         self._cloud_voice_check = QCheckBox()
-        self._cloud_voice_check.setWordWrap(True)
         layout.addWidget(self._cloud_voice_check)
 
     def _build_permissions_page(self) -> None:
