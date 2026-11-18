@@ -221,7 +221,7 @@ class OnboardingDialog(QDialog):
         return page, layout
 
     def _build_language_page(self) -> None:
-        _, layout = self._page("Choose your interface language", "This language will be used throughout JARVIS.")
+        _, layout = self._page("Choose your interface language", "JARVIS selected this language from your operating system. You can change it now; it will be used throughout JARVIS.")
         self._language_combo = QComboBox()
         for code, name in LANGUAGES.items():
             self._language_combo.addItem(name, code)
