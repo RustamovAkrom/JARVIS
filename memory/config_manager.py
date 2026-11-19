@@ -251,6 +251,30 @@ def save_voice(voice_name: str) -> None:
     _patch_config(voice_name=v if v in AVAILABLE_VOICES else DEFAULT_VOICE)
 
 
+WAKE_WORD_THRESHOLD_DEFAULT = 0.5
+
+def get_wake_word_threshold() -> float:
+    value = load_api_keys().get("wake_word_threshold", WAKE_WORD_THRESHOLD_DEFAULT)
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return WAKE_WORD_THRESHOLD_DEFAULT
+    if not 0.1 <= value <= 0.95:
+        return WAKE_WORD_THRESHOLD_DEFAULT
+    return round(value, 2)
+
+def save_wake_word_threshold(threshold: float) -> float:
+    try:
+        value = float(threshold)
+    except (TypeError, ValueError):
+        raise ValueError("Wake word threshold must be a number") from None
+    if not 0.1 <= value <= 0.95:
+        raise ValueError("Wake word threshold must be between 0.10 and 0.95")
+    value = round(value, 2)
+    _patch_config(wake_word_threshold=value)
+    return value
+
+
 def get_wake_word_enabled() -> bool:
     """Whether local wake-word gating is on (assistant sleeps until 'Hey Jarvis')."""
     return load_api_keys().get("wake_word_enabled", False)
