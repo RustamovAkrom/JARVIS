@@ -11187,18 +11187,155 @@ class MainWindow(QMainWindow):
             apply_changes=self._apply_identity_settings,
         )
 
+    def _build_live_session_settings_panel(self):
+        from gui.components.settings import SettingRow, SettingsSection
+        from memory.config_manager import (
+            get_media_resolution,
+            get_proactive_audio_enabled,
+            get_thinking_enabled,
+            get_turn_tuning,
+        )
+
+        host = QWidget()
+        layout = QVBoxLayout(host)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(12)
+
+        section = SettingsSection(
+            "Live session behavior",
+            "These settings affect the next Live session. Apply saves the complete configuration.",
+        )
+        thinking = QCheckBox(self._tr("Enable model thinking"))
+        thinking.setObjectName("thinking_enabled")
+        thinking.setChecked(get_thinking_enabled())
+        section.add_row(SettingRow(
+            "Thinking",
+            "Allow the Live model additional reasoning before responding. May increase response latency.",
+            thinking,
+        ))
+
+        proactive = QCheckBox(self._tr("Enable proactive audio"))
+        proactive.setObjectName("proactive_audio")
+        proactive.setChecked(get_proactive_audio_enabled())
+        section.add_row(SettingRow(
+            "Proactive audio",
+            "Allow the model to decide when speech in the room is not addressed to JARVIS.",
+            proactive,
+        ))
+
+        resolution = QComboBox()
+        resolution.setObjectName("media_resolution")
+        for value, label in (
+            ("default", "Model default"),
+            ("low", "Low — lower token cost"),
+            ("medium", "Medium — balanced"),
+            ("high", "High — more visual detail"),
+        ):
+            resolution.addItem(label, value)
+        resolution.setCurrentIndex(max(0, resolution.findData(get_media_resolution())))
+        section.add_row(SettingRow(
+            "Screen and camera detail",
+            "Controls visual detail sent with screen captures and camera frames.",
+            resolution,
+        ))
+
+        tuning = get_turn_tuning()
+        turn_enabled = QCheckBox(self._tr("Enable turn tuning"))
+        turn_enabled.setObjectName("turn_tuning_enabled")
+        turn_enabled.setChecked(tuning["enabled"])
+        section.add_row(SettingRow(
+            "Turn tuning",
+            "Adjust how quickly the Live session detects the end of your speech. Disabled by default.",
+            turn_enabled,
+        ))
+        silence = QComboBox()
+        silence.setObjectName("turn_silence_ms")
+        for value in (350, 450, 550, 700, 900, 1200, 1500):
+            silence.addItem(f"{value} ms", value)
+        silence.setCurrentIndex(max(0, silence.findData(tuning["silence_ms"])))
+        section.add_row(SettingRow(
+            "Silence duration",
+            "Pause required before JARVIS considers your turn complete.",
+            silence,
+        ))
+        prefix = QComboBox()
+        prefix.setObjectName("turn_prefix_ms")
+        for value in (0, 100, 150, 200, 300, 500):
+            prefix.addItem(f"{value} ms", value)
+        prefix.setCurrentIndex(max(0, prefix.findData(tuning["prefix_ms"])))
+        section.add_row(SettingRow(
+            "Speech prefix",
+            "Audio retained before the detected start of speech.",
+            prefix,
+        ))
+        end_sensitivity = QComboBox()
+        end_sensitivity.setObjectName("turn_end_sensitivity")
+        for value in ("high", "medium", "low"):
+            end_sensitivity.addItem(value.title(), value)
+        end_sensitivity.setCurrentIndex(max(0, end_sensitivity.findData(tuning["end_sensitivity"])))
+        section.add_row(SettingRow(
+            "End sensitivity",
+            "Higher sensitivity detects speech completion sooner.",
+            end_sensitivity,
+        ))
+        layout.addWidget(section)
+
+        apply_button = QPushButton(self._tr("Apply live session settings"))
+        apply_button.setObjectName("apply_live_session_settings")
+        status = QLabel("")
+        status.setWordWrap(True)
+        status.setStyleSheet(f"color:{C.TEXT_MED};")
+        layout.addWidget(apply_button)
+        layout.addWidget(status)
+
+        def apply_settings():
+            from memory.config_manager import (
+                save_media_resolution,
+                save_proactive_audio_enabled,
+                save_thinking_enabled,
+                save_turn_tuning,
+            )
+
+            save_thinking_enabled(thinking.isChecked())
+            save_proactive_audio_enabled(proactive.isChecked())
+            save_media_resolution(str(resolution.currentData() or "medium"))
+            save_turn_tuning({
+                "enabled": turn_enabled.isChecked(),
+                "silence_ms": int(silence.currentData() or 550),
+                "prefix_ms": int(prefix.currentData() or 0),
+                "end_sensitivity": str(end_sensitivity.currentData() or "high"),
+            })
+            callback = getattr(self, "on_voice_change", None)
+            if callable(callback):
+                try:
+                    callback()
+                    status.setText(self._tr("Settings saved and Live session reconnect requested."))
+                except Exception as exc:
+                    status.setText(self._tr("Settings saved, but reconnect failed: {error}", error=exc))
+            else:
+                status.setText(self._tr("Settings saved. They will apply to the next Live session."))
+        apply_button.clicked.connect(apply_settings)
+        return host
+
     def _build_voice_audio_page(self):
         from gui.settings.categories.audio import VoiceAudioPage
 
         device_panel = AudioDeviceOverlay(embedded=True)
         device_panel.picked.connect(self._on_audio_devices_applied)
+        controls_host = QWidget()
+        controls_layout = QVBoxLayout(controls_host)
+        controls_layout.setContentsMargins(0, 0, 0, 0)
+        controls_layout.setSpacing(12)
+        if self._voice_controls_panel is not None:
+            controls_layout.addWidget(self._voice_controls_panel)
+        controls_layout.addWidget(self._build_live_session_settings_panel())
         return VoiceAudioPage(
             self._embed_settings_panels((
                 "Audio devices",
                 "Select your microphone and speaker, adjust output volume, and test each device.",
                 device_panel,
             )),
-            voice_controls_panel=self._voice_controls_panel,
+            voice_controls_panel=controls_host,
         )
 
     def _embed_settings_panels(self, *panels):
