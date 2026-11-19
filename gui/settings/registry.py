@@ -37,6 +37,8 @@ CATEGORIES = (
     SettingsCategory("integrations", "AI Providers", "Choose where JARVIS runs its models: Online cloud services or Offline models on this device.", (("AI provider settings", "providers"),)),
     SettingsCategory("plugins", "Plugins", "Installed extensions and their settings.", (("Plugin manager", "plugins"), ("Plugin settings", "plugin_settings"))),
     SettingsCategory("memory", "Memory", "Facts JARVIS has saved. Conversation history is kept separately in Conversations.", (("Open memory", "memory"),)),
+    SettingsCategory("conversations", "Conversations", "Local transcript search, privacy and retention.", (("Manage conversation history", "conversations"),)),
+
     SettingsCategory("developer", "Developer & Diagnostics", "Confirmed development tools, runtime configuration, logs and testing diagnostics.", (("Developer options", "setup"), ("Debug console", "console"))),
     SettingsCategory("updates", "Updates & Maintenance", "Application version and update operations.", (("Open updates", "updates"),)),
 )
@@ -69,6 +71,8 @@ ENTRIES = (
     SettingEntry("plugins", "plugins", "Installed plugins", "Enable or disable installed plugins.", ("extension", "integration"), "plugins"),
     SettingEntry("plugin_config", "plugins", "Plugin configuration", "Edit plugin-specific settings and run plugin tests.", ("extension settings",), "plugin_settings"),
     SettingEntry("saved_memory", "memory", "Saved facts", "Review facts JARVIS has saved. Conversation history is managed separately.", ("facts", "long term"), "memory"),
+    SettingEntry("conversation_memory", "conversations", "Conversation memory", "Opt in to local transcript storage, set retention, and delete stored history.", ("recall", "transcripts", "history", "privacy", "retention"), "conversations"),
+
     SettingEntry("auth", "permissions", "Application authentication", "Passcode and face verification are supplied by the configured lock integration.", ("pin", "passphrase", "face unlock", "camera"), "security_info"),
     SettingEntry("developer_mode", "developer", "Developer mode", "Enable detailed diagnostics and optional testing tools after confirmation.", ("debug", "logs"), "console"),
     SettingEntry("updates", "updates", "Update preferences", "Check, download, and install application updates.", ("maintenance", "version"), "updates"),
