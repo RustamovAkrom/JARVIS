@@ -101,6 +101,26 @@ def screen_locked() -> Optional[bool]:
     return None
 
 
+def build_return_prompt(items: list[dict], greet: bool = True) -> Optional[str]:
+    """Build a bounded welcome-back prompt or notification digest."""
+    lines = [
+        " ".join(str(item.get("text", "")).split())[:700]
+        for item in items if isinstance(item, dict) and item.get("text")
+    ]
+    lines = lines[:8]
+    if not lines:
+        return (
+            "[PRESENCE_RETURN] Welcome the user back briefly and naturally. "
+            "Do not call tools."
+        ) if greet else None
+    return (
+        "[PRESENCE_DIGEST] The user has returned. Summarize these queued "
+        "notifications concisely and naturally, prioritizing important items. "
+        "Do not call tools.\n\n"
+        + "\n".join(f"- {line}" for line in lines)
+    )
+
+
 class Presence:
     """Thread-safe away/back state and bounded inbox; no autonomous thread."""
 
