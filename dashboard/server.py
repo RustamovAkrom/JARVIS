@@ -818,6 +818,12 @@ class DashboardServer:
         # Set by serve() when the port could not be taken, so the UI can say
         # why the QR code leads nowhere instead of showing it regardless.
         self._bind_error: str = ""
+        # Keep explicit handles so shutdown can ask Uvicorn to exit through
+        # its lifespan protocol instead of letting asyncio.run cancel it.
+        self._server = None
+        self._redirect_server = None
+        self._redirect_task = None
+        self._stopping = False
         self._login_html = _read("login.html")
         self._app_html = _read("app.html")
         self.app = self._build_app()
@@ -1338,7 +1344,21 @@ class DashboardServer:
             f"[Dashboard] Type by hand:  {self._ip}:{PORT}  "
             f"(sends you to the secure page)"
         )
-        await uvicorn.Server(cfg).serve()
+        server = uvicorn.Server(cfg)
+        self._redirect_server = server
+        if self._stopping:
+            server.should_exit = True
+        try:
+            await server.serve()
+        finally:
+            self._redirect_server = None
+
+    def request_shutdown(self) -> None:
+        """Ask every active Uvicorn listener to finish through lifespan shutdown."""
+        self._stopping = True
+        for server in (self._server, self._redirect_server):
+            if server is not None:
+                server.should_exit = True
 
     async def serve(self) -> None:
         if not _DEPS_OK:
@@ -1385,8 +1405,10 @@ class DashboardServer:
         # loud, repeated warning when it cannot. The page keeps working either
         # way; without a secure context it simply cannot encrypt, and it says
         # so on screen rather than pretending.
-        if use_ssl:
-            asyncio.create_task(self._serve_redirector())
+        if use_ssl and not self._stopping:
+            self._redirect_task = asyncio.create_task(
+                self._serve_redirector(), name="jarvis-dashboard-redirector"
+            )
         else:
             print(
                 "[Dashboard] Plain HTTP on your local network. Commands are "
@@ -1442,4 +1464,11 @@ class DashboardServer:
 
         print(f"[Dashboard] {self.get_url()}")
         print("[Dashboard] Press 'Remote Control' in JARVIS UI to get the QR code.")
-        await uvicorn.Server(cfg).serve()
+        server = uvicorn.Server(cfg)
+        self._server = server
+        if self._stopping:
+            server.should_exit = True
+        try:
+            await server.serve()
+        finally:
+            self._server = None
