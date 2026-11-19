@@ -1224,7 +1224,7 @@ class JarvisLive:
                 from core.language import instruction as _language_instruction
                 _language_hint = _language_instruction(user_text)
                 if _language_hint:
-                    text = f"{_language_hint}\\n\\n{text}"
+                    text = f"{_language_hint}\n\n{text}"
             except Exception as _language_exc:
                 print(f"[Language] typed routing failed: {type(_language_exc).__name__}: {_language_exc}")
 
