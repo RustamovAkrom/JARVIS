@@ -152,3 +152,6 @@ sherlock-project>=0.14.4     # osint_toolkit — username lookup CLI
 # macOS / Linux OS actions (volume, brightness, reminders) shell out to native
 # tools (pactl / brightnessctl / osascript / systemd), so no extra Python
 # packages are needed there — nothing Windows-specific is ever pulled in.
+
+# ── Test runner ──────────────────────────────────────────────────────────────
+pytest>=8,<10
