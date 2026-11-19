@@ -17263,33 +17263,52 @@ class JarvisUI:
             self._shutdown_services_started = True
             return True
 
-    def shutdown_services(self) -> None:
-        """Stop camera services before an assistant-triggered QApplication.quit.
+    def shutdown_services(self, timeout: float = 5.0) -> None:
+        """Start cleanup before QApplication.quit and wait only for a bounded time.
 
-        This method is called by the assistant runner, not the Qt GUI thread.
-        It deliberately finishes cleanup before the event loop is asked to exit.
+        This method is called by the assistant runner, never the Qt GUI thread.
+        A camera backend can stall inside a native read/release call; that must
+        not keep the whole application alive indefinitely.
         """
         if self._claim_shutdown_services():
-            self._shutdown_camera_services_impl()
+            self._start_shutdown_services_cleanup(wait_timeout=timeout)
 
     def _shutdown_camera_services(self):
         """Qt aboutToQuit fallback; schedule cleanup without blocking the GUI."""
-        if not self._claim_shutdown_services():
-            return
+        if self._claim_shutdown_services():
+            self._start_shutdown_services_cleanup(wait_timeout=0.0)
+
+    def _start_shutdown_services_cleanup(self, *, wait_timeout: float) -> None:
+        completed = threading.Event()
+
+        def cleanup():
+            try:
+                self._shutdown_camera_services_impl()
+            finally:
+                completed.set()
 
         worker = threading.Thread(
-            target=self._shutdown_camera_services_impl,
+            target=cleanup,
             name="jarvis-shutdown",
-            daemon=False,
+            daemon=True,
         )
         self._shutdown_services_thread = worker
         try:
             worker.start()
         except Exception as exc:
-            # Do not run blocking joins on the GUI thread as a fallback.
+            # Never run potentially blocking native camera cleanup on the GUI
+            # or assistant event-loop thread as a fallback.
             print(
                 f"[Shutdown] Could not start cleanup worker: "
                 f"{type(exc).__name__}: {exc}"
+            )
+            return
+
+        timeout = max(0.0, float(wait_timeout))
+        if timeout and not completed.wait(timeout=timeout):
+            print(
+                f"[Shutdown] Cleanup exceeded {timeout:.1f}s; "
+                "continuing application exit."
             )
 
     def _shutdown_camera_services_impl(self):
