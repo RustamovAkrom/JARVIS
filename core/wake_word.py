@@ -144,7 +144,9 @@ class WakeWordDetector:
         notify: Callable[[str], None] | None = None,
     ):
         self._on_detect = on_detect
-        self._threshold = threshold
+        self._threshold = self._validate_threshold(threshold)
+        self._cooldown_seconds = 2.0
+        self._last_detection = 0.0
         self._logger = logger
         # See PluginRegistry: `logger` is the console and gets everything,
         # `notify` is the activity log and gets only what the user must act on.
@@ -155,17 +157,35 @@ class WakeWordDetector:
         self._model = None
         self._ready = False
 
+    @staticmethod
+    def _validate_threshold(value: float) -> float:
+        value = float(value)
+        if not 0.1 <= value <= 0.95:
+            raise ValueError("Wake word threshold must be between 0.10 and 0.95")
+        return value
+
+    @property
+    def threshold(self) -> float:
+        return self._threshold
+
+    def set_threshold(self, value: float) -> None:
+        self._threshold = self._validate_threshold(value)
+
     def start(self) -> bool:
         """Load the model and spawn the inference thread. Returns True on success.
         Safe to call again — a no-op if already running. Never raises."""
         if self._running:
             return True
+        if self._thread is not None and self._thread.is_alive():
+            self._logger("Wake word: previous detector thread is still stopping.")
+            return False
         try:
             from openwakeword.model import Model
 
-            self._model = Model(
+            model = Model(
                 wakeword_models=[WAKE_MODEL], inference_framework="onnx"
             )
+            self._model = model
         except Exception as e:
             self._logger(f"Wake word: could not load model — {e}")
             self._notify("Wake word unavailable — use the WAKE NOW button.")
@@ -182,13 +202,26 @@ class WakeWordDetector:
 
     def stop(self) -> None:
         self._running = False
-        # unblock the thread if it's waiting on the queue
+        # Wake the worker without blocking the caller.
         try:
             self._queue.put_nowait(None)
-        except Exception:
-            pass
+        except queue.Full:
+            try:
+                self._queue.get_nowait()
+                self._queue.put_nowait(None)
+            except Exception:
+                pass
+        thread = self._thread
+        if thread is not None and thread is not threading.current_thread():
+            thread.join(timeout=1.5)
+        if thread is not None and thread.is_alive():
+            self._logger("Wake word: detector is still stopping; model retained until worker exits.")
+            self._ready = False
+            return
         self._model = None
+        self._thread = None
         self._ready = False
+        self._drain()
 
     @property
     def ready(self) -> bool:
@@ -206,32 +239,45 @@ class WakeWordDetector:
                 if getattr(frame_int16, "ndim", 1) > 1
                 else frame_int16.copy()
             )
-            self._queue.put_nowait(data)
+            try:
+                self._queue.put_nowait(data)
+            except queue.Full:
+                # Prefer fresh microphone audio over stale queued frames.
+                self._queue.get_nowait()
+                self._queue.put_nowait(data)
         except queue.Full:
             pass
         except Exception:
             pass
 
     def _loop(self) -> None:
-        import numpy as np
-
+        try:
+            import numpy as np
+        except Exception as exc:
+            self._logger(f"Wake word: numpy unavailable — {exc}")
+            self._running = False
+            return
+        model = self._model
         while self._running:
             try:
                 frame = self._queue.get()
                 if frame is None or not self._running:
                     break
-                scores = self._model.predict(np.asarray(frame, dtype=np.int16))
+                if model is None:
+                    break
+                scores = model.predict(np.asarray(frame, dtype=np.int16))
                 score = 0.0
                 if isinstance(scores, dict):
                     # match the jarvis model regardless of exact key suffix
                     for k, v in scores.items():
                         if "jarvis" in k.lower():
                             score = max(score, float(v))
-                    if score == 0.0 and scores:
-                        score = max(float(v) for v in scores.values())
-                if score >= self._threshold:
-                    # drain any backlog so we don't double-fire on the same utterance
+                now = time.monotonic()
+                if score >= self._threshold and now - self._last_detection >= self._cooldown_seconds:
+                    # Drain backlog and apply cooldown to suppress repeated scores
+                    # from the same utterance.
                     self._drain()
+                    self._last_detection = now
                     try:
                         self._on_detect()
                     except Exception as e:
