@@ -7594,6 +7594,7 @@ class MainWindow(QMainWindow):
         )
         self.on_wake_toggle = None  # callable: (enable: bool) -> str, set by JarvisLive
         self.on_wake_threshold_changed = None  # callable: (threshold: float) -> float
+        self.on_presence_settings_changed = None  # callable: (settings: dict) -> None
         self.on_wake_manual = None  # callable: () -> None — manual sleep/wake
         self.on_push_to_talk = None  # callable: (enable: bool) -> str scope
         self.ptt_hold = None  # callable: (held: bool) -> None — windowed chord
@@ -11099,6 +11100,7 @@ class MainWindow(QMainWindow):
                     "plugins": self._build_plugins_settings_page,
                     "memory": self._build_memory_settings_page,
                     "conversations": self._build_conversations_settings_page,
+                    "automation": self._build_automation_settings_page,
                     "workspace": self._build_workspace_settings_page,
                     "developer": self._build_developer_settings_page,
                     "updates": self._build_updates_settings_page,
@@ -11343,6 +11345,10 @@ class MainWindow(QMainWindow):
         return self._embed_settings_panels(
             ("Plugins", "Enable or disable plugins. Use the settings icon on a plugin row to configure only that plugin.", manager),
         )
+
+    def _build_automation_settings_page(self):
+        from gui.settings.categories.automation import AutomationSettingsPage
+        return AutomationSettingsPage(presence_changed=self.on_presence_settings_changed)
 
     def _build_conversations_settings_page(self):
         from gui.settings.categories.conversations import ConversationMemoryPage
@@ -17523,6 +17529,14 @@ class JarvisUI:
     @on_wake_toggle.setter
     def on_wake_toggle(self, cb):
         self._win.on_wake_toggle = cb
+
+    @property
+    def on_presence_settings_changed(self):
+        return self._win.on_presence_settings_changed
+
+    @on_presence_settings_changed.setter
+    def on_presence_settings_changed(self, cb):
+        self._win.on_presence_settings_changed = cb
 
     @property
     def on_wake_threshold_changed(self):
