@@ -19,6 +19,7 @@ av>=19.0.0
 # directly, and a package you import is a package you depend on — relying on
 # somebody else's transitive dependency works right up until they drop it.
 httpx>=0.27,<1
+py3langid>=0.3.0  # offline typed-language detection
 
 # ── Web search & browser control ──────────────────────────────────────────────
 requests>=2.31,<3
