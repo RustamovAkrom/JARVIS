@@ -17419,17 +17419,10 @@ class JarvisUI:
             print(f"[Shutdown] HUD camera cleanup failed: {type(exc).__name__}: {exc}")
 
         try:
-            from plugins import gesture_control
-            gesture_control.stop()
+            from core.plugin_runtime import shutdown_optional_plugin_services
+            shutdown_optional_plugin_services()
         except Exception as exc:
-            print(f"[Shutdown] Gesture Control cleanup failed: {type(exc).__name__}: {exc}")
-
-        try:
-            from plugins import _hands
-            if not _hands.SERVICE.shutdown(timeout=2.5):
-                print("[Shutdown] Hand tracking worker did not stop before timeout.")
-        except Exception as exc:
-            print(f"[Shutdown] Hand service cleanup failed: {type(exc).__name__}: {exc}")
+            print(f"[Shutdown] Optional plugin cleanup failed: {type(exc).__name__}: {exc}")
 
         try:
             from core import cameras
