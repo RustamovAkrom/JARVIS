@@ -3117,6 +3117,19 @@ class JarvisLive:
                         await self._send_presence_inbox(returned=True)
                     except Exception as exc:
                         print(f"[Presence] Could not deliver return summary: {exc}")
+                # Deliver queued items even if the return transition happened
+                # while the UI was locked or Presence was disabled/re-enabled.
+                if (
+                    not self._presence.away
+                    and self._presence.inbox_size()
+                    and self.session
+                    and self._awake
+                    and not self.ui.auth_locked
+                ):
+                    try:
+                        await self._send_presence_inbox(returned=False)
+                    except Exception as exc:
+                        print(f"[Presence] Could not deliver queued notifications: {exc}")
                 poll_count += 1
                 await asyncio.sleep(2)
             except asyncio.CancelledError:
