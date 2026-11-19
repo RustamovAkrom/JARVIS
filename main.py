@@ -3981,7 +3981,18 @@ class JarvisLive:
                 self._inputlock.unregister_interface(self.ui)
             except Exception:
                 pass
-            self.ui.root.quit()
+            try:
+                # Stop camera and tracking workers while the Qt event loop is
+                # still responsive. The aboutToQuit hook is then an idempotent
+                # no-op instead of joining those workers on the GUI thread.
+                self.ui.shutdown_services()
+            except Exception as exc:
+                print(
+                    f"[JARVIS] Shutdown cleanup failed: "
+                    f"{type(exc).__name__}: {exc}"
+                )
+            finally:
+                self.ui.root.quit()
 
 
 def main():
