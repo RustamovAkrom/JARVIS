@@ -71,6 +71,7 @@ ENTRIES = (
     SettingEntry("computer_access_level", "permissions", "Approval policy", "Confirm every action, use enabled permissions, or temporarily allow full access.", ("ask", "approve", "full access", "permissions"), "security_info"),
     SettingEntry("providers", "integrations", "AI mode", "Select Online or Offline, then configure voice recognition, the AI model and spoken voice.", ("engine", "model", "llm", "stt", "tts", "api key"), "providers"),
     SettingEntry("plugins", "plugins", "Installed plugins", "Enable or disable installed plugins.", ("extension", "integration"), "plugins"),
+    SettingEntry("plugin_system", "plugins", "Plugin system", "Globally enable or disable the optional plugin runtime. Core functionality does not depend on plugins.", ("optional extensions", "plugin runtime", "restart"), "plugins"),
     SettingEntry("plugin_config", "plugins", "Plugin configuration", "Edit plugin-specific settings and run plugin tests.", ("extension settings",), "plugin_settings"),
     SettingEntry("saved_memory", "memory", "Saved facts", "Review facts JARVIS has saved. Conversation history is managed separately.", ("facts", "long term"), "memory"),
     SettingEntry("conversation_memory", "conversations", "Conversation memory", "Opt in to local transcript storage, set retention, and delete stored history.", ("recall", "transcripts", "history", "privacy", "retention"), "conversations"),
