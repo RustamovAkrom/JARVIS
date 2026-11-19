@@ -884,8 +884,13 @@ class JarvisLive:
         return value
 
     def _on_wake_detected(self) -> None:
-        """Called from the detector thread when 'Hey Jarvis' is heard."""
-        self.wake(reason="wake word")
+        """Marshal detector-thread callbacks onto the asyncio runtime."""
+        loop = getattr(self, "_loop", None)
+        if loop is not None and loop.is_running():
+            loop.call_soon_threadsafe(self.wake, "wake word")
+        else:
+            self._wake_enabled = False
+            self._awake = True
 
     def wake(self, reason: str = "wake word") -> None:
         if self.ui.auth_locked:
@@ -4180,6 +4185,16 @@ class JarvisLive:
 
         if self._shutdown_requested:
             self.set_speaking(False)
+            try:
+                from memory import conversations as _conversations
+                await asyncio.to_thread(_conversations.flush, 3.0)
+            except Exception as exc:
+                print(f"[ConversationRecall] shutdown flush failed: {type(exc).__name__}: {exc}")
+            try:
+                if self._wake_detector is not None:
+                    await asyncio.to_thread(self._wake_detector.stop)
+            except Exception as exc:
+                print(f"[Wake] shutdown cleanup failed: {type(exc).__name__}: {exc}")
             print("[JARVIS] Stopping Remote Dashboard...")
             try:
                 await self._shutdown_dashboard()
