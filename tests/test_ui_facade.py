@@ -57,7 +57,7 @@ class UiFacadeTests(unittest.TestCase):
             self.assertTrue(panel.testAttribute(Qt.WidgetAttribute.WA_StyledBackground))
             self.assertRegex(
                 panel.styleSheet(),
-                rf"background\\s*:\\s*{re.escape(ui.C.PANEL)}"
+                rf"background\s*:\s*{re.escape(ui.C.PANEL)}"
             )
             self.assertIn("transparent", scroll.viewport().styleSheet())
             self.assertIn("transparent", scroll.widget().styleSheet())
