@@ -56,5 +56,7 @@ class JarvisRoutineHost:
             self._send("Provide a concise current-day briefing using available context. Do not call tools unless necessary.")
         elif name == "check_in":
             self._send("Check in with the user briefly and naturally. Ask whether they need help with anything.")
+        elif name == "system_check":
+            self._send("Run a concise system status check using the system_status tool if available, and report only actionable issues.")
         else:
             raise ValueError(f"Unsupported routine built-in: {name}")
