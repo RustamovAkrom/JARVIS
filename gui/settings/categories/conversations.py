@@ -51,6 +51,7 @@ class ConversationMemoryPage(QWidget):
         result=QMessageBox.question(self,"Delete conversation history","Delete all locally stored conversation history? This cannot be undone.",QMessageBox.StandardButton.Yes|QMessageBox.StandardButton.No,QMessageBox.StandardButton.No)
         if result != QMessageBox.StandardButton.Yes:
             return
+        conversations.flush()
         deleted=conversations.forget(everything=True)
         self.status.setText(f"Deleted {deleted} day-file(s).")
         self.refresh()
