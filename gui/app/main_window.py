@@ -16421,6 +16421,21 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         chat = self._chat_store.get_chat(self._active_chat_id)
         if chat is None:
             return
+        turn = next(
+            (row for row in chat.get("turns", []) if str(row.get("id") or "") == turn_id),
+            None,
+        )
+        if turn is None:
+            return
+        choice = QMessageBox.question(
+            self,
+            "Delete conversation turn",
+            "Delete this message and its response from the current conversation? This cannot be undone.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if choice != QMessageBox.StandardButton.Yes:
+            return
         chat["turns"] = [
             row for row in chat.get("turns", [])
             if str(row.get("id") or "") != turn_id
@@ -16437,6 +16452,18 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         self._notify_chat_switch(chat, force_reconnect=True)
 
     def _clear_chat(self):
+        current = self._chat_store.get_chat(self._active_chat_id)
+        if current is None or not current.get("turns"):
+            return
+        choice = QMessageBox.question(
+            self,
+            "Clear current chat",
+            "Delete all messages from the current conversation? The conversation remains in the archive.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if choice != QMessageBox.StandardButton.Yes:
+            return
         chat = self._chat_store.clear_chat(self._active_chat_id)
         if chat is None:
             return
