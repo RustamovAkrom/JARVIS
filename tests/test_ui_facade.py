@@ -29,9 +29,15 @@ class UiFacadeTests(unittest.TestCase):
         # multimedia backends. Video playback is not under test; constructing
         # QMediaPlayer starts platform-specific FFmpeg/audio workers that are
         # unreliable in Qt's offscreen GitHub Actions environment.
+        #
+        # MainWindow normally reads config/api_keys.json and schedules the
+        # first-run onboarding dialog when that file is absent. Keep startup
+        # deterministic: this test exercises the settings UI, not onboarding.
         with (
             patch.object(implementation, "_read_full_config", return_value={}),
             patch.object(implementation, "HAVE_VIDEO", False),
+            patch.object(implementation.MainWindow, "_check_config", return_value=True),
+            patch.object(implementation.MainWindow, "_show_setup") as show_setup,
         ):
             window = ui.MainWindow("")
         self.assertIsNone(window._video_player)
@@ -51,7 +57,7 @@ class UiFacadeTests(unittest.TestCase):
             self.assertTrue(panel.testAttribute(Qt.WidgetAttribute.WA_StyledBackground))
             self.assertRegex(
                 panel.styleSheet(),
-                rf"background\s*:\s*{re.escape(ui.C.PANEL)}"
+                rf"background\\s*:\\s*{re.escape(ui.C.PANEL)}"
             )
             self.assertIn("transparent", scroll.viewport().styleSheet())
             self.assertIn("transparent", scroll.widget().styleSheet())
@@ -99,6 +105,7 @@ class UiFacadeTests(unittest.TestCase):
         finally:
             window.close()
             app.processEvents()
+            show_setup.assert_not_called()
 
 
 if __name__ == "__main__":
