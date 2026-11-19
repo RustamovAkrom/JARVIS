@@ -6,6 +6,7 @@ import tempfile
 from io import BytesIO
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from PIL import Image
@@ -18,6 +19,7 @@ from PyQt6.QtWidgets import (
     QComboBox,
     QMainWindow,
     QScrollArea,
+    QSplitter,
     QWidget,
 )
 
@@ -72,6 +74,57 @@ class CursorAssistantUiTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
+
+    def test_adaptive_side_panels_can_hide_hud_without_collapsing_left_navigation(self):
+        left_panel = QWidget()
+        left_panel.setMinimumWidth(150)
+        center_views = QWidget()
+        center_views.setMinimumWidth(240)
+
+        main_splitter = QSplitter(Qt.Orientation.Horizontal)
+        main_splitter.setContentsMargins(6, 6, 6, 6)
+        main_splitter.setChildrenCollapsible(False)
+        main_splitter.addWidget(left_panel)
+        main_splitter.addWidget(center_views)
+
+        workspace_split = QSplitter(Qt.Orientation.Vertical)
+        workspace_split.addWidget(main_splitter)
+        owner = SimpleNamespace(
+            _left_panel=left_panel,
+            _center_views=center_views,
+            _main_splitter=main_splitter,
+            _workspace_split=workspace_split,
+        )
+
+        try:
+            MainWindow._sync_adaptive_side_panel_constraints(owner)
+
+            expected_minimum = (
+                left_panel.minimumWidth()
+                + main_splitter.handleWidth()
+                + main_splitter.contentsMargins().left()
+                + main_splitter.contentsMargins().right()
+            )
+            self.assertEqual(center_views.minimumWidth(), 0)
+            self.assertFalse(main_splitter.isCollapsible(0))
+            self.assertTrue(main_splitter.isCollapsible(1))
+            self.assertEqual(main_splitter.minimumWidth(), expected_minimum)
+            self.assertEqual(workspace_split.minimumWidth(), expected_minimum)
+
+            left_panel.hide()
+            MainWindow._sync_adaptive_side_panel_constraints(owner)
+            self.assertEqual(main_splitter.minimumWidth(), 0)
+            self.assertEqual(workspace_split.minimumWidth(), 0)
+
+            left_panel.show()
+            MainWindow._sync_adaptive_side_panel_constraints(owner)
+            self.assertEqual(main_splitter.minimumWidth(), expected_minimum)
+            self.assertEqual(workspace_split.minimumWidth(), expected_minimum)
+        finally:
+            workspace_split.close()
+            main_splitter.close()
+            left_panel.close()
+            center_views.close()
 
     def test_metric_gauge_animates_to_the_latest_reading(self):
         gauge = MetricGauge("CPU", "#00d4ff")
