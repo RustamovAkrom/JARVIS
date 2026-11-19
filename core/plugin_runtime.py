@@ -70,3 +70,27 @@ def load_plugin_registry(
             except Exception:
                 pass
         return DisabledPluginRegistry(f"initialization failed: {type(exc).__name__}")
+
+
+def shutdown_optional_plugin_services(logger: Callable[[str], None] = print) -> None:
+    """Best-effort cleanup for bundled plugin services, only when plugins are enabled."""
+    try:
+        from memory.config_manager import get_plugins_system_enabled
+        if not get_plugins_system_enabled():
+            return
+    except Exception:
+        # Configuration failure must not make shutdown unsafe.
+        return
+
+    try:
+        from plugins import gesture_control
+        gesture_control.stop()
+    except Exception as exc:
+        logger(f"[Shutdown] Gesture Control cleanup failed: {type(exc).__name__}: {exc}")
+
+    try:
+        from plugins import _hands
+        if not _hands.SERVICE.shutdown(timeout=2.5):
+            logger("[Shutdown] Hand tracking worker did not stop before timeout.")
+    except Exception as exc:
+        logger(f"[Shutdown] Hand service cleanup failed: {type(exc).__name__}: {exc}")
