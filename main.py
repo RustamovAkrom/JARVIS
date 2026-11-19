@@ -108,9 +108,10 @@ from memory.config_manager import (
     get_input_device,
     get_output_device,
     get_presence_settings,
+    get_plugins_system_enabled,
 )
 from core import gemini as _gemini
-from core.plugin_loader import discover_plugins
+from core.plugin_runtime import load_plugin_registry, DisabledPluginRegistry
 from core import undo as undo_stack
 from core import confirm as confirm_gate
 from core import audio_devices
@@ -816,22 +817,26 @@ class JarvisLive:
 
         # Plugins must not collide with either an inline tool or a discovered action.
         _core_names = _inline_names | self._action_registry.names()
-        self._plugin_registry = discover_plugins(
+        self._plugin_registry = load_plugin_registry(
+            enabled=get_plugins_system_enabled(),
             plugins_dir=_base_dir / "plugins",
             user_plugins_dir=PATHS.plugins_dir,
             core_tool_names=_core_names,
-            # Console gets the full boot transcript; the activity log gets only
-            # what the user has to know about. Every plugin loading correctly is
-            # the expected case and does not belong in their conversation.
             logger=lambda msg: print(f"[Plugins] {msg}"),
             notify=lambda msg: self.ui.write_log(f"SYS: {msg}"),
         )
         self.ui.get_plugins = self._plugin_registry.list_for_ui
-        self.ui.get_plugin_settings = (
-            self._plugin_registry.settings_schemas
-        )  # ⚙ settings tab
-        self.ui.request_say = self.plugin_say  # plugins: mid-task speech channel
-        self._plugin_registry.start_enabled_plugins(player=self.ui)
+        self.ui.get_plugin_settings = self._plugin_registry.settings_schemas
+        self.ui.get_plugin_status = lambda: {
+            "enabled": get_plugins_system_enabled(),
+            "available": not isinstance(self._plugin_registry, DisabledPluginRegistry),
+            "reason": getattr(self._plugin_registry, "reason", ""),
+        }
+        self.ui.request_say = self.plugin_say
+        try:
+            self._plugin_registry.start_enabled_plugins(player=self.ui)
+        except Exception as _plugin_start_exc:
+            print(f"[Plugins] Optional startup hooks failed: {type(_plugin_start_exc).__name__}: {_plugin_start_exc}")
 
         # ── Wake word ────────────────────────────────────────────────────────
         # _awake gates the mic (see _listen_audio) and the background speakers.
