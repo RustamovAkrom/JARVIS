@@ -772,6 +772,21 @@ class JarvisLive:
         self._proactive = ProactiveEngine()
         self._presence = Presence()
         self._presence.apply(get_presence_settings())
+
+        # Routine engine is process-scoped and persists independently of Live reconnects.
+        from core.routines.engine import RoutineEngine
+        from core.routines.host import JarvisRoutineHost
+        from core.routines.runtime import set_engine
+
+        self._routine_host = JarvisRoutineHost(self, loop_getter=lambda: self._loop)
+        self._routine_engine = RoutineEngine(
+            PATHS.databases_dir / "routines.json",
+            self._routine_host,
+            logger=lambda msg: print(msg),
+        )
+        set_engine(self._routine_engine)
+        self._routine_session_started = False
+
         self._last_user_speech = time.monotonic()  # updated on every user utterance
         self._enhanced_live = (
             True  # proactive audio; auto-disabled if the server rejects it
@@ -3077,6 +3092,20 @@ class JarvisLive:
             return True
         return False
 
+    async def _run_routine_scheduler(self) -> None:
+        """Tick persisted routines without blocking the Live event loop."""
+        while True:
+            try:
+                if not self._routine_session_started:
+                    self._routine_engine.session_started(awake=self._awake)
+                    self._routine_session_started = True
+                await asyncio.to_thread(self._routine_engine.tick)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                print(f"[Routines] Scheduler tick failed: {type(exc).__name__}: {exc}")
+            await asyncio.sleep(5)
+
     async def _run_presence_monitor(self) -> None:
         """Poll OS presence and deliver queued notifications when the user returns."""
         poll_count = 0
@@ -3873,6 +3902,7 @@ class JarvisLive:
                     tg.create_task(self._listen_audio())
                     tg.create_task(self._receive_audio())
                     tg.create_task(self._play_audio())
+                    tg.create_task(self._run_routine_scheduler(), name="jarvis-routines")
                     tg.create_task(self._run_presence_monitor(), name="jarvis-presence")
                     tg.create_task(self._run_system_monitor())
                     tg.create_task(self._run_background_monitor())
