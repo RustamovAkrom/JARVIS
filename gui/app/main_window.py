@@ -7489,9 +7489,11 @@ class MainWindow(QMainWindow):
     _review_sig = pyqtSignal(str, str, object, object)  # document review payload
     _auth_lock_sig = pyqtSignal(object, str)
     _auth_face_result_sig = pyqtSignal(object, bool)
+    _assistant_shutdown_sig = pyqtSignal()
 
     def __init__(self, face_path: str):
         super().__init__()
+        self._assistant_shutdown_active = False
         self._face_path = face_path
         self._custom_chrome_enabled = platform.system() == "Windows"
         if self._custom_chrome_enabled:
@@ -8076,6 +8078,7 @@ class MainWindow(QMainWindow):
         self._review_sig.connect(self._show_review)
         self._auth_lock_sig.connect(self._show_auth_lock)
         self._auth_face_result_sig.connect(self._finish_face_auth)
+        self._assistant_shutdown_sig.connect(self._close_for_assistant_shutdown)
         self._cam_stop = threading.Event()
         self._cam_thread = None
         self._cam_preview_dismissed = threading.Event()
@@ -16905,14 +16908,43 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             f"{self._assistant_name} online."
         )
 
+    def request_assistant_shutdown(self) -> None:
+        """Request application shutdown from any thread via the Qt event loop."""
+        try:
+            self._assistant_shutdown_sig.emit()
+        except RuntimeError:
+            # Qt is already tearing the window down.
+            pass
+
+    def _close_for_assistant_shutdown(self) -> None:
+        """Close the main window on its owning GUI thread."""
+        self._assistant_shutdown_active = True
+
+        # An authentication overlay runs its own modal event loop. End that
+        # loop explicitly so it cannot keep the process alive after shutdown.
+        dialog = getattr(self, "_auth_lock_dialog", None)
+        if dialog is not None:
+            try:
+                dialog.verified = True
+                self._auth_lock_dialog = None
+                dialog.accept()
+            except RuntimeError:
+                self._auth_lock_dialog = None
+
+        self.close()
+
     def closeEvent(self, event):
-        if getattr(self, "_auth_lock_dialog", None) is not None:
-            event.ignore()
-            return
-        for editor in tuple(getattr(self, "_project_editors", {}).values()):
-            if not editor.confirm_close():
+        assistant_shutdown = bool(
+            getattr(self, "_assistant_shutdown_active", False)
+        )
+        if not assistant_shutdown:
+            if getattr(self, "_auth_lock_dialog", None) is not None:
                 event.ignore()
                 return
+            for editor in tuple(getattr(self, "_project_editors", {}).values()):
+                if not editor.confirm_close():
+                    event.ignore()
+                    return
         if self._lecture_recorder is not None:
             try:
                 path = self._lecture_recorder.stop()
