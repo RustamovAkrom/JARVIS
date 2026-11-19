@@ -53,7 +53,14 @@ def instruction(text: str) -> str:
     code = written(text)
     if not code:
         return ""
+    label = ""
+    try:
+        from core.i18n import supported
+        label = supported().get(code, "")
+    except Exception:
+        pass
+    named = f" ({label})" if label else ""
     return (
-        f"[LANGUAGE ROUTING: The user's typed message is in language code '{code}'. "
+        f"[LANGUAGE ROUTING: The user's typed message is in language code '{code}'{named}. "
         f"Respond in that language unless the user explicitly requests another language.]"
     )
