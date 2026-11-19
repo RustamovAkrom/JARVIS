@@ -11359,12 +11359,40 @@ class MainWindow(QMainWindow):
         return page
 
     def _build_plugins_settings_page(self):
-        plugins = self.get_plugins() if self.get_plugins else []
-        sections = self.get_plugin_settings() if self.get_plugin_settings else []
+        from gui.components.settings import SettingRow, SettingsSection
+        from memory.config_manager import get_plugins_system_enabled, save_plugins_system_enabled
+
+        enabled = get_plugins_system_enabled()
+        status = self.get_plugin_status() if self.get_plugin_status else {"enabled": enabled, "available": enabled, "reason": ""}
+        plugins = self.get_plugins() if self.get_plugins and enabled else []
+        sections = self.get_plugin_settings() if self.get_plugin_settings and enabled else []
         manager = PluginManagerOverlay(plugins, settings_sections=sections)
         manager.configuration_requested.connect(self._open_plugin_configuration)
+
+        section = SettingsSection(
+            "Optional plugin subsystem",
+            "Plugins extend JARVIS but are not required for core operation. Changes to this switch require restarting JARVIS.",
+        )
+        toggle = QCheckBox(self._tr("Enable plugin system"))
+        toggle.setObjectName("plugins_system_enabled")
+        toggle.setChecked(enabled)
+        toggle.toggled.connect(save_plugins_system_enabled)
+        section.add_row(SettingRow(
+            self._tr("Plugin runtime"),
+            self._tr("Load optional plugins and their tools at startup."),
+            toggle,
+        ))
+        state = QLabel("Runtime: " + (
+            "enabled" if status.get("available") else
+            ("disabled by settings" if not enabled else "unavailable")
+        ))
+        state.setObjectName("plugins_runtime_status")
+        if status.get("reason") and enabled:
+            state.setToolTip(str(status["reason"]))
+        section.add_row(SettingRow(self._tr("Current runtime"), "", state))
         return self._embed_settings_panels(
-            ("Plugins", "Enable or disable plugins. Use the settings icon on a plugin row to configure only that plugin.", manager),
+            ("Plugin system", "Optional extensions. Core actions, voice, memory and the assistant remain available when plugins are disabled or fail to load.", section),
+            ("Installed plugins", "Enable or disable individual plugins. Use the settings icon to configure a plugin.", manager),
         )
 
     def _build_automation_settings_page(self):
