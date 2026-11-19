@@ -3,7 +3,7 @@
 from collections.abc import Callable
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QVBoxLayout, QWidget, QPushButton, QComboBox
+from PyQt6.QtWidgets import QVBoxLayout, QWidget, QPushButton, QComboBox, QLabel
 
 from gui.components.settings import SettingRow, SettingsSection
 from gui.themes.tokens import Space
@@ -59,12 +59,26 @@ class VoiceAudioPage(QWidget):
             self.threshold_combo.addItem(f"{value:.2f}", value)
         index = self.threshold_combo.findData(round(float(wake_threshold), 2))
         self.threshold_combo.setCurrentIndex(index if index >= 0 else 2)
-        self.threshold_combo.currentIndexChanged.connect(
-            lambda idx: threshold_changed(self.threshold_combo.currentData())
-            if threshold_changed is not None and idx >= 0 else None
-        )
+        self.threshold_error = QLabel("")
+        self.threshold_error.setWordWrap(True)
+        self.threshold_error.hide()
+        self.threshold_combo.currentIndexChanged.connect(self._apply_threshold)
+        self._threshold_changed = threshold_changed
         sensitivity.add_row(
             SettingRow("Detection threshold", "Adjust wake-word detection sensitivity.", self.threshold_combo)
         )
+        sensitivity.add_row(SettingRow("Status", "", self.threshold_error))
         layout.addWidget(sensitivity)
         layout.addStretch(1)
+
+    def _apply_threshold(self, index: int) -> None:
+        if index < 0 or self._threshold_changed is None:
+            return
+        try:
+            result = self._threshold_changed(float(self.threshold_combo.currentData()))
+            if result is not None:
+                self.threshold_error.setText("Sensitivity saved and applied.")
+                self.threshold_error.show()
+        except Exception as exc:
+            self.threshold_error.setText(f"Could not apply sensitivity: {exc}")
+            self.threshold_error.show()
