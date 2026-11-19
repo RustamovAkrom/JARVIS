@@ -7939,6 +7939,7 @@ class MainWindow(QMainWindow):
         self._center_split.setCollapsible(0, True)
         self._center_split.setCollapsible(1, True)
         self._center_split.setCollapsible(2, True)
+        self._center_split.splitterMoved.connect(self._schedule_workspace_layout_save)
         self._center_views = QStackedWidget()
         # Sidebars may consume the whole centre column; do not leave a forced HUD sliver.
         self._center_views.setMinimumWidth(0)
@@ -7984,6 +7985,7 @@ class MainWindow(QMainWindow):
         self._main_splitter.setStretchFactor(0, 0)
         self._main_splitter.setStretchFactor(1, 1)
         self._main_splitter.setSizes([_LEFT_W, 760])
+        self._main_splitter.splitterMoved.connect(self._schedule_workspace_layout_save)
         QTimer.singleShot(0, self._update_advanced_telemetry_visibility)
 
         self._workspace_split = QSplitter(Qt.Orientation.Vertical)
@@ -8028,13 +8030,20 @@ class MainWindow(QMainWindow):
         self._root_splitter.setStretchFactor(0, 1)
         self._root_splitter.setStretchFactor(1, 0)
         self._root_splitter.setSizes([max(500, start_w - _RIGHT_W), _RIGHT_W])
+        self._root_splitter.splitterMoved.connect(self._schedule_workspace_layout_save)
         self._workspace_split.addWidget(self._bottom_tabs)
         self._workspace_split.setStretchFactor(0, 3)
         self._workspace_split.setStretchFactor(1, 0)
         self._workspace_split.setCollapsible(0, False)
         self._workspace_split.setCollapsible(1, True)
         self._workspace_split.setSizes([max(300, start_h - 170), 0])
+        self._workspace_split.splitterMoved.connect(self._schedule_workspace_layout_save)
         root.addWidget(self._root_splitter, stretch=1)
+        self._workspace_layout_save_timer = QTimer(self)
+        self._workspace_layout_save_timer.setSingleShot(True)
+        self._workspace_layout_save_timer.setInterval(450)
+        self._workspace_layout_save_timer.timeout.connect(self._save_workspace_layout)
+        QTimer.singleShot(0, self._restore_workspace_layout)
         root.addWidget(self._build_footer())
 
         # Quick-access drawer (floating overlay, built after central widget layout is done)
@@ -11927,6 +11936,43 @@ class MainWindow(QMainWindow):
                 and self._bottom_tabs.currentWidget() is self._debug_panel
             )
         return False
+
+    def _restore_workspace_layout(self) -> None:
+        """Restore splitter proportions after Qt has completed initial layout."""
+        from memory.config_manager import get_workspace_layout_settings
+
+        saved = get_workspace_layout_settings()
+        for key, splitter in (
+            ("main", self._main_splitter),
+            ("root", self._root_splitter),
+            ("workspace", self._workspace_split),
+            ("center", self._center_split),
+        ):
+            sizes = saved.get(key)
+            if sizes and len(sizes) == splitter.count():
+                splitter.setSizes(sizes)
+
+    def _schedule_workspace_layout_save(self, *_args) -> None:
+        timer = getattr(self, "_workspace_layout_save_timer", None)
+        if timer is not None:
+            timer.start()
+
+    def _save_workspace_layout(self) -> None:
+        """Persist splitter sizes after the user finishes resizing panels."""
+        from memory.config_manager import save_workspace_layout_settings
+
+        values = {}
+        for key, splitter in (
+            ("main", self._main_splitter),
+            ("root", self._root_splitter),
+            ("workspace", self._workspace_split),
+            ("center", self._center_split),
+        ):
+            sizes = splitter.sizes()
+            if len(sizes) == splitter.count() and any(sizes):
+                values[key] = sizes
+        if values:
+            save_workspace_layout_settings(**values)
 
     def _set_workspace_panel_visibility(self, key: str, visible: bool) -> None:
         current = self._workspace_panel_is_visible(key)
