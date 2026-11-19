@@ -9591,6 +9591,10 @@ class MainWindow(QMainWindow):
         )
         self._terminal_toggle_btn.setStyleSheet(self._drawer_btn.styleSheet())
         self._terminal_toggle_btn.clicked.connect(self._toggle_terminal_panel)
+
+        # IMPORTANT: Keep the terminal button inside the main window header.
+        nav.addWidget(self._terminal_toggle_btn)
+
         self._terminal_toggle_btn.hide()
 
         brand = QVBoxLayout()
@@ -16911,10 +16915,24 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                 continue
             session.closing = True
             self._force_close_terminal_session(session_id)
+                # Close the detached reader window before shutting down the application.
+        reader = getattr(self, "_reader_window", None)
+        if reader is not None:
+            reader.close()
+            self._reader_window = None
+
         restore_console = getattr(self, "_console_restore_callback", None)
         if callable(restore_console):
             restore_console()
+
         super().closeEvent(event)
+
+        # Closing the main JARVIS window means the application should exit.
+        # Do not leave the Qt event loop alive because of auxiliary windows.
+        if event.isAccepted():
+            app = QApplication.instance()
+            if app is not None:
+                QTimer.singleShot(0, app.quit)
 
     def _show_auth_lock(self, verifier, mode="jarvis"):
         if getattr(self, "_auth_lock_dialog", None) is not None:
