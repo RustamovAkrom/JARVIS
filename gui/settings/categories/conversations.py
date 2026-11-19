@@ -11,7 +11,7 @@ class ConversationMemoryPage(QWidget):
         layout=QVBoxLayout(self)
         layout.setContentsMargins(0,0,0,0)
         layout.setSpacing(Space.LG)
-        privacy=SettingsSection("Conversation recall", "Local transcript search is opt-in. Raw conversations are stored on this device and are not uploaded by this feature.")
+        privacy=SettingsSection("Conversation recall", "Local transcript storage is opt-in. Stored files remain on this device; when you ask JARVIS to recall something, matching excerpts are sent to the active AI provider to answer.")
         self.enabled=QCheckBox("Store new conversations locally")
         self.enabled.setObjectName("conversation_memory_enabled")
         self.enabled.setAccessibleName("Store new conversations locally")
@@ -45,6 +45,7 @@ class ConversationMemoryPage(QWidget):
     def _retention(self, days):
         save_conversation_memory(days=days)
         conversations.refresh_settings()
+        conversations.flush()
         conversations.prune(days)
         self.refresh()
     def _delete_all(self):
@@ -57,4 +58,4 @@ class ConversationMemoryPage(QWidget):
         self.refresh()
     def refresh(self):
         stats=conversations.stats()
-        self.status.setText(f"{stats['exchanges']} exchanges across {stats['days_with_conversations']} days. " + (f"First: {stats['first']} · Last: {stats['last']}." if stats['first'] else "No stored history."))
+        self.status.setText(f"{stats['exchanges']} exchanges across {stats['days_with_conversations']} days; dropped writes: {stats.get('dropped_writes', 0)}. " + (f"First: {stats['first']} · Last: {stats['last']}." if stats['first'] else "No stored history."))
