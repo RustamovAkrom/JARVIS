@@ -1344,6 +1344,7 @@ class DashboardServer:
             f"[Dashboard] Type by hand:  {self._ip}:{PORT}  "
             f"(sends you to the secure page)"
         )
+        cfg.timeout_graceful_shutdown = 2
         server = uvicorn.Server(cfg)
         self._redirect_server = server
         if self._stopping:
@@ -1464,6 +1465,7 @@ class DashboardServer:
 
         print(f"[Dashboard] {self.get_url()}")
         print("[Dashboard] Press 'Remote Control' in JARVIS UI to get the QR code.")
+        cfg.timeout_graceful_shutdown = 2
         server = uvicorn.Server(cfg)
         self._server = server
         if self._stopping:
