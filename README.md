@@ -462,37 +462,13 @@ Plugins are optional systems that extend JARVIS without changing the main runtim
 
 A plugin may require an API key, account authorization, a local application, an additional Python dependency, a camera, a browser runtime or operating-system permissions. A plugin being present in the repository does not mean that every feature is active or configured.
 
-### Current plugin catalogue
+### Plugin catalogue
 
-The following groups summarize plugins in the v2 source tree.
+The complete, source-verified catalogue of the plugin modules in the `v2` branch is maintained in **[docs/plugins.md](docs/plugins.md)**. It includes each plugin's emoji, number, display name, exact tool identifier, and a description of its capabilities.
 
-| Category | Plugin | Capability |
-|---|---|---|
-| System dashboards | system_dashboard | Live CPU, memory, GPU, disk, network, battery and process views where data is available. |
-| System dashboards | battery_dashboard | Battery status and history on supported devices. |
-| System dashboards | disk_dashboard | Disk usage, available space and selected cache maintenance. |
-| System dashboards | network_dashboard | Network throughput, latency and interface diagnostics. |
-| Network tools | network_radar | Discover devices visible on the local network, inspect device information and optionally watch for new devices. Use only on networks you own or are authorized to assess. |
-| Visual assistance | gesture_control | Camera-based hand gestures for assistant interruption and supported media/volume controls. Uses local hand-detection components. |
-| Visual assistance | build_guide | Camera, screen or image-based component identification, assembly guidance, connection diagrams and visual troubleshooting. |
-| Visual assistance | calorie_counter | AI-assisted food-image analysis and estimated nutrition information. Estimates are not medical measurements. |
-| Visual assistance | gods_eye_plugin | God's Eye globe/map interface and search for streams explicitly marked live. |
-| Visual assistance | planet_watch | Globe and map views with public information such as earthquakes, disaster alerts, aircraft, weather and the ISS. Data availability depends on external sources. |
-| Documents and productivity | document_review | Explain and structure findings from uploaded or selected documents. Content may be sent to the selected AI provider. |
-| Documents and productivity | excel_writer | Generate Excel workbooks from a natural-language description. |
-| Documents and productivity | obsidian_vault | Search, read, create and append notes in a configured local Obsidian vault. |
-| Documents and productivity | quiz | Display interactive quizzes generated from the active conversation context. |
-| Documents and productivity | pomodoro | Focus sessions, breaks and locally stored focus statistics. |
-| Documents and productivity | water_reminder | Local hydration tracking and scheduled reminders. |
-| Communication | chat_takeover | Optional screen-based chat assistance and reply automation. Requires careful use of screen and input permissions. |
-| Communication | whatsapp_call | Place or manage supported WhatsApp calls through the configured desktop or browser transport. |
-| Communication | whatsapp_guard | Watch for incoming WhatsApp calls and apply the configured answer/decline workflow. |
-| Communication | telegram_remote | Pair authorized Telegram chats for remote commands and supported message/file relays. |
-| Media | spotify_control | Search and control playback through an authorized Spotify account and device. |
-| Gaming | game_updater | Inspect and manage supported Steam/Epic library installation and update operations. |
-| Research and data | trading_agent | Retrieve market quotes, public headlines and technical summaries. It does not replace independent financial research or professional advice. |
+The catalogue covers optional tools for system monitoring, network diagnostics, visual assistance, productivity, documents, communications, media, gaming, research and personal workflows. It also identifies platform restrictions, account/API requirements and relevant safety notes.
 
-The repository may gain or change plugins as development continues. The runtime plugin manager is the authoritative view of the plugins discovered by your installation. For the plugin contract, settings schema and implementation examples, see [Plugin guide](docs/plugins.md).
+The Plugin Manager in a running JARVIS installation remains the source of truth for which plugins actually loaded and are available on that machine. A source module may need optional dependencies, companion applications, account authorization, device access or operating-system permissions before it can be used.
 
 ### Configure an integration
 
