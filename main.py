@@ -102,6 +102,7 @@ from memory.config_manager import (
     get_voice,
     get_wake_word_enabled,
     get_wake_word_threshold,
+    get_typed_language_detection_enabled,
     save_wake_word_enabled,
     save_wake_word_threshold,
     get_input_device,
@@ -854,6 +855,12 @@ class JarvisLive:
         self.ui.on_wake_toggle = self._ui_wake_toggle  # (enable: bool) -> str
         self.ui.on_wake_threshold_changed = self._set_wake_threshold
         self.ui.on_presence_settings_changed = self._apply_presence_settings
+        if get_typed_language_detection_enabled():
+            threading.Thread(
+                target=lambda: __import__("core.language", fromlist=["warm"]).warm(),
+                daemon=True,
+                name="typed-language-warm",
+            ).start()
         self.ui.on_wake_manual = self._ui_wake_manual  # () -> toggle awake/asleep
         self.ui.on_wake_install = self._ui_wake_install  # () -> (ok, msg)
 
@@ -1209,6 +1216,18 @@ class JarvisLive:
                 "tools or perform state-changing work. Read-only lookups are allowed "
                 "only when needed to make the plan accurate.",
             )
+        user_text = str(text).replace(plan_marker, "").strip()
+        # Typed requests get a confidence-gated language hint. Speech remains
+        # handled by Gemini Live's native multilingual recognition.
+        if get_typed_language_detection_enabled():
+            try:
+                from core.language import instruction as _language_instruction
+                _language_hint = _language_instruction(user_text)
+                if _language_hint:
+                    text = f"{_language_hint}\\n\\n{text}"
+            except Exception as _language_exc:
+                print(f"[Language] typed routing failed: {type(_language_exc).__name__}: {_language_exc}")
+
         # Respect wake-word sleep: a typed command must not be answered while
         # asleep either (the sleep gate is not just for the mic). Wake first with
         # "Hey Jarvis" or the WAKE NOW button.
@@ -1239,9 +1258,7 @@ class JarvisLive:
             )
             return
 
-        self._session_log.append(
-            f"User: {str(text).replace(plan_marker, '').strip()}"
-        )
+        self._session_log.append(f"User: {user_text}")
         asyncio.run_coroutine_threadsafe(
             self.session.send_client_content(
                 turns={"role": "user", "parts": [{"text": text}]}, turn_complete=True
