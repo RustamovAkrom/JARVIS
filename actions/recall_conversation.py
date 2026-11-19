@@ -36,7 +36,7 @@ def handle(parameters: dict) -> str:
             s = conv.stats()
             return (f"Conversation memory is {'on' if s['enabled'] else 'off'}. "
                     f"Stored {s['exchanges']} exchanges across {s['days_with_conversations']} days. "
-                    f"Retention: {s['days_kept']} days. Local storage only.")
+                    f"Retention: {s['days_kept']} days. Stored locally; recall excerpts may be sent to the active AI provider. Dropped writes: {s.get('dropped_writes', 0)}.")
         if action in {"on", "off"}:
             cfg = save_conversation_memory(enabled=action == "on")
             conv.refresh_settings()
@@ -49,6 +49,7 @@ def handle(parameters: dict) -> str:
                 return "Retention must be between 1 and 3650 days."
             cfg = save_conversation_memory(days=days)
             conv.refresh_settings()
+            conv.flush()
             deleted = conv.prune(days)
             return f"Retention set to {cfg['days']} days. Deleted {deleted} older day(s)."
         if action == "forget":
