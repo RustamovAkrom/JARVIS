@@ -70,6 +70,19 @@ class ShutdownLifecycleTests(unittest.TestCase):
         self.assertNotEqual(cleanup_thread_ids[0], caller_thread_id)
         self.assertTrue(worker.daemon)
 
+    def test_ui_facade_forwards_assistant_shutdown_to_main_window(self):
+        ui = JarvisUI.__new__(JarvisUI)
+        requested = []
+        ui._win = type(
+            "WindowStub",
+            (),
+            {"request_assistant_shutdown": lambda _self: requested.append(True)},
+        )()
+
+        ui.request_assistant_shutdown()
+
+        self.assertEqual(requested, [True])
+
 
 if __name__ == "__main__":
     unittest.main()
