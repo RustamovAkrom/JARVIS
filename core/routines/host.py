@@ -10,7 +10,13 @@ class JarvisRoutineHost:
         self.loop_getter = loop_getter
 
     def ready(self) -> bool:
-        return bool(self.assistant.session and self.assistant._awake and not self.assistant.ui.auth_locked)
+        if not (self.assistant.session and self.assistant._awake and not self.assistant.ui.auth_locked):
+            return False
+        lock = getattr(self.assistant, "_speaking_lock", None)
+        if lock is not None:
+            with lock:
+                return not bool(getattr(self.assistant, "_is_speaking", False))
+        return True
 
     def idle_seconds(self) -> float:
         return max(0.0, __import__("time").monotonic() - self.assistant._last_user_speech)
