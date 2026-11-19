@@ -25,10 +25,16 @@ class UiFacadeTests(unittest.TestCase):
 
     def test_left_monitor_scroll_surfaces_do_not_cover_panel_theme(self):
         app = QApplication.instance() or QApplication([])
-        # Keep this UI test independent from a developer-mode preference saved
-        # in the local user profile by a previous interactive session.
-        with patch.object(implementation, "_read_full_config", return_value={}):
+        # Keep this UI test independent from developer preferences and native
+        # multimedia backends. Video playback is not under test; constructing
+        # QMediaPlayer starts platform-specific FFmpeg/audio workers that are
+        # unreliable in Qt's offscreen GitHub Actions environment.
+        with (
+            patch.object(implementation, "_read_full_config", return_value={}),
+            patch.object(implementation, "HAVE_VIDEO", False),
+        ):
             window = ui.MainWindow("")
+        self.assertIsNone(window._video_player)
         try:
             self.assertFalse(hasattr(window, "_ctrl_btn"))
             panel = window._left_panel
