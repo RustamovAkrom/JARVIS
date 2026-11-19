@@ -3194,10 +3194,10 @@ class JarvisLive:
         if redirect_task is not None and redirect_task not in server_tasks:
             server_tasks.append(redirect_task)
 
-        server_tasks = [task for task in server_tasks if not task.done()]
-        if server_tasks:
+        pending = [task for task in server_tasks if not task.done()]
+        if pending:
             _, pending = await asyncio.wait(
-                server_tasks, timeout=max(0.0, float(timeout))
+                pending, timeout=max(0.0, float(timeout))
             )
             if pending:
                 print(
@@ -3206,9 +3206,12 @@ class JarvisLive:
                 )
                 for task in pending:
                     task.cancel()
-                await asyncio.gather(*pending, return_exceptions=True)
-            else:
-                await asyncio.gather(*server_tasks, return_exceptions=True)
+
+        # Retrieve results from both completed and cancelled tasks. This keeps
+        # early Uvicorn startup/bind failures from surfacing as unhandled-task
+        # warnings during asyncio.run() finalization.
+        if server_tasks:
+            await asyncio.gather(*server_tasks, return_exceptions=True)
 
         self._dashboard_task = None
 
