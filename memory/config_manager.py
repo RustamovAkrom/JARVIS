@@ -619,6 +619,17 @@ def save_output_device(name: str) -> None:
     _patch_config(output_device=(name or "").strip())
 
 
+def get_plugins_subsystem_enabled() -> bool:
+    """Global optional-plugin switch. Built-in actions are unaffected."""
+    value = load_api_keys().get("plugins_subsystem_enabled", True)
+    return value if isinstance(value, bool) else True
+
+
+def save_plugins_subsystem_enabled(enabled: bool) -> None:
+    """Enable/disable plugin discovery and execution without affecting actions."""
+    _patch_config(plugins_subsystem_enabled=bool(enabled))
+
+
 def get_plugin_enabled(plugin_name: str) -> bool:
     """Plugins are enabled by default the moment they're discovered (opt-out model)."""
     return load_api_keys().get("plugins_enabled", {}).get(plugin_name, True)
