@@ -847,6 +847,7 @@ class JarvisLive:
         self.ui.wake_get_state = self._wake_state  # () -> dict
         self.ui.on_wake_toggle = self._ui_wake_toggle  # (enable: bool) -> str
         self.ui.on_wake_threshold_changed = self._set_wake_threshold
+        self.ui.on_presence_settings_changed = self._apply_presence_settings
         self.ui.on_wake_manual = self._ui_wake_manual  # () -> toggle awake/asleep
         self.ui.on_wake_install = self._ui_wake_install  # () -> (ok, msg)
 
@@ -876,6 +877,13 @@ class JarvisLive:
         if not self._wake_detector.ready:
             return self._wake_detector.start()
         return True
+
+    def _apply_presence_settings(self, settings: dict) -> None:
+        """Apply persisted presence settings to the running monitor."""
+        try:
+            self._presence.apply(settings)
+        except Exception as exc:
+            print(f"[Presence] settings apply failed: {type(exc).__name__}: {exc}")
 
     def _set_wake_threshold(self, threshold: float) -> float:
         value = save_wake_word_threshold(threshold)
