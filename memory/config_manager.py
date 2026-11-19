@@ -275,6 +275,14 @@ def save_wake_word_threshold(threshold: float) -> float:
     return value
 
 
+def get_plugins_system_enabled() -> bool:
+    """Global opt-in for the optional plugin subsystem."""
+    return bool(load_api_keys().get("plugins_system_enabled", True))
+
+def save_plugins_system_enabled(enabled: bool) -> None:
+    _save_flag("plugins_system_enabled", bool(enabled))
+
+
 def get_typed_language_detection_enabled() -> bool:
     """Whether confident offline detection annotates typed requests."""
     return bool(load_api_keys().get("typed_language_detection", True))
