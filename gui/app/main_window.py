@@ -5968,7 +5968,8 @@ class PluginSettingsOverlay(QWidget):
         run_fn = (sec.get("action") or {}).get("run")
         if not callable(run_fn):
             return
-        self._save_ns(ns)  # persist what the user typed before testing
+        # Test the current form values without committing them. Saving is an
+        # explicit action; a failed test must not silently change plugin config.
         values = self._gather(ns)
         lbl = self._status_labels.get(ns)
         if lbl:
