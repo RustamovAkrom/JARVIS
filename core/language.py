@@ -2,7 +2,6 @@
 from __future__ import annotations
 import re
 import threading
-import unicodedata
 
 _MIN_PROBABILITY = 0.30
 _MARGIN = 1.30
