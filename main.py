@@ -3992,7 +3992,10 @@ class JarvisLive:
                     f"{type(exc).__name__}: {exc}"
                 )
             finally:
-                self.ui.root.quit()
+                # Emit a Qt signal instead of quitting QApplication from the
+                # asyncio worker. The GUI thread must run MainWindow.closeEvent
+                # so timers, terminals and auxiliary windows are released.
+                self.ui.request_assistant_shutdown()
 
 
 def main():
