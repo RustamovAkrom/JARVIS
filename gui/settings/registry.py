@@ -47,6 +47,7 @@ CATEGORIES = (
 
 ENTRIES = (
     SettingEntry("app_language", "general", "Interface language", "Choose the language used by the JARVIS interface.", ("locale", "translation"), "controls"),
+    SettingEntry("typed_language_detection", "general", "Typed language detection", "Detect typed requests offline and reply in the detected language.", ("automatic language", "response language", "multilingual"), "controls"),
     SettingEntry("autostart", "general", "Start with Windows", "Launch JARVIS automatically when you sign in.", ("startup", "login"), "setup"),
     SettingEntry("fullscreen", "general", "Fullscreen", "Toggle the main window fullscreen mode.", ("display", "window"), "controls"),
     SettingEntry("morning_brief", "general", "Morning brief", "Enable or disable the daily brief.", ("daily", "brief"), "controls"),
