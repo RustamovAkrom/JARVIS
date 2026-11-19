@@ -35,15 +35,19 @@ class JarvisRoutineHost:
             print(f"[Routines] Delivery failed: {type(exc).__name__}: {exc}")
             return False
 
+    def _require_delivery(self, text: str) -> None:
+        if not self._send(text):
+            raise RuntimeError("Live session is unavailable; routine delivery was not accepted")
+
     def say(self, text: str) -> None:
-        self._send("Say this reminder briefly and naturally in the user's language: " + text)
+        self._require_delivery("Say this reminder briefly and naturally in the user's language: " + text)
 
     def prompt(self, text: str) -> None:
-        self._send(text)
+        self._require_delivery(text)
 
     def start_task(self, text: str, agent: str = "general", minutes: int = 10, deliver: str = "voice") -> None:
         safe_minutes = max(1, min(720, int(minutes)))
-        self._send(
+        self._require_delivery(
             "[SCHEDULED TASK — user authorized this routine]\n"
             f"Task: {text}\nAgent: {agent}\nTime budget: {safe_minutes} minutes.\n"
             "Execute using available tools. Keep the user informed only if delivery mode is voice. "
@@ -53,10 +57,10 @@ class JarvisRoutineHost:
     def builtin(self, name: str, options: dict) -> None:
         # Only explicitly implemented built-ins are permitted; no arbitrary tool execution.
         if name == "briefing":
-            self._send("Provide a concise current-day briefing using available context. Do not call tools unless necessary.")
+            self._require_delivery("Provide a concise current-day briefing using available context. Do not call tools unless necessary.")
         elif name == "check_in":
-            self._send("Check in with the user briefly and naturally. Ask whether they need help with anything.")
+            self._require_delivery("Check in with the user briefly and naturally. Ask whether they need help with anything.")
         elif name == "system_check":
-            self._send("Run a concise system status check using the system_status tool if available, and report only actionable issues.")
+            self._require_delivery("Run a concise system status check using the system_status tool if available, and report only actionable issues.")
         else:
             raise ValueError(f"Unsupported routine built-in: {name}")
