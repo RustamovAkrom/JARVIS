@@ -101,7 +101,9 @@ from memory.config_manager import (
     get_turn_tuning,
     get_voice,
     get_wake_word_enabled,
+    get_wake_word_threshold,
     save_wake_word_enabled,
+    save_wake_word_threshold,
     get_input_device,
     get_output_device,
     get_presence_settings,
@@ -844,6 +846,7 @@ class JarvisLive:
         self.ui.wake_is_ready = wake_is_ready  # () -> bool
         self.ui.wake_get_state = self._wake_state  # () -> dict
         self.ui.on_wake_toggle = self._ui_wake_toggle  # (enable: bool) -> str
+        self.ui.on_wake_threshold_changed = self._set_wake_threshold
         self.ui.on_wake_manual = self._ui_wake_manual  # () -> toggle awake/asleep
         self.ui.on_wake_install = self._ui_wake_install  # () -> (ok, msg)
 
@@ -866,12 +869,19 @@ class JarvisLive:
         if self._wake_detector is None:
             self._wake_detector = WakeWordDetector(
                 on_detect=self._on_wake_detected,
+                threshold=get_wake_word_threshold(),
                 logger=lambda m: print(f"[Wake] {m}"),
                 notify=lambda m: self.ui.write_log(f"SYS: {m}"),
             )
         if not self._wake_detector.ready:
             return self._wake_detector.start()
         return True
+
+    def _set_wake_threshold(self, threshold: float) -> float:
+        value = save_wake_word_threshold(threshold)
+        if self._wake_detector is not None:
+            self._wake_detector.set_threshold(value)
+        return value
 
     def _on_wake_detected(self) -> None:
         """Called from the detector thread when 'Hey Jarvis' is heard."""
