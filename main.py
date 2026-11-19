@@ -2369,17 +2369,17 @@ class JarvisLive:
             _mic_name = get_input_device()
             _mic_dev = audio_devices.resolve(_mic_name, "input")
             if _mic_dev is not None:
-                print("[JARVIS] 🎤 Input device selected (custom)")
+                print("[JARVIS] 🎤 Input device selected from saved settings")
             try:
                 _mic_stream = _open_mic(_mic_dev)
-            except Exception as _e:
+            except Exception:
                 # A device the picker listed but the driver will not open right
                 # now — exclusive mode, a webcam already in use, a virtual mic
                 # whose source went away. Chosen hardware failing must never
                 # mean the assistant cannot hear at all.
                 if _mic_dev is None:
                     raise
-                print(f"[JARVIS] ⚠️  Selected mic failed: {_e} — using default")
+                print("[JARVIS] ⚠️  Saved microphone unavailable — using system default")
                 self.ui.write_log(
                     "SYS: Selected microphone unavailable — using system default."
                 )
@@ -2389,8 +2389,8 @@ class JarvisLive:
                 print("[JARVIS] 🎤 Mic stream open")
                 while True:
                     await asyncio.sleep(0.1)
-        except Exception as e:
-            print(f"[JARVIS] ❌ Mic: {e}")
+        except Exception:
+            print("[JARVIS] ❌ Mic initialization failed")
             raise
 
     async def _flush_pending_vision(self) -> bool:
