@@ -88,6 +88,32 @@ def save_ui_language(language: str) -> None:
 
 
 
+# ── Local conversation recall ───────────────────────────────────────────────
+
+CONVERSATION_MEMORY_DEFAULTS = {"enabled": False, "days": 90}
+
+def get_conversation_memory() -> dict:
+    raw = load_api_keys().get("conversation_memory", {})
+    raw = raw if isinstance(raw, dict) else {}
+    try:
+        days = int(raw.get("days", CONVERSATION_MEMORY_DEFAULTS["days"]))
+    except (TypeError, ValueError):
+        days = CONVERSATION_MEMORY_DEFAULTS["days"]
+    return {"enabled": bool(raw.get("enabled", False)), "days": max(1, min(3650, days))}
+
+def save_conversation_memory(*, enabled=None, days=None) -> dict:
+    current = get_conversation_memory()
+    updates = dict(current)
+    if enabled is not None:
+        updates["enabled"] = bool(enabled)
+    if days is not None:
+        try: value = int(days)
+        except (TypeError, ValueError): raise ValueError("days must be an integer") from None
+        if not 1 <= value <= 3650: raise ValueError("days must be between 1 and 3650")
+        updates["days"] = value
+    _patch_config(conversation_memory=updates)
+    return updates
+
 # ── Presence ────────────────────────────────────────────────────────────────
 
 PRESENCE_DEFAULTS = {"enabled": True, "away_minutes": 10, "greet": True}
