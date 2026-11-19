@@ -135,6 +135,33 @@ class SettingsComponentTests(unittest.TestCase):
         page.close()
         owner.close()
 
+    def test_clear_current_chat_requires_confirmation(self):
+        from types import SimpleNamespace
+        from PyQt6.QtWidgets import QMessageBox
+
+        store = SimpleNamespace(
+            get_chat=lambda chat_id: {"id": chat_id, "turns": [{"id": "turn-1"}]},
+            clear_chat=lambda chat_id: self.fail("clear_chat must not run after cancellation"),
+        )
+        owner = SimpleNamespace(_chat_store=store, _active_chat_id="chat-1")
+        with patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.No):
+            MainWindow._clear_chat(owner)
+
+    def test_delete_chat_turn_requires_confirmation(self):
+        from types import SimpleNamespace
+        from PyQt6.QtWidgets import QMessageBox
+
+        store = SimpleNamespace(
+            get_chat=lambda chat_id: {
+                "id": chat_id,
+                "turns": [{"id": "turn-1", "request": "hello", "result": "world"}],
+            },
+            save_chat=lambda *args, **kwargs: self.fail("save_chat must not run after cancellation"),
+        )
+        owner = SimpleNamespace(_chat_store=store, _active_chat_id="chat-1")
+        with patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.No):
+            MainWindow._delete_chat_turn(owner, "turn-1")
+
     def test_setting_row_pairs_control_with_accessible_description(self):
         control = QCheckBox("Enabled")
         row = SettingRow("Wake word", "Listen for the configured wake phrase.", control)
