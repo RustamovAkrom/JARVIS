@@ -46,6 +46,7 @@ def test_declared_away_has_grace_before_return_detection():
     presence.note_activity()
     assert presence.poll(0, False) is None
     clock.advance(20)
+    presence.note_activity()
     assert presence.poll(0, False) == ("back", 25)
 
 
