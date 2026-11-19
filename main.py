@@ -84,6 +84,7 @@ from core.action_loader import strip_meta
 from actions.screen_processor import _capture_camera, _capture_screen
 from actions.system_monitor import SystemMonitor, get_system_status
 from actions.proactive import ProactiveEngine
+from core.presence import Presence, os_idle_seconds, screen_locked
 from actions.background_monitor import (
     add_monitor,
     remove_monitor,
@@ -103,6 +104,7 @@ from memory.config_manager import (
     save_wake_word_enabled,
     get_input_device,
     get_output_device,
+    get_presence_settings,
 )
 from core import gemini as _gemini
 from core.plugin_loader import discover_plugins
@@ -768,6 +770,8 @@ class JarvisLive:
         self._briefing_sent = False  # morning briefing fires once per process
         self._sys_monitor = SystemMonitor()  # persistent cooldown state
         self._proactive = ProactiveEngine()
+        self._presence = Presence()
+        self._presence.apply(get_presence_settings())
         self._last_user_speech = time.monotonic()  # updated on every user utterance
         self._enhanced_live = (
             True  # proactive audio; auto-disabled if the server rejects it
@@ -2544,6 +2548,7 @@ class JarvisLive:
                             if txt:
                                 in_buf.append(txt)
                                 self._last_user_speech = time.monotonic()
+                                self._presence.note_activity(source="speech")
                                 # Audio turns do not pass through
                                 # send_client_content(), so arm the same no-reply
                                 # watchdog when Gemini confirms it heard speech.
@@ -3039,6 +3044,49 @@ class JarvisLive:
             print(f"[Memory] ⚠️ Session summary failed: {e}")
 
     # ── System monitor ──────────────────────────────────────────────────────────
+
+    async def _run_presence_monitor(self) -> None:
+        """Poll optional OS presence signals without blocking the Live event loop.
+
+        This phase only records state transitions. Notification delivery and
+        welcome-back speech are deliberately deferred until the next phase.
+        """
+        poll_count = 0
+        last_locked = None
+        while True:
+            try:
+                settings = await asyncio.to_thread(get_presence_settings)
+                self._presence.apply(settings)
+                if not settings.get("enabled", True):
+                    await asyncio.sleep(5)
+                    continue
+
+                idle = await asyncio.to_thread(os_idle_seconds)
+                locked = last_locked
+                if poll_count % 3 == 0:
+                    locked = await asyncio.to_thread(screen_locked)
+                    last_locked = locked
+
+                change = self._presence.poll(idle, locked)
+                if change:
+                    event, away_seconds = change
+                    if event == "away":
+                        reason = self._presence.reason or "unknown"
+                        message = f"User away ({reason})."
+                    else:
+                        message = f"User returned after {away_seconds / 60:.1f} min."
+                    print(f"[Presence] {message}")
+                    try:
+                        self.ui.write_log(f"SYS: Presence — {message}")
+                    except Exception:
+                        pass
+                poll_count += 1
+                await asyncio.sleep(2)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                print(f"[Presence] Poll failed: {type(exc).__name__}: {exc}")
+                await asyncio.sleep(5)
 
     async def _run_system_monitor(self) -> None:
         """Background task: voice alerts when metrics exceed thresholds."""
@@ -3774,6 +3822,7 @@ class JarvisLive:
                     tg.create_task(self._listen_audio())
                     tg.create_task(self._receive_audio())
                     tg.create_task(self._play_audio())
+                    tg.create_task(self._run_presence_monitor(), name="jarvis-presence")
                     tg.create_task(self._run_system_monitor())
                     tg.create_task(self._run_background_monitor())
                     tg.create_task(self._run_proactive_mode())
