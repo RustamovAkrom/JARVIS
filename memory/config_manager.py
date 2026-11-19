@@ -275,6 +275,14 @@ def save_wake_word_threshold(threshold: float) -> float:
     return value
 
 
+def get_typed_language_detection_enabled() -> bool:
+    """Whether confident offline detection annotates typed requests."""
+    return bool(load_api_keys().get("typed_language_detection", True))
+
+def save_typed_language_detection_enabled(enabled: bool) -> None:
+    _save_flag("typed_language_detection", bool(enabled))
+
+
 def get_wake_word_enabled() -> bool:
     """Whether local wake-word gating is on (assistant sleeps until 'Hey Jarvis')."""
     return load_api_keys().get("wake_word_enabled", False)
