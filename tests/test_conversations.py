@@ -14,9 +14,23 @@ def test_record_search_and_forget(monkeypatch, tmp_path):
     assert conv.flush()
     result = conv.search("FastAPI")
     assert "FastAPI architecture" in result
+    assert "UNTRUSTED HISTORY" in result
     assert conv.stats()["exchanges"] == 1
     assert conv.forget(everything=True) == 1
     assert conv.stats()["exchanges"] == 0
+
+def test_writer_queue_is_bounded(monkeypatch):
+    import queue
+    class AliveThread:
+        def is_alive(self): return True
+    q=queue.Queue(maxsize=1)
+    monkeypatch.setattr(conv,"_queue",q)
+    monkeypatch.setattr(conv,"_writer",AliveThread())
+    monkeypatch.setattr(conv,"_dropped_writes",0)
+    conv._put("day.jsonl",{"user":"first"})
+    conv._put("day.jsonl",{"user":"second"})
+    assert q.qsize()==1
+    assert conv.stats()["dropped_writes"]==1
 
 def test_search_date_range(monkeypatch, tmp_path):
     monkeypatch.setattr(conv, "DIR", tmp_path)
