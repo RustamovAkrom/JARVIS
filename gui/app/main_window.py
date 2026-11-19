@@ -11097,6 +11097,7 @@ class MainWindow(QMainWindow):
                     "integrations": self._build_integrations_settings_page,
                     "plugins": self._build_plugins_settings_page,
                     "memory": self._build_memory_settings_page,
+                    "conversations": self._build_conversations_settings_page,
                     "workspace": self._build_workspace_settings_page,
                     "developer": self._build_developer_settings_page,
                     "updates": self._build_updates_settings_page,
@@ -11338,6 +11339,10 @@ class MainWindow(QMainWindow):
         return self._embed_settings_panels(
             ("Plugins", "Enable or disable plugins. Use the settings icon on a plugin row to configure only that plugin.", manager),
         )
+
+    def _build_conversations_settings_page(self):
+        from gui.settings.categories.conversations import ConversationMemoryPage
+        return ConversationMemoryPage()
 
     def _build_memory_settings_page(self):
         return self._embed_settings_panels((
