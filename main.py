@@ -758,6 +758,8 @@ class JarvisLive:
         # selecting an older chat restores its own server-side context.
         self._turn_done_event: asyncio.Event | None = None
         self._dashboard = None
+        self._dashboard_task: asyncio.Task | None = None
+        self._dashboard_commands_task: asyncio.Task | None = None
         self._shutdown_requested = False
         self._shutdown_requested_at: float | None = None
         self._plan_mode_active = bool(
@@ -3167,6 +3169,49 @@ class JarvisLive:
 
     # ── dashboard command relay ─────────────────────────────────────────────
 
+    async def _shutdown_dashboard(self, timeout: float = 5.0) -> None:
+        """Stop dashboard workers and await Uvicorn's graceful lifespan exit."""
+        dashboard = self._dashboard
+        if dashboard is not None:
+            try:
+                dashboard.request_shutdown()
+            except Exception as exc:
+                print(
+                    f"[Dashboard] Shutdown request failed: "
+                    f"{type(exc).__name__}: {exc}"
+                )
+
+        command_task = self._dashboard_commands_task
+        if command_task is not None and not command_task.done():
+            command_task.cancel()
+            await asyncio.gather(command_task, return_exceptions=True)
+        self._dashboard_commands_task = None
+
+        server_tasks = []
+        if self._dashboard_task is not None:
+            server_tasks.append(self._dashboard_task)
+        redirect_task = getattr(dashboard, "_redirect_task", None)
+        if redirect_task is not None and redirect_task not in server_tasks:
+            server_tasks.append(redirect_task)
+
+        server_tasks = [task for task in server_tasks if not task.done()]
+        if server_tasks:
+            _, pending = await asyncio.wait(
+                server_tasks, timeout=max(0.0, float(timeout))
+            )
+            if pending:
+                print(
+                    f"[Dashboard] Graceful shutdown exceeded {timeout:.1f}s; "
+                    "cancelling remaining server tasks."
+                )
+                for task in pending:
+                    task.cancel()
+                await asyncio.gather(*pending, return_exceptions=True)
+            else:
+                await asyncio.gather(*server_tasks, return_exceptions=True)
+
+        self._dashboard_task = None
+
     async def _process_dashboard_commands(self) -> None:
         while True:
             try:
@@ -3513,9 +3558,14 @@ class JarvisLive:
 
             self._dashboard = DashboardServer()
             self._dashboard.set_connect_callback(self._on_phone_connected)
-            asyncio.create_task(self._dashboard.serve())
-            # Runs for the whole lifetime, not just inside an active session
-            asyncio.create_task(self._process_dashboard_commands())
+            self._dashboard_task = asyncio.create_task(
+                self._dashboard.serve(), name="jarvis-dashboard-server"
+            )
+            # Runs for the whole lifetime, not just inside an active session.
+            self._dashboard_commands_task = asyncio.create_task(
+                self._process_dashboard_commands(),
+                name="jarvis-dashboard-commands",
+            )
         except Exception as e:
             print(f"[Dashboard] Disabled: {e}")
             self._dashboard = None
@@ -3975,6 +4025,14 @@ class JarvisLive:
 
         if self._shutdown_requested:
             self.set_speaking(False)
+            print("[JARVIS] Stopping Remote Dashboard...")
+            try:
+                await self._shutdown_dashboard()
+            except Exception as exc:
+                print(
+                    f"[Dashboard] Shutdown failed: "
+                    f"{type(exc).__name__}: {exc}"
+                )
             print("[JARVIS] Shutdown complete.")
             try:
                 self._inputlock.clear()
