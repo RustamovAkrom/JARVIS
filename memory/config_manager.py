@@ -1058,6 +1058,49 @@ def save_providers(
     _update_config(merge)
 
 
+def get_workspace_layout_settings() -> dict:
+    """Return persisted workspace splitter sizes, normalized and validated."""
+    raw = load_api_keys().get("workspace_layout", {})
+    raw = raw if isinstance(raw, dict) else {}
+    result = {}
+    for key in ("main", "root", "workspace", "center"):
+        value = raw.get(key)
+        if isinstance(value, list) and len(value) in (2, 3):
+            sizes = []
+            for item in value:
+                try:
+                    sizes.append(max(0, min(100000, int(item))))
+                except (TypeError, ValueError):
+                    sizes.append(0)
+            if any(sizes):
+                result[key] = sizes
+    return result
+
+
+def save_workspace_layout_settings(**sizes: list[int]) -> None:
+    """Persist only valid splitter size arrays; unrelated settings are preserved."""
+    fields = {}
+    for key, value in sizes.items():
+        if key not in {"main", "root", "workspace", "center"}:
+            continue
+        if not isinstance(value, (list, tuple)) or len(value) not in (2, 3):
+            continue
+        try:
+            fields[key] = [max(0, min(100000, int(item))) for item in value]
+        except (TypeError, ValueError):
+            continue
+    if not fields:
+        return
+
+    def merge(data: dict) -> None:
+        current = data.get("workspace_layout")
+        current = dict(current) if isinstance(current, dict) else {}
+        current.update(fields)
+        data["workspace_layout"] = current
+
+    _update_config(merge)
+
+
 def get_update_settings() -> dict:
     """Read safe update preferences; installation is opt-in."""
     raw = load_api_keys().get("updates", {})
