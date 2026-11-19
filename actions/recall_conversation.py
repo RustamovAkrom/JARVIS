@@ -54,6 +54,7 @@ def handle(parameters: dict) -> str:
         if action == "forget":
             if not p.get("confirmed"):
                 return "Deletion not performed. Ask the user to confirm the date range or all history first."
+            conv.flush()
             deleted = conv.forget(p.get("date_from"), p.get("date_to"), everything=bool(p.get("everything")))
             return f"Deleted {deleted} conversation day-file(s)."
         return "Unknown conversation memory action."
