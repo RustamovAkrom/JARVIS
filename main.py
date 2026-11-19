@@ -3078,11 +3078,7 @@ class JarvisLive:
         return False
 
     async def _run_presence_monitor(self) -> None:
-        """Poll optional OS presence signals without blocking the Live event loop.
-
-        This phase only records state transitions. Notification delivery and
-        welcome-back speech are deliberately deferred until the next phase.
-        """
+        """Poll OS presence and deliver queued notifications when the user returns."""
         poll_count = 0
         last_locked = None
         while True:
