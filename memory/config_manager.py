@@ -87,6 +87,46 @@ def save_ui_language(language: str) -> None:
     _save_flag("ui_language", value)
 
 
+
+# ── Presence ────────────────────────────────────────────────────────────────
+
+PRESENCE_DEFAULTS = {"enabled": True, "away_minutes": 10, "greet": True}
+
+
+def get_presence_settings() -> dict:
+    """Return validated presence settings without mutating stored config."""
+    raw = load_api_keys().get("presence", {})
+    raw = raw if isinstance(raw, dict) else {}
+    try:
+        away_minutes = int(raw.get("away_minutes", PRESENCE_DEFAULTS["away_minutes"]))
+    except (TypeError, ValueError):
+        away_minutes = PRESENCE_DEFAULTS["away_minutes"]
+    return {
+        "enabled": bool(raw.get("enabled", PRESENCE_DEFAULTS["enabled"])),
+        "away_minutes": max(1, min(240, away_minutes)),
+        "greet": bool(raw.get("greet", PRESENCE_DEFAULTS["greet"])),
+    }
+
+
+def save_presence_settings(*, enabled=None, away_minutes=None, greet=None) -> dict:
+    """Persist validated presence settings while preserving unrelated config."""
+    current = get_presence_settings()
+    updates = dict(current)
+    if enabled is not None:
+        updates["enabled"] = bool(enabled)
+    if away_minutes is not None:
+        try:
+            minutes = int(away_minutes)
+        except (TypeError, ValueError):
+            raise ValueError("away_minutes must be an integer") from None
+        if not 1 <= minutes <= 240:
+            raise ValueError("away_minutes must be between 1 and 240")
+        updates["away_minutes"] = minutes
+    if greet is not None:
+        updates["greet"] = bool(greet)
+    _patch_config(presence=updates)
+    return updates
+
 def get_workspace_path() -> str:
     """Return the configured project folder if it still exists."""
     value = load_api_keys().get("workspace_path", "")
