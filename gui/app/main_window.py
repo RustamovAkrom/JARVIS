@@ -17573,6 +17573,14 @@ class JarvisUI:
         self._win.get_plugin_settings = cb
 
     @property
+    def get_plugin_status(self):
+        return self._win.get_plugin_status
+
+    @get_plugin_status.setter
+    def get_plugin_status(self, cb):
+        self._win.get_plugin_status = cb
+
+    @property
     def on_wake_toggle(self):
         return self._win.on_wake_toggle
 
