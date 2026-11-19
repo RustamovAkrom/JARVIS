@@ -1,5 +1,5 @@
 import pytest
-from core.presence import Presence
+from core.presence import Presence, build_return_prompt
 
 
 class Clock:
@@ -75,3 +75,16 @@ def test_away_minutes_is_clamped_and_invalid_values_ignored():
     assert presence.away_minutes == 1
     presence.apply({"away_minutes": "invalid"})
     assert presence.away_minutes == 1
+
+
+def test_return_prompt_greeting_and_disabled_greeting():
+    assert "Welcome" in build_return_prompt([], greet=True)
+    assert build_return_prompt([], greet=False) is None
+
+
+def test_return_prompt_digest_is_bounded_and_sanitizes_text():
+    items = [{"text": f"Notification {i}\nwith whitespace"} for i in range(10)]
+    prompt = build_return_prompt(items)
+    assert prompt is not None
+    assert prompt.count("- Notification") == 8
+    assert "with whitespace" in prompt
