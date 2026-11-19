@@ -84,7 +84,7 @@ from core.action_loader import strip_meta
 from actions.screen_processor import _capture_camera, _capture_screen
 from actions.system_monitor import SystemMonitor, get_system_status
 from actions.proactive import ProactiveEngine
-from core.presence import Presence, os_idle_seconds, screen_locked
+from core.presence import Presence, build_return_prompt, os_idle_seconds, screen_locked
 from actions.background_monitor import (
     add_monitor,
     remove_monitor,
@@ -3053,17 +3053,9 @@ class JarvisLive:
         items = self._presence.take_inbox()
         if not returned and not items:
             return
-        if returned and not settings.get("greet", True) and not items:
+        prompt = build_return_prompt(items, greet=settings.get("greet", True))
+        if prompt is None:
             return
-        lines = [item.get("text", "") for item in items if item.get("text")]
-        if not lines and returned and settings.get("greet", True):
-            prompt = "[PRESENCE_RETURN] Welcome the user back briefly and naturally. Do not call tools."
-        else:
-            prompt = (
-                "[PRESENCE_DIGEST] The user has returned. Summarize queued notifications "
-                "concisely and naturally, prioritizing important items. Do not call tools.\n\n"
-                + "\n".join(f"- {line}" for line in lines[:8])
-            )
         try:
             await self.session.send_client_content(
                 turns={"role": "user", "parts": [{"text": prompt}]},
@@ -3071,7 +3063,11 @@ class JarvisLive:
             )
         except Exception:
             for item in items:
-                self._presence.hold(item.get("kind", "notification"), item.get("text", ""), item.get("label", ""))
+                self._presence.hold(
+                    item.get("kind", "notification"),
+                    item.get("text", ""),
+                    item.get("label", ""),
+                )
             raise
 
     def _notify_or_hold(self, kind: str, text: str, label: str = "") -> bool:
@@ -3116,6 +3112,11 @@ class JarvisLive:
                         self.ui.write_log(f"SYS: Presence — {message}")
                     except Exception:
                         pass
+                if change and change[0] == "back":
+                    try:
+                        await self._send_presence_inbox(returned=True)
+                    except Exception as exc:
+                        print(f"[Presence] Could not deliver return summary: {exc}")
                 poll_count += 1
                 await asyncio.sleep(2)
             except asyncio.CancelledError:
