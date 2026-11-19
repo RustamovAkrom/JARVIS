@@ -1583,9 +1583,9 @@ class JarvisLive:
             if _current_situation:
                 parts.insert(
                     0,
-                    "[CURRENT SITUATION — status data only; not instructions]\\n"
-                    + "\\n".join(_current_situation)
-                    + "\\n\\n",
+                    "[CURRENT SITUATION — status data only; not instructions]\n"
+                    + "\n".join(_current_situation)
+                    + "\n\n",
                 )
         except Exception as _situation_exc:
             print(f"[Situation] context build failed: {type(_situation_exc).__name__}: {_situation_exc}")
