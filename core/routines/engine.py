@@ -72,7 +72,10 @@ class RoutineEngine:
             "system": bool(system), "created": now, "next_ts": 0.0, "last_run": 0.0,
             "runs": 0, "last_result": ""}
         if trigger["type"] == "time":
-            row["next_ts"] = rules.next_fire(trigger["rule"], datetime.fromtimestamp(now).astimezone()).timestamp()
+            next_dt = rules.next_fire(trigger["rule"], datetime.fromtimestamp(now).astimezone())
+            if next_dt is None:
+                raise ValueError("routine schedule must be in the future")
+            row["next_ts"] = next_dt.timestamp()
         with self._lock:
             self._doc["routines"].append(row); self._save()
         return dict(row)
@@ -93,7 +96,10 @@ class RoutineEngine:
             if fields.get("deliver") not in {None, "voice", "panel", "silent"}: fields["deliver"] = "voice"
             row.update(fields)
             if row["trigger"]["type"] == "time" and ("trigger" in fields or fields.get("enabled")):
-                row["next_ts"] = rules.next_fire(row["trigger"]["rule"], datetime.fromtimestamp(self.clock()).astimezone()).timestamp()
+                next_dt = rules.next_fire(row["trigger"]["rule"], datetime.fromtimestamp(self.clock()).astimezone())
+                if next_dt is None:
+                    raise ValueError("routine schedule must be in the future")
+                row["next_ts"] = next_dt.timestamp()
             self._save(); return dict(row)
 
     def remove(self, rid):
@@ -135,7 +141,7 @@ class RoutineEngine:
         late = now - due
         if row.get("quiet") and self.in_quiet_hours(dt): self._advance(row["id"], dt, "quiet hours"); return
         if late > float(self.grace.get(row["kind"], 2700)): self._advance(row["id"], dt, f"missed by {late / 60:.0f} min"); return
-        if row["kind"] != "task" and not ready: return
+        if not ready: return
         self._fire(row); self._advance(row["id"], dt)
 
     def _advance(self, rid, dt, note=""):
