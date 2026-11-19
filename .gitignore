@@ -16,6 +16,7 @@ config/ui_tab_close.png
 config/ui_history.json
 config/ui_reminders.json
 memory/pomodoro_state.json
+cache/
 
 **/token*.json
 **/client_secret*.json
