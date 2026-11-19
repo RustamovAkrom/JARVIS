@@ -17244,13 +17244,56 @@ class JarvisUI:
         self._stderr_mirror = _ConsoleMirror(sys.stderr, self._win, "stderr")
         sys.stdout, sys.stderr = self._stdout_mirror, self._stderr_mirror
         self._win._console_restore_callback = self._restore_console
+        # Resource shutdown can wait for camera and tracking workers. Keep the
+        # completion state here so the voice path can clean up before Qt quits,
+        # while the aboutToQuit fallback never blocks the GUI event loop.
+        self._shutdown_services_lock = threading.Lock()
+        self._shutdown_services_started = False
+        self._shutdown_services_thread: threading.Thread | None = None
         self._app.aboutToQuit.connect(self._shutdown_camera_services)
         self._app.aboutToQuit.connect(self._restore_console)
         self.root = _RootShim(self._app)
         self._win.show()
 
+    def _claim_shutdown_services(self) -> bool:
+        """Claim the one-shot cleanup so voice and Qt shutdown cannot race."""
+        with self._shutdown_services_lock:
+            if self._shutdown_services_started:
+                return False
+            self._shutdown_services_started = True
+            return True
+
+    def shutdown_services(self) -> None:
+        """Stop camera services before an assistant-triggered QApplication.quit.
+
+        This method is called by the assistant runner, not the Qt GUI thread.
+        It deliberately finishes cleanup before the event loop is asked to exit.
+        """
+        if self._claim_shutdown_services():
+            self._shutdown_camera_services_impl()
+
     def _shutdown_camera_services(self):
-        """Stop camera consumers before Qt destroys the main window."""
+        """Qt aboutToQuit fallback; schedule cleanup without blocking the GUI."""
+        if not self._claim_shutdown_services():
+            return
+
+        worker = threading.Thread(
+            target=self._shutdown_camera_services_impl,
+            name="jarvis-shutdown",
+            daemon=False,
+        )
+        self._shutdown_services_thread = worker
+        try:
+            worker.start()
+        except Exception as exc:
+            # Do not run blocking joins on the GUI thread as a fallback.
+            print(
+                f"[Shutdown] Could not start cleanup worker: "
+                f"{type(exc).__name__}: {exc}"
+            )
+
+    def _shutdown_camera_services_impl(self):
+        """Stop camera consumers away from the Qt event loop."""
         try:
             self._win.stop_camera_stream()
             camera_thread = getattr(self._win, "_cam_thread", None)
