@@ -38,6 +38,7 @@ CATEGORIES = (
     SettingsCategory("plugins", "Plugins", "Installed extensions and their settings.", (("Plugin manager", "plugins"), ("Plugin settings", "plugin_settings"))),
     SettingsCategory("memory", "Memory", "Facts JARVIS has saved. Conversation history is kept separately in Conversations.", (("Open memory", "memory"),)),
     SettingsCategory("conversations", "Conversations", "Local transcript search, privacy and retention.", (("Manage conversation history", "conversations"),)),
+    SettingsCategory("automation", "Automation & Presence", "Presence awareness, routines, and quiet hours.", (("Manage automation", "automation"),)),
 
     SettingsCategory("developer", "Developer & Diagnostics", "Confirmed development tools, runtime configuration, logs and testing diagnostics.", (("Developer options", "setup"), ("Debug console", "console"))),
     SettingsCategory("updates", "Updates & Maintenance", "Application version and update operations.", (("Open updates", "updates"),)),
@@ -72,6 +73,8 @@ ENTRIES = (
     SettingEntry("plugin_config", "plugins", "Plugin configuration", "Edit plugin-specific settings and run plugin tests.", ("extension settings",), "plugin_settings"),
     SettingEntry("saved_memory", "memory", "Saved facts", "Review facts JARVIS has saved. Conversation history is managed separately.", ("facts", "long term"), "memory"),
     SettingEntry("conversation_memory", "conversations", "Conversation memory", "Opt in to local transcript storage, set retention, and delete stored history.", ("recall", "transcripts", "history", "privacy", "retention"), "conversations"),
+    SettingEntry("presence", "automation", "Presence awareness", "Configure away detection, return greetings and notification handling.", ("idle", "away", "lock screen", "welcome back"), "automation"),
+    SettingEntry("routines", "automation", "Routines", "Manage schedules, recurring tasks, and quiet hours.", ("schedule", "reminder", "automation", "quiet hours"), "automation"),
 
     SettingEntry("auth", "permissions", "Application authentication", "Passcode and face verification are supplied by the configured lock integration.", ("pin", "passphrase", "face unlock", "camera"), "security_info"),
     SettingEntry("developer_mode", "developer", "Developer mode", "Enable detailed diagnostics and optional testing tools after confirmation.", ("debug", "logs"), "console"),
