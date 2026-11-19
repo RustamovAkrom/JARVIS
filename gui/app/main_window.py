@@ -7592,6 +7592,7 @@ class MainWindow(QMainWindow):
         self.get_plugin_settings = (
             None  # callable: () -> list[dict] settings schemas, set by JarvisLive
         )
+        self.get_plugin_status = None  # callable: () -> optional subsystem status
         self.on_wake_toggle = None  # callable: (enable: bool) -> str, set by JarvisLive
         self.on_wake_threshold_changed = None  # callable: (threshold: float) -> float
         self.on_presence_settings_changed = None  # callable: (settings: dict) -> None
