@@ -7937,7 +7937,8 @@ class MainWindow(QMainWindow):
         self._center_split.setCollapsible(1, True)
         self._center_split.setCollapsible(2, True)
         self._center_views = QStackedWidget()
-        self._center_views.setMinimumWidth(240)
+        # Sidebars may consume the whole centre column; do not leave a forced HUD sliver.
+        self._center_views.setMinimumWidth(0)
         self._center_views.addWidget(self._center_split)
         self._editor_tabs = QTabWidget()
         self._editor_tabs.setDocumentMode(True)
@@ -7951,6 +7952,9 @@ class MainWindow(QMainWindow):
         self._editor_tabs.currentChanged.connect(self._on_project_editor_tab_changed)
         self._center_views.addWidget(self._editor_tabs)
         self._main_splitter.addWidget(self._center_views)
+        # Keep the left navigation anchored while allowing the centre/HUD to collapse.
+        self._main_splitter.setCollapsible(0, False)
+        self._main_splitter.setCollapsible(1, True)
         self._main_splitter.splitterMoved.connect(
             self._update_advanced_telemetry_visibility
         )
@@ -7990,6 +7994,7 @@ class MainWindow(QMainWindow):
             f"QSplitter::handle:hover {{ background:{C.PRI_DIM}; border-radius:4px; }}"
         )
         self._workspace_split.addWidget(self._main_splitter)
+        self._sync_adaptive_side_panel_constraints()
         self._terminal_panel = self._build_terminal_panel()
         self._bottom_tabs = QTabWidget()
         self._bottom_tabs.setObjectName("BottomPanelTabs")
@@ -14186,6 +14191,28 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             )
             self._content_expand_btn.setToolTip("Give results more space")
 
+    def _sync_adaptive_side_panel_constraints(self):
+        """Let sidebars consume the centre while preserving visible left navigation."""
+        self._center_views.setMinimumWidth(0)
+        self._main_splitter.setCollapsible(0, False)
+        self._main_splitter.setCollapsible(1, True)
+
+        if self._left_panel.isHidden():
+            minimum_width = 0
+        else:
+            margins = self._main_splitter.contentsMargins()
+            minimum_width = (
+                self._left_panel.minimumWidth()
+                + self._main_splitter.handleWidth()
+                + margins.left()
+                + margins.right()
+            )
+
+        # The outer splitter must leave enough room for the left navigation.
+        # Its remaining width can then be taken entirely from the centre/HUD.
+        self._main_splitter.setMinimumWidth(minimum_width)
+        self._workspace_split.setMinimumWidth(minimum_width)
+
     def _toggle_side_panel(self, index: int):
         if self._reading_mode or index not in (0, 2):
             return
@@ -14220,6 +14247,8 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             sizes[other_index] = max(other_min, available - restored)
             splitter.setSizes(sizes)
             self._side_restore_width[index] = restored
+        if index == 0:
+            self._sync_adaptive_side_panel_constraints()
         button.setChecked(panel.isVisible())
         self._update_advanced_telemetry_visibility()
         self._refresh_workspace_settings_state()
@@ -14381,6 +14410,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             self._content_expand_btn.setEnabled(False)
             self._left_panel.hide()
             self._right_panel.hide()
+            self._sync_adaptive_side_panel_constraints()
             self._hud_cam_stack.hide()
             self._quiz_panel.hide()
             self._content_panel.show()
@@ -14404,6 +14434,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         self._reading_mode = False
         self._left_panel.setVisible(saved.get("left", True))
         self._right_panel.setVisible(saved.get("right", True))
+        self._sync_adaptive_side_panel_constraints()
         self._hud_cam_stack.setVisible(saved.get("hud", True))
         self._content_panel.setVisible(saved.get("content", True))
         self._bottom_tabs.setVisible(saved.get("bottom_visible", False))
