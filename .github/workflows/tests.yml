@@ -3,7 +3,7 @@ name: Tests
 on:
   workflow_call:
   push:
-    branches: [main, v2]
+    branches: [main, v2, integration/mark-lix-features]
   pull_request:
     branches: [main, v2]
   workflow_dispatch:
