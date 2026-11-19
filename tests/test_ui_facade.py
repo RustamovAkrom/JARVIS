@@ -61,12 +61,21 @@ class UiFacadeTests(unittest.TestCase):
             )
             identity_page = window._settings_center._category_pages["identity"].widget()
             self.assertIsNotNone(identity_page.findChild(QLineEdit, "assistant_name"))
-            window._settings_center.action_requested.emit("audio")
-            self.assertTrue(window._settings_center.isVisible())
-            self.assertEqual(
-                window._settings_center.pages.currentWidget(),
-                window._settings_center._category_pages["audio"],
-            )
+            # This test validates Settings Center routing, not host audio
+            # hardware. MainWindow is constructed directly here, so the normal
+            # startup audio_devices.prefetch() has not run. Without these mocks,
+            # list_devices() can synchronously probe PortAudio devices on the
+            # GUI thread and make the test hang on machines with slow drivers.
+            with (
+                patch("core.audio_devices.list_devices", return_value=[]),
+                patch("core.audio_devices.get_output_volume", return_value=None),
+            ):
+                window._settings_center.action_requested.emit("audio")
+                self.assertTrue(window._settings_center.isVisible())
+                self.assertEqual(
+                    window._settings_center.pages.currentWidget(),
+                    window._settings_center._category_pages["audio"],
+                )
             self.assertEqual(routed, [])
             window._settings_center.action_requested.emit("controls")
             self.assertTrue(window._settings_center.isVisible())
