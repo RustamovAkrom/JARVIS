@@ -889,8 +889,7 @@ class JarvisLive:
         if loop is not None and loop.is_running():
             loop.call_soon_threadsafe(self.wake, "wake word")
         else:
-            self._wake_enabled = False
-            self._awake = True
+            print("[Wake] Detection received without an active asyncio loop.")
 
     def wake(self, reason: str = "wake word") -> None:
         if self.ui.auth_locked:
