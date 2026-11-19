@@ -17582,6 +17582,10 @@ class JarvisUI:
     def write_log(self, text: str):
         self._win._log_sig.emit(text)
 
+    def request_assistant_shutdown(self) -> None:
+        """Thread-safe: ask the main window to close on the Qt GUI thread."""
+        self._win.request_assistant_shutdown()
+
     def open_project(self, path: str, entry_file: str = ""):
         """Open a project in Project Files; safe to call from action workers."""
         self._win._project_open_sig.emit(str(path or ""), str(entry_file or ""))
