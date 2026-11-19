@@ -6,7 +6,8 @@ TOOL = {
     "description": (
         "Search previous conversations stored locally. Use when the user asks what was discussed "
         "earlier, what they mentioned, or refers to a past conversation. Actions: search, status, "
-        "on, off, keep_days, forget. Raw history is opt-in. Never claim deletion unless confirmed."
+        "on, off, keep_days, forget. Raw history is opt-in and stored locally; recall excerpts "
+        "may be sent to the active AI provider for answering. Never claim deletion unless confirmed."
     ),
     "parameters": {
         "type": "OBJECT",
@@ -41,7 +42,8 @@ def handle(parameters: dict) -> str:
             cfg = save_conversation_memory(enabled=action == "on")
             conv.refresh_settings()
             if action == "on":
-                return f"Conversation memory enabled. New exchanges will be stored locally for {cfg['days']} days."
+                return (f"Conversation memory enabled. New exchanges are stored locally for {cfg['days']} days. "
+                        "When you ask me to recall something, matching excerpts may be sent to the active AI provider.")
             return "Conversation memory disabled. No new exchanges will be stored. Existing history remains until deleted or expired."
         if action == "keep_days":
             days = int(p.get("days") or 0)
