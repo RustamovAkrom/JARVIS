@@ -11166,6 +11166,27 @@ class MainWindow(QMainWindow):
             )
         )
         page.layout().insertWidget(max(0, page.layout().count() - 1), shortcuts)
+
+        from memory.config_manager import (
+            get_typed_language_detection_enabled,
+            save_typed_language_detection_enabled,
+        )
+        language_routing = SettingsSection(
+            "Typed request language",
+            "Detect the language of typed requests offline and guide JARVIS to reply in it. Spoken language recognition remains automatic.",
+        )
+        typed_language = QCheckBox(self._tr("Automatically detect typed language"))
+        typed_language.setObjectName("typed_language_detection")
+        typed_language.setChecked(get_typed_language_detection_enabled())
+        typed_language.toggled.connect(save_typed_language_detection_enabled)
+        language_routing.add_row(
+            SettingRow(
+                self._tr("Language routing"),
+                self._tr("Use confident language detection for typed requests."),
+                typed_language,
+            )
+        )
+        page.layout().insertWidget(max(0, page.layout().count() - 1), language_routing)
         return page
 
     def _build_assistant_identity_page(self):
