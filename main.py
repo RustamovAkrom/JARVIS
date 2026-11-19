@@ -3045,6 +3045,42 @@ class JarvisLive:
 
     # ── System monitor ──────────────────────────────────────────────────────────
 
+    async def _send_presence_inbox(self, *, returned: bool = False) -> None:
+        """Deliver held notifications as one bounded, non-tool summary."""
+        if not self.session or self.ui.auth_locked:
+            return
+        settings = await asyncio.to_thread(get_presence_settings)
+        items = self._presence.take_inbox()
+        if not returned and not items:
+            return
+        if returned and not settings.get("greet", True) and not items:
+            return
+        lines = [item.get("text", "") for item in items if item.get("text")]
+        if not lines and returned and settings.get("greet", True):
+            prompt = "[PRESENCE_RETURN] Welcome the user back briefly and naturally. Do not call tools."
+        else:
+            prompt = (
+                "[PRESENCE_DIGEST] The user has returned. Summarize queued notifications "
+                "concisely and naturally, prioritizing important items. Do not call tools.\n\n"
+                + "\n".join(f"- {line}" for line in lines[:8])
+            )
+        try:
+            await self.session.send_client_content(
+                turns={"role": "user", "parts": [{"text": prompt}]},
+                turn_complete=True,
+            )
+        except Exception:
+            for item in items:
+                self._presence.hold(item.get("kind", "notification"), item.get("text", ""), item.get("label", ""))
+            raise
+
+    def _notify_or_hold(self, kind: str, text: str, label: str = "") -> bool:
+        """Return True when notification is held because the user is away."""
+        if self._presence.away:
+            self._presence.hold(kind, text, label)
+            return True
+        return False
+
     async def _run_presence_monitor(self) -> None:
         """Poll optional OS presence signals without blocking the Live event loop.
 
@@ -3100,6 +3136,8 @@ class JarvisLive:
                 speaking = self._is_speaking
             if speaking or (time.monotonic() - self._last_user_speech) < 10:
                 continue
+            if self._notify_or_hold("system_monitor", alert):
+                continue
             try:
                 await self.session.send_client_content(
                     turns={"role": "user", "parts": [{"text": alert}]},
@@ -3132,17 +3170,20 @@ class JarvisLive:
                         for alert in alerts:
                             if self.ui.auth_locked:
                                 break
+                            if self._notify_or_hold("background_monitor", alert):
+                                print("[Presence] Monitor alert queued while user is away.")
+                                continue
                             msg = (
                                 f"{alert}\n\n"
                                 f"Inform the user about this development naturally in {lang}. "
-                                "One brief sentence only."
+                                "One brief sentence only. Do not call tools."
                             )
                             await self.session.send_client_content(
                                 turns={"role": "user", "parts": [{"text": msg}]},
                                 turn_complete=True,
                             )
                             print("[JARVIS] Monitor alert sent.")
-                            await asyncio.sleep(6)  # gap between consecutive alerts
+                            await asyncio.sleep(6)
                     except Exception as e:
                         print(f"[Monitor] ⚠️ Background check error: {e}")
             await asyncio.sleep(1800)  # check every 30 minutes
@@ -3163,7 +3204,7 @@ class JarvisLive:
 
             with self._speaking_lock:
                 speaking = self._is_speaking
-            if speaking:
+            if speaking or self._presence.away:
                 continue
 
             if not self._proactive.should_trigger(self._last_user_speech):
