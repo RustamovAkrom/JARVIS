@@ -111,7 +111,8 @@ from memory.config_manager import (
     get_plugins_system_enabled,
 )
 from core import gemini as _gemini
-from core.plugin_runtime import load_plugin_registry, DisabledPluginRegistry
+from core.plugin_runtime import safe_discover_plugins, DisabledPluginRegistry
+from memory.config_manager import get_plugins_subsystem_enabled
 from core import undo as undo_stack
 from core import confirm as confirm_gate
 from core import audio_devices
@@ -817,26 +818,29 @@ class JarvisLive:
 
         # Plugins must not collide with either an inline tool or a discovered action.
         _core_names = _inline_names | self._action_registry.names()
-        self._plugin_registry = load_plugin_registry(
-            enabled=get_plugins_system_enabled(),
-            plugins_dir=_base_dir / "plugins",
-            user_plugins_dir=PATHS.plugins_dir,
-            core_tool_names=_core_names,
-            logger=lambda msg: print(f"[Plugins] {msg}"),
-            notify=lambda msg: self.ui.write_log(f"SYS: {msg}"),
-        )
+        if get_plugins_subsystem_enabled():
+            self._plugin_registry = safe_discover_plugins(
+                plugins_dir=_base_dir / "plugins",
+                user_plugins_dir=PATHS.plugins_dir,
+                core_tool_names=_core_names,
+                logger=lambda msg: print(f"[Plugins] {msg}"),
+                notify=lambda msg: self.ui.write_log(f"SYS: {msg}"),
+            )
+        else:
+            self._plugin_registry = DisabledPluginRegistry(
+                "Disabled by user in Settings"
+            )
+            print("[Plugins] Plugin subsystem disabled; built-in actions remain available.")
         self.ui.get_plugins = self._plugin_registry.list_for_ui
-        self.ui.get_plugin_settings = self._plugin_registry.settings_schemas
-        self.ui.get_plugin_status = lambda: {
-            "enabled": get_plugins_system_enabled(),
-            "available": not isinstance(self._plugin_registry, DisabledPluginRegistry),
-            "reason": getattr(self._plugin_registry, "reason", ""),
-        }
-        self.ui.request_say = self.plugin_say
+        self.ui.get_plugin_settings = (
+            self._plugin_registry.settings_schemas
+        )  # ⚙ settings tab
+        self.ui.request_say = self.plugin_say  # plugins: mid-task speech channel
         try:
             self._plugin_registry.start_enabled_plugins(player=self.ui)
-        except Exception as _plugin_start_exc:
-            print(f"[Plugins] Optional startup hooks failed: {type(_plugin_start_exc).__name__}: {_plugin_start_exc}")
+        except Exception as _plugin_start_error:
+            print(f"[Plugins] Startup hooks failed: {_plugin_start_error}")
+            self.ui.write_log("SYS: Some plugins could not start. JARVIS Core remains available.")
 
         # ── Wake word ────────────────────────────────────────────────────────
         # _awake gates the mic (see _listen_audio) and the background speakers.

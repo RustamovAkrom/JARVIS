@@ -1,8 +1,9 @@
-"""Optional plugin runtime boundary.
 
-The core imports this module, but the plugin loader is imported only when the
-user has enabled the optional plugin subsystem. A plugin discovery failure
-returns a no-op registry and must never prevent JARVIS from starting.
+"""Failure-safe boundary around the optional plugin subsystem.
+
+Core code imports this module, never the plugin loader directly. The loader is
+imported lazily and all discovery/startup failures are converted into an
+unavailable registry, allowing built-in actions and the rest of JARVIS to run.
 """
 from __future__ import annotations
 
@@ -11,86 +12,76 @@ from typing import Callable
 
 
 @dataclass
+class PluginSubsystemStatus:
+    enabled: bool = True
+    available: bool = True
+    error: str = ""
+
+
 class DisabledPluginRegistry:
-    reason: str = "disabled"
+    """No-op registry used when plugins are disabled or unavailable."""
 
+    def __init__(self, reason: str = "Plugin subsystem disabled") -> None:
+        self.status = PluginSubsystemStatus(enabled=False, available=False, error=reason)
     def get_tool_declarations(self) -> list[dict]:
-        return []
-
-    def has(self, name: str) -> bool:
-        return False
-
-    def scheduling(self, name: str):
-        return None
-
-    def run(self, name: str, parameters: dict, player=None, session_memory=None) -> str:
-        return f"Plugin '{name}' is unavailable ({self.reason})."
-
-    def settings_schemas(self) -> list[dict]:
         return []
 
     def list_for_ui(self) -> list[dict]:
         return []
 
+    def settings_schemas(self) -> list[dict]:
+        return []
+
     def start_enabled_plugins(self, player=None) -> None:
         return None
 
+    def stop_enabled_plugins(self, timeout: float = 2.0) -> None:
+        return None
 
-def load_plugin_registry(
+    def has(self, name: str) -> bool:
+        return False
+
+    def run(self, name: str, parameters: dict, player=None, session_memory=None) -> str:
+        return f"Plugin subsystem unavailable; '{name}' was not executed."
+
+    def scheduling(self, name: str) -> str:
+        return "WHEN_IDLE"
+
+
+def safe_discover_plugins(
     *,
-    enabled: bool,
     plugins_dir,
     user_plugins_dir=None,
     core_tool_names: set[str] | None = None,
     logger: Callable[[str], None] = print,
     notify: Callable[[str], None] | None = None,
 ):
-    """Load optional plugins safely; core remains usable on every failure."""
-    if not enabled:
-        logger("[Plugins] Optional plugin subsystem disabled by settings.")
-        return DisabledPluginRegistry("disabled by settings")
+    """Load the optional plugin loader lazily and fail closed.
 
+    A plugin import/discovery failure must not escape into Core startup. The
+    returned fallback preserves the registry interface used by main.py.
+    """
     try:
-        # Deliberately lazy: core startup does not import the plugin subsystem
-        # when the user has disabled it.
         from core.plugin_loader import discover_plugins
 
-        return discover_plugins(
+        registry = discover_plugins(
             plugins_dir=plugins_dir,
             user_plugins_dir=user_plugins_dir,
             core_tool_names=core_tool_names or set(),
             logger=logger,
             notify=notify,
         )
+        registry.status = PluginSubsystemStatus(enabled=True, available=True)
+        return registry
     except Exception as exc:
-        logger(f"[Plugins] Optional subsystem failed: {type(exc).__name__}: {exc}")
-        if notify:
-            try:
-                notify("Optional plugin subsystem failed to initialize. Core features remain available.")
-            except Exception:
-                pass
-        return DisabledPluginRegistry(f"initialization failed: {type(exc).__name__}")
-
-
-def shutdown_optional_plugin_services(logger: Callable[[str], None] = print) -> None:
-    """Best-effort cleanup for bundled plugin services, only when plugins are enabled."""
-    try:
-        from memory.config_manager import get_plugins_system_enabled
-        if not get_plugins_system_enabled():
-            return
-    except Exception:
-        # Configuration failure must not make shutdown unsafe.
-        return
-
-    try:
-        from plugins import gesture_control
-        gesture_control.stop()
-    except Exception as exc:
-        logger(f"[Shutdown] Gesture Control cleanup failed: {type(exc).__name__}: {exc}")
-
-    try:
-        from plugins import _hands
-        if not _hands.SERVICE.shutdown(timeout=2.5):
-            logger("[Shutdown] Hand tracking worker did not stop before timeout.")
-    except Exception as exc:
-        logger(f"[Shutdown] Hand service cleanup failed: {type(exc).__name__}: {exc}")
+        message = f"Plugin subsystem unavailable: {type(exc).__name__}: {exc}"
+        try:
+            logger(message)
+        except Exception:
+            pass
+        try:
+            if notify:
+                notify("Plugins are unavailable. Built-in actions remain active.")
+        except Exception:
+            pass
+        return DisabledPluginRegistry(message)

@@ -62,6 +62,72 @@ class CursorAssistantSettingsTests(unittest.TestCase):
         saved = json.loads(self.config_path.read_text(encoding="utf-8"))
         self.assertEqual(saved["gemini_api_key"], "preserved")
 
+    def test_live_session_settings_defaults_and_validation(self):
+        self.assertFalse(config_manager.get_thinking_enabled())
+        self.assertTrue(config_manager.get_proactive_audio_enabled())
+        self.assertEqual(config_manager.get_media_resolution(), "medium")
+        self.assertFalse(config_manager.get_turn_tuning()["enabled"])
+
+        config_manager.save_thinking_enabled(True)
+        config_manager.save_proactive_audio_enabled(False)
+        config_manager.save_media_resolution("high")
+        config_manager.save_turn_tuning(
+            {"enabled": True, "silence_ms": 700, "prefix_ms": 200, "end_sensitivity": "low"}
+        )
+        self.assertTrue(config_manager.get_thinking_enabled())
+        self.assertFalse(config_manager.get_proactive_audio_enabled())
+        self.assertEqual(config_manager.get_media_resolution(), "high")
+        tuning = config_manager.get_turn_tuning()
+        self.assertTrue(tuning["enabled"])
+        self.assertEqual(tuning["silence_ms"], 700)
+        self.assertEqual(tuning["prefix_ms"], 200)
+        self.assertEqual(tuning["end_sensitivity"], "low")
+
+    def test_workspace_layout_defaults_and_persistence(self):
+        self.assertEqual(config_manager.get_workspace_layout_settings(), {})
+        config_manager.save_workspace_layout_settings(
+            main=[220, 800],
+            root=[900, 260],
+            workspace=[700, 180],
+            center=[500, 200, 100],
+            ignored=[1, 2],
+        )
+        self.assertEqual(
+            config_manager.get_workspace_layout_settings(),
+            {
+                "main": [220, 800],
+                "root": [900, 260],
+                "workspace": [700, 180],
+                "center": [500, 200, 100],
+            },
+        )
+        saved = json.loads(self.config_path.read_text(encoding="utf-8"))
+        self.assertEqual(saved["gemini_api_key"], "preserved")
+
+    def test_workspace_layout_rejects_malformed_values(self):
+        self.config_path.write_text(
+            json.dumps(
+                {
+                    "workspace_layout": {
+                        "main": [100, "bad"],
+                        "root": [1, 2, 3, 4],
+                        "workspace": "not-a-list",
+                        "center": [0, 0, 0],
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+        self.assertEqual(
+            config_manager.get_workspace_layout_settings(),
+            {"main": [100, 0]},
+        )
+        config_manager.save_workspace_layout_settings(main=[1, "bad"])
+        self.assertEqual(
+            config_manager.get_workspace_layout_settings(),
+            {"main": [100, 0]},
+        )
+
     def test_workspace_must_be_an_existing_directory(self):
         workspace = Path(self.temp_dir.name) / "project"
         workspace.mkdir()

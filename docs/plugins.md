@@ -78,3 +78,27 @@ Use [`plugins/_template.py`](../plugins/_template.py) as the starting point. A p
 - Optionally, a startup hook such as `on_app_start(player=...)` and execution metadata such as `behavior`, `scheduling`, `tier` or `brief`.
 
 The loader validates the declaration, checks for name collisions, records import/validation failures and continues discovering other modules. Keep handlers bounded, validate parameters, use timeouts for network work, and avoid logging credentials. Review the [plugin loader](../core/plugin_loader.py) and [template](../plugins/_template.py) alongside the implementation.
+
+
+## Optional Plugin Subsystem & Core Isolation
+
+Plugins are an optional extension layer. Built-in actions in `actions/` are
+independent and remain available when the plugin subsystem is disabled or fails.
+
+- Global switch: `plugins_subsystem_enabled` in runtime configuration
+  (`api_keys.json`), defaulting to `true` for backward compatibility.
+- When disabled, JARVIS skips plugin discovery, registration, tool declarations,
+  and startup hooks. The no-op registry keeps the Core interface stable.
+- Plugin loader import/discovery failures are caught by
+  `core.plugin_runtime.safe_discover_plugins`; JARVIS continues with built-in
+  tools and actions.
+- Startup-hook failures are logged and do not abort the Live session.
+- A failure in one plugin module continues to be isolated by the plugin loader.
+- Plugins execute with the user's permissions and are **not sandboxed**. Only
+  install plugins you trust.
+
+The current implementation exposes the global setting through
+`memory.config_manager.get_plugins_subsystem_enabled()` and
+`save_plugins_subsystem_enabled()`. A Settings control should call these APIs
+and clearly report subsystem state (Enabled / Disabled / Unavailable). Do not
+couple this control to built-in Actions.

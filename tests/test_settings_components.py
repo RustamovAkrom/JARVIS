@@ -135,6 +135,92 @@ class SettingsComponentTests(unittest.TestCase):
         page.close()
         owner.close()
 
+    def test_clear_current_chat_requires_confirmation(self):
+        from types import SimpleNamespace
+        from PyQt6.QtWidgets import QMessageBox
+
+        store = SimpleNamespace(
+            get_chat=lambda chat_id: {"id": chat_id, "turns": [{"id": "turn-1"}]},
+            clear_chat=lambda chat_id: self.fail("clear_chat must not run after cancellation"),
+        )
+        owner = SimpleNamespace(_chat_store=store, _active_chat_id="chat-1")
+        with patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.No):
+            MainWindow._clear_chat(owner)
+
+    def test_delete_chat_turn_requires_confirmation(self):
+        from types import SimpleNamespace
+        from PyQt6.QtWidgets import QMessageBox
+
+        store = SimpleNamespace(
+            get_chat=lambda chat_id: {
+                "id": chat_id,
+                "turns": [{"id": "turn-1", "request": "hello", "result": "world"}],
+            },
+            save_chat=lambda *args, **kwargs: self.fail("save_chat must not run after cancellation"),
+        )
+        owner = SimpleNamespace(_chat_store=store, _active_chat_id="chat-1")
+        with patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.No):
+            MainWindow._delete_chat_turn(owner, "turn-1")
+
+    def test_workspace_layout_restore_applies_matching_splitter_sizes(self):
+        from types import SimpleNamespace
+
+        class Splitter:
+            def __init__(self, count):
+                self._count = count
+                self.applied = None
+
+            def count(self):
+                return self._count
+
+            def setSizes(self, sizes):
+                self.applied = list(sizes)
+
+        owner = SimpleNamespace(
+            _main_splitter=Splitter(2),
+            _root_splitter=Splitter(2),
+            _workspace_split=Splitter(2),
+            _center_split=Splitter(3),
+        )
+        saved = {
+            "main": [250, 750],
+            "root": [900, 300],
+            "workspace": [800, 200],
+            "center": [600, 200, 100],
+        }
+        with patch("memory.config_manager.get_workspace_layout_settings", return_value=saved):
+            MainWindow._restore_workspace_layout(owner)
+        self.assertEqual(owner._main_splitter.applied, [250, 750])
+        self.assertEqual(owner._root_splitter.applied, [900, 300])
+        self.assertEqual(owner._workspace_split.applied, [800, 200])
+        self.assertEqual(owner._center_split.applied, [600, 200, 100])
+
+    def test_workspace_layout_restore_ignores_mismatched_splitter_sizes(self):
+        from types import SimpleNamespace
+
+        class Splitter:
+            def __init__(self, count):
+                self._count = count
+                self.applied = None
+
+            def count(self):
+                return self._count
+
+            def setSizes(self, sizes):
+                self.applied = list(sizes)
+
+        owner = SimpleNamespace(
+            _main_splitter=Splitter(2),
+            _root_splitter=Splitter(2),
+            _workspace_split=Splitter(2),
+            _center_split=Splitter(3),
+        )
+        saved = {"main": [100, 200, 300], "root": [500, 400]}
+        with patch("memory.config_manager.get_workspace_layout_settings", return_value=saved):
+            MainWindow._restore_workspace_layout(owner)
+        self.assertIsNone(owner._main_splitter.applied)
+        self.assertEqual(owner._root_splitter.applied, [500, 400])
+
     def test_setting_row_pairs_control_with_accessible_description(self):
         control = QCheckBox("Enabled")
         row = SettingRow("Wake word", "Listen for the configured wake phrase.", control)

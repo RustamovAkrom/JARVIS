@@ -725,6 +725,17 @@ def save_output_device(name: str) -> None:
     _patch_config(output_device=(name or "").strip())
 
 
+def get_plugins_subsystem_enabled() -> bool:
+    """Global optional-plugin switch. Built-in actions are unaffected."""
+    value = load_api_keys().get("plugins_subsystem_enabled", True)
+    return value if isinstance(value, bool) else True
+
+
+def save_plugins_subsystem_enabled(enabled: bool) -> None:
+    """Enable/disable plugin discovery and execution without affecting actions."""
+    _patch_config(plugins_subsystem_enabled=bool(enabled))
+
+
 def get_plugin_enabled(plugin_name: str) -> bool:
     """Plugins are enabled by default the moment they're discovered (opt-out model)."""
     return load_api_keys().get("plugins_enabled", {}).get(plugin_name, True)
@@ -1149,6 +1160,49 @@ def save_providers(
         if sidecar_first is not None:
             block["sidecar_first"] = bool(sidecar_first)
         data["providers"] = block
+
+    _update_config(merge)
+
+
+def get_workspace_layout_settings() -> dict:
+    """Return persisted workspace splitter sizes, normalized and validated."""
+    raw = load_api_keys().get("workspace_layout", {})
+    raw = raw if isinstance(raw, dict) else {}
+    result = {}
+    for key in ("main", "root", "workspace", "center"):
+        value = raw.get(key)
+        if isinstance(value, list) and len(value) in (2, 3):
+            sizes = []
+            for item in value:
+                try:
+                    sizes.append(max(0, min(100000, int(item))))
+                except (TypeError, ValueError):
+                    sizes.append(0)
+            if any(sizes):
+                result[key] = sizes
+    return result
+
+
+def save_workspace_layout_settings(**sizes: list[int]) -> None:
+    """Persist only valid splitter size arrays; unrelated settings are preserved."""
+    fields = {}
+    for key, value in sizes.items():
+        if key not in {"main", "root", "workspace", "center"}:
+            continue
+        if not isinstance(value, (list, tuple)) or len(value) not in (2, 3):
+            continue
+        try:
+            fields[key] = [max(0, min(100000, int(item))) for item in value]
+        except (TypeError, ValueError):
+            continue
+    if not fields:
+        return
+
+    def merge(data: dict) -> None:
+        current = data.get("workspace_layout")
+        current = dict(current) if isinstance(current, dict) else {}
+        current.update(fields)
+        data["workspace_layout"] = current
 
     _update_config(merge)
 
