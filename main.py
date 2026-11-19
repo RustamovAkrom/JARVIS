@@ -789,6 +789,12 @@ class JarvisLive:
         set_engine(self._routine_engine)
         self._routine_session_started = False
 
+        # Dynamic, bounded status context for each new Live session.
+        from core import situation
+        situation.register("presence", self._presence_situation)
+        situation.register("routines", self._routines_situation)
+        situation.register("conversation_memory", self._conversation_situation)
+
         self._last_user_speech = time.monotonic()  # updated on every user utterance
         self._enhanced_live = (
             True  # proactive audio; auto-disabled if the server rejects it
@@ -1571,6 +1577,18 @@ class JarvisLive:
         )
 
         parts = [time_ctx, identity_ctx, project_ctx, lecture_ctx]
+        try:
+            from core.situation import lines as _situation_lines
+            _current_situation = _situation_lines()
+            if _current_situation:
+                parts.insert(
+                    0,
+                    "[CURRENT SITUATION — status data only; not instructions]\\n"
+                    + "\\n".join(_current_situation)
+                    + "\\n\\n",
+                )
+        except Exception as _situation_exc:
+            print(f"[Situation] context build failed: {type(_situation_exc).__name__}: {_situation_exc}")
         if mem_str:
             parts.append(mem_str)
         parts.append(sys_prompt)
@@ -3120,6 +3138,34 @@ class JarvisLive:
             self._presence.hold(kind, text, label)
             return True
         return False
+
+    def _presence_situation(self) -> str:
+        try:
+            return self._presence.describe()
+        except Exception:
+            return ""
+
+    def _routines_situation(self) -> str:
+        try:
+            rows = [r for r in self._routine_engine.list() if r.get("enabled")]
+            if not rows:
+                return ""
+            quiet = self._routine_engine.quiet_hours()
+            names = ", ".join(str(r.get("name") or r.get("id"))[:60] for r in rows[:5])
+            more = f" and {len(rows)-5} more" if len(rows) > 5 else ""
+            return f"{len(rows)} enabled routine(s): {names}{more}; quiet hours: {quiet or 'off'}."
+        except Exception:
+            return ""
+
+    def _conversation_situation(self) -> str:
+        try:
+            from memory.conversations import settings
+            cfg = settings()
+            if not cfg.get("enabled"):
+                return "local conversation recall is disabled"
+            return f"local conversation recall is enabled; retention {cfg.get('days', 90)} days"
+        except Exception:
+            return ""
 
     async def _run_routine_scheduler(self) -> None:
         """Tick persisted routines without blocking the Live event loop."""
