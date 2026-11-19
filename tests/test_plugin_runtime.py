@@ -54,3 +54,17 @@ def test_enabled_plugin_runtime_delegates_discovery(monkeypatch, tmp_path):
         logger=lambda _: None,
     )
     assert registry is sentinel
+
+
+
+def test_shutdown_skips_plugin_imports_when_disabled(monkeypatch):
+    from memory import config_manager
+    monkeypatch.setattr(config_manager, "get_plugins_system_enabled", lambda: False)
+    monkeypatch.delitem(sys.modules, "plugins.gesture_control", raising=False)
+    monkeypatch.delitem(sys.modules, "plugins._hands", raising=False)
+    logs = []
+    from core.plugin_runtime import shutdown_optional_plugin_services
+    shutdown_optional_plugin_services(logs.append)
+    assert logs == []
+    assert "plugins.gesture_control" not in sys.modules
+    assert "plugins._hands" not in sys.modules
