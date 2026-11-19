@@ -20,9 +20,10 @@ def test_host_ready_and_idle():
 
 def test_host_delivers_on_event_loop_thread():
     async def run():
+        loop=asyncio.get_running_loop()
         session=FakeSession()
         assistant=SimpleNamespace(session=session, _awake=True, ui=SimpleNamespace(auth_locked=False), _last_user_speech=0)
-        host=JarvisRoutineHost(assistant, loop_getter=lambda: asyncio.get_running_loop())
+        host=JarvisRoutineHost(assistant, loop_getter=lambda: loop)
         result=await asyncio.to_thread(host.prompt, "routine prompt")
         assert result is None
         assert len(session.sent)==1
