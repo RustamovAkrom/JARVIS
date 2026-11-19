@@ -46,21 +46,29 @@ class ShutdownLifecycleTests(unittest.TestCase):
         worker.join(timeout=1)
         self.assertFalse(worker.is_alive())
         self.assertNotEqual(cleanup_thread_id[0], callback_thread_id[0])
+        self.assertTrue(worker.daemon)
 
-    def test_assistant_shutdown_cleans_once_before_qt_quit(self):
+    def test_assistant_shutdown_cleans_once_on_a_worker_thread(self):
         ui = self._make_ui()
         cleanup_thread_ids = []
+        cleanup_finished = threading.Event()
         caller_thread_id = threading.get_ident()
 
         def cleanup():
             cleanup_thread_ids.append(threading.get_ident())
+            cleanup_finished.set()
 
         ui._shutdown_camera_services_impl = cleanup
-        ui.shutdown_services()
+        ui.shutdown_services(timeout=1.0)
+        self.assertTrue(cleanup_finished.wait(timeout=1))
+        worker = ui._shutdown_services_thread
+        self.assertIsNotNone(worker)
+        worker.join(timeout=1)
         ui._shutdown_camera_services()
 
-        self.assertEqual(cleanup_thread_ids, [caller_thread_id])
-        self.assertIsNone(ui._shutdown_services_thread)
+        self.assertEqual(len(cleanup_thread_ids), 1)
+        self.assertNotEqual(cleanup_thread_ids[0], caller_thread_id)
+        self.assertTrue(worker.daemon)
 
 
 if __name__ == "__main__":
