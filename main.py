@@ -2609,6 +2609,13 @@ class JarvisLive:
                             in_buf = []
 
                             full_out = " ".join(out_buf).strip()
+                            # Raw conversation recall is opt-in and writes asynchronously.
+                            if full_in or full_out:
+                                try:
+                                    from memory import conversations as _conversations
+                                    _conversations.record(full_in, full_out)
+                                except Exception as _recall_exc:
+                                    print(f"[ConversationRecall] record failed: {type(_recall_exc).__name__}: {_recall_exc}")
                             # Second line of defence: even if a repeat slips
                             # into a *fresh* buffer after a flush, never log the
                             # same answer (or a tail of it) twice in a row.
@@ -3094,6 +3101,11 @@ class JarvisLive:
 
     async def _run_routine_scheduler(self) -> None:
         """Tick persisted routines without blocking the Live event loop."""
+        try:
+            from memory import conversations as _conversations
+            await asyncio.to_thread(_conversations.prune)
+        except Exception as exc:
+            print(f"[ConversationRecall] retention cleanup failed: {type(exc).__name__}: {exc}")
         while True:
             try:
                 if not self._routine_session_started:
