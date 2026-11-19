@@ -14300,6 +14300,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         if index == 0:
             self._sync_adaptive_side_panel_constraints()
         button.setChecked(panel.isVisible())
+        self._schedule_workspace_layout_save()
         self._update_advanced_telemetry_visibility()
         self._refresh_workspace_settings_state()
 
@@ -14319,6 +14320,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                 [max(total - content - quiz, 120), content, quiz]
             )
         self._content_toggle_btn.setChecked(self._content_panel.isVisible())
+        self._schedule_workspace_layout_save()
         self._refresh_workspace_settings_state()
 
     def _toggle_debug_panel(self):
