@@ -7593,6 +7593,7 @@ class MainWindow(QMainWindow):
             None  # callable: () -> list[dict] settings schemas, set by JarvisLive
         )
         self.on_wake_toggle = None  # callable: (enable: bool) -> str, set by JarvisLive
+        self.on_wake_threshold_changed = None  # callable: (threshold: float) -> float
         self.on_wake_manual = None  # callable: () -> None — manual sleep/wake
         self.on_push_to_talk = None  # callable: (enable: bool) -> str scope
         self.ptt_hold = None  # callable: (held: bool) -> None — windowed chord
@@ -11183,6 +11184,7 @@ class MainWindow(QMainWindow):
 
         device_panel = AudioDeviceOverlay(embedded=True)
         device_panel.picked.connect(self._on_audio_devices_applied)
+        from memory.config_manager import get_wake_word_threshold
         return VoiceAudioPage(
             self._embed_settings_panels((
                 "Audio devices",
@@ -11190,6 +11192,8 @@ class MainWindow(QMainWindow):
                 device_panel,
             )),
             voice_controls_panel=self._voice_controls_panel,
+            wake_threshold=get_wake_word_threshold(),
+            threshold_changed=self.on_wake_threshold_changed,
         )
 
     def _embed_settings_panels(self, *panels):
@@ -17519,6 +17523,14 @@ class JarvisUI:
     @on_wake_toggle.setter
     def on_wake_toggle(self, cb):
         self._win.on_wake_toggle = cb
+
+    @property
+    def on_wake_threshold_changed(self):
+        return self._win.on_wake_threshold_changed
+
+    @on_wake_threshold_changed.setter
+    def on_wake_threshold_changed(self, cb):
+        self._win.on_wake_threshold_changed = cb
 
     @property
     def on_wake_manual(self):
