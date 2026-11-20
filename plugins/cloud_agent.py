@@ -1615,23 +1615,35 @@ def _run_command(player, client, cmd: dict) -> None:
         from core import phonegate
     except ImportError:
         phonegate = None
-    if phonegate is not None and cmd.get("chat") is not None:
-        phonegate.begin(cmd.get("chat"), text)
-    with _Tap(player) as tap:
-        _log(player, f"[☁ Cloud]: {text}")
-        fn(text)
-        sent, started = 0, time.monotonic()
-        quiet_until = started + _CMD_FIRST
-        while time.monotonic() < min(quiet_until, started + _CMD_MAX):
-            new = tap.next_lines(sent, timeout=1.0)
-            for line in new:
-                _post(client, cid, text=line)
-            if new:
-                sent += len(new)
-                quiet_until = time.monotonic() + _CMD_QUIET
-    if phonegate is not None and cmd.get("chat") is not None:
-        phonegate.end(cmd.get("chat"))
-    _post(client, cid, done=True)
+    chat = cmd.get("chat")
+    gate_started = False
+    sent = 0
+    try:
+        if phonegate is not None and chat is not None:
+            phonegate.begin(chat, text)
+            gate_started = True
+        with _Tap(player) as tap:
+            _log(player, f"[☁ Cloud]: {text}")
+            fn(text)
+            started = time.monotonic()
+            quiet_until = started + _CMD_FIRST
+            while time.monotonic() < min(quiet_until, started + _CMD_MAX):
+                new = tap.next_lines(sent, timeout=1.0)
+                for line in new:
+                    _post(client, cid, text=line)
+                if new:
+                    sent += len(new)
+                    quiet_until = time.monotonic() + _CMD_QUIET
+        _post(client, cid, done=True)
+    except Exception as e:
+        print(f"[CloudAgent] phone command failed: {type(e).__name__}: {e}", flush=True)
+        _post(client, cid, done=True, error=f"Command failed: {type(e).__name__}: {e}")
+    finally:
+        if gate_started:
+            try:
+                phonegate.end(chat)
+            except Exception as e:
+                print(f"[CloudAgent] phone confirmation cleanup failed: {e}", flush=True)
 
 
 # ── entry point ──────────────────────────────────────────────────────────────
