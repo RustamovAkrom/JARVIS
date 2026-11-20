@@ -32,3 +32,33 @@ def test_discovery_import_failure_falls_back(monkeypatch, tmp_path):
     assert isinstance(registry, DisabledPluginRegistry)
     assert registry.get_tool_declarations() == []
     assert registry.has("built_in") is False
+
+
+def test_shutdown_optional_plugin_services_stops_bundled_services(monkeypatch):
+    import importlib
+    from types import SimpleNamespace
+    import core.plugin_runtime as runtime
+    import memory.config_manager as config
+
+    calls = []
+    logs = []
+    gesture = SimpleNamespace(stop=lambda: calls.append("gesture"))
+    hands = SimpleNamespace(SERVICE=SimpleNamespace(
+        shutdown=lambda timeout: calls.append(("hands", timeout)) or True,
+    ))
+    monkeypatch.setattr(config, "get_plugins_system_enabled", lambda: True)
+    original_import = importlib.import_module
+
+    def fake_import(name, package=None):
+        if name == "plugins.gesture_control":
+            return gesture
+        if name == "plugins._hands":
+            return hands
+        return original_import(name, package)
+
+    monkeypatch.setattr(importlib, "import_module", fake_import)
+    runtime.shutdown_optional_plugin_services(timeout=1.25, logger=logs.append)
+
+    assert calls == ["gesture", ("hands", 1.25)]
+    assert logs == []
+
