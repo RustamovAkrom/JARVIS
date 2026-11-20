@@ -66,7 +66,7 @@ class ConnectedAppsCoreTests(unittest.TestCase):
         with patch("core.confirm.request", side_effect=lambda **kw: captured.update(kw) or "pending"):
             result = self.agent.start("test-app", "create a page")
         self.assertEqual(result, "pending")
-        adapter.started.assert_not_set()
+        self.assertFalse(adapter.started.is_set())
         self.assertEqual(captured["key"], "connected_apps.test-app")
         self.assertIn("create a page", captured["detail"])
         self.assertEqual(captured["run"]().split()[0], "status=done")
