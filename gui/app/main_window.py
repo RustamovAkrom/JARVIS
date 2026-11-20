@@ -17907,6 +17907,8 @@ class JarvisUI:
                 rounds=payload.get("rounds"),
                 deliver=payload.get("deliver", "panel"),
                 origin=payload.get("origin", "desk"),
+                not_before=payload.get("not_before", 0.0),
+                files=payload.get("files", []),
                 title=payload.get("title", ""),
             )
             self.write_log(f"[Tasks] Created: {task.get('title', task.get('id'))}")
