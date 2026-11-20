@@ -9778,12 +9778,18 @@ class MainWindow(QMainWindow):
         self._left_tabs.setDocumentMode(True)
         self._left_tabs.setUsesScrollButtons(True)
         self._left_tabs.tabBar().setExpanding(False)
-        self._left_tabs.tabBar().setElideMode(Qt.TextElideMode.ElideRight)
+        self._left_tabs.tabBar().setElideMode(Qt.TextElideMode.ElideNone)
+        self._left_tabs.tabBar().setMinimumWidth(0)
         self._left_tabs.setStyleSheet(f"""
             QTabWidget::pane {{ border:0; background:{C.PANEL}; }}
-            QTabBar::tab {{ color:{C.TEXT_DIM}; background:{C.PANEL2}; padding:6px 9px;
-                border:1px solid {C.BORDER}; border-bottom:0; margin-right:2px; }}
-            QTabBar::tab:selected {{ color:{C.PRI}; background:{C.PANEL}; }}
+            QTabBar {{ background:transparent; }}
+            QTabBar::tab {{ color:{C.TEXT_DIM}; background:{C.PANEL2};
+                padding:5px 4px; min-width:34px; max-width:62px;
+                font-size:8pt; border:1px solid {C.BORDER}; border-bottom:0;
+                margin-right:1px; }}
+            QTabBar::tab:selected {{ color:{C.PRI}; background:{C.PANEL};
+                border-color:{C.BORDER_B}; }}
+            QTabBar::tab:hover {{ color:{C.TEXT}; background:{C.PRI_GHO}; }}
         """)
         panel_layout.addWidget(self._left_tabs)
         system_page = QWidget()
@@ -10010,13 +10016,18 @@ class MainWindow(QMainWindow):
         self._advanced_panel.hide()
         lay.addWidget(self._advanced_panel)
 
-        self._left_tabs.addTab(system_page, self._tr("SYSTEM"))
+        self._left_tabs.addTab(system_page, "SYS")
+        self._left_tabs.setTabToolTip(0, self._tr("SYSTEM MONITOR"))
         self._build_project_explorer()
         self._activity_panel = ActivityPanel()
-        self._left_tabs.addTab(self._activity_panel, self._tr("ACTIVITY"))
+        self._left_tabs.addTab(self._activity_panel, "ACT")
+        self._left_tabs.setTabToolTip(1, self._tr("ACTIVITY"))
         from gui.panels.tasks import TaskPanel
         self._task_panel = TaskPanel()
-        self._left_tabs.addTab(self._task_panel, self._tr("TASKS"))
+        self._left_tabs.addTab(self._task_panel, "TASK")
+        self._left_tabs.setTabToolTip(2, self._tr("TASKS"))
+        self._left_tabs.setTabText(1, "EXP")
+        self._left_tabs.setTabToolTip(1, self._tr("EXPLORER"))
         self._left_tabs.currentChanged.connect(
             self._update_advanced_telemetry_visibility
         )
