@@ -7506,7 +7506,7 @@ class MainWindow(QMainWindow):
         """Qt-thread slot for binding the shared Task Engine."""
         panel = getattr(self, "_task_panel", None)
         if panel is None:
-            logger.warning("[Tasks] TaskPanel is unavailable; cannot bind Task Engine")
+            self._log_sig.emit("[Tasks] TaskPanel is unavailable; cannot bind Task Engine")
             return
         self._task_engine = engine
         panel.set_agent_profiles(engine.agents())
@@ -7518,7 +7518,7 @@ class MainWindow(QMainWindow):
             self._task_refresh_timer = timer
         ui = getattr(self, "_jarvis_ui", None)
         if ui is None:
-            logger.warning("[Tasks] JarvisUI bridge is unavailable")
+            self._log_sig.emit("[Tasks] JarvisUI bridge is unavailable")
             return
         panel.refresh_requested.connect(lambda e=engine: self._update_task_panel_ui(e.list(limit=100)))
         panel.create_task_requested.connect(ui._create_task)
