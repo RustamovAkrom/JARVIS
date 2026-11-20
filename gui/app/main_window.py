@@ -17880,10 +17880,12 @@ class JarvisUI:
         """Bind the Core-owned TaskEngine to the UI through the Qt thread."""
         panel = self._win._task_panel
         self._win._task_engine = engine
+        panel.set_agent_profiles(engine.agents())
         timer = QTimer(self._win)
         timer.setInterval(1500)
         timer.timeout.connect(lambda: panel.set_tasks(engine.list(limit=100)))
         panel.refresh_requested.connect(lambda: panel.set_tasks(engine.list(limit=100)))
+        panel.create_task_requested.connect(self._create_task)
         panel.cancel_requested.connect(lambda tid: engine.cancel(tid))
         panel.finish_requested.connect(lambda tid: engine.cancel(tid, finish=True))
         panel.steer_requested.connect(self._steer_task)
@@ -17891,6 +17893,26 @@ class JarvisUI:
         timer.start()
         self._win._task_refresh_timer = timer
         panel.set_tasks(engine.list(limit=100))
+
+    def _create_task(self, payload: dict) -> None:
+        engine = getattr(self._win, "_task_engine", None)
+        if engine is None:
+            self.write_log("[Tasks] Task Engine is unavailable.")
+            return
+        try:
+            task = engine.start(
+                payload.get("task", ""),
+                agent=payload.get("agent", "general"),
+                minutes=payload.get("minutes"),
+                rounds=payload.get("rounds"),
+                deliver=payload.get("deliver", "panel"),
+                origin=payload.get("origin", "desk"),
+                title=payload.get("title", ""),
+            )
+            self.write_log(f"[Tasks] Created: {task.get('title', task.get('id'))}")
+            self._win._task_panel.set_tasks(engine.list(limit=100))
+        except Exception as exc:
+            self.write_log(f"[Tasks] Could not create task: {exc}")
 
     def _steer_task(self, task_id: str) -> None:
         task = self._win._task_panel._tasks.get(task_id, {})
