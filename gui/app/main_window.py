@@ -17858,6 +17858,68 @@ class JarvisUI:
     def notify_phone_connected(self) -> None:
         self._win.notify_phone_connected()
 
+    def task_engine_command(self, action: str, payload: dict | None = None) -> dict:
+        """Public bridge used by the task_engine action and the TaskPanel."""
+        engine = getattr(self._win, "_task_engine", None)
+        if engine is None:
+            return {"ok": False, "error": "Task Engine is unavailable"}
+        payload = dict(payload or {})
+        action = str(action or "").strip().lower()
+        try:
+            if action == "start":
+                task_text = str(payload.get("task") or payload.get("query") or "").strip()
+                if not task_text:
+                    return {"ok": False, "error": "task description is required"}
+                task = engine.start(
+                    task_text,
+                    agent=str(payload.get("agent") or "general"),
+                    minutes=payload.get("minutes"),
+                    rounds=payload.get("rounds"),
+                    deliver=str(payload.get("deliver") or "panel"),
+                    origin="assistant",
+                    title=str(payload.get("title") or ""),
+                )
+                self._win._task_panel.set_tasks(engine.list(limit=100))
+                return {"ok": True, "task": task}
+            if action == "list":
+                return {"ok": True, "tasks": engine.list(limit=100)}
+            task_id = str(payload.get("task_id") or "").strip()
+            if not task_id:
+                return {"ok": False, "error": "task_id is required"}
+            task = engine.get(task_id)
+            if not task:
+                return {"ok": False, "error": "task not found", "task_id": task_id}
+            if action == "status":
+                return {"ok": True, "task": task}
+            if action == "cancel":
+                return {"ok": engine.cancel(task_id), "task_id": task_id}
+            if action == "finish":
+                return {"ok": engine.cancel(task_id, finish=True), "task_id": task_id}
+            if action == "steer":
+                note = str(payload.get("note") or "").strip()
+                if not note:
+                    return {"ok": False, "error": "note is required"}
+                return {"ok": engine.steer(task_id, note), "task_id": task_id}
+            if action == "retry":
+                budget = task.get("budget") if isinstance(task.get("budget"), dict) else {}
+                retry = engine.start(
+                    task.get("task", ""),
+                    agent=task.get("agent", "general"),
+                    minutes=budget.get("minutes"),
+                    rounds=budget.get("rounds"),
+                    deliver=task.get("deliver", "panel"),
+                    origin="assistant",
+                    title=task.get("title", ""),
+                )
+                self._win._task_panel.set_tasks(engine.list(limit=100))
+                return {"ok": True, "task": retry}
+            if action == "result":
+                return {"ok": True, "task": task, "result": task.get("report") or task.get("result") or ""}
+            return {"ok": False, "error": f"unknown action: {action}"}
+        except Exception as exc:
+            self.write_log(f"[Tasks] Tool action failed: {exc}")
+            return {"ok": False, "error": str(exc)}
+
     def bind_task_engine(self, engine) -> None:
         """Bind the Core-owned TaskEngine to the UI through the Qt thread."""
         panel = self._win._task_panel
