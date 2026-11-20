@@ -676,9 +676,22 @@ class HandService:
     def _grab(self, cam) -> None:
         """Read the camera as fast as it delivers, keep only the newest frame."""
         while not self._stop.is_set():
-            frame = cam.read()
-            if frame is None:
+            try:
+                frame = cam.read()
+            except Exception as exc:
+                print(f"[Hands] camera read failed: {type(exc).__name__}: {exc}", flush=True)
                 time.sleep(0.2)
+                continue
+            if (
+                frame is None
+                or not isinstance(frame, np.ndarray)
+                or frame.ndim != 3
+                or frame.shape[2] != 3
+                or frame.shape[0] < 2
+                or frame.shape[1] < 2
+                or frame.dtype == object
+            ):
+                time.sleep(0.05)
                 continue
             captured_at = time.monotonic()
             with self._lock:
@@ -730,8 +743,20 @@ class HandService:
                 frame, t = self._frame, self._frame_t
                 if frame is None:
                     continue
-                frame = cv2.flip(frame, 1)
-                hands = tracker.process(frame, t)
+                if (
+                    not isinstance(frame, np.ndarray)
+                    or frame.ndim != 3
+                    or frame.shape[2] != 3
+                    or frame.shape[0] < 2
+                    or frame.shape[1] < 2
+                ):
+                    continue
+                try:
+                    frame = cv2.flip(frame, 1)
+                    hands = tracker.process(frame, t)
+                except Exception as exc:
+                    print(f"[Hands] frame processing failed: {type(exc).__name__}: {exc}", flush=True)
+                    continue
                 if rec is not None:
                     rec.write(t, hands)
                 self._latest = (hands, frame, t)
