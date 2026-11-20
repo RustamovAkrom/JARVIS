@@ -5906,7 +5906,7 @@ class PluginSettingsOverlay(QWidget):
 
     def _style_toggle(self, btn: QPushButton):
         on = btn.isChecked()
-        btn.setText(self._tr("ON" if on else "OFF"))
+        btn.setText("ON" if on else "OFF")
         if on:
             btn.setStyleSheet(
                 f"QPushButton {{ background: {C.PRI_GHO}; color: {C.PRI}; "
