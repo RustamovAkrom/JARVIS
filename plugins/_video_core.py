@@ -47,6 +47,7 @@ PIECE_MIN_S = 35.0            # ... cut at the quietest moment between these two
 PIECE_MAX_S = 90.0
 QUIET_WIN_S = 0.3             # the window a "quiet moment" is measured over
 MAX_DOWNLOAD = 700 * 1024 * 1024
+MAX_LOCAL_FILE = 700 * 1024 * 1024
 CAPTION_MAX = 8 * 1024 * 1024
 CONCURRENCY = 2
 _KEEP = 8                     # transcripts remembered for follow-ups
@@ -514,6 +515,15 @@ def read_file(path: str, *, max_seconds: float, engine_factory,
     p = Path(str(path)).expanduser()
     if not p.is_file():
         raise VideoError("that file does not exist")
+    try:
+        size = p.stat().st_size
+    except OSError:
+        raise VideoError("that file could not be inspected") from None
+    if size > MAX_LOCAL_FILE:
+        raise VideoError(
+            f"that file is too large ({size / (1024 * 1024):.0f} MB); "
+            f"the limit is {MAX_LOCAL_FILE / (1024 * 1024):.0f} MB"
+        )
     duration = _probe_seconds(p)
     if max_seconds and duration > max_seconds:
         raise VideoError(f"that recording is {clock(duration)} long; the limit in this "
