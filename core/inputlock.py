@@ -350,3 +350,40 @@ def _reset_for_tests() -> None:
     _ui = None
     _can_speak = lambda: False
     _ui_ready.clear()
+
+# Compatibility API used by Core and older integrations.
+def register_interface(ui) -> None:
+    attach(ui)
+
+
+def unregister_interface(ui=None) -> None:
+    global _ui
+    if ui is None or _ui is ui:
+        _ui = None
+        _ui_ready.clear()
+
+
+def is_held() -> bool:
+    return held()
+
+
+def configure_fallback(callback=None) -> None:
+    """Compatibility hook; fallback is configured per hold in this module."""
+    return None
+
+
+def clear() -> None:
+    """Release all holds and reset lock state for shutdown/tests."""
+    with _lock:
+        had_holds = bool(_holds)
+        _holds.clear()
+        _tries.update(wrong=0, until=0.0)
+    if had_holds:
+        _unlocked()
+    else:
+        cb = _screen.get("hide")
+        if cb is not None:
+            try:
+                cb()
+            except Exception:
+                pass
