@@ -146,6 +146,26 @@ class CursorAssistantUiTests(unittest.TestCase):
         self.assertEqual(len(chart._samples), 30)
         self.assertEqual(chart._samples[-1], (34.0, 66.0))
 
+    def test_hud_style_selects_configured_centrepiece(self):
+        for style, painter in (("core", "_paint_core"), ("orbital", "_paint_orb3d")):
+            with patch.object(config_manager, "get_hud_style", return_value=style):
+                canvas = HudCanvas("", "JARVIS")
+            try:
+                canvas.resize(320, 320)
+                image = QImage(320, 320, QImage.Format.Format_ARGB32)
+                image.fill(Qt.GlobalColor.transparent)
+                with patch.object(canvas, "_paint_core") as core, patch.object(canvas, "_paint_orb3d") as orbital:
+                    canvas.render(image)
+                    if painter == "_paint_core":
+                        core.assert_called_once()
+                        orbital.assert_not_called()
+                    else:
+                        orbital.assert_called_once()
+                        core.assert_not_called()
+            finally:
+                canvas._tmr.stop()
+                canvas.close()
+
     def test_hud_orbit_reacts_to_cursor_and_recenters_on_leave(self):
         canvas = HudCanvas("", "JARVIS")
         try:
