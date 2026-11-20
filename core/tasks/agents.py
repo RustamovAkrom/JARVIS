@@ -78,7 +78,7 @@ def parse(text: str, file: str = "") -> AgentProfile:
     name = meta.get("name", "").lower()
     if not _NAME_RE.match(name):
         raise ValueError("name must be 2-32 lowercase letters, digits, - or _")
-    tools = [t.strip() for t in re.split(r"[,\s]+", meta.get("tools", "")) if t.strip()]
+    tools = list(dict.fromkeys(t.strip() for t in re.split(r"[,\s]+", meta.get("tools", "")) if t.strip()))
     if not tools:
         raise ValueError("tools is empty — an agent with no tools can only guess")
     unknown = sorted(set(tools) - set(KNOWN_TOOLS))
