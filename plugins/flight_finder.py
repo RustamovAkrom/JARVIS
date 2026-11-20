@@ -395,6 +395,9 @@ def flight_finder(parameters: dict, player=None, speak=None) -> str:
     except ValueError as exc:
         return f"Invalid flight date: {exc}"
 
+    today = datetime.now().strftime("%Y-%m-%d")
+    if date < today:
+        return "Departure date must be today or in the future."
     if return_date and return_date < date:
         return "Return date must be on or after the departure date."
 
