@@ -203,11 +203,11 @@ def _log(player, msg: str) -> None:
             pass
 
 
-def _monitor_loop(player):
+def _monitor_loop(player, stop_event: threading.Event):
     """Watch the print and speak up at the moments that matter — halfway, almost
     done (with time left), finished, failed. Each milestone is announced once;
     terminal states stop the loop; connection hiccups are tolerated silently."""
-    while not _monitor_stop.is_set():
+    while not stop_event.is_set():
         try:
             st = get_active_backend().get_status()
             state = st.state
@@ -241,20 +241,26 @@ def _monitor_loop(player):
             pass
         except Exception:
             pass
-        _monitor_stop.wait(_POLL_SECONDS)
+        stop_event.wait(_POLL_SECONDS)
 
 
 def _autostart_monitor(player) -> None:
     """Start the proactive monitor silently (no spoken confirmation). Used when
     the user checks status during an active print, so alerts flow without them
     having to ask for monitoring explicitly."""
-    global _monitor_thread
+    global _monitor_thread, _monitor_stop
     if _monitor_thread is not None and _monitor_thread.is_alive():
         return
-    _monitor_stop.clear()
+    _monitor_stop = threading.Event()
+    stop_event = _monitor_stop
     _announced.clear()
-    _monitor_thread = threading.Thread(target=_monitor_loop, args=(player,), daemon=True)
-    _monitor_thread.start()
+    _monitor_thread = threading.Thread(target=_monitor_loop, args=(player, stop_event), daemon=True)
+    try:
+        _monitor_thread.start()
+    except Exception as e:
+        _monitor_thread = None
+        stop_event.set()
+        print(f"[Printer] Monitor could not start: {e}")
 
 
 def _start_monitor(player) -> str:
@@ -267,7 +273,12 @@ def _start_monitor(player) -> str:
 
 def _stop_monitor() -> str:
     global _monitor_thread
+    thread = _monitor_thread
     _monitor_stop.set()
+    if thread is not None and thread.is_alive():
+        thread.join(2.0)
+    if thread is not None and thread.is_alive():
+        return "Asked the print monitor to stop; it is still finishing its current check."
     _monitor_thread = None
     return "Stopped watching the print."
 
