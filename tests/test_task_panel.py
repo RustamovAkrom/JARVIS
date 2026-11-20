@@ -113,6 +113,25 @@ class TaskPanelTests(unittest.TestCase):
         finally:
             panel.close()
 
+    def test_recovery_metadata_is_rendered(self):
+        panel = TaskPanel()
+        try:
+            panel.set_tasks([{
+                "id": "recovered",
+                "title": "Recovered task",
+                "status": "queued",
+                "attempts": 2,
+                "quota_until": 0,
+                "events": [{"kind": "state", "text": "resuming after an interruption"}],
+            }])
+            panel.list_widget.setCurrentRow(0)
+            html = panel.details_browser.toHtml()
+            self.assertIn("Attempts:", html)
+            self.assertIn("Recovery:", html)
+            self.assertIn("Resumed after interruption", html)
+        finally:
+            panel.close()
+
     def test_invalid_snapshots_are_ignored(self):
         panel = TaskPanel()
         try:
