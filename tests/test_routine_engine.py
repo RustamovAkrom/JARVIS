@@ -86,3 +86,28 @@ def test_close_waits_for_in_progress_tick(tmp_path):
     engine.tick()
     assert host.calls == [("say", "Hello")]
 
+
+def test_due_routine_is_deferred_until_quiet_hours_end(tmp_path):
+    host = Host()
+    engine = RoutineEngine(tmp_path / "routines.json", host)
+    engine.set_quiet_hours("22:00-07:00")
+    engine._defer_until_quiet_end(
+        "missing", datetime(2026, 11, 19, 23, 30)
+    )
+    row = engine.add("Reminder", "say", "Good morning", {"type": "startup"})
+    engine._defer_until_quiet_end(
+        row["id"], datetime(2026, 11, 20, 6, 30)
+    )
+    saved = engine.get(row["id"])
+    assert datetime.fromtimestamp(saved["next_ts"]).strftime("%H:%M") == "07:00"
+    assert "deferred until" in saved["last_result"]
+
+
+def test_quiet_hours_end_handles_midnight_and_full_day_windows(tmp_path):
+    engine = RoutineEngine(tmp_path / "routines.json", Host())
+    engine.set_quiet_hours("22:00-07:00")
+    assert engine.quiet_hours_end(datetime(2026, 11, 19, 23, 0)).strftime("%Y-%m-%d %H:%M") == "2026-11-20 07:00"
+    assert engine.quiet_hours_end(datetime(2026, 11, 20, 6, 0)).strftime("%Y-%m-%d %H:%M") == "2026-11-20 07:00"
+    engine.set_quiet_hours("00:00-00:00")
+    assert engine.quiet_hours_end(datetime(2026, 11, 20, 6, 0)).strftime("%Y-%m-%d %H:%M") == "2026-11-21 00:00"
+
