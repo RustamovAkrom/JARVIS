@@ -33,6 +33,7 @@ from pathlib import Path
 
 _NAME_RE = re.compile(r"^[a-z][a-z0-9_-]{1,31}$")
 MODES = ("", "agent", "research")
+KNOWN_TOOLS = ("search_web", "web_search", "fetch_page", "notes", "write_file", "file_processor", "recall_memory")
 
 
 @dataclass
@@ -80,6 +81,9 @@ def parse(text: str, file: str = "") -> AgentProfile:
     tools = [t.strip() for t in re.split(r"[,\s]+", meta.get("tools", "")) if t.strip()]
     if not tools:
         raise ValueError("tools is empty — an agent with no tools can only guess")
+    unknown = sorted(set(tools) - set(KNOWN_TOOLS))
+    if unknown:
+        raise ValueError(f"unknown tools: {', '.join(unknown)}")
     if not body:
         raise ValueError("no instructions under the header")
     mode = meta.get("mode", "").lower()
@@ -94,7 +98,7 @@ def parse(text: str, file: str = "") -> AgentProfile:
 
     return AgentProfile(name=name, title=meta.get("title") or name.title(),
                         description=meta.get("description", ""), tools=tools,
-                        minutes=_int("minutes", 10, 1, 720), rounds=_int("rounds", 40, 1, 1000),
+                        minutes=_int("minutes", 10, 1, 720), rounds=_int("rounds", 40, 1, 400),
                         instructions=body, file=file, mode="" if mode == "agent" else mode)
 
 
