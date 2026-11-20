@@ -85,7 +85,6 @@ class TaskStore:
         with self._lock:
             self._tasks[task["id"]] = task
             write_json(self._path(task["id"]), task)
-            self._prune()
             return json.loads(json.dumps(task))
 
     def get(self, tid: str) -> dict | None:
