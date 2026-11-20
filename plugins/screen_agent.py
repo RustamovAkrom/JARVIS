@@ -471,7 +471,10 @@ def _await_approval(player, description: str, irreversible: bool = False,
             approved = bool(_state["approved"])
         return approved and not (stop_event is not None and stop_event.is_set())
     finally:
-        confirm.withdraw("screen_agent")
+        # Cancel only this agent's pending confirmation. core.confirm exposes
+        # resolve(False, key=...) rather than a withdraw API; this also invokes
+        # on_cancel and removes the HUD confirmation.
+        confirm.resolve(False, key="screen_agent")
         with _lock:
             _state["pending"] = ""
             if stop_event is not None and stop_event.is_set():
