@@ -44,6 +44,7 @@ class TaskPanelTests(unittest.TestCase):
             panel.agent_filter.setCurrentIndex(panel.agent_filter.findData("research"))
             self.assertEqual(panel.list_widget.count(), 1)
             panel.agent_filter.setCurrentIndex(panel.agent_filter.findData("all"))
+            panel.list_widget.setCurrentRow(1)
             panel.search_box.setText("patch")
             self.assertEqual(panel.list_widget.count(), 1)
             self.assertEqual(panel.selected_task_id(), "c1")
