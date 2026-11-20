@@ -7510,7 +7510,7 @@ class MainWindow(QMainWindow):
     def _create_reminder(self, payload: dict) -> None:
         try:
             from actions.reminder import reminder
-            result = reminder(payload, player=getattr(self, "_jarvis_ui", None))
+            result = reminder(payload, player=None)
             self._log_sig.emit(f"[Reminders] {result}")
             if "Reminder set" in result:
                 self._refresh_reminders()
