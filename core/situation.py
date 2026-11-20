@@ -35,6 +35,7 @@ import threading
 from typing import Callable
 
 LINE = 600
+LINE_MAX = LINE  # compatibility alias used by older callers/tests
 
 _lock = threading.Lock()
 _sources: dict[str, Callable[[], str]] = {}
@@ -73,7 +74,7 @@ def show_panel(kind: str, **options) -> str:
             if fn(str(kind), **options):
                 return label
         except Exception as e:
-            print(f"[Situation] {name} could not show {kind}: {type(e).__name__}: {e}")
+            print(f"[Situation] host {name} failed: {type(e).__name__}: {e}")
     return ""
 
 
@@ -88,5 +89,5 @@ def lines() -> list[str]:
             print(f"[Situation] {name}: {type(e).__name__}: {e}")
             continue
         if text:
-            out.append(text[:LINE])
+            out.append(f"{name}: {text[:LINE]}")
     return out
