@@ -89,13 +89,34 @@ def _load() -> dict:
     return data
 
 
-def _save(data: dict) -> None:
+def _save(data: dict) -> bool:
+    """Persist atomically. A failed write must never be reported as saved or
+    mirrored into long-term memory as though the disk state had changed."""
+    import os
+    import tempfile
+
     try:
         STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-        STATE_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
-    except Exception:
-        pass
-    _remember(data)
+        payload = json.dumps(data, ensure_ascii=False, indent=1)
+        fd, temp_name = tempfile.mkstemp(
+            prefix=f".{STATE_FILE.name}.", suffix=".tmp", dir=str(STATE_FILE.parent)
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as stream:
+                stream.write(payload)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temp_name, STATE_FILE)
+        finally:
+            try:
+                os.unlink(temp_name)
+            except FileNotFoundError:
+                pass
+        _remember(data)
+        return True
+    except Exception as exc:
+        print(f"[ShoppingList] persistence failed: {type(exc).__name__}: {exc}")
+        return False
 
 
 def _remember(data: dict) -> None:
@@ -207,8 +228,10 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
                 continue
             data["items"].append({"name": nm, "qty": qty if len(names) == 1 else "", "done": False})
             added.append(nm)
-        _save(data)
+        saved = _save(data)
         _panel(player, data)
+        if not saved:
+            return "The list changed in this session, but I could not save it to disk. Check storage permissions."
         if added and already:
             return (f"Added {', '.join(added)}. {', '.join(already)} "
                     f"{'was' if len(already) == 1 else 'were'} already on the list.")
@@ -229,8 +252,10 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
                 removed.append(it["name"])
             else:
                 missing.append(nm)
-        _save(data)
+        saved = _save(data)
         _panel(player, data)
+        if not saved:
+            return "The list changed in this session, but I could not save it to disk. Check storage permissions."
         if removed and missing:
             return f"Removed {', '.join(removed)}. Couldn't find {', '.join(missing)}."
         if removed:
@@ -250,8 +275,10 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
                 checked.append(it["name"])
             else:
                 missing.append(nm)
-        _save(data)
+        saved = _save(data)
         _panel(player, data)
+        if not saved:
+            return "The list changed in this session, but I could not save it to disk. Check storage permissions."
         remaining = sum(1 for it in data["items"] if not it.get("done"))
         if checked:
             tail = (" Your list is complete!" if remaining == 0
@@ -266,13 +293,17 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
         if which == "done":
             before = len(data["items"])
             data["items"] = [it for it in data["items"] if not it.get("done")]
-            _save(data)
+            saved = _save(data)
             _panel(player, data)
+            if not saved:
+                return "The list changed in this session, but I could not save it to disk. Check storage permissions."
             return f"Cleared {before - len(data['items'])} bought items. {len(data['items'])} still on the list."
         n = len(data["items"])
         data["items"] = []
-        _save(data)
+        saved = _save(data)
         _panel(player, data)
+        if not saved:
+            return "The list changed in this session, but I could not save it to disk. Check storage permissions."
         return "Your shopping list is now empty." if n else "Your shopping list was already empty."
 
     # -------- LIST (default) --------
