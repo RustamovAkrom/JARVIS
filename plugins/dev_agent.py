@@ -777,8 +777,8 @@ PLUGIN = {
         "Say: \"Build me a small web app that…\" — it creates the project and fixes its own errors.",
         "Projects go to the folder set here; it can open your editor when done (VS Code by default).",
     ],
-    "name": "dev_agent",
-    "description": "Builds complete multi-file projects from scratch: plans, writes files, installs deps, opens VSCode, runs and fixes errors.",
+    "name": "project_builder",
+    "description": "Builds complete multi-file projects from scratch: plans, writes files, installs deps, opens VSCode, runs and fixes errors. This plugin is separate from the built-in dev_agent tool.",
     "parameters": {
         "type": "OBJECT",
         "properties": {
