@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt, pyqtSignal, QDateTime
-from PyQt6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QPushButton, QVBoxLayout, QWidget, QDialog, QFormLayout, QLineEdit, QSpinBox, QTextEdit, QDialogButtonBox, QFileDialog, QDateTimeEdit, QCheckBox, QProgressBar, QTextBrowser, QLineEdit
+from PyQt6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QPushButton, QVBoxLayout, QWidget, QDialog, QFormLayout, QLineEdit, QSpinBox, QTextEdit, QDialogButtonBox, QFileDialog, QDateTimeEdit, QCheckBox, QProgressBar, QTextBrowser
 
 _ACTIVE = {"queued", "scheduled", "running", "waiting_quota"}
 
@@ -71,6 +71,10 @@ class TaskPanel(QWidget):
         for label, value in (("All", "all"), ("Active", "active"), ("Completed", "done"), ("Failed", "failed")):
             self.filter_box.addItem(label, value)
         controls.addWidget(self.filter_box, 1)
+        self.agent_filter = QComboBox()
+        self.agent_filter.setToolTip("Filter by agent profile")
+        self.agent_filter.addItem("All Agents", "all")
+        controls.addWidget(self.agent_filter, 1)
         self.new_button = QPushButton("New Task")
         controls.addWidget(self.new_button)
         self.refresh_button = QPushButton("Refresh")
@@ -108,6 +112,7 @@ class TaskPanel(QWidget):
         self.new_button.clicked.connect(self._create_task_dialog)
         self.refresh_button.clicked.connect(self.refresh_requested.emit)
         self.filter_box.currentIndexChanged.connect(self.render)
+        self.agent_filter.currentIndexChanged.connect(self.render)
         self.search_box.textChanged.connect(self.render)
         self.export_button.clicked.connect(self._export_selected_report)
         self.list_widget.currentItemChanged.connect(self._selection_changed)
@@ -119,6 +124,15 @@ class TaskPanel(QWidget):
     def set_agent_profiles(self, profiles):
         self._profiles = dict(profiles or {})
         self._profile_names = sorted(self._profiles)
+        current = self.agent_filter.currentData() if hasattr(self, "agent_filter") else "all"
+        self.agent_filter.blockSignals(True)
+        self.agent_filter.clear()
+        self.agent_filter.addItem("All Agents", "all")
+        for name in self._profile_names:
+            self.agent_filter.addItem(name.replace("_", " ").title(), name)
+        idx = self.agent_filter.findData(current)
+        self.agent_filter.setCurrentIndex(max(0, idx))
+        self.agent_filter.blockSignals(False)
 
     def _create_task_dialog(self):
         profiles = getattr(self, "_profiles", {})
@@ -297,6 +311,7 @@ class TaskPanel(QWidget):
         selected = self.selected_task_id()
         mode = self.filter_box.currentData()
         query = self.search_box.text().strip().casefold()
+        agent = self.agent_filter.currentData()
         rows = sorted(self._tasks.values(), key=lambda t: float(t.get("created") or 0), reverse=True)
         if mode == "active":
             rows = [t for t in rows if t.get("status") in _ACTIVE]
@@ -304,6 +319,8 @@ class TaskPanel(QWidget):
             rows = [t for t in rows if t.get("status") == "done"]
         elif mode == "failed":
             rows = [t for t in rows if t.get("status") in {"failed", "cancelled"}]
+        if agent and agent != "all":
+            rows = [t for t in rows if str(t.get("agent") or "").lower() == str(agent).lower()]
         if query:
             rows = [t for t in rows if query in str(t.get("title") or "").casefold()
                     or query in str(t.get("task") or "").casefold()
