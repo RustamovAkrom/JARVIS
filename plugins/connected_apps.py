@@ -100,12 +100,30 @@ def run(parameters: dict, player=None) -> str:
     if action == "connect":
         opener = getattr(player, "open_panel", None) if player is not None else None
         if not callable(opener):
-            return outcome.failed("connected_apps.connect", "the Connected apps panel cannot be "
-                                                            "opened here")
-        opener("apps", {"search": app})
-        return outcome.done("connected_apps.connect", app=app or None, panel="open",
-                            next="the user picks the app in the panel, presses Connect and signs "
-                                 "in in the browser; tell them so in one short sentence")
+            return outcome.failed(
+                "connected_apps.connect",
+                "the Connected Apps setup UI is not available in this build",
+                app=app or None,
+            )
+        try:
+            opened = opener("apps", {"search": app})
+        except Exception as exc:
+            return outcome.failed(
+                "connected_apps.connect",
+                f"could not open Connected Apps setup: {type(exc).__name__}: {exc}",
+                app=app or None,
+            )
+        if opened is False:
+            return outcome.failed(
+                "connected_apps.connect",
+                "the Connected Apps panel is not installed or could not be opened",
+                app=app or None,
+            )
+        return outcome.done(
+            "connected_apps.connect", app=app or None, panel="open",
+            next="the user picks the app in the panel, presses Connect and signs "
+                 "in in the browser; tell them so in one short sentence",
+        )
     if action == "stop":
         return agent.stop(app)
     if not app:
