@@ -132,6 +132,27 @@ class TaskPanelTests(unittest.TestCase):
         finally:
             panel.close()
 
+    def test_live_active_task_summary_updates_with_snapshots(self):
+        panel = TaskPanel()
+        try:
+            panel.set_tasks([
+                {
+                    "id": "active",
+                    "title": "Background research",
+                    "status": "running",
+                    "used": {"rounds": 3},
+                    "budget": {"rounds": 10},
+                },
+                {"id": "done", "title": "Finished task", "status": "done"},
+            ])
+            self.assertIn("ACTIVE BACKGROUND TASKS · 1", panel.active_summary.text())
+            self.assertIn("Background research", panel.active_summary.text())
+            self.assertIn("30%", panel.active_summary.text())
+            panel.set_tasks([{"id": "done", "title": "Finished task", "status": "done"}])
+            self.assertEqual(panel.active_summary.text(), "No active background tasks")
+        finally:
+            panel.close()
+
     def test_invalid_snapshots_are_ignored(self):
         panel = TaskPanel()
         try:
