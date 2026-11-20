@@ -59,9 +59,24 @@ PLUGIN = {
 }
 
 
+def _backend_error() -> str | None:
+    """Connected Apps is optional, but its advertised tool must not crash when
+    the service/UI integration is absent from this checkout."""
+    try:
+        from core.connected_apps import service, agent  # noqa: F401
+        return None
+    except Exception as exc:
+        return f"Connected Apps backend is not installed in this JARVIS build: {type(exc).__name__}: {exc}"
+
+
 def describe() -> str:
     """The description as it is now: which apps are connected, and that
     work in them goes through this tool (not the screen)."""
+    unavailable = _backend_error()
+    if unavailable:
+        return ("Connected Apps is unavailable in this build. Do not attempt app "
+                "automation through this plugin. Tell the user that the Connected Apps "
+                "backend/UI has not been installed yet.")
     from core.connected_apps import service
     now = service.summary()
     if not now:
@@ -75,6 +90,9 @@ def describe() -> str:
 
 
 def run(parameters: dict, player=None) -> str:
+    unavailable = _backend_error()
+    if unavailable:
+        return outcome.failed("connected_apps", unavailable, available=False)
     from core.connected_apps import agent, service
     p = parameters or {}
     action = str(p.get("action") or "").strip().lower()
