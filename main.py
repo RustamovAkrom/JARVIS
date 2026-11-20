@@ -4265,6 +4265,35 @@ class JarvisLive:
         if self._shutdown_requested:
             self.set_speaking(False)
             try:
+                routine_stopped = await asyncio.to_thread(
+                    self._routine_engine.close, 3.0
+                )
+                from core.routines.runtime import set_engine
+                set_engine(None)
+                if not routine_stopped:
+                    print("[Routines] Scheduler tick did not stop within 3s.")
+            except Exception as exc:
+                print(
+                    f"[Routines] Shutdown cleanup failed: "
+                    f"{type(exc).__name__}: {exc}"
+                )
+            try:
+                from core.background_tasks import shutdown_background_task_manager
+
+                tasks_stopped = await asyncio.to_thread(
+                    shutdown_background_task_manager, 5.0
+                )
+                if not tasks_stopped:
+                    print(
+                        "[BackgroundTasks] Workers are still finishing; "
+                        "unfinished research remains queued for the next launch."
+                    )
+            except Exception as exc:
+                print(
+                    f"[BackgroundTasks] Shutdown cleanup failed: "
+                    f"{type(exc).__name__}: {exc}"
+                )
+            try:
                 from memory import conversations as _conversations
                 await asyncio.to_thread(_conversations.flush, 3.0)
             except Exception as exc:
