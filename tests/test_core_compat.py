@@ -50,14 +50,17 @@ class InputLockTests(unittest.TestCase):
 class CameraCompatibilityTests(unittest.TestCase):
     def test_camera_opens_preferred_device_and_releases_capture(self):
         cameras = importlib.import_module("core.cameras")
-        fake_capture = object()
+        class FakeCapture:
+            def release(self):
+                self.released = True
+        fake_capture = FakeCapture()
         camera = cameras.Camera(preferred=0)
         with patch.object(cameras, "open_index", return_value=fake_capture), patch.object(cameras, "films", return_value=True):
             self.assertTrue(camera.open())
             self.assertIs(camera.cap, fake_capture)
             self.assertEqual(camera.index, 0)
-        with patch.object(fake_capture, "release", create=True):
-            camera.release()
+        camera.release()
+        self.assertTrue(fake_capture.released)
         self.assertIsNone(camera.cap)
 
 
@@ -85,7 +88,7 @@ class CameraCaptureBackendTests(unittest.TestCase):
                 calls.append(args)
                 return capture
 
-        with patch.object(cameras, "cv2", FakeCV2, create=True), patch.object(cameras.sys, "platform", "darwin"):
+        with patch.dict("sys.modules", {"cv2": FakeCV2}), patch.object(cameras.sys, "platform", "darwin"):
             self.assertIsNone(cameras.open_index(3))
         self.assertEqual(calls, [(3, FakeCV2.CAP_ANY)])
         self.assertTrue(capture.released)
