@@ -13,6 +13,7 @@ names are stored exactly as spoken).
 
 import json
 import re
+import threading
 from pathlib import Path
 
 try:
@@ -315,7 +316,6 @@ def _run_locked(parameters: dict, player=None, session_memory=None) -> str:
 # Serialize read-modify-write operations in this plugin. Without this lock, two
 # simultaneous voice requests can load the same state and overwrite each other's
 # changes despite the atomic file replacement in _save().
-import threading
 _STATE_LOCK = threading.RLock()
 
 
