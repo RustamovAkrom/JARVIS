@@ -662,15 +662,11 @@ class WeatherPanel(Panel):
             from actions import weather_report
         except Exception:
             weather_report = None
-        if not city and weather_report is not None:
-            city = weather_report.last_city()
         self._city_shown = city
         if not city:
             return {"error": _say("Say which city: \"show the weather in Paris on the holo desk\"")}
         from core import cloud
         fc = cloud.forecast_days(city)
-        if weather_report is not None and self.options.get("city"):
-            weather_report.remember_asked(city)
         now_t = str(fc["now"].get("time") or "")
         hours = [h for h in fc["hourly"] if str(h.get("time") or "") >= now_t][:12]
         return {"place": str(fc.get("place") or city).split(",")[0], "now": fc["now"], "hours": hours,
@@ -721,12 +717,6 @@ class WeatherPanel(Panel):
         if not self.options.get("city") and not self._loading and now - getattr(self, "_city_seen", -1e9) > 2.0:
             self._city_seen = now
             try:
-                from actions import weather_report
-                want = weather_report.last_city()
-            except Exception:
-                want = ""
-            if want and want != getattr(self, "_city_shown", None) and self.data is not None:
-                self._loaded_at = -1e9               # fetch again now
         super().tick(now)
 
     def describe(self):
@@ -753,8 +743,11 @@ class NewsPanel(ListPanel):
             lang = ""
         country = briefing.country()
         topic = str(self.options.get("topic") or "")
-        rows = web_search.news_results(briefing.news_query(topic, country, lang), 12,
-                                       region=country, language=lang)
+        query = briefing.news_query(topic, country, lang)
+        # web_search exposes its DDG news backend internally; older Holo Desk
+        # code expected a removed news_results() API. Keep this panel decoupled
+        # from the action's conversational return format.
+        rows = web_search._ddg_news(query, 12)
         return {"rows": [{"title": str(r.get("title") or "").strip(), "source": str(r.get("source") or ""),
                           "snippet": str(r.get("snippet") or "").strip(), "url": str(r.get("url") or "")}
                          for r in rows if r.get("title")][:12]}
@@ -894,10 +887,17 @@ class ModelPanel(Panel):
                 edges = _edges(faces)
                 self.title = Path(path).stem
         if verts is None:
-            from core import avatar_mesh
-            m = avatar_mesh.get_head_mesh()
-            verts, edges = m["verts"].astype(np.float64), m["edges"]
-            self.title = "Torvis"
+            try:
+                from core import avatar_mesh
+                m = avatar_mesh.get_head_mesh()
+                verts, edges = m["verts"].astype(np.float64), m["edges"]
+                self.title = "Torvis"
+            except ImportError:
+                # avatar_mesh is optional/not present in this branch. Render a
+                # lightweight procedural wireframe head instead of failing the
+                # entire model panel.
+                verts, edges = _fallback_head_mesh()
+                self.title = "Torvis"
         verts = verts - verts.mean(axis=0)
         verts /= max(1e-9, float(np.abs(verts).max()))
         if len(edges) > 9000:                               # keep it light to draw
