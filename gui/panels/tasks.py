@@ -478,7 +478,10 @@ class TaskPanel(QWidget):
     @staticmethod
     def _format_time(value):
         try:
-            return __import__("datetime").datetime.fromtimestamp(float(value)).strftime("%Y-%m-%d %H:%M:%S")
+            timestamp = float(value or 0)
+            if timestamp <= 0:
+                return "—"
+            return __import__("datetime").datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S")
         except (TypeError, ValueError, OSError):
             return "—"
 
