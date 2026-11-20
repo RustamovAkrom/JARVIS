@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt, pyqtSignal, QDateTime
-from PyQt6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QPushButton, QVBoxLayout, QWidget, QDialog, QFormLayout, QGridLayout, QLineEdit, QSpinBox, QTextEdit, QDialogButtonBox, QFileDialog, QDateTimeEdit, QCheckBox, QProgressBar, QTextBrowser, QSizePolicy, QMessageBox, QApplication
+from PyQt6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QPushButton, QVBoxLayout, QWidget, QDialog, QFormLayout, QGridLayout, QLineEdit, QSpinBox, QTextEdit, QDialogButtonBox, QFileDialog, QDateTimeEdit, QCheckBox, QProgressBar, QTextBrowser, QSizePolicy, QMessageBox, QApplication, QPalette
 
 _ACTIVE = {"queued", "scheduled", "running", "waiting_quota"}
 
@@ -24,41 +24,7 @@ class TaskPanel(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("TaskPanel")
-        self.setStyleSheet("""
-        QWidget#TaskPanel { background: transparent; color: #d8e8e8; }
-        QWidget#TaskPanel QLabel { color: #c4d8d8; }
-        QWidget#TaskPanel QLabel#task_details_title { color: #67e8d0; font-weight: 600; padding: 5px 2px; }\n        QWidget#TaskPanel QLabel#task_empty { color: #6e9a9c; padding: 18px; }\n        QWidget#TaskPanel QLabel#task_stats { color: #5f999a; font-size: 10px; padding: 2px 4px; }
-        QWidget#TaskPanel QLineEdit, QWidget#TaskPanel QComboBox {
-            background: rgba(3, 18, 23, 220); color: #d8eeee;
-            border: 1px solid #245b60; border-radius: 5px; padding: 6px 8px;
-        }
-        QWidget#TaskPanel QPushButton {
-            background: rgba(9, 35, 39, 230); color: #bce9e4;
-            border: 1px solid #28666a; border-radius: 5px; padding: 6px 8px;
-        }
-        QWidget#TaskPanel QPushButton:hover { background: #12494b; border-color: #45b9a9; }
-        QWidget#TaskPanel QPushButton:disabled { color: #527176; border-color: #254044; background: #101b1e; }
-        QWidget#TaskPanel QListWidget {
-            background: rgba(2, 12, 16, 180); border: 1px solid #204c52;
-            border-radius: 6px; padding: 4px; outline: none;
-        }
-        QWidget#TaskPanel QListWidget::item {
-            color: #c9e2e2; background: rgba(8, 30, 34, 160);
-            border: 1px solid transparent; border-radius: 4px; padding: 7px 8px; margin: 2px 0;
-        }
-        QWidget#TaskPanel QListWidget::item:selected {
-            color: #eaffff; background: rgba(12, 95, 89, 160); border: 1px solid #39b8a6;
-        }
-        QWidget#TaskPanel QProgressBar {
-            background: #10272a; color: #bfe8e3; border: 1px solid #24545a;
-            border-radius: 4px; text-align: center; min-height: 17px;
-        }
-        QWidget#TaskPanel QProgressBar::chunk { background: #13a88f; border-radius: 3px; }
-        QWidget#TaskPanel QTextBrowser {
-            background: rgba(3, 15, 19, 210); color: #c5dada;
-            border: 1px solid #204c52; border-radius: 6px; padding: 8px;
-        }
-        """)
+        self.setStyleSheet(self._panel_stylesheet())
         self._tasks = {}
         root = QVBoxLayout(self)
         root.setContentsMargins(9, 9, 9, 9)
@@ -176,6 +142,64 @@ class TaskPanel(QWidget):
         self.agent_filter.setCurrentIndex(max(0, idx))
         self.agent_filter.blockSignals(False)
 
+    @staticmethod
+    def _is_light_theme():
+        return QApplication.palette().color(QPalette.ColorRole.Window).lightness() > 145
+
+    def _panel_stylesheet(self):
+        light = self._is_light_theme()
+        bg = "#f7fafc" if light else "#071216"
+        surface = "#ffffff" if light else "#0a1b20"
+        text = "#18333a" if light else "#d8eeee"
+        muted = "#526d75" if light else "#8baeb2"
+        border = "#c5d8df" if light else "#245b60"
+        accent = "#087f70" if light else "#13a88f"
+        selected_bg = "#d8f2ed" if light else "#12494b"
+        return f"""
+        QWidget#TaskPanel {{ background: transparent; color: {text}; }}
+        QWidget#TaskPanel QLabel {{ color: {text}; }}
+        QWidget#TaskPanel QLabel#task_details_title {{ color: {accent}; font-weight: 600; padding: 5px 2px; }}
+        QWidget#TaskPanel QLabel#task_empty {{ color: {muted}; padding: 18px; }}
+        QWidget#TaskPanel QLabel#task_stats {{ color: {muted}; font-size: 10px; padding: 2px 4px; }}
+        QWidget#TaskPanel QLineEdit, QWidget#TaskPanel QComboBox {{
+            background: {surface}; color: {text}; border: 1px solid {border};
+            border-radius: 6px; padding: 6px 8px; min-height: 22px;
+        }}
+        QWidget#TaskPanel QPushButton {{
+            background: {surface}; color: {text}; border: 1px solid {border};
+            border-radius: 6px; padding: 6px 8px; min-height: 24px;
+        }}
+        QWidget#TaskPanel QPushButton:hover {{ background: {selected_bg}; border-color: {accent}; }}
+        QWidget#TaskPanel QPushButton:disabled {{ color: {muted}; border-color: {border}; }}
+        QWidget#TaskPanel QListWidget {{ background: {bg}; border: 1px solid {border}; border-radius: 7px; padding: 4px; outline: none; }}
+        QWidget#TaskPanel QListWidget::item {{ color: {text}; background: {surface}; border: 1px solid transparent; border-radius: 5px; padding: 8px; margin: 2px 0; }}
+        QWidget#TaskPanel QListWidget::item:selected {{ color: {text}; background: {selected_bg}; border: 1px solid {accent}; }}
+        QWidget#TaskPanel QProgressBar {{ background: {surface}; color: {text}; border: 1px solid {border}; border-radius: 5px; text-align: center; min-height: 18px; }}
+        QWidget#TaskPanel QProgressBar::chunk {{ background: {accent}; border-radius: 4px; }}
+        QWidget#TaskPanel QTextBrowser {{ background: {surface}; color: {text}; border: 1px solid {border}; border-radius: 7px; padding: 8px; }}
+        """
+    
+    def _dialog_stylesheet(self):
+        light = self._is_light_theme()
+        bg = "#f7fafc" if light else "#071216"
+        surface = "#ffffff" if light else "#0a1b20"
+        text = "#18333a" if light else "#d8eeee"
+        muted = "#526d75" if light else "#a9c5c7"
+        border = "#c5d8df" if light else "#24565d"
+        accent = "#087f70" if light else "#22d3b2"
+        return f"""
+        QDialog#CreateTaskDialog {{ background: {bg}; color: {text}; }}
+        QDialog#CreateTaskDialog QLabel {{ color: {muted}; background: transparent; border: none; }}
+        QDialog#CreateTaskDialog QLabel#dialog_heading {{ color: {accent}; font-size: 16px; font-weight: 600; }}
+        QDialog#CreateTaskDialog QLineEdit, QDialog#CreateTaskDialog QTextEdit,
+        QDialog#CreateTaskDialog QComboBox, QDialog#CreateTaskDialog QSpinBox,
+        QDialog#CreateTaskDialog QDateTimeEdit {{ background: {surface}; color: {text}; border: 1px solid {border}; border-radius: 7px; padding: 8px 10px; min-height: 24px; }}
+        QDialog#CreateTaskDialog QCheckBox {{ color: {muted}; spacing: 8px; }}
+        QDialog#CreateTaskDialog QPushButton {{ background: {surface}; color: {text}; border: 1px solid {border}; border-radius: 7px; padding: 8px 14px; min-width: 82px; }}
+        QDialog#CreateTaskDialog QPushButton:hover {{ border-color: {accent}; }}
+        QDialog#CreateTaskDialog QPushButton:default {{ background: {accent}; color: white; }}
+        """
+    
     def _create_task_dialog(self):
         profiles = getattr(self, "_profiles", {})
         dialog = QDialog(self)
@@ -184,95 +208,7 @@ class TaskPanel(QWidget):
         dialog.setMinimumSize(560, 520)
         dialog.resize(640, 620)
         dialog.setSizeGripEnabled(True)
-        dialog.setStyleSheet("""
-            QDialog#CreateTaskDialog {
-                background: #071216;
-                color: #d8eeee;
-            }
-            QDialog#CreateTaskDialog QLabel {
-                color: #a9c5c7;
-                background: transparent;
-                border: none;
-            }
-            QDialog#CreateTaskDialog QLabel#dialog_heading {
-                color: #67e8d0;
-                font-size: 16px;
-                font-weight: 600;
-                padding-bottom: 2px;
-            }
-            QDialog#CreateTaskDialog QLineEdit,
-            QDialog#CreateTaskDialog QTextEdit,
-            QDialog#CreateTaskDialog QComboBox,
-            QDialog#CreateTaskDialog QSpinBox,
-            QDialog#CreateTaskDialog QDateTimeEdit {
-                background: #0a1b20;
-                color: #e0f4f2;
-                border: 1px solid #24565d;
-                border-radius: 7px;
-                padding: 8px 10px;
-                selection-background-color: #0d625b;
-                min-height: 24px;
-            }
-            QDialog#CreateTaskDialog QLineEdit:focus,
-            QDialog#CreateTaskDialog QTextEdit:focus,
-            QDialog#CreateTaskDialog QComboBox:focus,
-            QDialog#CreateTaskDialog QSpinBox:focus,
-            QDialog#CreateTaskDialog QDateTimeEdit:focus {
-                border: 1px solid #22d3b2;
-            }
-            QDialog#CreateTaskDialog QTextEdit {
-                min-height: 120px;
-            }
-            QDialog#CreateTaskDialog QComboBox::drop-down {
-                border: none;
-                width: 26px;
-            }
-            QDialog#CreateTaskDialog QComboBox QAbstractItemView {
-                background: #0a1b20;
-                color: #d8eeee;
-                border: 1px solid #24565d;
-                selection-background-color: #0d625b;
-                selection-color: #ffffff;
-                padding: 4px;
-            }
-            QDialog#CreateTaskDialog QCheckBox {
-                color: #b8d6d7;
-                spacing: 8px;
-            }
-            QDialog#CreateTaskDialog QCheckBox::indicator {
-                width: 16px;
-                height: 16px;
-                border: 1px solid #28666a;
-                border-radius: 4px;
-                background: #0a1b20;
-            }
-            QDialog#CreateTaskDialog QCheckBox::indicator:checked {
-                background: #13a88f;
-                border-color: #22d3b2;
-            }
-            QDialog#CreateTaskDialog QPushButton {
-                background: #0b252a;
-                color: #c8eeee;
-                border: 1px solid #28666a;
-                border-radius: 7px;
-                padding: 8px 14px;
-                min-width: 82px;
-            }
-            QDialog#CreateTaskDialog QPushButton:hover {
-                background: #12494b;
-                border-color: #45b9a9;
-            }
-            QDialog#CreateTaskDialog QPushButton:default {
-                background: #0d625b;
-                border-color: #22d3b2;
-                color: #ffffff;
-            }
-            QDialog#CreateTaskDialog QPushButton:disabled {
-                color: #527176;
-                border-color: #254044;
-                background: #101b1e;
-            }
-        """)
+        dialog.setStyleSheet(self._dialog_stylesheet())
         root = QVBoxLayout(dialog)
         root.setContentsMargins(22, 20, 22, 18)
         root.setSpacing(14)
