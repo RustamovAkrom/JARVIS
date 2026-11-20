@@ -343,7 +343,9 @@ def _allowed(url: str) -> bool:
         check_url(url)
         return True
     except ImportError:
-        return urllib.parse.urlparse(url).scheme in ("http", "https")
+        # Do not fall back to scheme-only validation: this plugin fetches
+        # model-selected URLs and must fail closed if SSRF protection is absent.
+        return False
     except Exception:
         return False
 
