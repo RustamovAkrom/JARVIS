@@ -167,8 +167,9 @@ def protect(value: str, name: str) -> str:
         raise SecretStoreError("Secret protection is unavailable on this system")
     try:
         return _PREFIX + base64.b64encode(_protect(value.encode("utf-8"), name)).decode("ascii")
-    except Exception:
-        return value        # never lose a key because protection failed; stays readable as before
+    except Exception as exc:
+        # Fail closed: never silently downgrade a secret to plaintext.
+        raise SecretStoreError("Secret protection failed") from exc
 
 
 # Opened values, by (name, stored form): the settings file is read many times a
