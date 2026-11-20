@@ -26,10 +26,10 @@ import time
 from pathlib import Path
 
 from core import outcome
+from core.tasks.agents import KNOWN_TOOLS
 
 _WEB = {"web_search", "search_web", "fetch_page"}
-KNOWN = ("search_web", "web_search", "fetch_page", "notes", "write_file", "file_processor",
-         "recall_memory")
+KNOWN = KNOWN_TOOLS
 _MAX_WRITE = 2_000_000
 
 _DECLS = {
