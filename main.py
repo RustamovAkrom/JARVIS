@@ -3765,6 +3765,14 @@ class JarvisLive:
             self._engine = None
             await engine.close()
 
+    def shutdown_tasks(self) -> None:
+        runtime = getattr(self, "_task_runtime", None)
+        if runtime is not None:
+            try:
+                runtime.shutdown(wait=2.0)
+            except Exception as exc:
+                self.ui.write_log(f"[Tasks] Shutdown failed: {exc}")
+
     def _on_task_notification(self, event: str, task: dict, text: str) -> None:
         """Deliver task completion through the UI's thread-safe bridge."""
         title = str(task.get("title") or "Task")
@@ -4380,6 +4388,8 @@ def main():
             asyncio.run(jarvis.run())
         except KeyboardInterrupt:
             print("\n🔴 Shutting down...")
+        finally:
+            jarvis.shutdown_tasks()
 
     threading.Thread(target=runner, daemon=True).start()
     ui.root.mainloop()
