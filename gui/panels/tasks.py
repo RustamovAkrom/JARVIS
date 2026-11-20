@@ -389,7 +389,14 @@ class TaskPanel(QWidget):
             status = str(task.get("status") or "unknown").upper()
             title = str(task.get("title") or task.get("task") or task.get("id"))
             used, budget = task.get("used") or {}, task.get("budget") or {}
-            item = QListWidgetItem(f"{status} · {title}\n{used.get('rounds', 0)}/{budget.get('rounds', '?')} rounds")
+            attempts = int(task.get("attempts") or 0)
+            scheduled = task.get("not_before")
+            subtitle = f"{used.get('rounds', 0)}/{budget.get('rounds', '?')} rounds"
+            if attempts:
+                subtitle += f" · attempt {attempts}"
+            if task.get("status") == "scheduled" and scheduled:
+                subtitle += f" · scheduled {self._format_time(scheduled)}"
+            item = QListWidgetItem(f"{status} · {title}\n{subtitle}")
             item.setToolTip(str(task.get("task") or title))
             item.setData(Qt.ItemDataRole.UserRole, str(task.get("id")))
             self.list_widget.addItem(item)
