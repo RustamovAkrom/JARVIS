@@ -46,8 +46,9 @@ class UiFacadeTests(unittest.TestCase):
             panel = window._left_panel
             scroll = panel.findChild(QScrollArea)
             self.assertIsNotNone(scroll)
-            self.assertEqual(window._left_tabs.count(), 3)
+            self.assertEqual(window._left_tabs.count(), 4)
             self.assertEqual(window._left_tabs.tabText(2), "ACTIVITY")
+            self.assertEqual(window._left_tabs.tabText(3), "TASKS")
             self.assertTrue(window._debug_toggle_btn.isHidden())
             self.assertEqual(
                 window._work_tabs.tabBar().elideMode(),
