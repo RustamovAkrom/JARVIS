@@ -10021,7 +10021,7 @@ class MainWindow(QMainWindow):
         self._build_project_explorer()
         self._activity_panel = ActivityPanel()
         self._left_tabs.addTab(self._activity_panel, "ACT")
-        self._left_tabs.setTabToolTip(1, self._tr("ACTIVITY"))
+        self._left_tabs.setTabToolTip(2, self._tr("ACTIVITY"))
         from gui.panels.tasks import TaskPanel
         self._task_panel = TaskPanel()
         self._left_tabs.addTab(self._task_panel, "TASK")
