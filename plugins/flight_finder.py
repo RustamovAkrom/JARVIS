@@ -389,8 +389,14 @@ def flight_finder(parameters: dict, player=None, speak=None) -> str:
     if cabin not in _CABIN_CODE:
         cabin = "economy"
 
-    date        = _parse_date(date_raw)
-    return_date = _parse_date(return_raw) if return_raw else None
+    try:
+        date = _parse_date(date_raw)
+        return_date = _parse_date(return_raw) if return_raw else None
+    except ValueError as exc:
+        return f"Invalid flight date: {exc}"
+
+    if return_date and return_date < date:
+        return "Return date must be on or after the departure date."
 
     if player:
         player.write_log(f"[FlightFinder] {origin} → {destination} on {date}")
