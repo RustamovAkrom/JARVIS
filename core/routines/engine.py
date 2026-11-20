@@ -1,7 +1,7 @@
 """Host-agnostic routine state engine; application owns scheduling thread and delivery."""
 from __future__ import annotations
 import json, os, tempfile, threading, time, uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable
 from core.routines import rules
@@ -153,7 +153,9 @@ class RoutineEngine:
         if not due: self._advance(row["id"], dt); return
         if now < due: return
         late = now - due
-        if row.get("quiet") and self.in_quiet_hours(dt): self._advance(row["id"], dt, "quiet hours"); return
+        if row.get("quiet") and self.in_quiet_hours(dt):
+            self._defer_until_quiet_end(row["id"], dt)
+            return
         if late > float(self.grace.get(row["kind"], 2700)): self._advance(row["id"], dt, f"missed by {late / 60:.0f} min"); return
         if not ready: return
         self._fire(row); self._advance(row["id"], dt)
@@ -203,6 +205,35 @@ class RoutineEngine:
             text = f"{rules.hhmm(first)}-{rules.hhmm(last)}"
         with self._lock: self._doc["quiet_hours"] = text; self._save()
         return text
+    def quiet_hours_end(self, dt: datetime) -> datetime | None:
+        """Return the next end of the active quiet window, including midnight spans."""
+        quiet = self.quiet_hours()
+        if not quiet:
+            return None
+        first, _, last = quiet.partition("-")
+        start, end = rules.parse_hhmm(first), rules.parse_hhmm(last)
+        current = (dt.hour, dt.minute)
+        end_at = dt.replace(
+            hour=end[0], minute=end[1], second=0, microsecond=0
+        )
+        if start == end or (start > end and current >= start):
+            end_at += timedelta(days=1)
+        return end_at
+
+    def _defer_until_quiet_end(self, rid: str, dt: datetime) -> None:
+        """Move a due routine to the end of quiet hours instead of dropping it."""
+        end_at = self.quiet_hours_end(dt)
+        if end_at is None:
+            return
+        with self._lock:
+            row = self._find(rid)
+            if row is None:
+                return
+            row["next_ts"] = end_at.timestamp()
+            row["last_result"] = f"deferred until {end_at:%Y-%m-%d %H:%M} (quiet hours)"
+            self._save()
+        self.log(f"[Routines] {row['name']} deferred until quiet hours end")
+
     def in_quiet_hours(self, dt):
         quiet = self.quiet_hours()
         if not quiet: return False
