@@ -421,7 +421,7 @@ class PiperTTS:
 def _num(value, default: float) -> float:
     try:
         return float(value)
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         return default
 
 
