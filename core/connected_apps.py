@@ -134,34 +134,65 @@ class ConnectedAppsAgent:
                 app=app_name,
             )
 
-        key = self._service.normalize(app_name)
-        with self._lock:
-            current = self._tasks.get(key)
-            if current is not None and current.thread is not None and current.thread.is_alive():
-                return outcome.failed("connected_apps", f"A task is already running for {app_name}.",
-                                      app=app_name)
-            state = AppTask(app=app_name, task=task_text, cancel_event=threading.Event())
-            worker = threading.Thread(
-                target=self._worker,
-                args=(key, state, adapter, say),
-                daemon=True,
-                name=f"connected-app-{key[:24]}",
-            )
-            state.thread = worker
-            state.started_at = time.monotonic()
-            self._tasks[key] = state
-            try:
-                worker.start()
-            except Exception as exc:
-                self._tasks.pop(key, None)
-                return outcome.failed(
-                    "connected_apps.start",
-                    f"Could not start app task: {type(exc).__name__}: {exc}",
-                    app=app_name,
-                )
+        key = self._service.normalize(getattr(adapter, "name", app_name))
 
-        return outcome.done("connected_apps.start", app=app_name, task="started",
-                           instruction="Tell the user the task has started in the background.")
+        def launch() -> str:
+            with self._lock:
+                current = self._tasks.get(key)
+                if current is not None and current.thread is not None and current.thread.is_alive():
+                    return outcome.failed(
+                        "connected_apps", f"A task is already running for {app_name}.", app=app_name
+                    )
+                state = AppTask(app=app_name, task=task_text, cancel_event=threading.Event())
+                worker = threading.Thread(
+                    target=self._worker,
+                    args=(key, state, adapter, say),
+                    daemon=True,
+                    name=f"connected-app-{key[:24]}",
+                )
+                state.thread = worker
+                state.started_at = time.monotonic()
+                self._tasks[key] = state
+                try:
+                    worker.start()
+                except Exception as exc:
+                    self._tasks.pop(key, None)
+                    return outcome.failed(
+                        "connected_apps.start",
+                        f"Could not start app task: {type(exc).__name__}: {exc}",
+                        app=app_name,
+                    )
+            return outcome.done(
+                "connected_apps.start", app=app_name, task="started",
+                instruction="Tell the user the task has started in the background."
+            )
+
+        # Unknown adapters are treated as write-capable. A provider must
+        # explicitly classify a request as read-only to avoid UI confirmation.
+        classifier = getattr(adapter, "requires_confirmation", None)
+        requires_confirmation = True
+        if callable(classifier):
+            try:
+                requires_confirmation = bool(classifier(task_text))
+            except Exception:
+                requires_confirmation = True
+        if not requires_confirmation:
+            return launch()
+
+        try:
+            from core import confirm
+            return confirm.request(
+                key=f"connected_apps.{key}",
+                title=f"CONNECTED APP — {app_name}",
+                detail=f"Allow this task in {app_name}?\n\n{task_text}",
+                run=launch,
+            )
+        except Exception as exc:
+            return outcome.failed(
+                "connected_apps.confirmation",
+                f"Could not request human confirmation: {type(exc).__name__}: {exc}",
+                app=app_name,
+            )
 
     def _worker(self, key: str, state: AppTask, adapter: ConnectedAppAdapter,
                 say: Callable[[str], None] | None) -> None:
