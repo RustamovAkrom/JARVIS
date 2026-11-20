@@ -29,7 +29,7 @@ def task_engine(parameters: dict, player=None) -> str:
         tasks = result.get("tasks") or []
         if not tasks:
             return "Task Engine: no tasks."
-        return "\\n".join(
+        return "\n".join(
             f"{t.get('id')} [{t.get('status')}] {t.get('title') or t.get('task', '')[:100]}"
             for t in tasks
         )
