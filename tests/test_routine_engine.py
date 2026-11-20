@@ -42,3 +42,47 @@ def test_invalid_trigger_and_empty_text_rejected(tmp_path):
     for args in [("bad","say","",{"type":"startup"}), ("bad","say","ok",{"type":"unknown"})]:
         try: eng.add(*args); assert False, "expected ValueError"
         except ValueError: pass
+
+def test_close_prevents_future_scheduler_ticks(tmp_path):
+    host = Host()
+    engine = RoutineEngine(tmp_path / "routines.json", host)
+    row = engine.add("Startup", "say", "Hello", {"type": "startup"})
+    engine.session_started(awake=True)
+
+    assert engine.close(timeout=0.1)
+    engine.tick()
+
+    assert host.calls == []
+    assert engine.get(row["id"])["runs"] == 0
+
+
+def test_close_waits_for_in_progress_tick(tmp_path):
+    import threading
+
+    entered = threading.Event()
+    release = threading.Event()
+
+    class BlockingHost(Host):
+        def ready(self):
+            entered.set()
+            release.wait(timeout=2)
+            return True
+
+    host = BlockingHost()
+    engine = RoutineEngine(tmp_path / "routines.json", host)
+    engine.add("Startup", "say", "Hello", {"type": "startup"})
+    engine.session_started(awake=True)
+
+    worker = threading.Thread(target=engine.tick)
+    worker.start()
+    assert entered.wait(timeout=1)
+
+    assert not engine.close(timeout=0.01)
+    release.set()
+    worker.join(timeout=1)
+    assert not worker.is_alive()
+    assert engine.close(timeout=0.1)
+
+    engine.tick()
+    assert host.calls == [("say", "Hello")]
+
