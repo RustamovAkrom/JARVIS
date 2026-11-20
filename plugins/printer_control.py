@@ -237,7 +237,7 @@ def _monitor_loop(player, stop_event: threading.Event):
         stop_event.wait(_POLL_SECONDS)
 
 
-def _autostart_monitor(player) -> None:
+def _autostart_monitor_unlocked(player) -> None:
     """Start the proactive monitor silently (no spoken confirmation). Used when
     the user checks status during an active print, so alerts flow without them
     having to ask for monitoring explicitly."""
@@ -264,7 +264,7 @@ def _start_monitor(player) -> str:
             "when it's nearly done, and the moment it finishes or if anything goes wrong.")
 
 
-def _stop_monitor() -> str:
+def _stop_monitor_unlocked() -> str:
     global _monitor_thread
     thread = _monitor_thread
     _monitor_stop.set()
@@ -274,6 +274,19 @@ def _stop_monitor() -> str:
         return "Asked the print monitor to stop; it is still finishing its current check."
     _monitor_thread = None
     return "Stopped watching the print."
+
+
+_monitor_lock = threading.RLock()
+
+
+def _autostart_monitor(player) -> None:
+    with _monitor_lock:
+        _autostart_monitor_unlocked(player)
+
+
+def _stop_monitor() -> str:
+    with _monitor_lock:
+        return _stop_monitor_unlocked()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -388,7 +401,7 @@ def _camera_loop(player, win, feed, backend, lit_by_us: bool,
                 pass
 
 
-def _stop_camera(wait: float = 3.0) -> bool:
+def _stop_camera_unlocked(wait: float = 3.0) -> bool:
     global _cam_thread
     thread = _cam_thread
     running = thread is not None and thread.is_alive()
@@ -403,7 +416,7 @@ def _stop_camera(wait: float = 3.0) -> bool:
     return running
 
 
-def _start_camera(player) -> str:
+def _start_camera_unlocked(player) -> str:
     global _cam_thread, _cam_stop
     win = _hud(player)
     if win is None:
@@ -466,6 +479,19 @@ def _start_camera(player) -> str:
         msg += " I switched the chamber light on so you can see inside; it goes off again when you close the camera."
     _log(player, msg)
     return msg
+
+
+_camera_lock = threading.RLock()
+
+
+def _stop_camera(wait: float = 3.0) -> bool:
+    with _camera_lock:
+        return _stop_camera_unlocked(wait)
+
+
+def _start_camera(player) -> str:
+    with _camera_lock:
+        return _start_camera_unlocked(player)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
