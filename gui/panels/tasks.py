@@ -31,7 +31,9 @@ class TaskPanel(QWidget):
         root = QVBoxLayout(self)
         root.setContentsMargins(7, 7, 7, 7)
         root.setSpacing(5)
-        root.addWidget(QLabel("TASKS"))
+        section_label = QLabel("TASKS")
+        section_label.setObjectName("task_section_label")
+        root.addWidget(section_label)
         self.active_summary = QLabel("No active background tasks")
         self.active_summary.setObjectName("task_active_summary")
         self.active_summary.setWordWrap(True)
@@ -80,26 +82,30 @@ class TaskPanel(QWidget):
         root.addLayout(controls)
         self.list_widget = QListWidget()
         self.list_widget.setObjectName("task_list")
-        self.list_widget.setMinimumHeight(76)
-        self.list_widget.setMaximumHeight(190)
-        root.addWidget(self.list_widget, 2)
+        self.list_widget.setMinimumHeight(54)
+        self.list_widget.setMaximumHeight(112)
+        self.list_widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        root.addWidget(self.list_widget, 0)
 
         self.details_title = QLabel("Select a task")
         self.details_title.setObjectName("task_details_title")
+        self.details_title.setWordWrap(True)
+        self.details_title.setMaximumHeight(42)
         root.addWidget(self.details_title)
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
         self.progress_bar.setFormat("%p%")
-        root.addWidget(self.progress_bar)
+        root.addWidget(self.progress_bar, 0)
         self.details_browser = QTextBrowser()
         self.details_browser.setObjectName("task_details")
         self.details_browser.setOpenExternalLinks(False)
-        self.details_browser.setMinimumHeight(70)
-        self.details_browser.setMaximumHeight(190)
-        root.addWidget(self.details_browser, 1)
+        self.details_browser.setMinimumHeight(54)
+        self.details_browser.setMaximumHeight(105)
+        self.details_browser.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        root.addWidget(self.details_browser, 0)
         self.export_button = QPushButton("Export Report")
-        root.addWidget(self.export_button)
+        root.addWidget(self.export_button, 0)
         history_actions = QGridLayout()
         history_actions.setHorizontalSpacing(5)
         history_actions.setVerticalSpacing(4)
@@ -111,14 +117,16 @@ class TaskPanel(QWidget):
         history_actions.addWidget(self.clear_history_button, 0, 1)
         history_actions.setColumnStretch(0, 1)
         history_actions.setColumnStretch(1, 1)
-        root.addLayout(history_actions)
+        root.addLayout(history_actions, 0)
         self.stats_label = QLabel("0 tasks")
         self.stats_label.setObjectName("task_stats")
-        root.addWidget(self.stats_label)
+        self.stats_label.setWordWrap(True)
+        self.stats_label.setMaximumHeight(32)
+        root.addWidget(self.stats_label, 0)
         self.empty_label = QLabel("No tasks yet. Create your first task.")
         self.empty_label.setObjectName("task_empty")
         self.empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        root.addWidget(self.empty_label)
+        root.addWidget(self.empty_label, 0)
         actions = QGridLayout()
         actions.setHorizontalSpacing(5)
         actions.setVerticalSpacing(4)
@@ -130,7 +138,7 @@ class TaskPanel(QWidget):
             actions.addWidget(button, index // 2, index % 2)
         actions.setColumnStretch(0, 1)
         actions.setColumnStretch(1, 1)
-        root.addLayout(actions)
+        root.addLayout(actions, 0)
         self.new_button.clicked.connect(self._create_task_dialog)
         self.refresh_button.clicked.connect(self.refresh_requested.emit)
         self.filter_box.currentIndexChanged.connect(self.render)
@@ -181,7 +189,8 @@ class TaskPanel(QWidget):
         return f"""
         QWidget#TaskPanel {{ background: transparent; color: {text}; }}
         QWidget#TaskPanel QLabel {{ color: {text}; background: transparent; }}
-        QWidget#TaskPanel QLabel#task_details_title {{ color: {accent}; font-weight: 600; padding: 4px 2px; }}
+        QWidget#TaskPanel QLabel#task_details_title {{ color: {accent}; font-weight: 600; padding: 2px; }}
+        QWidget#TaskPanel QLabel#task_section_label {{ font-weight: 600; padding: 2px 4px; }}
         QWidget#TaskPanel QLabel#task_empty {{ color: {muted}; padding: 10px; }}
         QWidget#TaskPanel QLabel#task_stats {{ color: {muted}; font-size: 10px; padding: 2px 4px; }}
         QWidget#TaskPanel QLineEdit, QWidget#TaskPanel QComboBox {{
@@ -194,14 +203,14 @@ class TaskPanel(QWidget):
         }}
         QWidget#TaskPanel QPushButton {{
             background: {surface}; color: {text}; border: 1px solid {border};
-            border-radius: 6px; padding: 5px 7px; min-height: 24px;
+            border-radius: 6px; padding: 3px 5px; min-height: 21px;
         }}
         QWidget#TaskPanel QPushButton:hover {{ background: {selected_bg}; border-color: {accent}; }}
         QWidget#TaskPanel QPushButton:disabled {{ color: {muted}; border-color: {border}; }}
         QWidget#TaskPanel QListWidget {{ background: {bg}; border: 1px solid {border}; border-radius: 7px; padding: 3px; outline: none; }}
-        QWidget#TaskPanel QListWidget::item {{ color: {text}; background: {surface}; border: 1px solid {border}; border-radius: 5px; padding: 6px; margin: 2px 0; }}
+        QWidget#TaskPanel QListWidget::item {{ color: {text}; background: {surface}; border: 1px solid {border}; border-radius: 5px; padding: 4px 5px; margin: 1px 0; }}
         QWidget#TaskPanel QListWidget::item:selected {{ color: {text}; background: {selected_bg}; border: 1px solid {accent}; }}
-        QWidget#TaskPanel QProgressBar {{ background: {surface}; color: {text}; border: 1px solid {border}; border-radius: 5px; text-align: center; min-height: 17px; max-height: 20px; }}
+        QWidget#TaskPanel QProgressBar {{ background: {surface}; color: {text}; border: 1px solid {border}; border-radius: 5px; text-align: center; min-height: 15px; max-height: 18px; }}
         QWidget#TaskPanel QProgressBar::chunk {{ background: {accent}; border-radius: 4px; }}
         QWidget#TaskPanel QTextBrowser {{ background: {surface}; color: {text}; border: 1px solid {border}; border-radius: 7px; padding: 6px; }}
         """
