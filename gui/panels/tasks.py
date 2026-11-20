@@ -425,10 +425,13 @@ class TaskPanel(QWidget):
             progress = min(99, round(seconds_used / seconds_budget * 100))
         else:
             progress = 0
-        self.details_title.setText(status)
+        # The task list already displays title + status. Avoid repeating the
+        # same status in a second heading above the progress bar.
+        self.details_title.setText(title)
+        self.details_title.setVisible(False)
         self.progress_bar.setVisible(True)
         self.details_browser.setVisible(True)
-        self.export_button.setEnabled(bool(task.get("report") or task.get("result")))
+        self.export_button.setEnabled(bool(task))
         if status.lower() in _ACTIVE:
             self.progress_bar.setRange(0, 0)  # Busy indicator: rounds/budget are not completion percentage.
         else:
@@ -439,7 +442,6 @@ class TaskPanel(QWidget):
         else:
             self.progress_bar.setFormat(f"Running · {rounds_used}/{rounds_budget or '∞'} rounds")
         lines = [
-            f"<b>Status:</b> {status}",
             f"<b>Agent:</b> {self._html(task.get('agent') or 'general')}",
             f"<b>Created:</b> {self._format_time(task.get('created'))}",
             f"<b>Started:</b> {self._format_time(task.get('started'))}",
@@ -490,9 +492,37 @@ class TaskPanel(QWidget):
 
     def _export_selected_report(self):
         task = self._tasks.get(self.selected_task_id(), {})
-        report = str(task.get("report") or task.get("result") or "")
+        report = str(task.get("report") or task.get("result") or "").strip()
         if not report:
-            return
+            # Failed/cancelled tasks may not have a report. Export a useful
+            # diagnostic summary instead of silently doing nothing.
+            used = task.get("used") if isinstance(task.get("used"), dict) else {}
+            budget = task.get("budget") if isinstance(task.get("budget"), dict) else {}
+            events = task.get("events") if isinstance(task.get("events"), list) else []
+            report_lines = [
+                f"# {task.get('title') or task.get('task') or 'Background task'}",
+                "",
+                f"- Status: {str(task.get('status') or 'unknown').upper()}",
+                f"- Agent: {task.get('agent') or 'general'}",
+                f"- Created: {self._format_time(task.get('created'))}",
+                f"- Started: {self._format_time(task.get('started'))}",
+                f"- Time used: {float(used.get('seconds') or 0):.1f}s",
+                f"- Rounds: {used.get('rounds', 0)} / {budget.get('rounds', 'unlimited')}",
+                "",
+                "## Task",
+                str(task.get('task') or ""),
+            ]
+            if task.get("error"):
+                report_lines.extend(["", "## Error", str(task.get("error"))])
+            if events:
+                report_lines.extend(["", "## Event history"])
+                for event in events:
+                    if isinstance(event, dict):
+                        report_lines.append(
+                            f"- [{self._format_time(event.get('t'))}] "
+                            f"{event.get('kind') or 'event'}: {event.get('text') or ''}"
+                        )
+            report = "\n".join(report_lines)
         from pathlib import Path
         path, _ = QFileDialog.getSaveFileName(
             self, "Export Task Report", f"{task.get('title') or 'task-report'}.md",
