@@ -277,7 +277,7 @@ def _schedule_linux(target_dt: datetime, task_name: str, script_path: Path) -> s
             errors="replace",
         )
         if result.returncode == 0:
-            return task_name
+            return f"systemd:{task_name}"
         print(f"[Reminder] ⚠️ systemd-run failed: {result.stderr.strip()}, trying 'at'")
 
     if shutil.which("at"):
@@ -292,7 +292,7 @@ def _schedule_linux(target_dt: datetime, task_name: str, script_path: Path) -> s
             errors="replace",
         )
         if result.returncode == 0:
-            match = re.search(r"job\\s+(\\d+)", result.stdout or "", re.IGNORECASE)
+            match = re.search(r"job\s+(\d+)", result.stdout or "", re.IGNORECASE)
             return f"at:{match.group(1)}" if match else f"at:{task_name}"
         print(f"[Reminder] ❌ at: {result.stderr.strip()}")
         return ""
