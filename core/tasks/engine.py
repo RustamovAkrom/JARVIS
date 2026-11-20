@@ -461,7 +461,7 @@ class TaskEngine:
             report = str(self._write_report(task, result))
         except Exception as e:
             self._log(f"[Tasks] report for {tid} could not be written: {e}")
-        self._finish(tid, "done", result=result[:_RESULT_CAP], report=report)
+        self._finish(tid, "done", result=result[:_RESULT_CAP], report_path=report, report=report)
 
     def _write_report(self, task: dict, result: str) -> Path:
         self.reports_dir.mkdir(parents=True, exist_ok=True)
