@@ -30,7 +30,8 @@ class TaskPanel(QWidget):
         self._tasks = {}
         root = QVBoxLayout(self)
         root.setContentsMargins(7, 7, 7, 7)
-        root.setSpacing(5)
+        root.setSpacing(4)
+        root.setSizeConstraint(QVBoxLayout.SizeConstraint.SetMinimumSize)
         section_label = QLabel("TASKS")
         section_label.setObjectName("task_section_label")
         root.addWidget(section_label)
@@ -48,11 +49,13 @@ class TaskPanel(QWidget):
         self.search_box = QLineEdit()
         self.search_box.setObjectName("task_search")
         self.search_box.setPlaceholderText("Search tasks...")
+        self.search_box.setMinimumHeight(30)
+        self.search_box.setMaximumHeight(36)
         root.addWidget(self.search_box)
         controls = QVBoxLayout()
-        controls.setSpacing(5)
+        controls.setSpacing(3)
         filter_row = QHBoxLayout()
-        filter_row.setSpacing(5)
+        filter_row.setSpacing(4)
         self.filter_box = QComboBox()
         for label, value in (("Active", "active"), ("History", "history"), ("All", "all")):
             self.filter_box.addItem(label, value)
@@ -68,48 +71,56 @@ class TaskPanel(QWidget):
         for widget in (self.filter_box, self.agent_filter, self.sort_box):
             widget.setMinimumWidth(0)
             widget.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+            widget.setMinimumHeight(30)
+            widget.setMaximumHeight(36)
             filter_row.addWidget(widget, 1)
         controls.addLayout(filter_row)
         action_row = QHBoxLayout()
-        action_row.setSpacing(5)
+        action_row.setSpacing(4)
         self.new_button = QPushButton("+ New")
-        self.new_button.setMinimumHeight(26)
+        self.new_button.setMinimumHeight(28)
+        self.new_button.setMaximumHeight(32)
         self.refresh_button = QPushButton("↻")
         self.refresh_button.setToolTip("Refresh tasks")
-        self.refresh_button.setMinimumHeight(26)
+        self.refresh_button.setMinimumHeight(28)
+        self.refresh_button.setMaximumHeight(32)
         action_row.addWidget(self.new_button, 1)
         action_row.addWidget(self.refresh_button, 1)
         controls.addLayout(action_row)
         root.addLayout(controls)
         self.list_widget = QListWidget()
         self.list_widget.setObjectName("task_list")
-        self.list_widget.setMinimumHeight(48)
-        self.list_widget.setMaximumHeight(86)
+        self.list_widget.setMinimumHeight(0)
+        self.list_widget.setMaximumHeight(78)
         self.list_widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.list_widget.setUniformItemSizes(True)
         root.addWidget(self.list_widget, 0)
 
         self.details_title = QLabel("Select a task")
         self.details_title.setObjectName("task_details_title")
         self.details_title.setWordWrap(True)
-        self.details_title.setMaximumHeight(28)
+        self.details_title.setMaximumHeight(24)
+        self.details_title.setMinimumHeight(0)
         root.addWidget(self.details_title)
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
         self.progress_bar.setFormat("%p%")
+        self.progress_bar.setMaximumHeight(18)
         root.addWidget(self.progress_bar, 0)
         self.details_browser = QTextBrowser()
         self.details_browser.setObjectName("task_details")
         self.details_browser.setOpenExternalLinks(False)
-        self.details_browser.setMinimumHeight(40)
-        self.details_browser.setMaximumHeight(72)
+        self.details_browser.setMinimumHeight(0)
+        self.details_browser.setMaximumHeight(64)
         self.details_browser.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         root.addWidget(self.details_browser, 0)
         self.export_button = QPushButton("Export")
+        self.export_button.setMaximumHeight(28)
         root.addWidget(self.export_button, 0)
         history_actions = QGridLayout()
         history_actions.setHorizontalSpacing(5)
-        history_actions.setVerticalSpacing(4)
+        history_actions.setVerticalSpacing(2)
         self.delete_button = QPushButton("Delete")
         self.clear_history_button = QPushButton("Clear History")
         self.delete_button.setToolTip("Permanently delete selected task and its task-owned files")
@@ -122,16 +133,16 @@ class TaskPanel(QWidget):
         self.stats_label = QLabel("0 tasks")
         self.stats_label.setObjectName("task_stats")
         self.stats_label.setWordWrap(True)
-        self.stats_label.setMaximumHeight(24)
+        self.stats_label.setMaximumHeight(22)
         root.addWidget(self.stats_label, 0)
         self.empty_label = QLabel("No tasks yet. Create your first task.")
         self.empty_label.setObjectName("task_empty")
-        self.empty_label.setMaximumHeight(34)
+        self.empty_label.setMaximumHeight(24)
         self.empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         root.addWidget(self.empty_label, 0)
         actions = QGridLayout()
         actions.setHorizontalSpacing(5)
-        actions.setVerticalSpacing(4)
+        actions.setVerticalSpacing(2)
         self.retry_button = QPushButton("Retry")
         self.cancel_button = QPushButton("Cancel")
         self.finish_button = QPushButton("Finish")
@@ -197,7 +208,7 @@ class TaskPanel(QWidget):
         QWidget#TaskPanel QLabel#task_stats {{ color: {muted}; font-size: 10px; padding: 2px 4px; }}
         QWidget#TaskPanel QLineEdit, QWidget#TaskPanel QComboBox {{
             background: {surface}; color: {text}; border: 1px solid {border};
-            border-radius: 6px; padding: 5px 7px; min-height: 22px;
+            border-radius: 6px; padding: 3px 5px; min-height: 20px; max-height: 32px;
         }}
         QWidget#TaskPanel QComboBox QAbstractItemView {{
             background: {surface}; color: {text}; selection-background-color: {selected_bg};
@@ -205,7 +216,7 @@ class TaskPanel(QWidget):
         }}
         QWidget#TaskPanel QPushButton {{
             background: {surface}; color: {text}; border: 1px solid {border};
-            border-radius: 6px; padding: 3px 5px; min-height: 21px;
+            border-radius: 6px; padding: 2px 4px; min-height: 18px; max-height: 28px;
         }}
         QWidget#TaskPanel QPushButton:hover {{ background: {selected_bg}; border-color: {accent}; }}
         QWidget#TaskPanel QPushButton:disabled {{ color: {muted}; border-color: {border}; }}
@@ -563,7 +574,8 @@ class TaskPanel(QWidget):
                 subtitle += f" · attempt {attempts}"
             if task.get("status") == "scheduled" and scheduled:
                 subtitle += f" · scheduled {self._format_time(scheduled)}"
-            item = QListWidgetItem(f"{title[:42]}\n{status} · {subtitle}")
+            item = QListWidgetItem(f"{title[:36]}\n{status} · {subtitle}")
+            item.setSizeHint(item.sizeHint())
             item.setToolTip(str(task.get("task") or title))
             item.setData(Qt.ItemDataRole.UserRole, str(task.get("id")))
             self.list_widget.addItem(item)
