@@ -112,6 +112,21 @@ def _is_rate_limit(error: Exception) -> bool:
     return "429" in msg or "quota" in msg or "resource_exhausted" in msg
 
 
+def _safe_project_path(project_dir: Path, raw_path: str) -> Path:
+    """Resolve a generated path without allowing it to escape the project."""
+    raw = str(raw_path or "").strip().replace("\\", "/")
+    if not raw or raw.startswith("/") or re.match(r"^[A-Za-z]:", raw):
+        raise ValueError(f"Unsafe project path: {raw_path!r}")
+    parts = raw.split("/")
+    if any(part in ("", ".", "..") for part in parts):
+        raise ValueError(f"Unsafe project path: {raw_path!r}")
+    root = project_dir.resolve()
+    target = (root / Path(*parts)).resolve()
+    if target != root and root not in target.parents:
+        raise ValueError(f"Project path escapes its root: {raw_path!r}")
+    return target
+
+
 def _parse_traceback(output: str, project_files: list[str]) -> tuple[str | None, int | None]:
 
     pattern = re.compile(r'File ["\']([^"\']+\.py)["\'],\s+line\s+(\d+)', re.IGNORECASE)
@@ -287,7 +302,7 @@ Code for {file_path}:"""
         response = model.generate_content(prompt)
         code = _strip_fences(response.text)
 
-        full_path = project_dir / file_path
+        full_path = _safe_project_path(project_dir, file_path)
         full_path.parent.mkdir(parents=True, exist_ok=True)
         full_path.write_text(code, encoding="utf-8")
 
@@ -513,7 +528,7 @@ Fixed code for {fix_path}:"""
             response = model.generate_content(prompt)
             fixed = _strip_fences(response.text)
 
-            full_path = project_dir / fix_path
+            full_path = _safe_project_path(project_dir, fix_path)
             full_path.parent.mkdir(parents=True, exist_ok=True)
             full_path.write_text(fixed, encoding="utf-8")
 
