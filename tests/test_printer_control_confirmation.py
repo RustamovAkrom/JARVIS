@@ -17,14 +17,13 @@ class PrinterControlConfirmationTests(unittest.TestCase):
         with patch("core.confirm.request", side_effect=request), \
              patch.object(printer_control, "get_active_backend", return_value=backend):
             result = printer_control.run({"action": "stop", "confirm": True})
+            self.assertEqual(result, "pending")
+            backend.stop.assert_not_called()
+            self.assertEqual(captured["key"], "printer_control.stop")
 
-        self.assertEqual(result, "pending")
-        backend.stop.assert_not_called()
-        self.assertEqual(captured["key"], "printer_control.stop")
-
-        # Only the interface-owned callback executes the destructive action.
-        self.assertEqual(captured["run"](), "Print stopped.")
-        backend.stop.assert_called_once()
+            # Callback is deferred; keep backend patch active until confirmation.
+            self.assertEqual(captured["run"](), "Print stopped.")
+            backend.stop.assert_called_once()
 
     def test_home_refuses_while_printing_after_confirmation(self):
         backend = Mock()
@@ -38,12 +37,11 @@ class PrinterControlConfirmationTests(unittest.TestCase):
         with patch("core.confirm.request", side_effect=request), \
              patch.object(printer_control, "get_active_backend", return_value=backend):
             result = printer_control.run({"action": "home"})
-
-        self.assertEqual(result, "pending")
-        self.assertIn("CONFIRM", captured["title"])
-        self.assertIn("home", captured["key"])
-        self.assertIn("Refused", captured["run"]())
-        backend.home.assert_not_called()
+            self.assertEqual(result, "pending")
+            self.assertIn("CONFIRM", captured["title"])
+            self.assertIn("home", captured["key"])
+            self.assertIn("Refused", captured["run"]())
+            backend.home.assert_not_called()
 
 
 if __name__ == "__main__":
