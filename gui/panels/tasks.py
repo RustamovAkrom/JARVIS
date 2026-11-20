@@ -236,7 +236,24 @@ class TaskPanel(QWidget):
             if isinstance(task, dict) and str(task.get("id") or "").strip():
                 rows[str(task["id"])] = dict(task)
         self._tasks = rows
-        active = sorted((task for task in rows.values() if task.get("status") in _ACTIVE),\n                        key=lambda task: float(task.get("started") or task.get("created") or 0),\n                        reverse=True)\n        if not active:\n            self.active_summary.setText("No active background tasks")\n        else:\n            lines = [f"ACTIVE BACKGROUND TASKS · {len(active)}"]\n            for task in active[:3]:\n                status = str(task.get("status") or "active").upper()\n                progress = int(self._progress(task))\n                title = str(task.get("title") or task.get("task") or "Untitled task").replace("\\n", " ")\n                lines.append(f"• {title[:48]} — {status} · {progress}%")\n            if len(active) > 3:\n                lines.append(f"+ {len(active) - 3} more")\n            self.active_summary.setText("\\n".join(lines))\n        self.render()
+        active = sorted(
+            (task for task in rows.values() if task.get("status") in _ACTIVE),
+            key=lambda task: float(task.get("started") or task.get("created") or 0),
+            reverse=True,
+        )
+        if not active:
+            self.active_summary.setText("No active background tasks")
+        else:
+            lines = [f"ACTIVE BACKGROUND TASKS · {len(active)}"]
+            for task in active[:3]:
+                status = str(task.get("status") or "active").upper()
+                progress = int(self._progress(task))
+                title = str(task.get("title") or task.get("task") or "Untitled task").replace("\n", " ")
+                lines.append(f"• {title[:48]} — {status} · {progress}%")
+            if len(active) > 3:
+                lines.append(f"+ {len(active) - 3} more")
+            self.active_summary.setText("\n".join(lines))
+        self.render()
 
     def _render_details(self, task):
         if not task:
