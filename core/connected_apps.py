@@ -67,7 +67,17 @@ class ConnectedAppsService:
     def unregister(self, name: str) -> bool:
         key = self.normalize(name)
         with self._lock:
-            return self._adapters.pop(key, None) is not None
+            if key in self._adapters:
+                return self._adapters.pop(key, None) is not None
+            # Match get(): allow friendly display-name unregister, but do not
+            # silently remove an adapter when display names are ambiguous.
+            matches = [
+                adapter_key for adapter_key, adapter in self._adapters.items()
+                if self.normalize(getattr(adapter, "display_name", "")) == key
+            ]
+            if len(matches) != 1:
+                return False
+            return self._adapters.pop(matches[0], None) is not None
 
     def get(self, name: str) -> ConnectedAppAdapter | None:
         key = self.normalize(name)
