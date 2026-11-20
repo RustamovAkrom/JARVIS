@@ -274,3 +274,30 @@ class Presence:
             if returned_at and now - returned_at < 300 and gone >= 120:
                 return f"The user returned {int((now-returned_at)//60)} min ago after {int(gone//60)} min away."
             return ""
+
+
+# Process-scoped bridge used by the auto-discovered Presence action. The
+# Presence state machine itself remains free of application/UI dependencies.
+_presence_runtime = None
+_presence_runtime_lock = threading.RLock()
+
+
+def set_presence_runtime(instance) -> None:
+    """Publish the active Presence instance for Core actions and Settings."""
+    global _presence_runtime
+    with _presence_runtime_lock:
+        _presence_runtime = instance
+
+
+def get_presence_runtime():
+    """Return the currently active Presence instance, if JARVIS is running."""
+    with _presence_runtime_lock:
+        return _presence_runtime
+
+
+def clear_presence_runtime(expected=None) -> None:
+    """Clear the runtime bridge without removing a newer application instance."""
+    global _presence_runtime
+    with _presence_runtime_lock:
+        if expected is None or _presence_runtime is expected:
+            _presence_runtime = None
