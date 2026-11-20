@@ -498,7 +498,7 @@ class HudCanvas(QWidget):
         don't make the waveform stutter; _step() decays it back down."""
         try:
             lv = float(level)
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             return
         if lv < 0.0:
             lv = 0.0
