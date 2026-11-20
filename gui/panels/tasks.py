@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QPushButton, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QPushButton, QVBoxLayout, QWidget, QDialog, QFormLayout, QLineEdit, QSpinBox, QTextEdit, QDialogButtonBox
 
 _ACTIVE = {"queued", "scheduled", "running", "waiting_quota"}
 
@@ -16,6 +16,7 @@ class TaskPanel(QWidget):
     task_selected = pyqtSignal(str)
     refresh_requested = pyqtSignal()
     create_requested = pyqtSignal()
+    create_task_requested = pyqtSignal(dict)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -48,7 +49,7 @@ class TaskPanel(QWidget):
         for button in (self.cancel_button, self.finish_button, self.steer_button):
             actions.addWidget(button)
         root.addLayout(actions)
-        self.new_button.clicked.connect(self.create_requested.emit)
+        self.new_button.clicked.connect(self._create_task_dialog)
         self.refresh_button.clicked.connect(self.refresh_requested.emit)
         self.filter_box.currentIndexChanged.connect(self.render)
         self.list_widget.currentItemChanged.connect(self._selection_changed)
@@ -56,6 +57,61 @@ class TaskPanel(QWidget):
         self.finish_button.clicked.connect(self._finish_selected)
         self.steer_button.clicked.connect(self._steer_selected)
         self.render()
+
+    def set_agent_profiles(self, profiles):
+        self._profiles = dict(profiles or {})
+        self._profile_names = sorted(self._profiles)
+
+    def _create_task_dialog(self):
+        profiles = getattr(self, "_profiles", {})
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Create Task")
+        dialog.setMinimumWidth(460)
+        form = QFormLayout(dialog)
+        title = QLineEdit()
+        title.setPlaceholderText("Optional task title")
+        description = QTextEdit()
+        description.setPlaceholderText("Describe what JARVIS should accomplish...")
+        description.setMinimumHeight(110)
+        agent = QComboBox()
+        for name, profile in sorted(profiles.items()):
+            agent.addItem(getattr(profile, "title", name), name)
+        if agent.count() == 0:
+            agent.addItem("General", "general")
+        minutes = QSpinBox()
+        minutes.setRange(1, 720)
+        minutes.setValue(10)
+        rounds = QSpinBox()
+        rounds.setRange(1, 400)
+        rounds.setValue(40)
+        delivery = QComboBox()
+        delivery.addItem("Voice notification", "voice")
+        delivery.addItem("Panel only", "panel")
+        delivery.addItem("Silent", "silent")
+        form.addRow("Title", title)
+        form.addRow("Task", description)
+        form.addRow("Agent", agent)
+        form.addRow("Time budget (minutes)", minutes)
+        form.addRow("Round budget", rounds)
+        form.addRow("Delivery", delivery)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Cancel | QDialogButtonBox.StandardButton.Ok)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        form.addRow(buttons)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        task_text = description.toPlainText().strip()
+        if not task_text:
+            return
+        self.create_task_requested.emit({
+            "task": task_text,
+            "title": title.text().strip(),
+            "agent": agent.currentData(),
+            "minutes": minutes.value(),
+            "rounds": rounds.value(),
+            "deliver": delivery.currentData(),
+            "origin": "desk",
+        })
 
     def set_tasks(self, tasks):
         rows = {}
