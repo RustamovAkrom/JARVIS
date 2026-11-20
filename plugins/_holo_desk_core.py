@@ -1221,6 +1221,7 @@ class HoloDesk(QWidget):
         self._bg_frame = None
         self._bg_new = threading.Event()
         self._bg_stop = threading.Event()
+        self._bg_thread: Optional[threading.Thread] = None
         self._mouse = {"down": False, "panel": None, "offset": (0, 0), "pos": (0.0, 0.0), "t": 0.0}
         self._last = time.monotonic()
         self._t0 = self._last
@@ -1272,7 +1273,13 @@ class HoloDesk(QWidget):
         if self.show_help:
             self.add("help", self.width() / 2, self.height() * 0.42, sound=False)
         H.SERVICE.subscribe(self._on_camera)
-        threading.Thread(target=self._bg_loop, daemon=True, name="holo-background").start()
+        # open_on may be called more than once during UI re-entry.
+        self._bg_stop.clear()
+        if self._bg_thread is None or not self._bg_thread.is_alive():
+            self._bg_thread = threading.Thread(
+                target=self._bg_loop, daemon=True, name="holo-background"
+            )
+            self._bg_thread.start()
         self._timer.start(16)
         self.sounds.play("open")
 
@@ -1287,6 +1294,10 @@ class HoloDesk(QWidget):
     def shutdown(self) -> None:
         H.SERVICE.unsubscribe(self._on_camera)
         self._bg_stop.set()
+        self._bg_new.set()  # wake worker before bounded join
+        worker = self._bg_thread
+        if worker is not None and worker.is_alive() and worker is not threading.current_thread():
+            worker.join(timeout=1.0)
         self._save()
         for pn in self.panels:
             pn.close()
