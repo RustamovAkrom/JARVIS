@@ -13,6 +13,7 @@ class TaskPanel(QWidget):
     cancel_requested = pyqtSignal(str)
     finish_requested = pyqtSignal(str)
     steer_requested = pyqtSignal(str)
+    retry_requested = pyqtSignal(str)
     task_selected = pyqtSignal(str)
     refresh_requested = pyqtSignal()
     create_requested = pyqtSignal()
@@ -104,10 +105,11 @@ class TaskPanel(QWidget):
         self.empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         root.addWidget(self.empty_label)
         actions = QHBoxLayout()
+        self.retry_button = QPushButton("Retry")
         self.cancel_button = QPushButton("Cancel")
         self.finish_button = QPushButton("Finish & Report")
         self.steer_button = QPushButton("Steer")
-        for button in (self.cancel_button, self.finish_button, self.steer_button):
+        for button in (self.retry_button, self.cancel_button, self.finish_button, self.steer_button):
             actions.addWidget(button)
         root.addLayout(actions)
         self.new_button.clicked.connect(self._create_task_dialog)
@@ -117,6 +119,7 @@ class TaskPanel(QWidget):
         self.search_box.textChanged.connect(self.render)
         self.export_button.clicked.connect(self._export_selected_report)
         self.list_widget.currentItemChanged.connect(self._selection_changed)
+        self.retry_button.clicked.connect(self._retry_selected)
         self.cancel_button.clicked.connect(self._cancel_selected)
         self.finish_button.clicked.connect(self._finish_selected)
         self.steer_button.clicked.connect(self._steer_selected)
@@ -352,10 +355,16 @@ class TaskPanel(QWidget):
         self.progress_bar.setVisible(has_task)
         self.details_browser.setVisible(has_task)
         active = task.get("status") in _ACTIVE
+        self.retry_button.setEnabled(task.get("status") in {"failed", "cancelled"})
         for button in (self.cancel_button, self.finish_button, self.steer_button):
             button.setEnabled(active)
         if tid:
             self.task_selected.emit(tid)
+
+    def _retry_selected(self):
+        tid = self.selected_task_id()
+        if tid:
+            self.retry_requested.emit(tid)
 
     def _cancel_selected(self):
         tid = self.selected_task_id()
