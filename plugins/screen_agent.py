@@ -412,13 +412,28 @@ def _await_approval(player, description: str, irreversible: bool = False,
     from core import confirm
     from core.i18n import t
     event = _state["confirm"]
+    stop_event = _state.get("stop")
+    # Clear the previous step's signal first, then check cancellation. If stop
+    # races with this clear, stop_event remains set and approval is refused.
     event.clear()
     with _lock:
         _state["approved"] = False
         _state["pending"] = description
+    if stop_event is not None and stop_event.is_set():
+        with _lock:
+            _state["pending"] = ""
+        return False
 
     def yes() -> str:
+        # A delayed UI callback must not approve an action after cancellation.
+        if stop_event is not None and stop_event.is_set():
+            event.set()
+            return "cancelled"
         with _lock:
+            if stop_event is not None and stop_event.is_set():
+                _state["approved"] = False
+                event.set()
+                return "cancelled"
             _state["approved"] = True
         event.set()
         return "approved"
@@ -438,17 +453,29 @@ def _await_approval(player, description: str, irreversible: bool = False,
         asked = confirm.request(
             key="screen_agent", title=title,
             detail=description[:400], run=yes, report=lambda _r: None, on_cancel=event.set)
-    if not event.is_set():
-        _panel(player, f"   ⏸️  waiting for you — {description}")
-        _say(player, f"In one short sentence, tell the user what you are about to do "
-                     f"({description}) and that they need to press the confirmation "
-                     f"button for it. {asked}")
-        event.wait(timeout)
-    confirm.withdraw("screen_agent")
-    with _lock:
-        approved = bool(_state["approved"])
-        _state["pending"] = ""
-    return approved
+    try:
+        if not event.is_set():
+            _panel(player, f"   ⏸️  waiting for you — {description}")
+            _say(player, f"In one short sentence, tell the user what you are about to do "
+                         f"({description}) and that they need to press the confirmation "
+                         f"button for it. {asked}")
+            deadline = time.monotonic() + max(0.0, timeout)
+            while not event.is_set():
+                if stop_event is not None and stop_event.is_set():
+                    break
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break
+                event.wait(min(0.2, remaining))
+        with _lock:
+            approved = bool(_state["approved"])
+        return approved and not (stop_event is not None and stop_event.is_set())
+    finally:
+        confirm.withdraw("screen_agent")
+        with _lock:
+            _state["pending"] = ""
+            if stop_event is not None and stop_event.is_set():
+                _state["approved"] = False
 
 
 # ---------------------------------------------------------------------------
