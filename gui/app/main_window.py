@@ -7553,6 +7553,8 @@ class MainWindow(QMainWindow):
             return
         panel.refresh_requested.connect(lambda e=engine: self._update_task_panel_ui(e.list(limit=100)))
         panel.create_task_requested.connect(ui._create_task)
+        panel.delete_task_requested.connect(lambda tid, e=engine: ui._delete_task(e, tid))
+        panel.delete_history_requested.connect(lambda e=engine: ui._delete_task_history(e))
         panel.retry_requested.connect(ui._retry_task)
         panel.cancel_requested.connect(lambda tid, e=engine: e.cancel(tid))
         panel.finish_requested.connect(lambda tid, e=engine: e.cancel(tid, finish=True))
@@ -17964,6 +17966,15 @@ class JarvisUI:
                 return {"ok": True, "task": task}
             if action == "list":
                 return {"ok": True, "tasks": engine.list(limit=100)}
+            if action == "delete":
+                task_id = str(payload.get("task_id") or "").strip()
+                deleted = engine.delete_task(task_id)
+                self._win._task_panel_update_sig.emit(engine.list(limit=100))
+                return {"ok": deleted, "task_id": task_id}
+            if action == "delete_history":
+                deleted = engine.delete_history()
+                self._win._task_panel_update_sig.emit(engine.list(limit=100))
+                return {"ok": True, "deleted": deleted}
             task_id = str(payload.get("task_id") or "").strip()
             if not task_id:
                 return {"ok": False, "error": "task_id is required"}
@@ -18023,6 +18034,8 @@ class JarvisUI:
             self._win._task_refresh_timer = timer
         panel.refresh_requested.connect(lambda e=engine: self._update_task_panel_ui(e.list(limit=100)))
         panel.create_task_requested.connect(self._create_task)
+        panel.delete_task_requested.connect(lambda tid, e=engine: self._delete_task(e, tid))
+        panel.delete_history_requested.connect(lambda e=engine: self._delete_task_history(e))
         panel.retry_requested.connect(self._retry_task)
         panel.cancel_requested.connect(lambda tid, e=engine: e.cancel(tid))
         panel.finish_requested.connect(lambda tid, e=engine: e.cancel(tid, finish=True))
@@ -18030,6 +18043,22 @@ class JarvisUI:
         panel.task_selected.connect(lambda tid, e=engine: self._show_task_report(e, tid))
         timer.start()
         self._update_task_panel_ui(engine.list(limit=100))
+
+    def _delete_task(self, engine, task_id: str) -> None:
+        try:
+            if engine.delete_task(task_id):
+                self.write_log(f"[Tasks] Deleted task and owned data: {task_id}")
+            self._win._task_panel_update_sig.emit(engine.list(limit=100))
+        except Exception as exc:
+            self.write_log(f"[Tasks] Delete failed: {exc}")
+
+    def _delete_task_history(self, engine) -> None:
+        try:
+            deleted = engine.delete_history()
+            self.write_log(f"[Tasks] Deleted {deleted} history entries and owned data")
+            self._win._task_panel_update_sig.emit(engine.list(limit=100))
+        except Exception as exc:
+            self.write_log(f"[Tasks] History deletion failed: {exc}")
 
     def _retry_task(self, task_id: str) -> None:
         engine = getattr(self._win, "_task_engine", None)

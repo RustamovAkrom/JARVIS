@@ -85,7 +85,6 @@ class TaskStore:
         with self._lock:
             self._tasks[task["id"]] = task
             write_json(self._path(task["id"]), task)
-            self._prune()
             return json.loads(json.dumps(task))
 
     def get(self, tid: str) -> dict | None:
@@ -123,6 +122,27 @@ class TaskStore:
 
     def save_turns(self, tid: str, turns: list, key: str = "") -> None:
         write_json(self._turns_path(tid, key), turns)
+
+    def delete(self, tid: str) -> bool:
+        """Delete task metadata, checkpoints and its private workspace."""
+        with self._lock:
+            task = self._tasks.pop(str(tid), None)
+            if task is None:
+                return False
+            for path in [self._path(tid)] + list(self.root.glob(f"{tid}.*.turns.json")):
+                try:
+                    path.unlink(missing_ok=True)
+                except OSError:
+                    pass
+            shutil.rmtree(self.workdir(tid), ignore_errors=True)
+            return True
+
+    def delete_finished(self) -> int:
+        """Delete all terminal tasks and their task-owned data."""
+        with self._lock:
+            ids = [tid for tid, task in self._tasks.items()
+                   if task.get("status") not in ("queued", "scheduled", "running", "waiting_quota")]
+        return sum(1 for tid in ids if self.delete(tid))
 
     # ── housekeeping ─────────────────────────────────────────────────────────
     def _prune(self) -> None:

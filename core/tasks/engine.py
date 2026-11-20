@@ -231,6 +231,24 @@ class TaskEngine:
     def list(self, limit: int = 20) -> list[dict]:
         return list(reversed(self.store.all()))[:limit]
 
+    def delete_task(self, tid: str) -> bool:
+        """Delete a terminal task and all task-owned data/reports."""
+        task = self.store.get(tid)
+        if not task or task.get("status") in ACTIVE:
+            return False
+        deleted = self.store.delete(tid)
+        if deleted:
+            for report in self.reports_dir.glob(f"*{tid}*.md"):
+                try:
+                    report.unlink()
+                except OSError:
+                    pass
+        return deleted
+
+    def delete_history(self) -> int:
+        """Delete all terminal tasks, preserving active/scheduled tasks."""
+        return self.store.delete_finished()
+
     def cancel(self, tid: str, finish: bool = False) -> bool:
         t = self.store.get(tid)
         if not t or t["status"] not in ACTIVE:

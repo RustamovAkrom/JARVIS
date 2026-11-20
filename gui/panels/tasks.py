@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt, pyqtSignal, QDateTime
-from PyQt6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QPushButton, QVBoxLayout, QWidget, QDialog, QFormLayout, QGridLayout, QLineEdit, QSpinBox, QTextEdit, QDialogButtonBox, QFileDialog, QDateTimeEdit, QCheckBox, QProgressBar, QTextBrowser, QSizePolicy
+from PyQt6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QPushButton, QVBoxLayout, QWidget, QDialog, QFormLayout, QGridLayout, QLineEdit, QSpinBox, QTextEdit, QDialogButtonBox, QFileDialog, QDateTimeEdit, QCheckBox, QProgressBar, QTextBrowser, QSizePolicy, QMessageBox, QApplication
 
 _ACTIVE = {"queued", "scheduled", "running", "waiting_quota"}
 
@@ -18,6 +18,8 @@ class TaskPanel(QWidget):
     refresh_requested = pyqtSignal()
     create_requested = pyqtSignal()
     create_task_requested = pyqtSignal(dict)
+    delete_task_requested = pyqtSignal(str)
+    delete_history_requested = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -77,9 +79,9 @@ class TaskPanel(QWidget):
         filter_row = QHBoxLayout()
         filter_row.setSpacing(5)
         self.filter_box = QComboBox()
-        for label, value in (("All", "all"), ("Active", "active"), ("Done", "done"), ("Failed", "failed")):
+        for label, value in (("Active", "active"), ("History", "history"), ("All", "all")):
             self.filter_box.addItem(label, value)
-        self.filter_box.setToolTip("Filter tasks by status")
+        self.filter_box.setToolTip("Active tasks are shown by default. Completed tasks are available in History.")
         self.agent_filter = QComboBox()
         self.agent_filter.setToolTip("Filter by agent profile")
         self.agent_filter.addItem("All Agents", "all")
@@ -122,6 +124,14 @@ class TaskPanel(QWidget):
         root.addWidget(self.details_browser, 2)
         self.export_button = QPushButton("Export Report")
         root.addWidget(self.export_button)
+        history_actions = QHBoxLayout()
+        self.delete_button = QPushButton("Delete Task")
+        self.clear_history_button = QPushButton("Delete History")
+        self.delete_button.setToolTip("Permanently delete selected task and its task-owned files")
+        self.clear_history_button.setToolTip("Permanently delete all completed, failed and cancelled tasks")
+        history_actions.addWidget(self.delete_button)
+        history_actions.addWidget(self.clear_history_button)
+        root.addLayout(history_actions)
         self.stats_label = QLabel("0 tasks")
         self.stats_label.setObjectName("task_stats")
         root.addWidget(self.stats_label)
@@ -144,6 +154,8 @@ class TaskPanel(QWidget):
         self.agent_filter.currentIndexChanged.connect(self.render)
         self.search_box.textChanged.connect(self.render)
         self.export_button.clicked.connect(self._export_selected_report)
+        self.delete_button.clicked.connect(self._delete_selected)
+        self.clear_history_button.clicked.connect(self._delete_history)
         self.list_widget.currentItemChanged.connect(self._selection_changed)
         self.retry_button.clicked.connect(self._retry_selected)
         self.cancel_button.clicked.connect(self._cancel_selected)
@@ -423,10 +435,13 @@ class TaskPanel(QWidget):
         rounds_budget = int(budget.get("rounds") or 0)
         seconds_used = float(used.get("seconds") or 0)
         seconds_budget = float(budget.get("seconds") or 0)
-        if rounds_budget:
-            progress = min(100, round(rounds_used / rounds_budget * 100))
+        terminal = status.lower() in {"done", "failed", "cancelled"}
+        if terminal:
+            progress = 100 if status.lower() == "done" else 0
+        elif rounds_budget:
+            progress = min(99, round(rounds_used / rounds_budget * 100))
         elif seconds_budget:
-            progress = min(100, round(seconds_used / seconds_budget * 100))
+            progress = min(99, round(seconds_used / seconds_budget * 100))
         else:
             progress = 0
         self.details_title.setText(f"{title}  |  {status}")
@@ -434,7 +449,10 @@ class TaskPanel(QWidget):
         self.details_browser.setVisible(True)
         self.export_button.setEnabled(bool(task.get("report") or task.get("result")))
         self.progress_bar.setValue(progress)
-        self.progress_bar.setFormat(f"{progress}% · {rounds_used}/{rounds_budget or '∞'} rounds")
+        if terminal:
+            self.progress_bar.setFormat("Completed" if status.lower() == "done" else status.title())
+        else:
+            self.progress_bar.setFormat(f"{rounds_used}/{rounds_budget or '∞'} rounds · {progress}% budget used")
         lines = [
             f"<b>Status:</b> {status}",
             f"<b>Agent:</b> {self._html(task.get('agent') or 'general')}",
@@ -527,12 +545,11 @@ class TaskPanel(QWidget):
         query = self.search_box.text().strip().casefold()
         agent = self.agent_filter.currentData()
         rows = list(self._tasks.values())
+        terminal_statuses = {"done", "failed", "cancelled"}
         if mode == "active":
             rows = [t for t in rows if t.get("status") in _ACTIVE]
-        elif mode == "done":
-            rows = [t for t in rows if t.get("status") == "done"]
-        elif mode == "failed":
-            rows = [t for t in rows if t.get("status") in {"failed", "cancelled"}]
+        elif mode == "history":
+            rows = [t for t in rows if t.get("status") in terminal_statuses]
         if agent and agent != "all":
             rows = [t for t in rows if str(t.get("agent") or "").lower() == str(agent).lower()]
         if query:
@@ -581,7 +598,40 @@ class TaskPanel(QWidget):
         has_rows = self.list_widget.count() > 0
         self.empty_label.setVisible(not has_rows)
         self.list_widget.setVisible(has_rows)
-        self._selection_changed(self.list_widget.currentItem(), None)
+        current = self.list_widget.currentItem()
+        self._selection_changed(current, None)
+        selected_task = self._tasks.get(self.selected_task_id(), {})
+        terminal = selected_task.get("status") not in _ACTIVE
+        self.delete_button.setEnabled(bool(selected_task) and terminal)
+        self.clear_history_button.setEnabled(any(t.get("status") not in _ACTIVE for t in all_tasks))
+
+    def _delete_selected(self):
+        tid = self.selected_task_id()
+        task = self._tasks.get(tid, {})
+        if not tid or task.get("status") in _ACTIVE:
+            return
+        title = str(task.get("title") or task.get("task") or tid)
+        answer = QMessageBox.question(
+            self, "Delete task",
+            f"Permanently delete '{title}' and its task data/report?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer == QMessageBox.StandardButton.Yes:
+            self.delete_task_requested.emit(tid)
+
+    def _delete_history(self):
+        count = sum(1 for t in self._tasks.values() if t.get("status") not in _ACTIVE)
+        if not count:
+            return
+        answer = QMessageBox.question(
+            self, "Delete task history",
+            f"Permanently delete {count} completed/failed/cancelled tasks and their task-owned data?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer == QMessageBox.StandardButton.Yes:
+            self.delete_history_requested.emit()
 
     def _selection_changed(self, current, _previous):
         tid = str(current.data(Qt.ItemDataRole.UserRole) or "") if current else ""
