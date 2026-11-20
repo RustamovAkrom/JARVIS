@@ -16798,7 +16798,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         for reminder in reminders:
             try:
                 due = float(reminder.get("due", 0))
-            except TypeError, ValueError:
+            except (TypeError, ValueError):
                 continue
             if due <= now:
                 continue
