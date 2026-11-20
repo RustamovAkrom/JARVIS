@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt, pyqtSignal, QDateTime
-from PyQt6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QPushButton, QVBoxLayout, QWidget, QDialog, QFormLayout, QLineEdit, QSpinBox, QTextEdit, QDialogButtonBox, QFileDialog, QDateTimeEdit, QCheckBox, QProgressBar, QTextBrowser
+from PyQt6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QPushButton, QVBoxLayout, QWidget, QDialog, QFormLayout, QLineEdit, QSpinBox, QTextEdit, QDialogButtonBox, QFileDialog, QDateTimeEdit, QCheckBox, QProgressBar, QTextBrowser, QLineEdit
 
 _ACTIVE = {"queued", "scheduled", "running", "waiting_quota"}
 
@@ -21,12 +21,52 @@ class TaskPanel(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("TaskPanel")
+        self.setStyleSheet("""
+        QWidget#TaskPanel { background: transparent; color: #d8e8e8; }
+        QWidget#TaskPanel QLabel { color: #c4d8d8; }
+        QWidget#TaskPanel QLabel#task_details_title { color: #67e8d0; font-weight: 600; padding: 5px 2px; }
+        QWidget#TaskPanel QLineEdit, QWidget#TaskPanel QComboBox {
+            background: rgba(3, 18, 23, 220); color: #d8eeee;
+            border: 1px solid #245b60; border-radius: 5px; padding: 6px 8px;
+        }
+        QWidget#TaskPanel QPushButton {
+            background: rgba(9, 35, 39, 230); color: #bce9e4;
+            border: 1px solid #28666a; border-radius: 5px; padding: 6px 8px;
+        }
+        QWidget#TaskPanel QPushButton:hover { background: #12494b; border-color: #45b9a9; }
+        QWidget#TaskPanel QPushButton:disabled { color: #527176; border-color: #254044; background: #101b1e; }
+        QWidget#TaskPanel QListWidget {
+            background: rgba(2, 12, 16, 180); border: 1px solid #204c52;
+            border-radius: 6px; padding: 4px; outline: none;
+        }
+        QWidget#TaskPanel QListWidget::item {
+            color: #c9e2e2; background: rgba(8, 30, 34, 160);
+            border: 1px solid transparent; border-radius: 4px; padding: 7px 8px; margin: 2px 0;
+        }
+        QWidget#TaskPanel QListWidget::item:selected {
+            color: #eaffff; background: rgba(12, 95, 89, 160); border: 1px solid #39b8a6;
+        }
+        QWidget#TaskPanel QProgressBar {
+            background: #10272a; color: #bfe8e3; border: 1px solid #24545a;
+            border-radius: 4px; text-align: center; min-height: 17px;
+        }
+        QWidget#TaskPanel QProgressBar::chunk { background: #13a88f; border-radius: 3px; }
+        QWidget#TaskPanel QTextBrowser {
+            background: rgba(3, 15, 19, 210); color: #c5dada;
+            border: 1px solid #204c52; border-radius: 6px; padding: 8px;
+        }
+        """)
         self._tasks = {}
         root = QVBoxLayout(self)
         root.setContentsMargins(9, 9, 9, 9)
         root.setSpacing(7)
         root.addWidget(QLabel("TASKS"))
+        self.search_box = QLineEdit()
+        self.search_box.setObjectName("task_search")
+        self.search_box.setPlaceholderText("Search tasks...")
+        root.addWidget(self.search_box)
         controls = QHBoxLayout()
+        controls.setSpacing(6)
         self.filter_box = QComboBox()
         for label, value in (("All", "all"), ("Active", "active"), ("Completed", "done"), ("Failed", "failed")):
             self.filter_box.addItem(label, value)
@@ -38,7 +78,7 @@ class TaskPanel(QWidget):
         root.addLayout(controls)
         self.list_widget = QListWidget()
         self.list_widget.setObjectName("task_list")
-        root.addWidget(self.list_widget, 1)
+        root.addWidget(self.list_widget, 2)
 
         self.details_title = QLabel("Select a task")
         self.details_title.setObjectName("task_details_title")
@@ -51,8 +91,10 @@ class TaskPanel(QWidget):
         self.details_browser = QTextBrowser()
         self.details_browser.setObjectName("task_details")
         self.details_browser.setOpenExternalLinks(False)
-        self.details_browser.setMinimumHeight(130)
-        root.addWidget(self.details_browser, 1)
+        self.details_browser.setMinimumHeight(100)
+        root.addWidget(self.details_browser, 2)
+        self.export_button = QPushButton("Export Report")
+        root.addWidget(self.export_button)
         self.empty_label = QLabel("No tasks yet.")
         self.empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         root.addWidget(self.empty_label)
@@ -66,6 +108,8 @@ class TaskPanel(QWidget):
         self.new_button.clicked.connect(self._create_task_dialog)
         self.refresh_button.clicked.connect(self.refresh_requested.emit)
         self.filter_box.currentIndexChanged.connect(self.render)
+        self.search_box.textChanged.connect(self.render)
+        self.export_button.clicked.connect(self._export_selected_report)
         self.list_widget.currentItemChanged.connect(self._selection_changed)
         self.cancel_button.clicked.connect(self._cancel_selected)
         self.finish_button.clicked.connect(self._finish_selected)
@@ -165,6 +209,9 @@ class TaskPanel(QWidget):
             self.details_title.setText("Select a task")
             self.progress_bar.setValue(0)
             self.details_browser.clear()
+            self.progress_bar.setVisible(False)
+            self.details_browser.setVisible(False)
+            self.export_button.setEnabled(False)
             return
 
         title = str(task.get("title") or task.get("task") or task.get("id") or "Task")
@@ -181,7 +228,10 @@ class TaskPanel(QWidget):
             progress = min(100, round(seconds_used / seconds_budget * 100))
         else:
             progress = 0
-        self.details_title.setText(f"{title} · {status}")
+        self.details_title.setText(f"{title}  |  {status}")
+        self.progress_bar.setVisible(True)
+        self.details_browser.setVisible(True)
+        self.export_button.setEnabled(bool(task.get("report") or task.get("result")))
         self.progress_bar.setValue(progress)
         self.progress_bar.setFormat(f"{progress}% · {rounds_used}/{rounds_budget or '∞'} rounds")
         lines = [
@@ -221,6 +271,24 @@ class TaskPanel(QWidget):
         except (TypeError, ValueError, OSError):
             return "—"
 
+    def _export_selected_report(self):
+        task = self._tasks.get(self.selected_task_id(), {})
+        report = str(task.get("report") or task.get("result") or "")
+        if not report:
+            return
+        from pathlib import Path
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export Task Report", f"{task.get('title') or 'task-report'}.md",
+            "Markdown (*.md);;Text (*.txt)"
+        )
+        if not path:
+            return
+        try:
+            Path(path).write_text(report, encoding="utf-8")
+        except OSError as exc:
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "Export failed", str(exc))
+
     def selected_task_id(self):
         item = self.list_widget.currentItem()
         return str(item.data(Qt.ItemDataRole.UserRole) or "") if item else ""
@@ -228,6 +296,7 @@ class TaskPanel(QWidget):
     def render(self, *_):
         selected = self.selected_task_id()
         mode = self.filter_box.currentData()
+        query = self.search_box.text().strip().casefold()
         rows = sorted(self._tasks.values(), key=lambda t: float(t.get("created") or 0), reverse=True)
         if mode == "active":
             rows = [t for t in rows if t.get("status") in _ACTIVE]
@@ -235,6 +304,11 @@ class TaskPanel(QWidget):
             rows = [t for t in rows if t.get("status") == "done"]
         elif mode == "failed":
             rows = [t for t in rows if t.get("status") in {"failed", "cancelled"}]
+        if query:
+            rows = [t for t in rows if query in str(t.get("title") or "").casefold()
+                    or query in str(t.get("task") or "").casefold()
+                    or query in str(t.get("agent") or "").casefold()
+                    or query in str(t.get("status") or "").casefold()]
         self.list_widget.clear()
         for task in rows:
             status = str(task.get("status") or "unknown").upper()
