@@ -52,6 +52,7 @@ import os
 import sys
 import threading
 import time
+import weakref
 from pathlib import Path
 
 import numpy as np
@@ -60,6 +61,7 @@ import numpy as np
 os.environ.setdefault("OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS", "0")
 
 _lock = threading.Lock()
+_active_cameras: weakref.WeakSet = weakref.WeakSet()
 
 
 # ── Windows: DirectShow's list ───────────────────────────────────────────────
@@ -438,6 +440,7 @@ class Camera:
         self._skip: dict[int, float] = {}
         self._prev = None
         self._still_since: float | None = None
+        _active_cameras.add(self)
 
     def _order(self) -> list[int]:
         now = time.monotonic()
@@ -535,6 +538,10 @@ class Camera:
                 pass
         self.cap, self.index = None, None
 
+    def close(self) -> None:
+        """Compatibility alias for release()."""
+        self.release()
+
 
 def open_live(cams: list[dict] | None = None):
     """The first camera that films (the chosen one first), opened - or None."""
@@ -624,3 +631,12 @@ def in_use_by() -> str:
     except Exception:
         found = []
     return found[0] if found else ""
+
+
+def close_all() -> None:
+    """Release every Camera instance currently owned by this module."""
+    for camera in list(_active_cameras):
+        try:
+            camera.release()
+        except Exception:
+            pass
