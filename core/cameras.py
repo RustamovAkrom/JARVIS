@@ -61,7 +61,7 @@ import numpy as np
 os.environ.setdefault("OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS", "0")
 
 _lock = threading.Lock()
-_active_cameras: weakref.WeakSet = weakref.WeakSet()
+_active_cameras: set = set()
 
 
 # ── Windows: DirectShow's list ───────────────────────────────────────────────
