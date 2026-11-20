@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt, pyqtSignal, QDateTime
-from PyQt6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QPushButton, QVBoxLayout, QWidget, QDialog, QFormLayout, QLineEdit, QSpinBox, QTextEdit, QDialogButtonBox
+from PyQt6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QPushButton, QVBoxLayout, QWidget, QDialog, QFormLayout, QLineEdit, QSpinBox, QTextEdit, QDialogButtonBox, QFileDialog, QDateTimeEdit, QCheckBox
 
 _ACTIVE = {"queued", "scheduled", "running", "waiting_quota"}
 
