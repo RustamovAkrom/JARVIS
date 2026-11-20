@@ -682,15 +682,24 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
                                 str(p.get("file_path") or "").strip(),
                                 str(p.get("code") or "").strip())
         p["action"] = action
-    if action in ("run", "build"):
+    # Code execution and filesystem mutation are human-confirmed. The model
+    # may request an action, but it cannot forge the UI confirmation token.
+    if action in ("run", "build", "write", "edit", "optimize"):
         from core import confirm
         from core.i18n import t
         where = str(p.get("file_path") or p.get("output_path") or "").strip()
-        title = (t("confirm.run_code", name=Path(where).name or where) if action == "run"
-                 else t("confirm.build_code"))
-        detail = str(p.get("description") or "").strip() or where
+        titles = {
+            "run": t("confirm.run_code", name=Path(where).name or where),
+            "build": t("confirm.build_code"),
+            "write": "WRITE CODE FILE",
+            "edit": "EDIT CODE FILE",
+            "optimize": "OPTIMIZE CODE FILE",
+        }
+        detail = str(p.get("description") or p.get("instruction") or "").strip() or where
+        if action in ("edit", "optimize"):
+            detail = f"File: {where}\n\n{detail}"
         return confirm.request(
-            key="code_helper", title=title, detail=detail[:600],
+            key=f"code_helper.{action}", title=titles[action], detail=detail[:600],
             run=lambda: code_helper(p, player=player, speak=_speaker(player)))
     return code_helper(p, player=player, speak=_speaker(player))
 
