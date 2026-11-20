@@ -220,7 +220,10 @@ def _problem(resp) -> TuyaError | None:
     if resp is None:
         return TuyaError("Tuya Cloud didn't answer — check the internet connection.", "net")
     if not isinstance(resp, dict):
-        return None
+        return TuyaError(
+            f"Tuya returned an unexpected response ({type(resp).__name__}); the command was not verified.",
+            "response",
+        )
     said = " ".join(str(resp.get(k) or "") for k in ("code", "msg", "Error", "Payload")).strip()
     low = said.lower()
     print(f"[SmartLight] Tuya: {said[:200]}")
@@ -335,8 +338,10 @@ def _set_brightness(level: int) -> str:
 
 
 def _set_white(warmth: str = "warm") -> str:
-    warmth = (warmth or "warm").lower()
-    temp = {"warm": 0, "neutral": 500, "cool": 1000}.get(warmth, 0)
+    warmth = (warmth or "warm").strip().lower()
+    if warmth not in {"warm", "neutral", "cool"}:
+        return "Choose warm, neutral, or cool white."
+    temp = {"warm": 0, "neutral": 500, "cool": 1000}[warmth]
     _send([
         {"code": "switch_led", "value": True},
         {"code": "work_mode", "value": "white"},
