@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt, pyqtSignal, QDateTime
-from PyQt6.QtGui import QPalette
+from gui.themes.tokens import C
+
 from PyQt6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QPushButton, QVBoxLayout, QWidget, QDialog, QFormLayout, QGridLayout, QLineEdit, QSpinBox, QTextEdit, QDialogButtonBox, QFileDialog, QDateTimeEdit, QCheckBox, QProgressBar, QTextBrowser, QSizePolicy, QMessageBox, QApplication
 
 _ACTIVE = {"queued", "scheduled", "running", "waiting_quota"}
@@ -28,8 +29,8 @@ class TaskPanel(QWidget):
         self.setStyleSheet(self._panel_stylesheet())
         self._tasks = {}
         root = QVBoxLayout(self)
-        root.setContentsMargins(9, 9, 9, 9)
-        root.setSpacing(7)
+        root.setContentsMargins(7, 7, 7, 7)
+        root.setSpacing(5)
         root.addWidget(QLabel("TASKS"))
         self.active_summary = QLabel("No active background tasks")
         self.active_summary.setObjectName("task_active_summary")
@@ -79,6 +80,8 @@ class TaskPanel(QWidget):
         root.addLayout(controls)
         self.list_widget = QListWidget()
         self.list_widget.setObjectName("task_list")
+        self.list_widget.setMinimumHeight(76)
+        self.list_widget.setMaximumHeight(190)
         root.addWidget(self.list_widget, 2)
 
         self.details_title = QLabel("Select a task")
@@ -92,17 +95,22 @@ class TaskPanel(QWidget):
         self.details_browser = QTextBrowser()
         self.details_browser.setObjectName("task_details")
         self.details_browser.setOpenExternalLinks(False)
-        self.details_browser.setMinimumHeight(100)
-        root.addWidget(self.details_browser, 2)
+        self.details_browser.setMinimumHeight(70)
+        self.details_browser.setMaximumHeight(190)
+        root.addWidget(self.details_browser, 1)
         self.export_button = QPushButton("Export Report")
         root.addWidget(self.export_button)
-        history_actions = QHBoxLayout()
+        history_actions = QGridLayout()
+        history_actions.setHorizontalSpacing(5)
+        history_actions.setVerticalSpacing(4)
         self.delete_button = QPushButton("Delete Task")
         self.clear_history_button = QPushButton("Delete History")
         self.delete_button.setToolTip("Permanently delete selected task and its task-owned files")
         self.clear_history_button.setToolTip("Permanently delete all completed, failed and cancelled tasks")
-        history_actions.addWidget(self.delete_button)
-        history_actions.addWidget(self.clear_history_button)
+        history_actions.addWidget(self.delete_button, 0, 0)
+        history_actions.addWidget(self.clear_history_button, 0, 1)
+        history_actions.setColumnStretch(0, 1)
+        history_actions.setColumnStretch(1, 1)
         root.addLayout(history_actions)
         self.stats_label = QLabel("0 tasks")
         self.stats_label.setObjectName("task_stats")
@@ -111,13 +119,17 @@ class TaskPanel(QWidget):
         self.empty_label.setObjectName("task_empty")
         self.empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         root.addWidget(self.empty_label)
-        actions = QHBoxLayout()
+        actions = QGridLayout()
+        actions.setHorizontalSpacing(5)
+        actions.setVerticalSpacing(4)
         self.retry_button = QPushButton("Retry")
         self.cancel_button = QPushButton("Cancel")
         self.finish_button = QPushButton("Finish & Report")
         self.steer_button = QPushButton("Steer")
-        for button in (self.retry_button, self.cancel_button, self.finish_button, self.steer_button):
-            actions.addWidget(button)
+        for index, button in enumerate((self.retry_button, self.cancel_button, self.finish_button, self.steer_button)):
+            actions.addWidget(button, index // 2, index % 2)
+        actions.setColumnStretch(0, 1)
+        actions.setColumnStretch(1, 1)
         root.addLayout(actions)
         self.new_button.clicked.connect(self._create_task_dialog)
         self.refresh_button.clicked.connect(self.refresh_requested.emit)
@@ -150,69 +162,73 @@ class TaskPanel(QWidget):
 
     @staticmethod
     def _is_light_theme():
-        return QApplication.palette().color(QPalette.ColorRole.Window).lightness() > 145
+        return str(C.PANEL).strip().lower() in {"#ffffff", "#fff", "white"}
+
+    def refresh_theme(self):
+        """Rebuild panel and dialog styles from the live application palette."""
+        self.setStyleSheet(self._panel_stylesheet())
+        if hasattr(self, "active_summary"):
+            self.active_summary.setStyleSheet(
+                f"color: {C.PRI}; background: {C.PANEL2}; border: 1px solid {C.BORDER}; "
+                "border-radius: 6px; padding: 7px;"
+            )
+        self.update()
 
     def _panel_stylesheet(self):
-        light = self._is_light_theme()
-        bg = "#f7fafc" if light else "#071216"
-        surface = "#ffffff" if light else "#0a1b20"
-        text = "#18333a" if light else "#d8eeee"
-        muted = "#526d75" if light else "#8baeb2"
-        border = "#c5d8df" if light else "#245b60"
-        accent = "#087f70" if light else "#13a88f"
-        selected_bg = "#d8f2ed" if light else "#12494b"
+        bg, surface = C.PANEL, C.PANEL2
+        text, muted, border, accent = C.TEXT, C.TEXT_DIM, C.BORDER, C.PRI
+        selected_bg = C.PRI_GHO
         return f"""
         QWidget#TaskPanel {{ background: transparent; color: {text}; }}
-        QWidget#TaskPanel QLabel {{ color: {text}; }}
-        QWidget#TaskPanel QLabel#task_details_title {{ color: {accent}; font-weight: 600; padding: 5px 2px; }}
-        QWidget#TaskPanel QLabel#task_empty {{ color: {muted}; padding: 18px; }}
+        QWidget#TaskPanel QLabel {{ color: {text}; background: transparent; }}
+        QWidget#TaskPanel QLabel#task_details_title {{ color: {accent}; font-weight: 600; padding: 4px 2px; }}
+        QWidget#TaskPanel QLabel#task_empty {{ color: {muted}; padding: 10px; }}
         QWidget#TaskPanel QLabel#task_stats {{ color: {muted}; font-size: 10px; padding: 2px 4px; }}
         QWidget#TaskPanel QLineEdit, QWidget#TaskPanel QComboBox {{
             background: {surface}; color: {text}; border: 1px solid {border};
-            border-radius: 6px; padding: 6px 8px; min-height: 22px;
+            border-radius: 6px; padding: 5px 7px; min-height: 22px;
+        }}
+        QWidget#TaskPanel QComboBox QAbstractItemView {{
+            background: {surface}; color: {text}; selection-background-color: {selected_bg};
+            border: 1px solid {border};
         }}
         QWidget#TaskPanel QPushButton {{
             background: {surface}; color: {text}; border: 1px solid {border};
-            border-radius: 6px; padding: 6px 8px; min-height: 24px;
+            border-radius: 6px; padding: 5px 7px; min-height: 24px;
         }}
         QWidget#TaskPanel QPushButton:hover {{ background: {selected_bg}; border-color: {accent}; }}
         QWidget#TaskPanel QPushButton:disabled {{ color: {muted}; border-color: {border}; }}
-        QWidget#TaskPanel QListWidget {{ background: {bg}; border: 1px solid {border}; border-radius: 7px; padding: 4px; outline: none; }}
-        QWidget#TaskPanel QListWidget::item {{ color: {text}; background: {surface}; border: 1px solid transparent; border-radius: 5px; padding: 8px; margin: 2px 0; }}
+        QWidget#TaskPanel QListWidget {{ background: {bg}; border: 1px solid {border}; border-radius: 7px; padding: 3px; outline: none; }}
+        QWidget#TaskPanel QListWidget::item {{ color: {text}; background: {surface}; border: 1px solid {border}; border-radius: 5px; padding: 6px; margin: 2px 0; }}
         QWidget#TaskPanel QListWidget::item:selected {{ color: {text}; background: {selected_bg}; border: 1px solid {accent}; }}
-        QWidget#TaskPanel QProgressBar {{ background: {surface}; color: {text}; border: 1px solid {border}; border-radius: 5px; text-align: center; min-height: 18px; }}
+        QWidget#TaskPanel QProgressBar {{ background: {surface}; color: {text}; border: 1px solid {border}; border-radius: 5px; text-align: center; min-height: 17px; max-height: 20px; }}
         QWidget#TaskPanel QProgressBar::chunk {{ background: {accent}; border-radius: 4px; }}
-        QWidget#TaskPanel QTextBrowser {{ background: {surface}; color: {text}; border: 1px solid {border}; border-radius: 7px; padding: 8px; }}
+        QWidget#TaskPanel QTextBrowser {{ background: {surface}; color: {text}; border: 1px solid {border}; border-radius: 7px; padding: 6px; }}
         """
-    
+
     def _dialog_stylesheet(self):
-        light = self._is_light_theme()
-        bg = "#f7fafc" if light else "#071216"
-        surface = "#ffffff" if light else "#0a1b20"
-        text = "#18333a" if light else "#d8eeee"
-        muted = "#526d75" if light else "#a9c5c7"
-        border = "#c5d8df" if light else "#24565d"
-        accent = "#087f70" if light else "#22d3b2"
+        bg, surface = C.PANEL, C.PANEL2
+        text, muted, border, accent = C.TEXT, C.TEXT_DIM, C.BORDER, C.PRI
         return f"""
         QDialog#CreateTaskDialog {{ background: {bg}; color: {text}; }}
         QDialog#CreateTaskDialog QLabel {{ color: {muted}; background: transparent; border: none; }}
         QDialog#CreateTaskDialog QLabel#dialog_heading {{ color: {accent}; font-size: 16px; font-weight: 600; }}
         QDialog#CreateTaskDialog QLineEdit, QDialog#CreateTaskDialog QTextEdit,
         QDialog#CreateTaskDialog QComboBox, QDialog#CreateTaskDialog QSpinBox,
-        QDialog#CreateTaskDialog QDateTimeEdit {{ background: {surface}; color: {text}; border: 1px solid {border}; border-radius: 7px; padding: 8px 10px; min-height: 24px; }}
+        QDialog#CreateTaskDialog QDateTimeEdit {{ background: {surface}; color: {text}; border: 1px solid {border}; border-radius: 7px; padding: 7px 9px; min-height: 22px; }}
         QDialog#CreateTaskDialog QCheckBox {{ color: {muted}; spacing: 8px; }}
-        QDialog#CreateTaskDialog QPushButton {{ background: {surface}; color: {text}; border: 1px solid {border}; border-radius: 7px; padding: 8px 14px; min-width: 82px; }}
+        QDialog#CreateTaskDialog QPushButton {{ background: {surface}; color: {text}; border: 1px solid {border}; border-radius: 7px; padding: 7px 12px; min-width: 75px; }}
         QDialog#CreateTaskDialog QPushButton:hover {{ border-color: {accent}; }}
         QDialog#CreateTaskDialog QPushButton:default {{ background: {accent}; color: white; }}
         """
-    
+
     def _create_task_dialog(self):
         profiles = getattr(self, "_profiles", {})
         dialog = QDialog(self)
         dialog.setObjectName("CreateTaskDialog")
         dialog.setWindowTitle("Create Task")
-        dialog.setMinimumSize(560, 520)
-        dialog.resize(640, 620)
+        dialog.setMinimumSize(440, 430)
+        dialog.resize(560, 560)
         dialog.setSizeGripEnabled(True)
         dialog.setStyleSheet(self._dialog_stylesheet())
         root = QVBoxLayout(dialog)
