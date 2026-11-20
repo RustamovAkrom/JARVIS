@@ -62,7 +62,6 @@ ENTRIES = (
     SettingEntry("push_to_talk", "audio", "Push to talk", "Use the configured keyboard chord to activate listening.", ("ptt", "keyboard"), "audio"),
     SettingEntry("theme", "appearance", "Theme and accent color", "Choose a color preset or customize the accent.", ("black", "white", "color", "palette"), "customize"),
     SettingEntry("opacity", "appearance", "Interface opacity", "Adjust the main window opacity.", ("glass", "transparency"), "customize"),
-    SettingEntry("hud_style", "appearance", "HUD centrepiece", "Choose the reactor core or orbital network shown in the main HUD.", ("core", "orbital", "reactor", "orb", "centrepiece"), "customize"),
     SettingEntry("panel_visibility", "workspace", "Panel visibility", "Show or hide the project explorer, chat, results and debug panels.", ("splitter", "layout"), "layout"),
     SettingEntry("workspace_folder", "workspace", "Project folder", "Choose the active folder for project files and new terminal sessions.", ("root folder", "project path"), "layout"),
     SettingEntry("project_open_mode", "workspace", "Open text files", "Choose the built-in editor or the system default application.", ("external editor", "file opener"), "layout"),
