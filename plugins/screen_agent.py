@@ -489,7 +489,12 @@ def _worker(player, goal: str, cfg: dict, show_me: bool = False) -> None:
     from core import screenview
     from plugins import _screen_loop as loop
     if _sensors is not None:
-        _sensors.start("screen_agent", "screen", stop=_stop_from_window)
+        try:
+            _sensors.start("screen_agent", "screen", stop=_stop_from_window)
+        except Exception as e:
+            # Sensor Registry is observability/lifecycle integration, not a
+            # dependency of the screen agent itself.
+            print(f"[ScreenAgent] sensor registration failed: {type(e).__name__}: {e}")
 
     stop = _state["stop"]
     narrate = _cfg_bool(cfg, "narrate")
@@ -603,7 +608,11 @@ def _report(player, result) -> None:
 
 def _finish(player, spoken: str, line: str) -> None:
     if _sensors is not None:
-        _sensors.stop("screen_agent")
+        try:
+            _sensors.stop("screen_agent")
+        except Exception as e:
+            # Cleanup must not prevent the agent state from being reset.
+            print(f"[ScreenAgent] sensor cleanup failed: {type(e).__name__}: {e}")
     _busy(player, "")
     _log(player, f"{get_assistant_name()}: {line.splitlines()[0]}")
     _panel(player, line)
