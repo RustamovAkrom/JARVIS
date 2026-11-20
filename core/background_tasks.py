@@ -49,6 +49,8 @@ class BackgroundTaskManager:
         self._threads: dict[str, threading.Thread] = {}
         self._player = None
         self._recovered = False
+        self._closing = False
+        self._shutdown_event = threading.Event()
 
         changed = False
         for task in self._tasks:
@@ -106,8 +108,10 @@ class BackgroundTaskManager:
             ) from exc
 
     def bind_player(self, player) -> None:
-        self._player = player
         with self._lock:
+            if self._closing:
+                return
+            self._player = player
             if self._recovered:
                 return
             self._recovered = True
@@ -134,6 +138,8 @@ class BackgroundTaskManager:
             "error": "",
         }
         with self._lock:
+            if self._closing:
+                raise RuntimeError("Background task manager is shutting down.")
             active = sum(row.get("status") in _ACTIVE for row in self._tasks)
             if active >= self._max_active:
                 raise ValueError(
@@ -163,7 +169,7 @@ class BackgroundTaskManager:
     def _launch(self, task_id: str) -> None:
         with self._lock:
             task = self._find_locked(task_id)
-            if not task or task.get("status") != "queued":
+            if self._closing or not task or task.get("status") != "queued":
                 return
             thread = self._threads.get(task_id)
             if thread and thread.is_alive():
@@ -194,7 +200,8 @@ class BackgroundTaskManager:
             else:
                 notify_error = ""
         if notify_error:
-            self._notify_failure(task_id, notify_error)
+            if not self._shutdown_event.is_set():
+                self._notify_failure(task_id, notify_error)
             return
 
         try:
@@ -235,9 +242,10 @@ class BackgroundTaskManager:
                     notify_error = task["error"]
                 completed = dict(task)
         if notify_error:
-            self._notify_failure(task_id, notify_error)
+            if not self._shutdown_event.is_set():
+                self._notify_failure(task_id, notify_error)
             return
-        if completed is None:
+        if completed is None or self._shutdown_event.is_set():
             return
         self._notify_success(completed)
 
@@ -262,7 +270,10 @@ class BackgroundTaskManager:
             return task["status"]
 
     def _notify_success(self, task: dict) -> None:
-        player = self._player
+        with self._lock:
+            if self._closing:
+                return
+            player = self._player
         if not player:
             return
         try:
@@ -281,7 +292,10 @@ class BackgroundTaskManager:
             print(f"[BackgroundTasks] Could not notify the UI for {task['id']}: {exc}")
 
     def _notify_failure(self, task_id: str, error: str) -> None:
-        player = self._player
+        with self._lock:
+            if self._closing:
+                return
+            player = self._player
         if not player:
             return
         try:
@@ -320,12 +334,55 @@ class BackgroundTaskManager:
                 raise
             return True
 
+    def shutdown(self, timeout: float = 5.0) -> bool:
+        """Stop accepting work and wait a bounded time for research workers.
+
+        Running searches are not force-killed: Python cannot safely terminate a
+        worker thread. Their state is persisted as queued/cancelling so a fresh
+        manager can recover or report them on the next application start.
+        """
+        timeout = max(0.0, float(timeout))
+        with self._lock:
+            self._closing = True
+            self._shutdown_event.set()
+            self._player = None
+            for task in self._tasks:
+                status = task.get("status")
+                if status == "queued":
+                    task["status"] = "queued"
+                    task["updated"] = time.time()
+                elif status in {"running", "cancelling"}:
+                    task["status"] = "queued"
+                    task["updated"] = time.time()
+            self._save_locked()
+            threads = tuple(self._threads.values())
+
+        deadline = time.monotonic() + timeout
+        for thread in threads:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            if thread is not threading.current_thread():
+                thread.join(remaining)
+        return not any(thread.is_alive() for thread in threads)
+
     def _find_locked(self, task_id: str) -> dict | None:
         return next((row for row in self._tasks if row.get("id") == task_id), None)
 
 
 _manager: BackgroundTaskManager | None = None
 _manager_lock = threading.Lock()
+
+
+def shutdown_background_task_manager(timeout: float = 5.0) -> bool:
+    """Shut down the process singleton; a later app start creates a fresh one."""
+    global _manager
+    with _manager_lock:
+        manager = _manager
+        _manager = None
+    if manager is None:
+        return True
+    return manager.shutdown(timeout=timeout)
 
 
 def get_background_task_manager(player=None) -> BackgroundTaskManager:
