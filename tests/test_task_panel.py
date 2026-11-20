@@ -33,6 +33,23 @@ class TaskPanelTests(unittest.TestCase):
         finally:
             panel.close()
 
+    def test_search_and_agent_filter(self):
+        panel = TaskPanel()
+        try:
+            panel.set_agent_profiles({"research": object(), "coding": object()})
+            panel.set_tasks([
+                {"id": "r1", "title": "Research API", "task": "Find endpoints", "status": "running", "agent": "research"},
+                {"id": "c1", "title": "Fix API", "task": "Patch endpoint", "status": "done", "agent": "coding"},
+            ])
+            panel.agent_filter.setCurrentIndex(panel.agent_filter.findData("research"))
+            self.assertEqual(panel.list_widget.count(), 1)
+            panel.agent_filter.setCurrentIndex(panel.agent_filter.findData("all"))
+            panel.search_box.setText("patch")
+            self.assertEqual(panel.list_widget.count(), 1)
+            self.assertEqual(panel.selected_task_id(), "c1")
+        finally:
+            panel.close()
+
     def test_actions_emit_selected_task_id(self):
         panel = TaskPanel()
         try:
