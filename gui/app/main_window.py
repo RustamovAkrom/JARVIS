@@ -10022,10 +10022,6 @@ class MainWindow(QMainWindow):
         self._activity_panel = ActivityPanel()
         self._left_tabs.addTab(self._activity_panel, "ACT")
         self._left_tabs.setTabToolTip(2, self._tr("ACTIVITY"))
-        from gui.panels.tasks import TaskPanel
-        self._task_panel = TaskPanel()
-        self._left_tabs.addTab(self._task_panel, "TASK")
-        self._left_tabs.setTabToolTip(2, self._tr("TASKS"))
         self._left_tabs.setTabText(1, "EXP")
         self._left_tabs.setTabToolTip(1, self._tr("EXPLORER"))
         self._left_tabs.currentChanged.connect(
@@ -10416,38 +10412,17 @@ class MainWindow(QMainWindow):
             1, self._tr("Previous conversations. Saved facts are managed separately in Memory.")
         )
 
+        from gui.panels.tasks import TaskPanel
         task_page = QWidget()
-        task_lay = QVBoxLayout(task_page)
-        task_lay.setContentsMargins(4, 4, 4, 4)
-        task_lay.setSpacing(4)
-        task_hint = QLabel(
-            self._tr("Tasks you add here stay in your local JARVIS list.")
-        )
-        task_hint.setWordWrap(True)
-        task_hint.setStyleSheet(f"color:{C.TEXT_DIM}; background:transparent;")
-        task_lay.addWidget(task_hint)
-        self._task_list = QListWidget()
-        self._task_list.setStyleSheet(
-            f"background: {C.PANEL2}; color: {C.TEXT}; border: none; border-radius: 5px;"
-            f"QListWidget::item {{ padding: 5px; border-bottom: 1px solid {C.BORDER}; }}"
-        )
-        self._task_list.itemChanged.connect(self._task_item_changed)
-        task_lay.addWidget(self._task_list, 1)
-        add_row = QHBoxLayout()
-        self._task_input = QLineEdit()
-        self._task_input.setStyleSheet(
-            f"QLineEdit {{ background: {C.PANEL2}; color: {C.TEXT}; border: 1px solid {C.BORDER}; border-radius: 5px; padding: 5px 8px; }}"
-        )
-        self._task_input.setPlaceholderText(self._tr("Add a task…"))
-        self._task_input.setToolTip(self._tr("Add a reminder to your local task list."))
-        self._task_input.returnPressed.connect(self._add_ui_task)
-        add_row.addWidget(self._task_input, 1)
-        add_task = QPushButton("+")
-        add_task.setFixedWidth(30)
-        add_task.clicked.connect(self._add_ui_task)
-        add_row.addWidget(add_task)
-        task_lay.addLayout(add_row)
+        task_page_layout = QVBoxLayout(task_page)
+        task_page_layout.setContentsMargins(4, 4, 4, 4)
+        task_page_layout.setSpacing(0)
+        self._task_panel = TaskPanel()
+        task_page_layout.addWidget(self._task_panel, 1)
         self._work_tabs.addTab(task_page, self._tr("TASKS"))
+        self._work_tabs.setTabToolTip(
+            2, self._tr("Background tasks managed by JARVIS Task Engine")
+        )
 
         self._log = LogWidget()
         self._update_panel = UpdatePanel(self)
@@ -10460,10 +10435,6 @@ class MainWindow(QMainWindow):
         lay.addWidget(self._work_tabs, stretch=1)
         self._refresh_chat()
         self._refresh_history()
-        self._refresh_tasks()
-        self._tasks_refresh_timer = QTimer(self)
-        self._tasks_refresh_timer.timeout.connect(self._refresh_tasks)
-        self._tasks_refresh_timer.start(60_000)
 
         sep = QFrame()
         sep.setFrameShape(QFrame.Shape.HLine)
