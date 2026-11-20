@@ -62,6 +62,12 @@ class TaskPanel(QWidget):
         root.setContentsMargins(9, 9, 9, 9)
         root.setSpacing(7)
         root.addWidget(QLabel("TASKS"))
+        self.active_summary = QLabel("No active background tasks")
+        self.active_summary.setObjectName("task_active_summary")
+        self.active_summary.setWordWrap(True)
+        self.active_summary.setMaximumHeight(62)
+        self.active_summary.setStyleSheet("color: #67e8d0; background: rgba(5, 24, 29, 150); border: 1px solid #245b60; border-radius: 5px; padding: 6px;")
+        root.addWidget(self.active_summary)
         self.search_box = QLineEdit()
         self.search_box.setObjectName("task_search")
         self.search_box.setPlaceholderText("Search tasks...")
@@ -230,7 +236,7 @@ class TaskPanel(QWidget):
             if isinstance(task, dict) and str(task.get("id") or "").strip():
                 rows[str(task["id"])] = dict(task)
         self._tasks = rows
-        self.render()
+        active = sorted((task for task in rows.values() if task.get("status") in _ACTIVE),\n                        key=lambda task: float(task.get("started") or task.get("created") or 0),\n                        reverse=True)\n        if not active:\n            self.active_summary.setText("No active background tasks")\n        else:\n            lines = [f"ACTIVE BACKGROUND TASKS · {len(active)}"]\n            for task in active[:3]:\n                status = str(task.get("status") or "active").upper()\n                progress = int(self._progress(task))\n                title = str(task.get("title") or task.get("task") or "Untitled task").replace("\\n", " ")\n                lines.append(f"• {title[:48]} — {status} · {progress}%")\n            if len(active) > 3:\n                lines.append(f"+ {len(active) - 3} more")\n            self.active_summary.setText("\\n".join(lines))\n        self.render()
 
     def _render_details(self, task):
         if not task:
