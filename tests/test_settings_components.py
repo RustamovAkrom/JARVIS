@@ -273,6 +273,11 @@ class SettingsComponentTests(unittest.TestCase):
         proactive_entries = search_entries("ambient audio")
         self.assertEqual([entry.id for entry in proactive_entries], ["proactive_audio"])
 
+        quiet_entries = search_entries("quiet hours notifications")
+        self.assertEqual([entry.id for entry in quiet_entries], ["quiet_hours"])
+        presence_entries = search_entries("idle absence minutes")
+        self.assertEqual([entry.id for entry in presence_entries], ["presence_away_threshold"])
+
         category_titles = {category.id: category.title for category in CATEGORIES}
         self.assertNotIn("security", category_titles)
         self.assertEqual(category_titles["permissions"], "Security & Permissions")
