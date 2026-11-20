@@ -268,6 +268,11 @@ class SettingsComponentTests(unittest.TestCase):
         self.assertEqual(hud_entries[0].category_id, "appearance")
         self.assertEqual(hud_entries[0].action_id, "customize")
 
+        live_entries = search_entries("speech detection silence")
+        self.assertEqual([entry.id for entry in live_entries], ["turn_tuning"])
+        proactive_entries = search_entries("ambient audio")
+        self.assertEqual([entry.id for entry in proactive_entries], ["proactive_audio"])
+
         category_titles = {category.id: category.title for category in CATEGORIES}
         self.assertNotIn("security", category_titles)
         self.assertEqual(category_titles["permissions"], "Security & Permissions")
