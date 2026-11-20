@@ -3,7 +3,9 @@ from __future__ import annotations
 
 from datetime import datetime
 from PyQt6.QtCore import Qt, pyqtSignal, QDateTime
-from PyQt6.QtWidgets import (
+from gui.themes.tokens import C
+
+from PyQt6.QtWidgets (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
     QPushButton, QLineEdit, QDateTimeEdit, QMessageBox,
 )
@@ -17,21 +19,7 @@ class RemindersPanel(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("RemindersPanel")
-        self.setStyleSheet("""
-        QWidget#RemindersPanel { background: transparent; color: #c9e2e2; }
-        QWidget#RemindersPanel QLineEdit, QWidget#RemindersPanel QDateTimeEdit {
-            background: rgba(3,18,23,220); color: #d8eeee; border: 1px solid #245b60;
-            border-radius: 5px; padding: 7px;
-        }
-        QWidget#RemindersPanel QListWidget {
-            background: rgba(2,12,16,180); border: 1px solid #204c52; border-radius: 6px;
-        }
-        QWidget#RemindersPanel QListWidget::item { padding: 8px; border-bottom: 1px solid #18383c; }
-        QWidget#RemindersPanel QListWidget::item:selected { background: #0c5f59; }
-        QWidget#RemindersPanel QPushButton { background: #092327; color: #bce9e4;
-            border: 1px solid #28666a; border-radius: 5px; padding: 7px; }
-        QWidget#RemindersPanel QPushButton:hover { background: #12494b; }
-        """)
+        self.setStyleSheet(self._stylesheet())
         layout = QVBoxLayout(self)
         layout.setContentsMargins(9, 9, 9, 9)
         layout.setSpacing(8)
@@ -62,6 +50,30 @@ class RemindersPanel(QWidget):
         self.refresh_button.clicked.connect(self.refresh_requested.emit)
         self.cancel_button.clicked.connect(self._cancel)
         self.set_reminders([])
+
+    def _stylesheet(self):
+        return f"""
+        QWidget#RemindersPanel {{ background: transparent; color: {C.TEXT}; }}
+        QWidget#RemindersPanel QLabel {{ color: {C.TEXT}; background: transparent; }}
+        QWidget#RemindersPanel QLineEdit, QWidget#RemindersPanel QDateTimeEdit {{
+            background: {C.PANEL2}; color: {C.TEXT}; border: 1px solid {C.BORDER};
+            border-radius: 6px; padding: 7px;
+        }}
+        QWidget#RemindersPanel QListWidget {{
+            background: {C.PANEL}; color: {C.TEXT}; border: 1px solid {C.BORDER}; border-radius: 7px;
+        }}
+        QWidget#RemindersPanel QListWidget::item {{ padding: 8px; border-bottom: 1px solid {C.BORDER}; }}
+        QWidget#RemindersPanel QListWidget::item:selected {{ background: {C.PRI_GHO}; color: {C.TEXT}; }}
+        QWidget#RemindersPanel QPushButton {{ background: {C.PANEL2}; color: {C.TEXT};
+            border: 1px solid {C.BORDER}; border-radius: 6px; padding: 7px; }}
+        QWidget#RemindersPanel QPushButton:hover {{ background: {C.PRI_GHO}; border-color: {C.PRI}; }}
+        QWidget#RemindersPanel QPushButton:disabled {{ color: {C.TEXT_DIM}; }}
+        """
+
+    def refresh_theme(self):
+        self.setStyleSheet(self._stylesheet())
+        self.info.setStyleSheet(f"color: {C.TEXT_DIM};")
+        self.update()
 
     def _create(self):
         message = self.message.text().strip()
