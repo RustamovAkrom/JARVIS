@@ -91,15 +91,48 @@ def safe_discover_plugins(
         return DisabledPluginRegistry(message)
 
 
-def shutdown_optional_plugin_services(timeout: float = 2.0) -> None:
-    """Best-effort cleanup for optional plugins; never block Core shutdown."""
-    registry = _active_registry
-    if registry is None:
-        return
+def shutdown_optional_plugin_services(
+    timeout: float = 2.5,
+    logger: Callable[[str], None] = print,
+) -> None:
+    """Stop optional bundled plugin services without depending on registry APIs.
+
+    PluginRegistry intentionally has no global stop method: startup hooks are
+    optional and individual long-running services own their shutdown contracts.
+    This cleanup therefore targets the bundled services that expose explicit
+    stop/shutdown APIs and isolates every failure.
+    """
     try:
-        registry.stop_enabled_plugins(timeout=timeout)
+        from memory.config_manager import get_plugins_system_enabled
+        if not get_plugins_system_enabled():
+            return
+    except Exception:
+        # Configuration failure must not make Core shutdown unsafe.
+        return
+
+    import importlib
+
+    try:
+        gesture_control = importlib.import_module("plugins.gesture_control")
+        stop = getattr(gesture_control, "stop", None)
+        if callable(stop):
+            stop()
     except Exception as exc:
         try:
-            print(f"[Plugins] cleanup failed: {type(exc).__name__}: {exc}")
+            logger(f"[Shutdown] Gesture Control cleanup failed: {type(exc).__name__}: {exc}")
+        except Exception:
+            pass
+
+    try:
+        hands = importlib.import_module("plugins._hands")
+        service = getattr(hands, "SERVICE", None)
+        shutdown = getattr(service, "shutdown", None)
+        if callable(shutdown):
+            stopped = shutdown(timeout=timeout)
+            if stopped is False:
+                logger("[Shutdown] Hand tracking worker did not stop before timeout.")
+    except Exception as exc:
+        try:
+            logger(f"[Shutdown] Hand service cleanup failed: {type(exc).__name__}: {exc}")
         except Exception:
             pass
