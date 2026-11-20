@@ -512,6 +512,14 @@ class Camera:
         if not ok or frame is None:
             self._drop(f"camera {self.index} stopped sending pictures")
             return None
+        # Drivers and virtual cameras can return malformed frames while starting
+        # or after changing format. Never pass those into image processing.
+        if not isinstance(frame, np.ndarray) or frame.ndim != 3 or frame.shape[2] != 3:
+            self._drop(f"camera {self.index} returned an invalid frame")
+            return None
+        if frame.shape[0] < 2 or frame.shape[1] < 2 or frame.dtype == object:
+            self._drop(f"camera {self.index} returned an empty/invalid frame")
+            return None
         cur = _crop(frame)
         now = time.monotonic()
         if self._prev is not None and not _changes(self._prev, cur):
