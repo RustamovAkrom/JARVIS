@@ -34,7 +34,12 @@ class TaskPanel(QWidget):
         self.active_summary.setObjectName("task_active_summary")
         self.active_summary.setWordWrap(True)
         self.active_summary.setMaximumHeight(62)
-        self.active_summary.setStyleSheet("color: #67e8d0; background: rgba(5, 24, 29, 150); border: 1px solid #245b60; border-radius: 5px; padding: 6px;")
+        light = self._is_light_theme()
+        self.active_summary.setStyleSheet(
+            "color: #087f70; background: #e8f7f4; border: 1px solid #b9ddd6; border-radius: 5px; padding: 6px;"
+            if light else
+            "color: #67e8d0; background: rgba(5, 24, 29, 150); border: 1px solid #245b60; border-radius: 5px; padding: 6px;"
+        )
         root.addWidget(self.active_summary)
         self.search_box = QLineEdit()
         self.search_box.setObjectName("task_search")
@@ -356,6 +361,7 @@ class TaskPanel(QWidget):
     def _render_details(self, task):
         if not task:
             self.details_title.setText("Select a task")
+            self.progress_bar.setRange(0, 100)
             self.progress_bar.setValue(0)
             self.details_browser.clear()
             self.progress_bar.setVisible(False)
@@ -384,11 +390,15 @@ class TaskPanel(QWidget):
         self.progress_bar.setVisible(True)
         self.details_browser.setVisible(True)
         self.export_button.setEnabled(bool(task.get("report") or task.get("result")))
+        if status.lower() in _ACTIVE:
+            self.progress_bar.setRange(0, 0)  # Busy indicator: rounds/budget are not completion percentage.
+        else:
+            self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(progress)
         if terminal:
             self.progress_bar.setFormat("Completed" if status.lower() == "done" else status.title())
         else:
-            self.progress_bar.setFormat(f"{rounds_used}/{rounds_budget or '∞'} rounds · {progress}% budget used")
+            self.progress_bar.setFormat(f"Running · {rounds_used}/{rounds_budget or '∞'} rounds")
         lines = [
             f"<b>Status:</b> {status}",
             f"<b>Agent:</b> {self._html(task.get('agent') or 'general')}",
