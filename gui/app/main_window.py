@@ -7497,6 +7497,37 @@ class MainWindow(QMainWindow):
     _task_engine_bind_sig = pyqtSignal(object)
     _task_panel_update_sig = pyqtSignal(object)
 
+    def _refresh_reminders(self) -> None:
+        panel = getattr(self, "_reminders_panel", None)
+        if panel is None:
+            return
+        try:
+            from actions.reminder import list_reminders
+            panel.set_reminders(list_reminders())
+        except Exception as exc:
+            self._log_sig.emit(f"[Reminders] Failed to refresh: {exc}")
+
+    def _create_reminder(self, payload: dict) -> None:
+        try:
+            from actions.reminder import reminder
+            result = reminder(payload, player=None)
+            self._log_sig.emit(f"[Reminders] {result}")
+            if "Reminder set" in result:
+                self._refresh_reminders()
+                self._reminders_panel.message.clear()
+        except Exception as exc:
+            self._log_sig.emit(f"[Reminders] Could not create reminder: {exc}")
+
+    def _cancel_reminder(self, reminder_id: str) -> None:
+        try:
+            from actions.reminder import cancel_reminder
+            ok, message = cancel_reminder(reminder_id)
+            self._log_sig.emit(f"[Reminders] {message}")
+            if ok:
+                self._refresh_reminders()
+        except Exception as exc:
+            self._log_sig.emit(f"[Reminders] Could not cancel reminder: {exc}")
+
     def _update_task_panel_ui(self, tasks) -> None:
         panel = getattr(self, "_task_panel", None)
         if panel is not None:
@@ -10448,13 +10479,27 @@ class MainWindow(QMainWindow):
         )
 
         from gui.panels.tasks import TaskPanel
+        from gui.panels.reminders import RemindersPanel
         task_page = QWidget()
         task_page_layout = QVBoxLayout(task_page)
         task_page_layout.setContentsMargins(4, 4, 4, 4)
         task_page_layout.setSpacing(0)
+        self._task_subtabs = QTabWidget()
+        self._task_subtabs.setDocumentMode(True)
         self._task_panel = TaskPanel()
-        task_page_layout.addWidget(self._task_panel, 1)
+        self._reminders_panel = RemindersPanel()
+        self._task_subtabs.addTab(self._task_panel, self._tr("BACKGROUND TASKS"))
+        self._task_subtabs.addTab(self._reminders_panel, self._tr("REMINDERS"))
+        task_page_layout.addWidget(self._task_subtabs, 1)
         self._work_tabs.addTab(task_page, self._tr("TASKS"))
+        self._reminders_panel.create_requested.connect(self._create_reminder)
+        self._reminders_panel.cancel_requested.connect(self._cancel_reminder)
+        self._reminders_panel.refresh_requested.connect(self._refresh_reminders)
+        self._refresh_reminders()
+        self._reminders_refresh_timer = QTimer(self)
+        self._reminders_refresh_timer.setInterval(15000)
+        self._reminders_refresh_timer.timeout.connect(self._refresh_reminders)
+        self._reminders_refresh_timer.start()
         self._work_tabs.setTabToolTip(
             2, self._tr("Background tasks managed by JARVIS Task Engine")
         )
