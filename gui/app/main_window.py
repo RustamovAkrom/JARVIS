@@ -17879,6 +17879,7 @@ class JarvisUI:
     def bind_task_engine(self, engine) -> None:
         """Bind the Core-owned TaskEngine to the UI through the Qt thread."""
         panel = self._win._task_panel
+        self._win._task_engine = engine
         timer = QTimer(self._win)
         timer.setInterval(1500)
         timer.timeout.connect(lambda: panel.set_tasks(engine.list(limit=100)))
