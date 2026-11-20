@@ -118,6 +118,40 @@ class BackgroundTaskTests(unittest.TestCase):
         self.assertEqual(manager.get(task["id"])["status"], "cancelled")
         self.assertFalse(player.contents)
 
+    def test_shutdown_suppresses_late_ui_delivery_and_persists_running_task(self):
+        entered = threading.Event()
+        release = threading.Event()
+        player = _Player()
+
+        def wait_for_release(_query):
+            entered.set()
+            release.wait(timeout=2)
+            return "completed after shutdown"
+
+        manager = BackgroundTaskManager(self.path, search=wait_for_release)
+        manager.bind_player(player)
+        task = manager.start("finish after close")
+        self.assertTrue(entered.wait(timeout=1))
+
+        # Shutdown marks the worker recoverable and detaches the UI before
+        # waiting. The search itself cannot be force-killed.
+        self.assertTrue(manager.shutdown(timeout=0.01) is False)
+        self.assertEqual(manager.get(task["id"])["status"], "queued")
+        release.set()
+        manager._threads[task["id"]].join(timeout=2)
+
+        self.assertFalse(player.contents)
+        self.assertFalse(player.speeches)
+        saved = json.loads(self.path.read_text(encoding="utf-8"))
+        self.assertEqual(saved["tasks"][0]["status"], "queued")
+
+    def test_shutdown_is_idempotent_and_rejects_new_tasks(self):
+        manager = BackgroundTaskManager(self.path, search=lambda _query: "ok")
+        self.assertTrue(manager.shutdown(timeout=0.1))
+        self.assertTrue(manager.shutdown(timeout=0.1))
+        with self.assertRaises(RuntimeError):
+            manager.start("cannot start after shutdown")
+
     def test_action_reports_store_errors_instead_of_claiming_success(self):
         from actions import background_tasks
 
