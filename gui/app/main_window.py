@@ -17876,6 +17876,38 @@ class JarvisUI:
     def notify_phone_connected(self) -> None:
         self._win.notify_phone_connected()
 
+    def bind_task_engine(self, engine) -> None:
+        """Bind the Core-owned TaskEngine to the UI through the Qt thread."""
+        panel = self._win._task_panel
+        timer = QTimer(self._win)
+        timer.setInterval(1500)
+        timer.timeout.connect(lambda: panel.set_tasks(engine.list(limit=100)))
+        panel.refresh_requested.connect(lambda: panel.set_tasks(engine.list(limit=100)))
+        panel.cancel_requested.connect(lambda tid: engine.cancel(tid))
+        panel.finish_requested.connect(lambda tid: engine.cancel(tid, finish=True))
+        panel.steer_requested.connect(self._steer_task)
+        panel.task_selected.connect(lambda tid: self._show_task_report(engine, tid))
+        timer.start()
+        self._win._task_refresh_timer = timer
+        panel.set_tasks(engine.list(limit=100))
+
+    def _steer_task(self, task_id: str) -> None:
+        task = self._win._task_panel._tasks.get(task_id, {})
+        note, ok = QInputDialog.getText(
+            self._win, "Steer Task", str(task.get("title") or "Task"),
+            QLineEdit.EchoMode.Normal, "",
+        )
+        if ok and note.strip():
+            self._win._task_engine.steer(task_id, note.strip())
+
+    def _show_task_report(self, engine, task_id: str) -> None:
+        task = engine.get(task_id)
+        if not task:
+            return
+        report = str(task.get("report") or task.get("result") or task.get("error") or "")
+        if report:
+            self.show_content(str(task.get("title") or "Task Report"), report, key=f"task:{task_id}")
+
     def set_state(self, state: str):
         self._win._state_sig.emit(state)
 
