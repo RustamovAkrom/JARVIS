@@ -28,7 +28,7 @@ KINDS = ("camera", "screen")
 
 _lock = threading.Lock()
 _active: dict[str, dict] = {}            # key -> {"kind", "stop"}
-_listeners: list[Callable[[], None]] = []
+_listeners: list[Callable[[], None]] = []\n_registry = SensorRegistry()\n\n\ndef registry_snapshot():\n    \"\"\"Return typed snapshots while preserving the legacy UI API.\"\"\"\n    return _registry.snapshot()
 
 
 def _notify() -> None:
