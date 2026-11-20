@@ -718,11 +718,7 @@ class WeatherPanel(Panel):
                            f"{temps[i]:.0f}°")
 
     def tick(self, now: float) -> None:
-        # Without a city of its own it shows the city asked about last - and
-        # follows it: asked about another city, it changes within two seconds.
-        if not self.options.get("city") and not self._loading and now - getattr(self, "_city_seen", -1e9) > 2.0:
-            self._city_seen = now
-            try:
+        # Refresh according to the panel's normal lifecycle.
         super().tick(now)
 
     def describe(self):
