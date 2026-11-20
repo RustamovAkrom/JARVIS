@@ -4,6 +4,8 @@ import platform
 import shutil
 import subprocess
 import sys
+import re
+from xml.sax.saxutils import escape
 from datetime import datetime
 from pathlib import Path
 from core.runtime_paths import PATHS
@@ -160,8 +162,8 @@ def _schedule_windows(
         "    <Enabled>true</Enabled>\n"
         "  </TimeTrigger></Triggers>\n"
         "  <Actions><Exec>\n"
-        f"    <Command>{python_exe}</Command>\n"
-        f'    <Arguments>"{script_path}"</Arguments>\n'
+        f"    <Command>{escape(str(python_exe))}</Command>\n"
+        f'    <Arguments>"{escape(str(script_path))}"</Arguments>\n'
         "  </Exec></Actions>\n"
         "  <Settings>\n"
         "    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>\n"
@@ -290,13 +292,72 @@ def _schedule_linux(target_dt: datetime, task_name: str, script_path: Path) -> s
             errors="replace",
         )
         if result.returncode == 0:
-            return task_name
+            match = re.search(r"job\\s+(\\d+)", result.stdout or "", re.IGNORECASE)
+            return f"at:{match.group(1)}" if match else f"at:{task_name}"
         print(f"[Reminder] ❌ at: {result.stderr.strip()}")
         return ""
 
     print("[Reminder] ❌ Neither systemd-run nor at found on this Linux system.")
     return ""
 
+
+
+def list_reminders() -> list[dict]:
+    """Return the persisted reminder index, newest first."""
+    index = PATHS.config_dir / "ui_reminders.json"
+    try:
+        data = json.loads(index.read_text(encoding="utf-8")) if index.exists() else {}
+        rows = data.get("reminders", []) if isinstance(data, dict) else []
+        return sorted(
+            [row for row in rows if isinstance(row, dict)],
+            key=lambda row: float(row.get("due", 0)),
+        )
+    except (OSError, json.JSONDecodeError, TypeError, ValueError):
+        return []
+
+
+def cancel_reminder(reminder_id: str) -> tuple[bool, str]:
+    """Cancel a scheduled reminder and remove it from the local index."""
+    reminder_id = str(reminder_id or "").strip()
+    if not reminder_id:
+        return False, "Reminder ID is required."
+    rows = list_reminders()
+    row = next((r for r in rows if str(r.get("id")) == reminder_id), None)
+    if row is None:
+        return False, "Reminder was not found."
+    job_id = str(row.get("job_id") or "")
+    platform_name = str(row.get("platform") or _get_os())
+    try:
+        if platform_name == "windows":
+            subprocess.run(["schtasks", "/Delete", "/TN", job_id, "/F"],
+                           capture_output=True, text=True, **_CNW, check=True)
+        elif platform_name == "mac":
+            plist = Path.home() / "Library" / "LaunchAgents" / f"{job_id}.plist"
+            subprocess.run(["launchctl", "unload", str(plist)],
+                           capture_output=True, text=True, check=False)
+            plist.unlink(missing_ok=True)
+        elif job_id.startswith("at:"):
+            subprocess.run(["atrm", job_id.split(":", 1)[1]],
+                           capture_output=True, text=True, check=True)
+        else:
+            unit = job_id.removeprefix("systemd:")
+            subprocess.run(["systemctl", "--user", "stop", f"{unit}.timer", f"{unit}.service"],
+                           capture_output=True, text=True, check=False)
+    except (OSError, subprocess.CalledProcessError) as exc:
+        return False, f"Could not cancel system reminder: {exc}"
+    remaining = [r for r in rows if str(r.get("id")) != reminder_id]
+    index = PATHS.config_dir / "ui_reminders.json"
+    try:
+        index.parent.mkdir(parents=True, exist_ok=True)
+        tmp = index.with_suffix(index.suffix + ".tmp")
+        tmp.write_text(json.dumps({"reminders": remaining}, ensure_ascii=False, indent=2),
+                       encoding="utf-8")
+        tmp.replace(index)
+    except OSError as exc:
+        return False, f"Reminder cancelled, but index could not be updated: {exc}"
+    script = _scripts_dir() / f"{reminder_id}.py"
+    script.unlink(missing_ok=True)
+    return True, "Reminder cancelled."
 
 def reminder(
     parameters: dict,
@@ -361,6 +422,7 @@ def reminder(
                 "due": target_dt.timestamp(),
                 "message": safe_msg,
                 "job_id": str(job_id),
+                "platform": os_name,
             }
         )
         config_dir.mkdir(parents=True, exist_ok=True)
