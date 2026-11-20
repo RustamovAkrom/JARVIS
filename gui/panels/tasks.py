@@ -367,7 +367,13 @@ class TaskPanel(QWidget):
         running = sum(t.get("status") == "running" for t in all_tasks)
         done = sum(t.get("status") == "done" for t in all_tasks)
         failed = sum(t.get("status") == "failed" for t in all_tasks)
-        self.stats_label.setText(f"{len(all_tasks)} tasks · {running} running · {done} done · {failed} failed")
+        queued = sum(t.get("status") in {"queued", "scheduled"} for t in all_tasks)
+        waiting = sum(t.get("status") == "waiting_quota" for t in all_tasks)
+        cancelled = sum(t.get("status") == "cancelled" for t in all_tasks)
+        self.stats_label.setText(
+            f"{len(all_tasks)} tasks · {queued} queued · {running} running · "
+            f"{waiting} waiting · {done} done · {failed} failed · {cancelled} cancelled"
+        )
         self.list_widget.clear()
         for task in rows:
             status = str(task.get("status") or "unknown").upper()
