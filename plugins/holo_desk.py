@@ -55,7 +55,7 @@ PLUGIN = {
     "level": "basic",
     "label": "Holo Desk",
     "summary": ("Your camera fills the screen and glass panels float in it - clock, system, "
-                "weather, news, notes, a 3D model - and you move them with your hands."),
+                "weather, news, notes, an abstract 3D hologram - and you move them with your hands."),
     "setup": [
         "Needs a webcam - choose it in AUDIO & CAMERA.",
         "Say: \"Open the holo desk.\"",
@@ -99,7 +99,7 @@ PLUGIN = {
         "action='open': 'open the holo desk'. action='close'. action='clear' removes every panel. "
         "action='show' puts a panel on it (opening the desk if needed): panel='clock' | "
         "'system' | 'weather' (city) | 'news' (topic) | 'notes' | 'routines' (what is coming "
-        "up) | 'model' (path to a .obj, or none for Torvis's own head) | 'image' (path) | "
+        "up) | 'model' (path to a .obj, or none for an abstract hologram) | 'image' (path) | "
         "'video' (path or link) | 'text' (title + text: anything the user asks to put on the "
         "desk - a recipe, a list, your answer). "
         "action='this' acts on the panel the user is pointing at or holding - use it whenever "
