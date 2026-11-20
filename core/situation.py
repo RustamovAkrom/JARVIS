@@ -86,7 +86,7 @@ def lines() -> list[str]:
         try:
             text = " ".join(str(fn() or "").split())
         except Exception as e:
-            print(f"[Situation] {name}: {type(e).__name__}: {e}")
+            print(f"[Situation] source {name} failed: {type(e).__name__}: {e}")
             continue
         if text:
             out.append(f"{name}: {text[:LINE]}")
