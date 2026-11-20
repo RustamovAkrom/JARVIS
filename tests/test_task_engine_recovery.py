@@ -75,6 +75,36 @@ class TaskCheckpointRecoveryTests(unittest.TestCase):
                            for event in recovered["events"]))
         engine.shutdown(wait=0)
 
+    def test_cancel_queued_task_is_terminal_and_idempotent(self):
+        self._task(status="queued")
+        engine = TaskEngine(
+            root=self.root,
+            reports_dir=self.root / "reports",
+            agents_dirs=[],
+            autostart=False,
+            log=lambda *_: None,
+        )
+        self.assertTrue(engine.cancel("task-recovery"))
+        self.assertEqual(engine.get("task-recovery")["status"], "cancelled")
+        self.assertFalse(engine.cancel("task-recovery"))
+        engine.shutdown(wait=0)
+
+    def test_steer_appends_note_to_active_task(self):
+        self._task(status="queued")
+        engine = TaskEngine(
+            root=self.root,
+            reports_dir=self.root / "reports",
+            agents_dirs=[],
+            autostart=False,
+            log=lambda *_: None,
+        )
+        self.assertTrue(engine.steer("task-recovery", "Focus on official sources"))
+        task = engine.get("task-recovery")
+        self.assertEqual(task["notes_in"], ["Focus on official sources"])
+        self.assertTrue(any(event["kind"] == "note" for event in task["events"]))
+        self.assertFalse(engine.steer("task-recovery", "   "))
+        engine.shutdown(wait=0)
+
     def test_recovery_fails_after_max_interrupted_attempts(self):
         self._task(status="running", attempts=3)
         engine = TaskEngine(
