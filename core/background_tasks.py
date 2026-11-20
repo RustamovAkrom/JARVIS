@@ -209,6 +209,8 @@ class BackgroundTaskManager:
             if not result:
                 raise RuntimeError("The research search returned no report.")
         except Exception as exc:
+            if self._requeue_if_closing(task_id):
+                return
             final_status = self._finish(task_id, status="failed", error=str(exc))
             if final_status == "failed":
                 self._notify_failure(task_id, str(exc))
@@ -219,7 +221,18 @@ class BackgroundTaskManager:
             task = self._find_locked(task_id)
             if not task:
                 return
-            if task.get("status") == "cancelling":
+            if self._closing:
+                task["status"] = "queued"
+                task["result"] = ""
+                task["error"] = ""
+                task["updated"] = time.time()
+                try:
+                    self._save_locked()
+                except RuntimeError as exc:
+                    task["status"] = "failed"
+                    task["error"] = str(exc)[:1000]
+                completed = None
+            elif task.get("status") == "cancelling":
                 task["status"] = "cancelled"
                 task["updated"] = time.time()
                 try:
@@ -254,7 +267,10 @@ class BackgroundTaskManager:
             task = self._find_locked(task_id)
             if not task:
                 return "missing"
-            if task.get("status") == "cancelling":
+            if self._closing:
+                status = "queued"
+                error = ""
+            elif task.get("status") == "cancelling":
                 status = "cancelled"
             task["status"] = status
             task["error"] = error[:1000]
@@ -366,6 +382,23 @@ class BackgroundTaskManager:
                 thread.join(remaining)
         return not any(thread.is_alive() for thread in threads)
 
+    def _requeue_if_closing(self, task_id: str) -> bool:
+        """Keep interrupted work recoverable instead of persisting a false failure."""
+        with self._lock:
+            if not self._closing:
+                return False
+            task = self._find_locked(task_id)
+            if task is None:
+                return True
+            task.update(
+                status="queued",
+                result="",
+                error="",
+                updated=time.time(),
+            )
+            self._save_locked()
+            return True
+
     def _find_locked(self, task_id: str) -> dict | None:
         return next((row for row in self._tasks if row.get("id") == task_id), None)
 
@@ -375,14 +408,18 @@ _manager_lock = threading.Lock()
 
 
 def shutdown_background_task_manager(timeout: float = 5.0) -> bool:
-    """Shut down the process singleton; a later app start creates a fresh one."""
+    """Shut down the process singleton; clear it only after workers have exited."""
     global _manager
     with _manager_lock:
         manager = _manager
-        _manager = None
     if manager is None:
         return True
-    return manager.shutdown(timeout=timeout)
+    stopped = manager.shutdown(timeout=timeout)
+    if stopped:
+        with _manager_lock:
+            if _manager is manager:
+                _manager = None
+    return stopped
 
 
 def get_background_task_manager(player=None) -> BackgroundTaskManager:
