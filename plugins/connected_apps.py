@@ -97,6 +97,12 @@ def run(parameters: dict, player=None) -> str:
     p = parameters or {}
     action = str(p.get("action") or "").strip().lower()
     app = str(p.get("app") or "").strip()
+    if action not in {"do", "connect", "stop"}:
+        return outcome.failed(
+            "connected_apps",
+            f"Unknown action '{action}'. Supported actions are: do, connect, stop.",
+            action=action or None,
+        )
     if action == "connect":
         opener = getattr(player, "open_panel", None) if player is not None else None
         if not callable(opener):
