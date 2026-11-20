@@ -216,8 +216,13 @@ def _reference(t: "vc.Transcript") -> str:
             "another feature.\n" + outcome.untrusted("video transcript", cut))
 
 
-def _finish_on_screen(player, t: "vc.Transcript", request: str, words: str) -> None:
-    """The long answer, written on a side thread and shown when ready."""
+def _finish_on_screen(player, t: "vc.Transcript", request: str, words: str) -> bool:
+    """The long answer, written on a side thread and shown when ready.
+
+    Returns False if the worker could not start; the caller can then fall back
+    to synchronous processing rather than promising a result that will never
+    arrive.
+    """
     import threading
 
     def work():
@@ -225,7 +230,13 @@ def _finish_on_screen(player, t: "vc.Transcript", request: str, words: str) -> N
             _show(player, t.title, vc.answer(t, request, _ask, words))
         except Exception as e:
             print(f"[Video] answer failed: {type(e).__name__}")
-    threading.Thread(target=work, daemon=True, name="video-answer").start()
+    thread = threading.Thread(target=work, daemon=True, name="video-answer")
+    try:
+        thread.start()
+        return True
+    except Exception as e:
+        print(f"[Video] answer worker could not start: {type(e).__name__}: {e}")
+        return False
 
 
 def _show(player, title: str, text: str) -> None:
@@ -273,11 +284,14 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
         except Exception:
             line = ""
         if line:
-            _finish_on_screen(player, t, request, words)
-            return (f"status=done {facts}. The full answer is being written and appears on screen "
-                    "in a moment. Say ONLY the 'what to say' text to the user, as it is - it is "
-                    "already in their language - and nothing else.\n"
-                    + outcome.untrusted("what to say", line[:600]) + "\n" + _reference(t))
+            if _finish_on_screen(player, t, request, words):
+                return (f"status=done {facts}. The full answer is being written and appears on screen "
+                        "in a moment. Say ONLY the 'what to say' text to the user, as it is - it is "
+                        "already in their language - and nothing else.\n"
+                        + outcome.untrusted("what to say", line[:600]) + "\n" + _reference(t))
+            # The worker could not start. Fall through and compute/show the
+            # full answer synchronously rather than promise a result that will
+            # never arrive.
     try:
         result = vc.answer(t, request, _ask, words)
     except Exception as e:
