@@ -53,6 +53,10 @@ _AEAD = "aead1:"
 _PREFIX = _DPAPI if sys.platform == "win32" else _AEAD   # what protect() writes here
 _NONCE = 12
 
+
+class SecretStoreError(RuntimeError):
+    """Raised when a secret cannot be protected safely."""
+
 # Elsewhere than Windows: protect with the OS-kept key. A server process sets
 # this False before it reads any setting (see the module text).
 os_key = True
@@ -157,8 +161,10 @@ else:
 
 def protect(value: str, name: str) -> str:
     """The string to store for `value` under setting `name`. "" stays ""."""
-    if not value or not available():
+    if not value:
         return value
+    if not available():
+        raise SecretStoreError("Secret protection is unavailable on this system")
     try:
         return _PREFIX + base64.b64encode(_protect(value.encode("utf-8"), name)).decode("ascii")
     except Exception:
@@ -171,22 +177,26 @@ def protect(value: str, name: str) -> str:
 _opened: dict[tuple[str, str], str] = {}
 
 
-def reveal(stored: str, name: str, cache: bool = True) -> str:
+def reveal(stored: str, name: str, cache: bool = True) -> str | None:
     """The value behind `stored`, or "" when it cannot be opened on this
     computer and account (a settings file copied from elsewhere). `cache`
     False for large values that change on every write (the memory file)."""
     if not isinstance(stored, str) or not stored:
         return ""
     if not is_protected(stored):
+        # Sensitive profile blobs must never be accepted as plaintext. Other
+        # legacy settings remain readable for backward compatibility.
+        if str(name).lower() in {"face_lock.profile", "face_recognition.profile"}:
+            return None
         return stored
     if not stored.startswith(_PREFIX) or not available():
-        return ""
+        return None
     hit = _opened.get((name, stored))
     if hit is not None:
         return hit
     value, _ = _open(stored, name)
     if value is None:
-        return ""
+        return None
     if not cache:
         return value
     if len(_opened) > 256:
