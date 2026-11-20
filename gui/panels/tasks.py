@@ -15,6 +15,7 @@ class TaskPanel(QWidget):
     steer_requested = pyqtSignal(str)
     task_selected = pyqtSignal(str)
     refresh_requested = pyqtSignal()
+    create_requested = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -29,6 +30,8 @@ class TaskPanel(QWidget):
         for label, value in (("All", "all"), ("Active", "active"), ("Completed", "done"), ("Failed", "failed")):
             self.filter_box.addItem(label, value)
         controls.addWidget(self.filter_box, 1)
+        self.new_button = QPushButton("New Task")
+        controls.addWidget(self.new_button)
         self.refresh_button = QPushButton("Refresh")
         controls.addWidget(self.refresh_button)
         root.addLayout(controls)
@@ -45,6 +48,7 @@ class TaskPanel(QWidget):
         for button in (self.cancel_button, self.finish_button, self.steer_button):
             actions.addWidget(button)
         root.addLayout(actions)
+        self.new_button.clicked.connect(self.create_requested.emit)
         self.refresh_button.clicked.connect(self.refresh_requested.emit)
         self.filter_box.currentIndexChanged.connect(self.render)
         self.list_widget.currentItemChanged.connect(self._selection_changed)
