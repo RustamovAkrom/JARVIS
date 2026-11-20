@@ -865,16 +865,14 @@ class RoutinesPanel(ListPanel):
                    row["name"])
 
 
-def _fallback_head_mesh() -> tuple[np.ndarray, np.ndarray]:
-    """Small procedural wireframe head used when the optional avatar mesh is absent."""
+def _fallback_hologram_mesh() -> tuple[np.ndarray, np.ndarray]:
+    """Procedural abstract sphere mesh; no avatar or facial geometry."""
     rings, segments = 12, 24
     verts = []
     for ri in range(rings):
         theta = -math.pi / 2 + math.pi * (ri + 1) / (rings + 1)
         y = math.sin(theta)
         radius = math.cos(theta)
-        # Slightly narrow the jaw and broaden the upper head.
-        radius *= 0.72 + 0.28 * (y + 1.0) / 2.0
         for si in range(segments):
             phi = 2 * math.pi * si / segments
             verts.append((radius * math.cos(phi), y, radius * math.sin(phi)))
@@ -882,16 +880,14 @@ def _fallback_head_mesh() -> tuple[np.ndarray, np.ndarray]:
     for ri in range(rings):
         for si in range(segments):
             a = ri * segments + si
-            b = ri * segments + (si + 1) % segments
-            edges.append((a, b))
+            edges.append((a, ri * segments + (si + 1) % segments))
             if ri < rings - 1:
                 edges.append((a, a + segments))
     return np.asarray(verts, dtype=np.float64), np.asarray(edges, dtype=np.int32)
 
 
 class ModelPanel(Panel):
-    """A 3D model as a hologram: Torvis's own head unless a .obj is given.
-    It turns slowly by itself, and with the hand that holds it."""
+    """An abstract 3D hologram or user-provided OBJ model."""
 
     kind, title, size, refresh = "model", "3D model", (420.0, 420.0), 0.0
 
@@ -917,9 +913,8 @@ class ModelPanel(Panel):
                 edges = _edges(faces)
                 self.title = Path(path).stem
         if verts is None:
-            # JARVIS no longer includes avatar.py/avatar_mesh.py. The default
-            # model panel is a neutral procedural hologram, not an avatar.
-            verts, edges = _fallback_head_mesh()
+            # No avatar dependencies: use an abstract procedural hologram.
+            verts, edges = _fallback_hologram_mesh()
             self.title = "3D hologram"
         verts = verts - verts.mean(axis=0)
         verts /= max(1e-9, float(np.abs(verts).max()))
