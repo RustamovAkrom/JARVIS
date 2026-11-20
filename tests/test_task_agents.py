@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from core.tasks.agents import KNOWN_TOOLS, FALLBACK, load, parse
+from core.tasks.agents import FALLBACK, load, parse
 from core.tasks.tools import TaskTools
 
 
@@ -39,11 +39,11 @@ Do the task.
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / "invalid.md").write_text(
-                "---\\nname: bad\\ntools: shell\\n---\\nNo instructions.\\n",
+                "---\nname: bad\ntools: shell\n---\nNo instructions.\n",
                 encoding="utf-8",
             )
             (root / "valid.md").write_text(
-                "---\\nname: valid\\ntools: notes\\n---\\nKeep notes.\\n",
+                "---\nname: valid\ntools: notes\n---\nKeep notes.\n",
                 encoding="utf-8",
             )
             logs = []
@@ -65,8 +65,8 @@ Do the task.
             user = Path(tmp) / "user"
             bundled.mkdir()
             user.mkdir()
-            source = "---\\nname: custom\\ntools: notes\\n---\\nBundled.\\n"
-            override = "---\\nname: custom\\ntools: write_file\\n---\\nUser override.\\n"
+            source = "---\nname: custom\ntools: notes\n---\nBundled.\n"
+            override = "---\nname: custom\ntools: write_file\n---\nUser override.\n"
             (bundled / "custom.md").write_text(source, encoding="utf-8")
             (user / "custom.md").write_text(override, encoding="utf-8")
             profiles = load([bundled, user], log=lambda _message: None)
