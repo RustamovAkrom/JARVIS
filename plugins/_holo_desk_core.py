@@ -673,7 +673,13 @@ class WeatherPanel(Panel):
                 "days": fc["daily"][:4]}
 
     def paint_body(self, p, body, t):
-        d = self.data
+        d = self.data or {}
+        if not d.get("now"):
+            p.setPen(TEXT_DIM)
+            p.setFont(_font(10))
+            message = d.get("error") or _say("Weather data is unavailable.")
+            p.drawText(body, int(Qt.AlignmentFlag.AlignCenter) | int(Qt.TextFlag.TextWordWrap), str(message))
+            return
         now = d["now"]
         p.setPen(TEXT)
         p.setFont(_font(34))
