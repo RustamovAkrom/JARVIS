@@ -221,7 +221,7 @@ def format_release_date(value: str) -> str:
             .astimezone()
             .strftime("%Y-%m-%d %H:%M %Z")
         )
-    except ValueError, TypeError:
+    except (ValueError, TypeError):
         return value or "Unknown"
 
 
