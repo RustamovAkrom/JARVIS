@@ -31,6 +31,7 @@ class ScreenAgentApprovalCancellationTests(unittest.TestCase):
             return "confirmation requested"
 
         with patch("core.confirm.request", side_effect=request), \
+             patch("core.confirm.resolve") as resolve, \
              patch("plugins.screen_agent._panel"), \
              patch("plugins.screen_agent._say"):
             worker = threading.Thread(
@@ -56,6 +57,7 @@ class ScreenAgentApprovalCancellationTests(unittest.TestCase):
 
     def test_timeout_does_not_leave_pending_approval(self):
         with patch("core.confirm.request", return_value="confirmation requested"), \
+             patch("core.confirm.resolve") as resolve, \
              patch("plugins.screen_agent._panel"), \
              patch("plugins.screen_agent._say"):
             approved = screen_agent._await_approval(None, "delete file", timeout=0.01)
