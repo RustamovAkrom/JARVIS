@@ -49,6 +49,31 @@ class TaskPanelTests(unittest.TestCase):
         finally:
             panel.close()
 
+    def test_details_show_progress_and_escape_event_text(self):
+        panel = TaskPanel()
+        try:
+            panel.set_tasks([{
+                "id": "detail",
+                "title": "Task details",
+                "task": "Inspect repository",
+                "status": "running",
+                "agent": "research",
+                "created": 1000,
+                "started": 1100,
+                "used": {"rounds": 3, "seconds": 120},
+                "budget": {"rounds": 10, "seconds": 600},
+                "events": [{"t": 1200, "kind": "note", "text": "<script>alert(1)</script>"}],
+            }])
+            panel.list_widget.setCurrentRow(0)
+            self.assertEqual(panel.progress_bar.value(), 30)
+            self.assertIn("Task details", panel.details_title.text())
+            rendered = panel.details_browser.toHtml()
+            self.assertNotIn("<script>alert(1)</script>", rendered)
+            self.assertIn("&lt;script&gt;", rendered)
+            self.assertIn("Event history", rendered)
+        finally:
+            panel.close()
+
     def test_invalid_snapshots_are_ignored(self):
         panel = TaskPanel()
         try:
