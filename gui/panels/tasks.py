@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt, pyqtSignal, QDateTime
-from PyQt6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QPushButton, QVBoxLayout, QWidget, QDialog, QFormLayout, QLineEdit, QSpinBox, QTextEdit, QDialogButtonBox, QFileDialog, QDateTimeEdit, QCheckBox, QProgressBar, QTextBrowser
+from PyQt6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QPushButton, QVBoxLayout, QWidget, QDialog, QFormLayout, QGridLayout, QLineEdit, QSpinBox, QTextEdit, QDialogButtonBox, QFileDialog, QDateTimeEdit, QCheckBox, QProgressBar, QTextBrowser
 
 _ACTIVE = {"queued", "scheduled", "running", "waiting_quota"}
 
@@ -157,54 +157,194 @@ class TaskPanel(QWidget):
     def _create_task_dialog(self):
         profiles = getattr(self, "_profiles", {})
         dialog = QDialog(self)
+        dialog.setObjectName("CreateTaskDialog")
         dialog.setWindowTitle("Create Task")
-        dialog.setMinimumWidth(460)
-        form = QFormLayout(dialog)
+        dialog.setMinimumSize(560, 520)
+        dialog.resize(640, 620)
+        dialog.setSizeGripEnabled(True)
+        dialog.setStyleSheet("""
+            QDialog#CreateTaskDialog {
+                background: #071216;
+                color: #d8eeee;
+            }
+            QDialog#CreateTaskDialog QLabel {
+                color: #a9c5c7;
+                background: transparent;
+                border: none;
+            }
+            QDialog#CreateTaskDialog QLabel#dialog_heading {
+                color: #67e8d0;
+                font-size: 16px;
+                font-weight: 600;
+                padding-bottom: 2px;
+            }
+            QDialog#CreateTaskDialog QLineEdit,
+            QDialog#CreateTaskDialog QTextEdit,
+            QDialog#CreateTaskDialog QComboBox,
+            QDialog#CreateTaskDialog QSpinBox,
+            QDialog#CreateTaskDialog QDateTimeEdit {
+                background: #0a1b20;
+                color: #e0f4f2;
+                border: 1px solid #24565d;
+                border-radius: 7px;
+                padding: 8px 10px;
+                selection-background-color: #0d625b;
+                min-height: 24px;
+            }
+            QDialog#CreateTaskDialog QLineEdit:focus,
+            QDialog#CreateTaskDialog QTextEdit:focus,
+            QDialog#CreateTaskDialog QComboBox:focus,
+            QDialog#CreateTaskDialog QSpinBox:focus,
+            QDialog#CreateTaskDialog QDateTimeEdit:focus {
+                border: 1px solid #22d3b2;
+            }
+            QDialog#CreateTaskDialog QTextEdit {
+                min-height: 120px;
+            }
+            QDialog#CreateTaskDialog QComboBox::drop-down {
+                border: none;
+                width: 26px;
+            }
+            QDialog#CreateTaskDialog QComboBox QAbstractItemView {
+                background: #0a1b20;
+                color: #d8eeee;
+                border: 1px solid #24565d;
+                selection-background-color: #0d625b;
+                selection-color: #ffffff;
+                padding: 4px;
+            }
+            QDialog#CreateTaskDialog QCheckBox {
+                color: #b8d6d7;
+                spacing: 8px;
+            }
+            QDialog#CreateTaskDialog QCheckBox::indicator {
+                width: 16px;
+                height: 16px;
+                border: 1px solid #28666a;
+                border-radius: 4px;
+                background: #0a1b20;
+            }
+            QDialog#CreateTaskDialog QCheckBox::indicator:checked {
+                background: #13a88f;
+                border-color: #22d3b2;
+            }
+            QDialog#CreateTaskDialog QPushButton {
+                background: #0b252a;
+                color: #c8eeee;
+                border: 1px solid #28666a;
+                border-radius: 7px;
+                padding: 8px 14px;
+                min-width: 82px;
+            }
+            QDialog#CreateTaskDialog QPushButton:hover {
+                background: #12494b;
+                border-color: #45b9a9;
+            }
+            QDialog#CreateTaskDialog QPushButton:default {
+                background: #0d625b;
+                border-color: #22d3b2;
+                color: #ffffff;
+            }
+            QDialog#CreateTaskDialog QPushButton:disabled {
+                color: #527176;
+                border-color: #254044;
+                background: #101b1e;
+            }
+        """)
+        root = QVBoxLayout(dialog)
+        root.setContentsMargins(22, 20, 22, 18)
+        root.setSpacing(14)
+
+        heading = QLabel("Create a background task")
+        heading.setObjectName("dialog_heading")
+        root.addWidget(heading)
+        subtitle = QLabel("Configure the task, agent and execution limits.")
+        subtitle.setWordWrap(True)
+        root.addWidget(subtitle)
+
         title = QLineEdit()
         title.setPlaceholderText("Optional task title")
+        title.setClearButtonEnabled(True)
+
         description = QTextEdit()
-        description.setPlaceholderText("Describe what JARVIS should accomplish...")
-        description.setMinimumHeight(110)
+        description.setPlaceholderText("Describe what JARVIS should accomplish…")
+        description.setMinimumHeight(130)
+
         agent = QComboBox()
         for name, profile in sorted(profiles.items()):
             agent.addItem(getattr(profile, "title", name), name)
         if agent.count() == 0:
-            agent.addItem("General", "general")
+            agent.addItem("General assistant", "general")
+
         minutes = QSpinBox()
         minutes.setRange(1, 720)
         minutes.setValue(10)
+        minutes.setSuffix(" min")
         rounds = QSpinBox()
         rounds.setRange(1, 400)
         rounds.setValue(40)
+        rounds.setSuffix(" rounds")
+
         delivery = QComboBox()
         delivery.addItem("Voice notification", "voice")
         delivery.addItem("Panel only", "panel")
         delivery.addItem("Silent", "silent")
+
         schedule_enabled = QCheckBox("Schedule for later")
         schedule = QDateTimeEdit(QDateTime.currentDateTime().addSecs(3600))
         schedule.setCalendarPopup(True)
-        schedule.setDisplayFormat("yyyy-MM-dd HH:mm")
+        schedule.setDisplayFormat("dd MMM yyyy  HH:mm")
         schedule.setEnabled(False)
         schedule_enabled.toggled.connect(schedule.setEnabled)
+
         files_label = QLabel("No attachments")
+        files_label.setWordWrap(True)
+        files_label.setMinimumWidth(0)
         files = []
         attach_button = QPushButton("Attach files")
         attach_button.clicked.connect(lambda: self._choose_task_files(files, files_label))
-        file_row = QHBoxLayout()
-        file_row.addWidget(attach_button)
-        file_row.addWidget(files_label, 1)
-        form.addRow("Title", title)
-        form.addRow("Task", description)
-        form.addRow("Agent", agent)
-        form.addRow("Time budget (minutes)", minutes)
-        form.addRow("Round budget", rounds)
-        form.addRow("Delivery", delivery)
-        form.addRow(schedule_enabled, schedule)
-        form.addRow("Attachments", file_row)
-        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Cancel | QDialogButtonBox.StandardButton.Ok)
+
+        root.addWidget(QLabel("Task title"))
+        root.addWidget(title)
+        root.addWidget(QLabel("Task description"))
+        root.addWidget(description)
+
+        settings = QGridLayout()
+        settings.setHorizontalSpacing(12)
+        settings.setVerticalSpacing(10)
+        settings.setColumnStretch(0, 1)
+        settings.setColumnStretch(1, 1)
+        settings.addWidget(QLabel("Agent"), 0, 0)
+        settings.addWidget(QLabel("Delivery"), 0, 1)
+        settings.addWidget(agent, 1, 0)
+        settings.addWidget(delivery, 1, 1)
+        settings.addWidget(QLabel("Time budget"), 2, 0)
+        settings.addWidget(QLabel("Round budget"), 2, 1)
+        settings.addWidget(minutes, 3, 0)
+        settings.addWidget(rounds, 3, 1)
+        root.addLayout(settings)
+
+        schedule_row = QHBoxLayout()
+        schedule_row.addWidget(schedule_enabled)
+        schedule_row.addStretch(1)
+        schedule_row.addWidget(schedule)
+        root.addLayout(schedule_row)
+
+        attachment_row = QHBoxLayout()
+        attachment_row.addWidget(attach_button)
+        attachment_row.addWidget(files_label, 1)
+        root.addLayout(attachment_row)
+
+        root.addStretch(1)
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Cancel | QDialogButtonBox.StandardButton.Ok
+        )
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setText("Create task")
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setDefault(True)
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
-        form.addRow(buttons)
+        root.addWidget(buttons)
+
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
         task_text = description.toPlainText().strip()
