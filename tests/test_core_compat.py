@@ -103,8 +103,9 @@ class SecretStoreTests(unittest.TestCase):
         import os
         if os.name != "nt":
             secretstore = importlib.import_module("core.secretstore")
-            with self.assertRaises(secretstore.SecretStoreError):
-                secretstore.protect("embedding", "face_lock.profile")
+            with patch.object(secretstore, "available", return_value=False):
+                with self.assertRaises(secretstore.SecretStoreError):
+                    secretstore.protect("embedding", "face_lock.profile")
 
 
 if __name__ == "__main__":
