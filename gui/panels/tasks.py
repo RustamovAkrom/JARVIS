@@ -24,7 +24,7 @@ class TaskPanel(QWidget):
         self.setStyleSheet("""
         QWidget#TaskPanel { background: transparent; color: #d8e8e8; }
         QWidget#TaskPanel QLabel { color: #c4d8d8; }
-        QWidget#TaskPanel QLabel#task_details_title { color: #67e8d0; font-weight: 600; padding: 5px 2px; }
+        QWidget#TaskPanel QLabel#task_details_title { color: #67e8d0; font-weight: 600; padding: 5px 2px; }\n        QWidget#TaskPanel QLabel#task_empty { color: #6e9a9c; padding: 18px; }
         QWidget#TaskPanel QLineEdit, QWidget#TaskPanel QComboBox {
             background: rgba(3, 18, 23, 220); color: #d8eeee;
             border: 1px solid #245b60; border-radius: 5px; padding: 6px 8px;
@@ -99,7 +99,8 @@ class TaskPanel(QWidget):
         root.addWidget(self.details_browser, 2)
         self.export_button = QPushButton("Export Report")
         root.addWidget(self.export_button)
-        self.empty_label = QLabel("No tasks yet.")
+        self.empty_label = QLabel("No tasks yet. Create your first task.")
+        self.empty_label.setObjectName("task_empty")
         self.empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         root.addWidget(self.empty_label)
         actions = QHBoxLayout()
@@ -337,14 +338,19 @@ class TaskPanel(QWidget):
             self.list_widget.addItem(item)
             if str(task.get("id")) == selected:
                 self.list_widget.setCurrentItem(item)
-        self.empty_label.setVisible(self.list_widget.count() == 0)
-        self.list_widget.setVisible(self.list_widget.count() > 0)
+        has_rows = self.list_widget.count() > 0
+        self.empty_label.setVisible(not has_rows)
+        self.list_widget.setVisible(has_rows)
         self._selection_changed(self.list_widget.currentItem(), None)
 
     def _selection_changed(self, current, _previous):
         tid = str(current.data(Qt.ItemDataRole.UserRole) or "") if current else ""
         task = self._tasks.get(tid, {})
         self._render_details(task)
+        has_task = bool(task)
+        self.details_title.setVisible(has_task)
+        self.progress_bar.setVisible(has_task)
+        self.details_browser.setVisible(has_task)
         active = task.get("status") in _ACTIVE
         for button in (self.cancel_button, self.finish_button, self.steer_button):
             button.setEnabled(active)
