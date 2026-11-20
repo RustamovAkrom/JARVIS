@@ -545,6 +545,7 @@ class Camera:
             except Exception:
                 pass
         self.cap, self.index = None, None
+        _active_cameras.discard(self)
 
     def close(self) -> None:
         """Compatibility alias for release()."""
