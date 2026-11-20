@@ -162,7 +162,7 @@ def _resolve_color(query: str):
 
 def _rgb_to_hsv_tuya(r: int, g: int, b: int, brightness: int | None = None) -> dict:
     h, s, v = colorsys.rgb_to_hsv(r / 255, g / 255, b / 255)
-    v_val = max(100, int(brightness * 10)) if brightness else max(100, int(v * 1000))
+    v_val = max(100, min(1000, int(brightness * 10))) if brightness is not None else max(100, int(v * 1000))
     return {"h": int(h * 360), "s": int(s * 1000), "v": v_val}
 
 
