@@ -8576,6 +8576,13 @@ class MainWindow(QMainWindow):
         self._sync_reader_content()
         self._refresh_chat()
         self._refresh_cursor_assistant()
+        # Task and reminder panels own palette-derived QSS; refresh them after
+        # the shared design system is applied so light mode never leaves stale dark widgets.
+        for panel_name in ("_task_panel", "_reminders_panel"):
+            panel = getattr(self, panel_name, None)
+            refresh = getattr(panel, "refresh_theme", None)
+            if callable(refresh):
+                refresh()
 
     def _show_camera_frame(self, img_bytes: bytes):
         """Slot — display camera preview overlay (main thread)."""
