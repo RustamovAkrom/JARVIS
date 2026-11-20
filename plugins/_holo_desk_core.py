@@ -917,17 +917,10 @@ class ModelPanel(Panel):
                 edges = _edges(faces)
                 self.title = Path(path).stem
         if verts is None:
-            try:
-                from core import avatar_mesh
-                m = avatar_mesh.get_head_mesh()
-                verts, edges = m["verts"].astype(np.float64), m["edges"]
-                self.title = "Torvis"
-            except ImportError:
-                # avatar_mesh is optional/not present in this branch. Render a
-                # lightweight procedural wireframe head instead of failing the
-                # entire model panel.
-                verts, edges = _fallback_head_mesh()
-                self.title = "Torvis"
+            # JARVIS no longer includes avatar.py/avatar_mesh.py. The default
+            # model panel is a neutral procedural hologram, not an avatar.
+            verts, edges = _fallback_head_mesh()
+            self.title = "3D hologram"
         verts = verts - verts.mean(axis=0)
         verts /= max(1e-9, float(np.abs(verts).max()))
         if len(edges) > 9000:                               # keep it light to draw
