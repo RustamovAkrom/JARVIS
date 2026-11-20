@@ -570,7 +570,15 @@ def _build_project(
 
     proj_name    = project_name or plan.get("project_name", "project")
     proj_name    = re.sub(r"[^\w\-]", "_", proj_name)
-    project_dir  = _projects_dir() / proj_name
+    projects_root = _projects_dir()
+    project_dir = projects_root / proj_name
+    # Never overwrite a previous project, even when the model reuses a name.
+    if project_dir.exists() and any(project_dir.iterdir()):
+        suffix = 2
+        while (projects_root / f"{proj_name}-{suffix}").exists():
+            suffix += 1
+        project_dir = projects_root / f"{proj_name}-{suffix}"
+        log(f"Existing project preserved; creating {project_dir.name} instead.")
     project_dir.mkdir(parents=True, exist_ok=True)
 
     files        = plan.get("files", [])
