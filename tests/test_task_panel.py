@@ -4,6 +4,7 @@ import unittest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtWidgets import QApplication
+from PyQt6.QtCore import Qt
 from gui.panels.tasks import TaskPanel
 
 
@@ -48,6 +49,26 @@ class TaskPanelTests(unittest.TestCase):
             panel.search_box.setText("patch")
             self.assertEqual(panel.list_widget.count(), 1)
             self.assertEqual(panel.selected_task_id(), "c1")
+        finally:
+            panel.close()
+
+    def test_sorting_and_statistics(self):
+        panel = TaskPanel()
+        try:
+            panel.set_tasks([
+                {"id": "old", "title": "Old", "status": "done", "created": 1},
+                {"id": "new", "title": "New", "status": "running", "created": 2,
+                 "used": {"rounds": 5}, "budget": {"rounds": 10}},
+                {"id": "failed", "title": "Failed", "status": "failed", "created": 3},
+            ])
+            self.assertEqual(panel.list_widget.item(0).data(Qt.ItemDataRole.UserRole), "new")
+            panel.sort_box.setCurrentIndex(panel.sort_box.findData("oldest"))
+            self.assertEqual(panel.list_widget.item(0).data(Qt.ItemDataRole.UserRole), "old")
+            panel.sort_box.setCurrentIndex(panel.sort_box.findData("progress"))
+            self.assertEqual(panel.list_widget.item(0).data(Qt.ItemDataRole.UserRole), "new")
+            self.assertIn("1 running", panel.stats_label.text())
+            self.assertIn("1 done", panel.stats_label.text())
+            self.assertIn("1 failed", panel.stats_label.text())
         finally:
             panel.close()
 
