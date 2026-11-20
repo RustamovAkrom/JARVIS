@@ -80,6 +80,7 @@ class TaskPanel(QWidget):
         for label, value in (("Newest", "newest"), ("Oldest", "oldest"), ("Status", "status"), ("Progress", "progress")):
             self.sort_box.addItem(label, value)
         self.sort_box.setToolTip("Sort tasks")
+        self.sort_box.setCurrentIndex(self.sort_box.findData("newest"))
         controls.addWidget(self.sort_box, 1)
         self.new_button = QPushButton("New Task")
         controls.addWidget(self.new_button)
