@@ -21,6 +21,8 @@ class RoutineEngine:
         self._startup_awake = False
         self._startup_done = set()
         self._idle_last = {}
+        self._tick_lock = threading.Lock()
+        self._closed = False
 
     def _load(self):
         if not self.path.exists():
@@ -110,10 +112,22 @@ class RoutineEngine:
             self._doc["routines"].remove(row); self._save(); return True
 
     def session_started(self, awake=True):
+        if self._closed:
+            return
         if self._session_started is None:
             self._session_started, self._startup_awake = self.monotonic(), bool(awake)
 
     def tick(self):
+        """Run at most one scheduler pass at a time, and never after close."""
+        if self._closed or not self._tick_lock.acquire(blocking=False):
+            return
+        try:
+            if not self._closed:
+                self._tick_once()
+        finally:
+            self._tick_lock.release()
+
+    def _tick_once(self):
         now = self.clock(); dt = datetime.fromtimestamp(now).astimezone()
         ready = bool(self._host("ready", default=False))
         idle = float(self._host("idle_seconds", default=0) or 0)
@@ -204,6 +218,15 @@ class RoutineEngine:
         if typ == "time" and isinstance(trigger.get("rule"), dict):
             rule = dict(trigger["rule"]); rules.next_fire(rule, datetime.now().astimezone()); return {"type": "time", "rule": rule}
         raise ValueError("trigger must be startup, idle, or time with a rule")
+
+    def close(self, timeout: float = 3.0) -> bool:
+        """Prevent new scheduler passes and wait for any active pass to finish."""
+        self._closed = True
+        acquired = self._tick_lock.acquire(timeout=max(0.0, float(timeout)))
+        if not acquired:
+            return False
+        self._tick_lock.release()
+        return True
 
     def _host(self, method, *args, default=None):
         fn = getattr(self.host, method, None)
