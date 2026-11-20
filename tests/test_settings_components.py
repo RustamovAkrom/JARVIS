@@ -263,10 +263,10 @@ class SettingsComponentTests(unittest.TestCase):
         self.assertEqual([entry.id for entry in results], ["microphone"])
         self.assertEqual(results[0].action_id, "audio")
 
-        hud_entries = search_entries("orbital HUD")
-        self.assertEqual([entry.id for entry in hud_entries], ["hud_style"])
-        self.assertEqual(hud_entries[0].category_id, "appearance")
-        self.assertEqual(hud_entries[0].action_id, "customize")
+        # The original JARVIS HUD is not exposed as a Mark LIX centrepiece
+        # selector; Appearance only controls the original theme and opacity.
+        self.assertEqual(search_entries("orbital HUD"), [])
+        self.assertNotIn("hud_style", {entry.id for entry in ENTRIES})
 
         live_entries = search_entries("speech detection silence")
         self.assertEqual([entry.id for entry in live_entries], ["turn_tuning"])
