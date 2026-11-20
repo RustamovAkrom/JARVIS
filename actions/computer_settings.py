@@ -1304,7 +1304,7 @@ def computer_settings(
             "yes",
         )
         type_text(text, press_enter_after=enter_after)
-        return outcome.done("computer_settings", wanted=action, typed=text[:60])
+        return outcome.unverified(\n            "computer_settings",\n            "text was sent to the active input, but the target application was not read back",\n            wanted=action,\n            typed=text[:60],\n        )
 
     if action == "press_key":
         key = str(value or params.get("key", "")).strip()
@@ -1313,7 +1313,7 @@ def computer_settings(
                 "computer_settings", "no key was given to press", wanted=action
             )
         press_key(key)
-        return outcome.done("computer_settings", wanted=action, key=key)
+        return outcome.unverified(\n            "computer_settings",\n            "the keypress was sent, but its effect was not observed",\n            wanted=action,\n            key=key,\n        )
 
     if action in ("reload_n", "refresh_n", "reload_page_n"):
         try:
