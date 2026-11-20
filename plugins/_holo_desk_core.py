@@ -54,6 +54,7 @@ import math
 import re
 import threading
 import time
+import traceback
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -193,7 +194,8 @@ def on_gui(job: Callable[[], object], timeout: float = 10.0):
             try:
                 self.result = job()
             except Exception as e:
-                print(f"[HoloDesk] {type(e).__name__}: {e}")
+                print(f"[HoloDesk] GUI callback failed: {type(e).__name__}: {e}", flush=True)
+                traceback.print_exc()
             finally:
                 self.done.set()
                 _calls.discard(self)
@@ -371,6 +373,8 @@ class Panel:
                     self.data = self.load()
                 except Exception as e:
                     self.data = {"error": f"{type(e).__name__}: {e}"}
+                    print(f"[HoloDesk] {self.kind} panel load failed: {type(e).__name__}: {e}", flush=True)
+                    traceback.print_exc()
                 finally:
                     self._tries = self._tries + 1 if self.incomplete() else 0
                     self._loaded_at = time.monotonic()
@@ -462,7 +466,9 @@ class Panel:
             else:
                 self.paint_body(p, body, t)
         except Exception as e:
-            self._message(p, body, f"{type(e).__name__}")
+            self._message(p, body, f"{type(e).__name__}: {e}")
+            print(f"[HoloDesk] {self.kind} panel render failed: {type(e).__name__}: {e}", flush=True)
+            traceback.print_exc()
         p.setClipping(False)
         if self.can_scroll():                                  # where in the list
             top = max(1.0, self.content_height() - body.height())
