@@ -1504,6 +1504,21 @@ class JarvisLive:
             f"Always refer to yourself as {self._asst_name}.\n"
             f"{_addr}\n\n"
         )
+        task_engine_ctx = (
+            "[BACKGROUND TASK ROUTING]\n"
+            "When the user explicitly asks you to do work in the background, continue independently, "
+            "run a long task while they chat, research/build/analyze something asynchronously, or says "
+            "background task/background tasks, you MUST use the task_engine action=start tool. "
+            "Do not substitute web_search mode=research, a content tab, a normal chat response, or the "
+            "legacy background_tasks action. Start the persistent Task Engine task with a self-contained "
+            "instruction, a concise title, and appropriate time/round budgets. Confirm that it was started "
+            "only after the tool returns a task ID/status. The task must appear in the right-side TASKS "
+            "panel under BACKGROUND TASKS. Use task_engine list/status/result to monitor it, steer to add "
+            "instructions, finish to produce a report, and retry only failed tasks.\n"
+            "When the user asks for a reminder (remind me, don't forget, at a time/date or in a duration), "
+            "use the reminder action to schedule it with the operating-system scheduler. Do not create a "
+            "background research task for a reminder.\n\n"
+        )
 
         # Everything the model is told about *itself* is derived here, not
         # written into prompt.txt: the name comes from config, the platform from
@@ -1602,7 +1617,7 @@ class JarvisLive:
             "with file_controller for a lecture recording.\n\n"
         )
 
-        parts = [time_ctx, identity_ctx, project_ctx, lecture_ctx]
+        parts = [time_ctx, identity_ctx, task_engine_ctx, project_ctx, lecture_ctx]
         try:
             from core.situation import lines as _situation_lines
             _current_situation = _situation_lines()
