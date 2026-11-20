@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt, pyqtSignal, QDateTime
-from PyQt6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QPushButton, QVBoxLayout, QWidget, QDialog, QFormLayout, QLineEdit, QSpinBox, QTextEdit, QDialogButtonBox, QFileDialog, QDateTimeEdit, QCheckBox
+from PyQt6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QPushButton, QVBoxLayout, QWidget, QDialog, QFormLayout, QLineEdit, QSpinBox, QTextEdit, QDialogButtonBox, QFileDialog, QDateTimeEdit, QCheckBox, QProgressBar, QTextBrowser
 
 _ACTIVE = {"queued", "scheduled", "running", "waiting_quota"}
 
@@ -39,6 +39,20 @@ class TaskPanel(QWidget):
         self.list_widget = QListWidget()
         self.list_widget.setObjectName("task_list")
         root.addWidget(self.list_widget, 1)
+
+        self.details_title = QLabel("Select a task")
+        self.details_title.setObjectName("task_details_title")
+        root.addWidget(self.details_title)
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setFormat("%p%")
+        root.addWidget(self.progress_bar)
+        self.details_browser = QTextBrowser()
+        self.details_browser.setObjectName("task_details")
+        self.details_browser.setOpenExternalLinks(False)
+        self.details_browser.setMinimumHeight(130)
+        root.addWidget(self.details_browser, 1)
         self.empty_label = QLabel("No tasks yet.")
         self.empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         root.addWidget(self.empty_label)
@@ -146,6 +160,67 @@ class TaskPanel(QWidget):
         self._tasks = rows
         self.render()
 
+    def _render_details(self, task):
+        if not task:
+            self.details_title.setText("Select a task")
+            self.progress_bar.setValue(0)
+            self.details_browser.clear()
+            return
+
+        title = str(task.get("title") or task.get("task") or task.get("id") or "Task")
+        status = str(task.get("status") or "unknown").upper()
+        used = task.get("used") if isinstance(task.get("used"), dict) else {}
+        budget = task.get("budget") if isinstance(task.get("budget"), dict) else {}
+        rounds_used = int(used.get("rounds") or 0)
+        rounds_budget = int(budget.get("rounds") or 0)
+        seconds_used = float(used.get("seconds") or 0)
+        seconds_budget = float(budget.get("seconds") or 0)
+        if rounds_budget:
+            progress = min(100, round(rounds_used / rounds_budget * 100))
+        elif seconds_budget:
+            progress = min(100, round(seconds_used / seconds_budget * 100))
+        else:
+            progress = 0
+        self.details_title.setText(f"{title} · {status}")
+        self.progress_bar.setValue(progress)
+        self.progress_bar.setFormat(f"{progress}% · {rounds_used}/{rounds_budget or '∞'} rounds")
+        lines = [
+            f"<b>Status:</b> {status}",
+            f"<b>Agent:</b> {self._html(task.get('agent') or 'general')}",
+            f"<b>Created:</b> {self._format_time(task.get('created'))}",
+            f"<b>Started:</b> {self._format_time(task.get('started'))}",
+            f"<b>Time used:</b> {seconds_used / 60:.1f} / {seconds_budget / 60:.1f} min" if seconds_budget else f"<b>Time used:</b> {seconds_used / 60:.1f} min",
+            f"<b>Rounds:</b> {rounds_used} / {rounds_budget or 'unlimited'}",
+        ]
+        if task.get("error"):
+            lines.append(f"<br><b>Error:</b> {self._html(task['error'])}")
+        result = task.get("result") or task.get("report")
+        if result:
+            lines.append(f"<br><b>Result:</b><br>{self._html(result)}")
+        events = task.get("events") or []
+        if events:
+            lines.append("<br><b>Event history:</b>")
+            for event in events[-20:]:
+                if not isinstance(event, dict):
+                    continue
+                stamp = self._format_time(event.get("t"))
+                kind = self._html(event.get("kind") or "event")
+                text = self._html(event.get("text") or "")
+                lines.append(f"<br><span style='color:#8b9aa8'>[{stamp}]</span> <b>{kind}</b> — {text}")
+        self.details_browser.setHtml("<br>".join(lines))
+
+    @staticmethod
+    def _html(value):
+        import html
+        return html.escape(str(value or "")).replace("\\n", "<br>")
+
+    @staticmethod
+    def _format_time(value):
+        try:
+            return __import__("datetime").datetime.fromtimestamp(float(value)).strftime("%Y-%m-%d %H:%M:%S")
+        except (TypeError, ValueError, OSError):
+            return "—"
+
     def selected_task_id(self):
         item = self.list_widget.currentItem()
         return str(item.data(Qt.ItemDataRole.UserRole) or "") if item else ""
@@ -177,7 +252,9 @@ class TaskPanel(QWidget):
 
     def _selection_changed(self, current, _previous):
         tid = str(current.data(Qt.ItemDataRole.UserRole) or "") if current else ""
-        active = self._tasks.get(tid, {}).get("status") in _ACTIVE
+        task = self._tasks.get(tid, {})
+        self._render_details(task)
+        active = task.get("status") in _ACTIVE
         for button in (self.cancel_button, self.finish_button, self.steer_button):
             button.setEnabled(active)
         if tid:
