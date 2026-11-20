@@ -1169,7 +1169,15 @@ def _on_exit() -> None:
 # ── the loop ─────────────────────────────────────────────────────────────────
 
 def _loop(player, stop: threading.Event) -> None:
-    from core import cloud
+    try:
+        from core import cloud
+    except Exception as e:
+        print(f"[CloudAgent] startup failed: {type(e).__name__}: {e}", flush=True)
+        _log(player, f"SYS: Cloud memory could not start: {e}")
+        with _lock:
+            _state["running"] = False
+            _state["stop"] = None
+        return
 
     fails, synced = 0, False
     event_seq = int(_cfg().get("event_seq") or 0)
@@ -1676,7 +1684,15 @@ def _start(player) -> str:
             _state["quit_hooked"] = True
     except Exception:
         pass
-    threading.Thread(target=_loop, args=(player, stop), daemon=True, name="cloud-agent").start()
+    thread = threading.Thread(target=_loop, args=(player, stop), daemon=True, name="cloud-agent")
+    try:
+        thread.start()
+    except Exception as e:
+        stop.set()
+        with _lock:
+            _state.update(running=False, stop=None, player=None, client=None)
+        _log(player, f"SYS: Cloud memory could not start: {e}")
+        return f"Cloud agent could not start: {type(e).__name__}: {e}"
     return "Connecting to the cloud. I'll say so here once the link is up."
 
 
