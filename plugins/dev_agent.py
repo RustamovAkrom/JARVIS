@@ -573,7 +573,8 @@ def _build_project(
     projects_root = _projects_dir()
     project_dir = projects_root / proj_name
     # Never overwrite a previous project, even when the model reuses a name.
-    if project_dir.exists() and any(project_dir.iterdir()):
+    if project_dir.exists() or project_dir.is_symlink():
+        # Existing symlinks are never used as project destinations.
         suffix = 2
         while (projects_root / f"{proj_name}-{suffix}").exists():
             suffix += 1
