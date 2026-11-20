@@ -42,12 +42,11 @@ if not installed("cv2"):        # pragma: no cover
     raise ImportError("holo_desk needs OpenCV, which is not installed. "
                       "Run: pip install opencv-python")
 
-try:
-    from plugins import _hands as H
-    from plugins import _holo_desk_core as D
-except ImportError:             # loaded outside the package
-    import _hands as H  # type: ignore
-    import _holo_desk_core as D  # type: ignore
+# Plugin Loader imports bundled plugins as plugins.<name>.
+# Do not catch ImportError from inside these helpers and retry as top-level
+# modules: that masks the real dependency failure as 'pip install _hands'.
+from plugins import _hands as H
+from plugins import _holo_desk_core as D
 
 _NAME = "holo_desk"
 _NS = "holo_desk"
