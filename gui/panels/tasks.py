@@ -269,7 +269,17 @@ class TaskPanel(QWidget):
             f"<b>Started:</b> {self._format_time(task.get('started'))}",
             f"<b>Time used:</b> {seconds_used / 60:.1f} / {seconds_budget / 60:.1f} min" if seconds_budget else f"<b>Time used:</b> {seconds_used / 60:.1f} min",
             f"<b>Rounds:</b> {rounds_used} / {rounds_budget or 'unlimited'}",
+            f"<b>Attempts:</b> {int(task.get('attempts') or 0)}",
         ]
+        quota_until = float(task.get("quota_until") or 0)
+        if quota_until > 0:
+            lines.append(f"<b>Quota retry:</b> {self._format_time(quota_until)}")
+        recovery_events = [
+            event for event in (task.get("events") or [])
+            if isinstance(event, dict) and "resuming after an interruption" in str(event.get("text") or "").lower()
+        ]
+        if recovery_events:
+            lines.append("<br><b>Recovery:</b> Resumed after interruption")
         if task.get("error"):
             lines.append(f"<br><b>Error:</b> {self._html(task['error'])}")
         result = task.get("result") or task.get("report")
