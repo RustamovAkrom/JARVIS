@@ -7494,6 +7494,8 @@ class MainWindow(QMainWindow):
     _auth_lock_sig = pyqtSignal(object, str)
     _auth_face_result_sig = pyqtSignal(object, bool)
     _assistant_shutdown_sig = pyqtSignal()
+    _task_engine_bind_sig = pyqtSignal(object)
+    _task_panel_update_sig = pyqtSignal(object)
 
     def __init__(self, face_path: str):
         super().__init__()
@@ -8072,6 +8074,8 @@ class MainWindow(QMainWindow):
         self._update_metrics()
 
         self._log_sig.connect(self._append_activity)
+        self._task_engine_bind_sig.connect(self._bind_task_engine_ui)
+        self._task_panel_update_sig.connect(self._update_task_panel_ui)
         self._chat_log_sig.connect(self._append_activity)
         self._project_open_sig.connect(self._open_project_from_assistant)
         self._state_sig.connect(self._apply_state)
@@ -17877,7 +17881,7 @@ class JarvisUI:
                     origin="assistant",
                     title=str(payload.get("title") or ""),
                 )
-                self._win._task_panel.set_tasks(engine.list(limit=100))
+                self._win._task_panel_update_sig.emit(engine.list(limit=100))
                 return {"ok": True, "task": task}
             if action == "list":
                 return {"ok": True, "tasks": engine.list(limit=100)}
@@ -17909,7 +17913,7 @@ class JarvisUI:
                     origin="assistant",
                     title=task.get("title", ""),
                 )
-                self._win._task_panel.set_tasks(engine.list(limit=100))
+                self._win._task_panel_update_sig.emit(engine.list(limit=100))
                 return {"ok": True, "task": retry}
             if action == "result":
                 return {"ok": True, "task": task, "result": task.get("report") or task.get("result") or ""}
@@ -17919,23 +17923,34 @@ class JarvisUI:
             return {"ok": False, "error": str(exc)}
 
     def bind_task_engine(self, engine) -> None:
-        """Bind the Core-owned TaskEngine to the UI through the Qt thread."""
+        """Thread-safe binding entry point; all widget work is queued to Qt."""
+        self._win._task_engine_bind_sig.emit(engine)
+
+    def _update_task_panel_ui(self, tasks) -> None:
+        panel = getattr(self._win, "_task_panel", None)
+        if panel is not None:
+            panel.set_tasks(tasks or [])
+
+    def _bind_task_engine_ui(self, engine) -> None:
+        """Runs only on the Qt GUI thread."""
         panel = self._win._task_panel
         self._win._task_engine = engine
         panel.set_agent_profiles(engine.agents())
-        timer = QTimer(self._win)
-        timer.setInterval(1500)
-        timer.timeout.connect(lambda: panel.set_tasks(engine.list(limit=100)))
-        panel.refresh_requested.connect(lambda: panel.set_tasks(engine.list(limit=100)))
+        timer = getattr(self._win, "_task_refresh_timer", None)
+        if timer is None:
+            timer = QTimer(self._win)
+            timer.setInterval(1500)
+            timer.timeout.connect(lambda e=engine: self._update_task_panel_ui(e.list(limit=100)))
+            self._win._task_refresh_timer = timer
+        panel.refresh_requested.connect(lambda e=engine: self._update_task_panel_ui(e.list(limit=100)))
         panel.create_task_requested.connect(self._create_task)
         panel.retry_requested.connect(self._retry_task)
-        panel.cancel_requested.connect(lambda tid: engine.cancel(tid))
-        panel.finish_requested.connect(lambda tid: engine.cancel(tid, finish=True))
+        panel.cancel_requested.connect(lambda tid, e=engine: e.cancel(tid))
+        panel.finish_requested.connect(lambda tid, e=engine: e.cancel(tid, finish=True))
         panel.steer_requested.connect(self._steer_task)
-        panel.task_selected.connect(lambda tid: self._show_task_report(engine, tid))
+        panel.task_selected.connect(lambda tid, e=engine: self._show_task_report(e, tid))
         timer.start()
-        self._win._task_refresh_timer = timer
-        panel.set_tasks(engine.list(limit=100))
+        self._update_task_panel_ui(engine.list(limit=100))
 
     def _retry_task(self, task_id: str) -> None:
         engine = getattr(self._win, "_task_engine", None)
@@ -17955,7 +17970,7 @@ class JarvisUI:
                 title=task.get("title", ""),
             )
             self.write_log(f"[Tasks] Retried: {retry.get('title', retry.get('id'))}")
-            self._win._task_panel.set_tasks(engine.list(limit=100))
+            self._win._task_panel_update_sig.emit(engine.list(limit=100))
         except Exception as exc:
             self.write_log(f"[Tasks] Retry failed: {exc}")
 
@@ -17977,7 +17992,7 @@ class JarvisUI:
                 title=payload.get("title", ""),
             )
             self.write_log(f"[Tasks] Created: {task.get('title', task.get('id'))}")
-            self._win._task_panel.set_tasks(engine.list(limit=100))
+            self._win._task_panel_update_sig.emit(engine.list(limit=100))
         except Exception as exc:
             self.write_log(f"[Tasks] Could not create task: {exc}")
 
