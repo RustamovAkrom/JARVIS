@@ -62,6 +62,7 @@ class ScreenAgentApprovalCancellationTests(unittest.TestCase):
              patch("plugins.screen_agent._say"):
             approved = screen_agent._await_approval(None, "delete file", timeout=0.01)
         self.assertFalse(approved)
+        resolve.assert_called_once_with(False, key="screen_agent")
         self.assertEqual(screen_agent._state["pending"], "")
         self.assertFalse(screen_agent._state["approved"])
 
