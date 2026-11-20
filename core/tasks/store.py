@@ -129,7 +129,7 @@ class TaskStore:
             task = self._tasks.pop(str(tid), None)
             if task is None:
                 return False
-            for path in [self._path(tid)] + list(self.root.glob(f"{tid}.*.turns.json")):
+            for path in [self._path(tid), self._turns_path(tid)] + list(self.root.glob(f"{tid}.*.turns.json")):
                 try:
                     path.unlink(missing_ok=True)
                 except OSError:
