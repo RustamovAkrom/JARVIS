@@ -1,7 +1,7 @@
 """Task Engine desktop panel — UI-only adapter; engine ownership stays in Core."""
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal, QDateTime
 from PyQt6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QPushButton, QVBoxLayout, QWidget, QDialog, QFormLayout, QLineEdit, QSpinBox, QTextEdit, QDialogButtonBox
 
 _ACTIVE = {"queued", "scheduled", "running", "waiting_quota"}
@@ -88,12 +88,27 @@ class TaskPanel(QWidget):
         delivery.addItem("Voice notification", "voice")
         delivery.addItem("Panel only", "panel")
         delivery.addItem("Silent", "silent")
+        schedule_enabled = QCheckBox("Schedule for later")
+        schedule = QDateTimeEdit(QDateTime.currentDateTime().addSecs(3600))
+        schedule.setCalendarPopup(True)
+        schedule.setDisplayFormat("yyyy-MM-dd HH:mm")
+        schedule.setEnabled(False)
+        schedule_enabled.toggled.connect(schedule.setEnabled)
+        files_label = QLabel("No attachments")
+        files = []
+        attach_button = QPushButton("Attach files")
+        attach_button.clicked.connect(lambda: self._choose_task_files(files, files_label))
+        file_row = QHBoxLayout()
+        file_row.addWidget(attach_button)
+        file_row.addWidget(files_label, 1)
         form.addRow("Title", title)
         form.addRow("Task", description)
         form.addRow("Agent", agent)
         form.addRow("Time budget (minutes)", minutes)
         form.addRow("Round budget", rounds)
         form.addRow("Delivery", delivery)
+        form.addRow(schedule_enabled, schedule)
+        form.addRow("Attachments", file_row)
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Cancel | QDialogButtonBox.StandardButton.Ok)
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
@@ -111,7 +126,17 @@ class TaskPanel(QWidget):
             "rounds": rounds.value(),
             "deliver": delivery.currentData(),
             "origin": "desk",
+            "not_before": schedule.dateTime().toSecsSinceEpoch() if schedule_enabled.isChecked() else 0.0,
+            "files": list(files),
         })
+
+    def _choose_task_files(self, files, label):
+        selected, _ = QFileDialog.getOpenFileNames(
+            self, "Attach task files", "", "All files (*.*)"
+        )
+        if selected:
+            files[:] = selected
+            label.setText(f"{len(files)} file(s) selected")
 
     def set_tasks(self, tasks):
         rows = {}
