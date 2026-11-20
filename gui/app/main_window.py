@@ -7497,6 +7497,39 @@ class MainWindow(QMainWindow):
     _task_engine_bind_sig = pyqtSignal(object)
     _task_panel_update_sig = pyqtSignal(object)
 
+    def _update_task_panel_ui(self, tasks) -> None:
+        panel = getattr(self, "_task_panel", None)
+        if panel is not None:
+            panel.set_tasks(tasks or [])
+
+    def _bind_task_engine_ui(self, engine) -> None:
+        """Qt-thread slot for binding the shared Task Engine."""
+        panel = getattr(self, "_task_panel", None)
+        if panel is None:
+            logger.warning("[Tasks] TaskPanel is unavailable; cannot bind Task Engine")
+            return
+        self._task_engine = engine
+        panel.set_agent_profiles(engine.agents())
+        timer = getattr(self, "_task_refresh_timer", None)
+        if timer is None:
+            timer = QTimer(self)
+            timer.setInterval(1500)
+            timer.timeout.connect(lambda e=engine: self._update_task_panel_ui(e.list(limit=100)))
+            self._task_refresh_timer = timer
+        ui = getattr(self, "_jarvis_ui", None)
+        if ui is None:
+            logger.warning("[Tasks] JarvisUI bridge is unavailable")
+            return
+        panel.refresh_requested.connect(lambda e=engine: self._update_task_panel_ui(e.list(limit=100)))
+        panel.create_task_requested.connect(ui._create_task)
+        panel.retry_requested.connect(ui._retry_task)
+        panel.cancel_requested.connect(lambda tid, e=engine: e.cancel(tid))
+        panel.finish_requested.connect(lambda tid, e=engine: e.cancel(tid, finish=True))
+        panel.steer_requested.connect(ui._steer_task)
+        panel.task_selected.connect(lambda tid, e=engine: ui._show_task_report(e, tid))
+        timer.start()
+        self._update_task_panel_ui(engine.list(limit=100))
+
     def __init__(self, face_path: str):
         super().__init__()
         self._assistant_shutdown_active = False
@@ -17537,6 +17570,7 @@ class JarvisUI:
         self._app = QApplication.instance() or QApplication(sys.argv)
         self._app.setStyle("Fusion")
         self._win = MainWindow(face_path)
+        self._win._jarvis_ui = self
         self._console_streams = (sys.stdout, sys.stderr)
         self._win._console_stdout = sys.stdout
         self._stdout_mirror = _ConsoleMirror(sys.stdout, self._win, "stdout")
