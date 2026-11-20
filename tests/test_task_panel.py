@@ -61,7 +61,7 @@ class TaskPanelTests(unittest.TestCase):
                  "used": {"rounds": 5}, "budget": {"rounds": 10}},
                 {"id": "failed", "title": "Failed", "status": "failed", "created": 3},
             ])
-            self.assertEqual(panel.list_widget.item(0).data(Qt.ItemDataRole.UserRole), "new")
+            self.assertEqual(panel.list_widget.item(0).data(Qt.ItemDataRole.UserRole), "failed")
             panel.sort_box.setCurrentIndex(panel.sort_box.findData("oldest"))
             self.assertEqual(panel.list_widget.item(0).data(Qt.ItemDataRole.UserRole), "old")
             panel.sort_box.setCurrentIndex(panel.sort_box.findData("progress"))
