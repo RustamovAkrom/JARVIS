@@ -8414,7 +8414,6 @@ class MainWindow(QMainWindow):
             + _scroll_qss(),
         )
         put(self._history_list, _inset_qss("QListWidget"))
-        put(self._task_list, _inset_qss("QListWidget"))
         put(
             self._log,
             _inset_qss("QTextEdit").replace("border-radius: 5px;", "border-radius: 10px;"),
@@ -8429,7 +8428,6 @@ class MainWindow(QMainWindow):
             session.view.page().runJavaScript(
                 f"window.setTerminalTheme && window.setTerminalTheme({terminal_theme})"
             )
-        put(self._task_input, _input_qss())
         put(
             self._input,
             f"QLineEdit {{ background:transparent; color:{C.TEXT}; border:0; padding:5px 7px; "
