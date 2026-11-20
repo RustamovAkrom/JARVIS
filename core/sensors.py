@@ -55,10 +55,15 @@ def _remove_registry_entry(key: str) -> None:
     if snapshot is None:
         return
     try:
-        if snapshot.state == SensorState.ACTIVE:
-            _registry.transition(key, SensorState.STOPPING)
-            _registry.transition(key, SensorState.REGISTERED)
-        elif snapshot.state == SensorState.STARTING:
+        if snapshot.state in {SensorState.ACTIVE, SensorState.STARTING}:
+            _registry.transition(key, SensorState.REGISTERED if snapshot.state == SensorState.STARTING
+                                 else SensorState.STOPPING)
+            if snapshot.state == SensorState.ACTIVE:
+                _registry.transition(key, SensorState.REGISTERED)
+        elif snapshot.state == SensorState.STOPPING:
+            # A registry stop request calls the feature's callback; the feature
+            # then calls sensors.stop() during its own cleanup. Complete that
+            # transition here so the registry entry cannot remain stale.
             _registry.transition(key, SensorState.REGISTERED)
         _registry.unregister(key)
     except (RuntimeError, ValueError):
