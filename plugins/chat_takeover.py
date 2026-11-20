@@ -761,7 +761,7 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
 
             try:
                 minutes = float(parameters.get("duration_minutes") or _DEFAULT_MINUTES)
-            except TypeError, ValueError:
+            except (TypeError, ValueError):
                 minutes = _DEFAULT_MINUTES
             minutes = max(1.0, min(minutes, 120.0))
 
