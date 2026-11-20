@@ -146,6 +146,11 @@ class TaskTools:
         return out
 
     def execute(self, name: str, args: dict) -> str:
+        # Background agents re-check the live JARVIS policy for every tool call.
+        from core.tasks.security import authorize_task_tool
+        decision = authorize_task_tool(name, args)
+        if not decision.allowed:
+            return outcome.failed(name, decision.reason)
         args = dict(args or {})
         if name not in self.names:
             return outcome.failed(name, "this tool is not available to this agent")
