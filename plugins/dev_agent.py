@@ -379,9 +379,16 @@ def _open_vscode(project_dir: Path) -> bool:
     ]
     for cmd in vscode_candidates:
         try:
+            # Launch executables directly. Batch files require cmd.exe,
+            # but shell=True with a list has platform-dependent argument handling
+            # and unnecessarily routes configured editor commands through a shell.
+            if Path(cmd).suffix.lower() in {".cmd", ".bat"}:
+                launch = ["cmd.exe", "/c", cmd, str(project_dir)]
+            else:
+                launch = [cmd, str(project_dir)]
             subprocess.Popen(
-                [cmd, str(project_dir)],
-                shell=True,
+                launch,
+                shell=False,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL
             )
