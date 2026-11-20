@@ -1508,9 +1508,19 @@ def _open(player, kind: str, factory: Callable[[Any, Optional[QWidget]], Board],
     return True
 
 
-def open_panel(player, kind: str, factory: Callable[[Any, Optional[QWidget]], Board]) -> bool:
-    """Open a custom live board using the same HUD lifecycle as system/weather."""
-    return bool(_gui(lambda: _open(player, kind, factory)))
+def open_panel(
+    player,
+    kind: str,
+    factory: Callable[[Any, Optional[QWidget]], Board],
+    setup: Optional[Callable[[Board], None]] = None,
+) -> bool:
+    """Open a custom live board using the shared HUD lifecycle.
+
+    The optional setup callback runs on the GUI thread after the board is
+    created/reused and before it is shown. This is used by data-driven panels
+    such as the weather dashboard.
+    """
+    return bool(_gui(lambda: _open(player, kind, factory, setup)))
 
 
 def panel_status(kind: str) -> bool:
