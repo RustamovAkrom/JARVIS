@@ -10,6 +10,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable
 
+_active_registry = None
+
 
 @dataclass
 class PluginSubsystemStatus:
@@ -72,6 +74,8 @@ def safe_discover_plugins(
             notify=notify,
         )
         registry.status = PluginSubsystemStatus(enabled=True, available=True)
+        global _active_registry
+        _active_registry = registry
         return registry
     except Exception as exc:
         message = f"Plugin subsystem unavailable: {type(exc).__name__}: {exc}"
@@ -85,3 +89,17 @@ def safe_discover_plugins(
         except Exception:
             pass
         return DisabledPluginRegistry(message)
+
+
+def shutdown_optional_plugin_services(timeout: float = 2.0) -> None:
+    """Best-effort cleanup for optional plugins; never block Core shutdown."""
+    registry = _active_registry
+    if registry is None:
+        return
+    try:
+        registry.stop_enabled_plugins(timeout=timeout)
+    except Exception as exc:
+        try:
+            print(f"[Plugins] cleanup failed: {type(exc).__name__}: {exc}")
+        except Exception:
+            pass
