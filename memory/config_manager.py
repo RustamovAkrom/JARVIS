@@ -64,7 +64,7 @@ def get_ui_opacity() -> int:
         return 100
     try:
         value = round(value)
-    except OverflowError, ValueError:
+    except (OverflowError, ValueError):
         return 100
     return max(60, min(100, value))
 
@@ -160,7 +160,7 @@ def get_workspace_path() -> str:
         return ""
     try:
         path = Path(value).expanduser().resolve()
-    except OSError, RuntimeError:
+    except (OSError, RuntimeError):
         return ""
     return str(path) if path.is_dir() else ""
 
@@ -364,7 +364,7 @@ def get_turn_tuning() -> dict:
     def _int(key, default, lo, hi):
         try:
             return max(lo, min(hi, int(cfg.get(key, default))))
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             return default
 
     return {
@@ -536,7 +536,7 @@ def get_cursor_assistant_settings() -> dict:
     style = str(cfg.get("style", "halo")).lower()
     try:
         size = int(cfg.get("size", 24))
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         size = 24
     actions = cfg.get("menu_actions", DEFAULT_CURSOR_MENU_ACTIONS)
     if not isinstance(actions, list):
@@ -577,7 +577,7 @@ def save_cursor_assistant_settings(values: dict) -> None:
     if "size" in values:
         try:
             size = int(values["size"])
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             size = 24
         current["size"] = size if size in CURSOR_SIZES else 24
     if "hotkey" in values:
