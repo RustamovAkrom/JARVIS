@@ -1,54 +1,93 @@
 """
-core/sensors.py — what is looking at the camera or the screen right now, and
-one switch that stops all of it.
+Sensor watcher registry and compatibility API.
 
-WHY
-    The microphone has always had its indicator and its mute key. A feature
-    that watches the camera (the push-up counter) or the screen (the screen
-    agent, the chat takeover, the WhatsApp call guard) ran with nothing on the
-    window saying so, and stopping it meant knowing which feature to ask. Now
-    whatever watches registers here while it watches; the window shows each
-    one in its status strip, a click stops that one, and "Stop all" stops
-    every one of them and mutes the microphone.
-
-HOW A FEATURE USES IT (plugins included — they call core, never the reverse)
-    sensors.start("screen_agent", "screen", stop=lambda: ...)   while it runs
-    sensors.stop("screen_agent")                                when it ends
-    `stop` is what "Stop" does: it must make the feature end soon, and the
-    feature then calls sensors.stop itself. A one-shot picture (a single
-    screenshot or photo) is not registered: it is over before anyone could
-    press anything.
+Legacy callers continue using start/stop/active/stop_kind/stop_all. The typed
+SensorRegistry mirrors watcher lifecycle and capabilities without owning the
+actual camera/screen resource.
 """
 from __future__ import annotations
 
 import threading
 from typing import Callable, Optional
 
+from core.sensor_registry import SensorRegistry, SensorSpec, SensorState
+
 KINDS = ("camera", "screen")
 
-_lock = threading.Lock()
-_active: dict[str, dict] = {}            # key -> {"kind", "stop"}
-_listeners: list[Callable[[], None]] = []\n_registry = SensorRegistry()\n\n\ndef registry_snapshot():\n    \"\"\"Return typed snapshots while preserving the legacy UI API.\"\"\"\n    return _registry.snapshot()
+_lock = threading.RLock()
+_active: dict[str, dict] = {}
+_listeners: list[Callable[[], None]] = []
+_registry = SensorRegistry()
+
+
+def registry_snapshot():
+    """Return typed snapshots while preserving the legacy UI API."""
+    return _registry.snapshot()
 
 
 def _notify() -> None:
-    for fn in list(_listeners):
+    with _lock:
+        listeners = tuple(_listeners)
+    for fn in listeners:
         try:
             fn()
         except Exception as e:
             print(f"[Sensors] listener failed: {type(e).__name__}: {e}")
 
 
-def subscribe(fn: Callable[[], None]) -> None:
-    """`fn()` after every change, on whatever thread made it."""
-    _listeners.append(fn)
+def subscribe(fn: Callable[[], None]) -> Callable[[], None]:
+    """Subscribe to changes. Returns an unsubscribe callback."""
+    with _lock:
+        _listeners.append(fn)
+
+    def unsubscribe() -> None:
+        with _lock:
+            try:
+                _listeners.remove(fn)
+            except ValueError:
+                pass
+
+    return unsubscribe
+
+
+def _remove_registry_entry(key: str) -> None:
+    snapshot = _registry.get(key)
+    if snapshot is None:
+        return
+    try:
+        if snapshot.state == SensorState.ACTIVE:
+            _registry.transition(key, SensorState.STOPPING)
+            _registry.transition(key, SensorState.REGISTERED)
+        elif snapshot.state == SensorState.STARTING:
+            _registry.transition(key, SensorState.REGISTERED)
+        _registry.unregister(key)
+    except (RuntimeError, ValueError):
+        # Registry state must never break the legacy sensor API.
+        pass
 
 
 def start(key: str, kind: str, stop: Optional[Callable[[], None]] = None) -> None:
     if kind not in KINDS or not key:
         return
+
     with _lock:
+        previous = _active.get(key)
         _active[key] = {"kind": kind, "stop": stop}
+
+    if previous is not None:
+        _remove_registry_entry(key)
+
+    _registry.register(
+        SensorSpec(
+            sensor_id=key,
+            kind=kind,
+            capabilities={kind},
+            description="Legacy sensor watcher",
+        ),
+        stop=stop,
+    )
+    _registry.transition(key, SensorState.STARTING)
+    _registry.transition(key, SensorState.ACTIVE)
     _notify()
 
 
@@ -57,11 +96,12 @@ def stop(key: str) -> None:
     with _lock:
         gone = _active.pop(key, None)
     if gone is not None:
+        _remove_registry_entry(key)
         _notify()
 
 
 def active() -> dict[str, list[str]]:
-    """{"camera": [keys], "screen": [keys]} — only kinds in use."""
+    """Return watcher IDs grouped by kind."""
     with _lock:
         out: dict[str, list[str]] = {}
         for key, item in _active.items():
@@ -90,7 +130,7 @@ def stop_all() -> list[str]:
 def _ask_to_stop(key: str, item: dict) -> None:
     fn = item.get("stop")
     if fn is None:
-        stop(key)               # nothing to ask: it is only shown, so it goes
+        stop(key)
         return
     try:
         fn()
