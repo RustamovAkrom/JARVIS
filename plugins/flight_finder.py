@@ -80,8 +80,11 @@ def _parse_date(raw: str) -> str:
     lower = raw.lower()
     today = datetime.now()
 
-    if re.match(r"\d{4}-\d{2}-\d{2}", raw):
-        return raw
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", raw):
+        try:
+            return datetime.strptime(raw, "%Y-%m-%d").strftime("%Y-%m-%d")
+        except ValueError:
+            raise ValueError("invalid calendar date") from None
     for fmt in ("%d/%m/%Y", "%m/%d/%Y", "%d.%m.%Y", "%d-%m-%Y"):
         try:
             return datetime.strptime(raw, fmt).strftime("%Y-%m-%d")
@@ -104,8 +107,11 @@ def _parse_date(raw: str) -> str:
             f"Return ONLY the date string, nothing else.",
             tier=gemini.FAST,
         )
-        if re.match(r"\d{4}-\d{2}-\d{2}", result):
-            return result
+        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", result):
+            try:
+                return datetime.strptime(result, "%Y-%m-%d").strftime("%Y-%m-%d")
+            except ValueError:
+                pass
     except Exception as e:
         print(f"[FlightFinder] ⚠️ Gemini date parse failed: {e}")
 
@@ -115,11 +121,12 @@ def _parse_date(raw: str) -> str:
             if day_match:
                 day  = int(day_match.group())
                 year = today.year if month_num >= today.month else today.year + 1
-                return f"{year}-{month_num:02d}-{day:02d}"
+                try:
+                    return datetime(year, month_num, day).strftime("%Y-%m-%d")
+                except ValueError:
+                    raise ValueError(f"invalid date: {raw}") from None
 
-    # Last resort: today
-    print(f"[FlightFinder] ⚠️ Could not parse date '{raw}' — using today.")
-    return today.strftime("%Y-%m-%d")
+    raise ValueError(f"could not parse departure date: {raw}")
 
 _CABIN_CODE: dict[str, str] = {
     "economy":  "1",
@@ -321,8 +328,13 @@ def _format_text_report(
     return "\n".join(lines)
 
 def _save_to_desktop(content: str, origin: str, destination: str) -> str:
-    ts       = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"flights_{origin}_{destination}_{ts}.txt".replace(" ", "_")
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    # User/model-provided airport names must never become path components.
+    def safe_label(value: str) -> str:
+        label = re.sub(r"[^A-Za-z0-9_-]+", "_", str(value or "").strip())
+        return label.strip("_-")[:40] or "airport"
+
+    filename = f"flights_{safe_label(origin)}_{safe_label(destination)}_{ts}.txt"
     from core.user_dirs import folder
     desktop  = folder("desktop")      # the real one, never a made-up ~/Desktop
     filepath = desktop / filename
@@ -350,8 +362,13 @@ def flight_finder(parameters: dict, player=None, speak=None) -> str:
     destination = params.get("destination", "").strip()
     date_raw    = params.get("date",        "").strip()
     return_raw  = (params.get("return_date") or "").strip()
-    passengers  = max(1, int(params.get("passengers", 1)))
-    cabin       = params.get("cabin", "").strip().lower()
+    try:
+        passengers = int(params.get("passengers", 1))
+    except (TypeError, ValueError):
+        return "Passenger count must be a whole number between 1 and 9."
+    if not 1 <= passengers <= 9:
+        return "Passenger count must be between 1 and 9."
+    cabin = str(params.get("cabin", "")).strip().lower()
     _save       = params.get("save")
 
     # Settings fill the gaps, never override a spoken instruction. "Find me a
