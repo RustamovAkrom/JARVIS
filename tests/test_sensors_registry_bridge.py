@@ -23,6 +23,16 @@ class SensorsRegistryBridgeTests(unittest.TestCase):
         sensors.stop("test_camera")
         self.assertFalse(any(item.spec.sensor_id == "test_camera" for item in sensors.registry_snapshot()))
 
+    def test_registry_stop_callback_can_remove_stopping_sensor(self):
+        key = "stop_callback_screen"
+        sensors.start(key, "screen", stop=lambda: sensors.stop(key))
+        row = next(item for item in sensors.registry_snapshot() if item.spec.sensor_id == key)
+        self.assertEqual(row.state, SensorState.ACTIVE)
+
+        self.assertTrue(sensors._registry.request_stop(key))
+        self.assertFalse(any(item.spec.sensor_id == key for item in sensors.registry_snapshot()))
+        self.assertNotIn(key, sensors.active().get("screen", []))
+
     def test_invalid_kind_remains_ignored(self):
         before = sensors.registry_snapshot()
         sensors.start("bad", "unknown")
