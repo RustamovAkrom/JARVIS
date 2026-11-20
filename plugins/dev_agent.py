@@ -576,7 +576,8 @@ def _build_project(
     if project_dir.exists() or project_dir.is_symlink():
         # Existing symlinks are never used as project destinations.
         suffix = 2
-        while (projects_root / f"{proj_name}-{suffix}").exists():
+        while ((projects_root / f"{proj_name}-{suffix}").exists()
+               or (projects_root / f"{proj_name}-{suffix}").is_symlink()):
             suffix += 1
         project_dir = projects_root / f"{proj_name}-{suffix}"
         log(f"Existing project preserved; creating {project_dir.name} instead.")
