@@ -775,7 +775,12 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
     with _lock:
         _state["thread"] = thread
     _busy(player, f"working on the screen ({goal[:120]})")
-    thread.start()
+    try:
+        thread.start()
+    except Exception as e:
+        _finish(player, f"Tell the user the screen task could not start: {e}",
+                f"❌ Could not start screen agent: {e}")
+        return f"Could not start screen agent: {type(e).__name__}: {e}"
 
     return (f'[SCREEN_AGENT_STARTED] I am now working on the screen: "{goal}". '
             f"Tell the user you are starting, in one short sentence, then stop "
