@@ -82,6 +82,9 @@ ENTRIES = (
     SettingEntry("conversation_memory", "conversations", "Conversation memory", "Opt in to local transcript storage, set retention, and delete stored history.", ("recall", "transcripts", "history", "privacy", "retention"), "conversations"),
     SettingEntry("presence", "automation", "Presence awareness", "Configure away detection, return greetings and notification handling.", ("idle", "away", "lock screen", "welcome back"), "automation"),
     SettingEntry("routines", "automation", "Routines", "Manage schedules, recurring tasks, and quiet hours.", ("schedule", "reminder", "automation", "quiet hours"), "automation"),
+    SettingEntry("presence_away_threshold", "automation", "Away threshold", "Set how long JARVIS waits without input before marking you away.", ("idle", "minutes", "absence"), "automation"),
+    SettingEntry("presence_greeting", "automation", "Return greeting", "Enable or disable a greeting and queued notification digest when you return.", ("welcome back", "notifications", "digest"), "automation"),
+    SettingEntry("quiet_hours", "automation", "Quiet hours", "Defer routine notifications during a configured time window.", ("notifications", "silence", "night"), "automation"),
 
     SettingEntry("auth", "permissions", "Application authentication", "Passcode and face verification are supplied by the configured lock integration.", ("pin", "passphrase", "face unlock", "camera"), "security_info"),
     SettingEntry("developer_mode", "developer", "Developer mode", "Enable detailed diagnostics and optional testing tools after confirmation.", ("debug", "logs"), "console"),
