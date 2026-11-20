@@ -1,68 +1,86 @@
-"""presence — the user says they are leaving; status and settings of
-core/presence.py (noticing when the user is away and back)."""
+"""Core Presence action backed by the active process-scoped Presence engine."""
 from __future__ import annotations
 
 
 def presence(parameters: dict, player=None) -> str:
-    from core import presence as P
-    a = parameters or {}
-    action = str(a.get("action") or "status").strip().lower()
-    p = P.get()
+    from core.presence import get_presence_runtime
+    from memory.config_manager import (
+        get_presence_settings,
+        save_presence_settings,
+    )
+
+    args = parameters if isinstance(parameters, dict) else {}
+    action = str(args.get("action") or "status").strip().lower()
+    engine = get_presence_runtime()
+
     try:
         if action == "leaving":
-            if p is None or not p.enabled:
-                return "Presence is switched off, so I will speak as things come in."
-            p.declare_away()
-            return ("Noted: the user is away. Anything that comes in is held and told when they "
-                    "are back. Say a short goodbye.")
+            if engine is None:
+                return "Presence is not running in this session."
+            if not engine.enabled:
+                return "Presence is switched off; notifications will be delivered normally."
+            engine.declare_away()
+            return (
+                "Noted: you are away. Unprompted notifications will be queued "
+                "and summarized when you return."
+            )
+
         if action == "status":
-            if p is None:
-                return "Presence is not running."
-            s = p.status()
-            if not s["enabled"]:
+            if engine is None:
+                return "Presence is not running in this session."
+            runtime = engine.status()
+            settings = get_presence_settings()
+            if not runtime["enabled"]:
                 return "Presence is switched off."
-            how = []
-            how.append("keyboard and mouse" if s["idle_detection"] else
-                       "not keyboard and mouse (this system does not report them)")
-            if s["lock_detection"]:
-                how.append("the screen lock")
-            where = (f"The user is away ({s['reason']}, {s['away_minutes']:.0f} min), "
-                     f"{s['held']} thing(s) held." if s["away"] else "The user is here.")
-            from memory.config_manager import get_presence
-            return (f"{where} Away after {get_presence()['away_minutes']} quiet minutes; "
-                    f"watching {', '.join(how)} and voice. No camera, nothing recorded.")
+            if runtime["away"]:
+                location = (
+                    f"User is away ({runtime['reason']}, "
+                    f"{runtime['away_minutes']:.0f} min); "
+                    f"{runtime['held']} notification(s) queued."
+                )
+            else:
+                location = "User is present."
+            return (
+                f"{location} Away threshold: {settings['away_minutes']} quiet minutes; "
+                f"return greeting: {'on' if settings['greet'] else 'off'}. "
+                "Presence uses supported OS idle/lock signals only; no camera or "
+                "ambient audio recording is used."
+            )
+
         if action == "settings":
-            from memory.config_manager import save_presence, get_presence
             changes = {}
-            if a.get("enabled") is not None:
-                changes["enabled"] = bool(a["enabled"])
-            if a.get("away_minutes"):
-                changes["away_minutes"] = int(a["away_minutes"])
-            if a.get("greet") is not None:
-                changes["greet"] = bool(a["greet"])
+            if args.get("enabled") is not None:
+                changes["enabled"] = bool(args["enabled"])
+            if args.get("away_minutes") is not None:
+                changes["away_minutes"] = args["away_minutes"]
+            if args.get("greet") is not None:
+                changes["greet"] = bool(args["greet"])
             if not changes:
-                return "Say what to change: on/off, the minutes, or the welcome back."
-            save_presence(**changes)
-            cur = get_presence()
-            if p is not None:
-                p.enabled, p.away_minutes = cur["enabled"], cur["away_minutes"]
-            return (f"Presence is {'on' if cur['enabled'] else 'off'}; away after "
-                    f"{cur['away_minutes']} quiet minutes; welcome back "
-                    f"{'on' if cur['greet'] else 'off'}.")
-        return f"Unknown action '{action}'."
-    except Exception as e:
-        return f"Presence could not do that: {type(e).__name__}: {e}"
+                return "Provide at least one setting: enabled, away_minutes, or greet."
+
+            saved = save_presence_settings(**changes)
+            if engine is not None:
+                engine.apply(saved)
+            return (
+                f"Presence is {'on' if saved['enabled'] else 'off'}; "
+                f"away after {saved['away_minutes']} quiet minutes; "
+                f"welcome back {'on' if saved['greet'] else 'off'}."
+            )
+
+        return f"Unknown Presence action '{action}'."
+    except Exception as exc:
+        return f"Presence could not do that: {type(exc).__name__}: {exc}"
 
 
 TOOL = {
     "name": "presence",
     "description": (
-        "Knowing whether the user is at the computer. leaving: the user says they are going "
-        "away for a while ('I'm heading out', 'back in an hour', 'going to sleep') - you then "
-        "hold anything unprompted and tell them when they are back. status: is the user "
-        "considered here, what is being held, how it is noticed. settings: enabled "
-        "(on/off), away_minutes (quiet minutes before away), greet (welcome back on/off)."),
-    "brief": "User leaving / presence status and settings.",
+        "Manage Presence awareness. leaving: declare that the user is going away; "
+        "unprompted notifications are queued. status: check current away/present state, "
+        "queued notifications, threshold and greeting setting. settings: update enabled, "
+        "away_minutes (1-240), or greet (welcome back on/off)."
+    ),
+    "brief": "Presence status, away declaration and settings.",
     "tier": "core",
     "parameters": {
         "type": "OBJECT",
