@@ -26,6 +26,15 @@ class FlightFinderValidationTests(unittest.TestCase):
             })
         self.assertIn("Invalid flight date", result)
 
+    def test_past_departure_date_is_rejected(self):
+        from datetime import datetime, timedelta
+        yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+        with patch.object(flight_finder, "_parse_date", return_value=yesterday):
+            result = flight_finder.flight_finder({
+                "origin": "TAS", "destination": "IST", "date": "yesterday"
+            })
+        self.assertEqual(result, "Departure date must be today or in the future.")
+
     def test_return_date_before_departure_is_rejected(self):
         with patch.object(flight_finder, "_parse_date", side_effect=["2026-12-20", "2026-12-19"]):
             result = flight_finder.flight_finder({
