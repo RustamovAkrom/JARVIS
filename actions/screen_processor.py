@@ -125,7 +125,7 @@ def _probe_camera(index: int, backend: int, warmup: int = 5) -> bool:
         frame = None
         deadline = time.monotonic() + max(1.0, warmup * 0.25)
         while time.monotonic() < deadline and frame is None:
-            frame = camera.read(timeout=0.25)
+            frame = camera.read()
         return frame is not None and bool(np.mean(frame) > 8)
     finally:
         camera.close()
@@ -177,13 +177,13 @@ def _capture_camera() -> tuple[bytes, str]:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 break
-            candidate = camera.read(timeout=min(0.5, remaining))
+            candidate = camera.read()
             if candidate is not None:
                 frame = candidate
         if frame is None:
-            frame = camera.read(timeout=1.0)
+            frame = camera.read()
         if frame is None:
-            frame = camera.read_latest()
+            frame = camera.read()
     finally:
         camera.close()
 
