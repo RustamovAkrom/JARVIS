@@ -10014,6 +10014,9 @@ class MainWindow(QMainWindow):
         self._build_project_explorer()
         self._activity_panel = ActivityPanel()
         self._left_tabs.addTab(self._activity_panel, self._tr("ACTIVITY"))
+        from gui.panels.tasks import TaskPanel
+        self._task_panel = TaskPanel()
+        self._left_tabs.addTab(self._task_panel, self._tr("TASKS"))
         self._left_tabs.currentChanged.connect(
             self._update_advanced_telemetry_visibility
         )
