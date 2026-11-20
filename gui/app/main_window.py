@@ -17909,7 +17909,7 @@ class JarvisUI:
                 rounds=budget.get("rounds"),
                 deliver=task.get("deliver", "panel"),
                 origin=task.get("origin", "desk"),
-                files=task.get("files", []),
+                files=[str(engine.store.workdir(task_id) / item) for item in task.get("files", []) if (engine.store.workdir(task_id) / item).is_file()],
                 title=task.get("title", ""),
             )
             self.write_log(f"[Tasks] Retried: {retry.get('title', retry.get('id'))}")
