@@ -1,0 +1,42 @@
+from core.tasks.store import TaskStore
+
+
+def _task(task_id, status):
+    return {
+        "id": task_id,
+        "status": status,
+        "created": 1,
+        "title": task_id,
+        "task": "test",
+    }
+
+
+def test_delete_removes_task_metadata_checkpoints_and_workspace(tmp_path):
+    store = TaskStore(tmp_path)
+    store.create(_task("done-1", "done"))
+    store.save_turns("done-1", [{"role": "assistant", "text": "checkpoint"}])
+    workdir = store.workdir("done-1")
+    workdir.mkdir(parents=True)
+    (workdir / "notes.md").write_text("notes", encoding="utf-8")
+
+    assert store.delete("done-1") is True
+    assert store.get("done-1") is None
+    assert not store._path("done-1").exists()
+    assert not store._turns_path("done-1").exists()
+    assert not workdir.exists()
+
+
+def test_delete_finished_preserves_active_tasks(tmp_path):
+    store = TaskStore(tmp_path)
+    store.create(_task("done-1", "done"))
+    store.create(_task("running-1", "running"))
+    assert store.delete_finished() == 1
+    assert store.get("done-1") is None
+    assert store.get("running-1") is not None
+
+
+def test_task_history_is_not_pruned_on_create(tmp_path):
+    store = TaskStore(tmp_path)
+    for index in range(105):
+        store.create(_task(f"done-{index}", "done"))
+    assert len(store.all()) == 105

@@ -246,8 +246,10 @@ class TaskEngine:
         return deleted
 
     def delete_history(self) -> int:
-        """Delete all terminal tasks, preserving active/scheduled tasks."""
-        return self.store.delete_finished()
+        """Delete all terminal tasks, including their generated reports."""
+        ids = [task["id"] for task in self.store.all()
+               if task.get("status") not in ACTIVE]
+        return sum(1 for tid in ids if self.delete_task(tid))
 
     def cancel(self, tid: str, finish: bool = False) -> bool:
         t = self.store.get(tid)
