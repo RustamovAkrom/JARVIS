@@ -263,6 +263,11 @@ class SettingsComponentTests(unittest.TestCase):
         self.assertEqual([entry.id for entry in results], ["microphone"])
         self.assertEqual(results[0].action_id, "audio")
 
+        hud_entries = search_entries("orbital HUD")
+        self.assertEqual([entry.id for entry in hud_entries], ["hud_style"])
+        self.assertEqual(hud_entries[0].category_id, "appearance")
+        self.assertEqual(hud_entries[0].action_id, "customize")
+
         category_titles = {category.id: category.title for category in CATEGORIES}
         self.assertNotIn("security", category_titles)
         self.assertEqual(category_titles["permissions"], "Security & Permissions")
