@@ -17886,6 +17886,7 @@ class JarvisUI:
         timer.timeout.connect(lambda: panel.set_tasks(engine.list(limit=100)))
         panel.refresh_requested.connect(lambda: panel.set_tasks(engine.list(limit=100)))
         panel.create_task_requested.connect(self._create_task)
+        panel.retry_requested.connect(self._retry_task)
         panel.cancel_requested.connect(lambda tid: engine.cancel(tid))
         panel.finish_requested.connect(lambda tid: engine.cancel(tid, finish=True))
         panel.steer_requested.connect(self._steer_task)
@@ -17893,6 +17894,28 @@ class JarvisUI:
         timer.start()
         self._win._task_refresh_timer = timer
         panel.set_tasks(engine.list(limit=100))
+
+    def _retry_task(self, task_id: str) -> None:
+        engine = getattr(self._win, "_task_engine", None)
+        task = engine.get(task_id) if engine else None
+        if not task:
+            return
+        budget = task.get("budget") if isinstance(task.get("budget"), dict) else {}
+        try:
+            retry = engine.start(
+                task.get("task", ""),
+                agent=task.get("agent", "general"),
+                minutes=budget.get("minutes"),
+                rounds=budget.get("rounds"),
+                deliver=task.get("deliver", "panel"),
+                origin=task.get("origin", "desk"),
+                files=task.get("files", []),
+                title=task.get("title", ""),
+            )
+            self.write_log(f"[Tasks] Retried: {retry.get('title', retry.get('id'))}")
+            self._win._task_panel.set_tasks(engine.list(limit=100))
+        except Exception as exc:
+            self.write_log(f"[Tasks] Retry failed: {exc}")
 
     def _create_task(self, payload: dict) -> None:
         engine = getattr(self._win, "_task_engine", None)
