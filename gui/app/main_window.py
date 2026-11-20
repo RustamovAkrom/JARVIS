@@ -1133,7 +1133,11 @@ class HudCanvas(QWidget):
             _band_t = 12.0
             _band_h = max(60.0, _sy_status - 12.0 - _band_t)
             _r = min(W * 0.46, _band_h / 2.0)
-            self._paint_orb3d(p, cx, _band_t + _band_h / 2.0, _r, W, _band_h)
+            _centre_y = _band_t + _band_h / 2.0
+            if self.hud_style == "core":
+                self._paint_core(p, cx, _centre_y, _r, W, _band_h)
+            else:
+                self._paint_orb3d(p, cx, _centre_y, _r, W, _band_h)
 
         # Compact status chip: draw its indicator instead of relying on emoji
         # glyphs, which rendered as stray characters on some Windows fonts.
@@ -11473,11 +11477,52 @@ class MainWindow(QMainWindow):
         panel.on_preview = self._preview_ui_color
         panel.on_opacity_preview = self._preview_ui_opacity
         panel.saved.connect(self._apply_appearance_settings)
-        return self._embed_settings_panels((
-            "Personalization",
-            "Set the JARVIS accent and window opacity. Identity and voice live in their own settings category.",
-            panel,
-        ))
+
+        hud_panel = QWidget()
+        hud_layout = QHBoxLayout(hud_panel)
+        hud_layout.setContentsMargins(0, 0, 0, 0)
+        hud_layout.setSpacing(10)
+        hud_label = QLabel(self._tr("HUD centrepiece"))
+        hud_label.setWordWrap(True)
+        hud_layout.addWidget(hud_label, 1)
+        hud_combo = QComboBox()
+        hud_combo.addItem(self._tr("Reactor Core"), "core")
+        hud_combo.addItem(self._tr("Orbital Network"), "orbital")
+        from memory.config_manager import get_hud_style
+        current_hud = get_hud_style()
+        hud_combo.setCurrentIndex(max(0, hud_combo.findData(current_hud)))
+        hud_combo.setToolTip(self._tr("Choose the animated centrepiece shown in the main HUD."))
+        hud_combo.currentIndexChanged.connect(lambda _index: self._save_hud_style(hud_combo.currentData()))
+        hud_layout.addWidget(hud_combo)
+
+        return self._embed_settings_panels(
+            (
+                "Personalization",
+                "Set the JARVIS accent and window opacity. Identity and voice live in their own settings category.",
+                panel,
+            ),
+            (
+                "HUD centrepiece",
+                "Switch between the reactor core and the animated orbital network. The change applies immediately.",
+                hud_panel,
+            ),
+        )
+
+
+    def _save_hud_style(self, style: str) -> None:
+        """Persist and apply the selected HUD centrepiece without reconnecting Live."""
+        from memory.config_manager import save_hud_style
+
+        selected = str(style or "core").strip().lower()
+        if selected not in ("core", "orbital"):
+            selected = "core"
+        try:
+            save_hud_style(selected)
+            self.hud.hud_style = selected
+            self.hud.update()
+            self._log.append_log(f"SYS: HUD centrepiece set — {selected}")
+        except Exception as exc:
+            self._log.append_log(f"ERR: HUD style update failed — {exc}")
 
     def _build_integrations_settings_page(self):
         try:
