@@ -400,7 +400,7 @@ def _stop_camera(wait: float = 3.0) -> bool:
 
 
 def _start_camera(player) -> str:
-    global _cam_thread
+    global _cam_thread, _cam_stop
     win = _hud(player)
     if win is None:
         return ("The live printer camera can only be shown on the desktop "
