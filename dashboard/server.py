@@ -738,6 +738,9 @@ class DashboardServer:
         # Set by serve() when the port could not be taken, so the UI can say
         # why the QR code leads nowhere instead of showing it regardless.
         self._bind_error: str = ""
+        self._stopping: bool = False
+        self._server = None
+        self._redirect_server = None
         self._login_html                  = _read("login.html")
         self._app_html                    = _read("app.html")
         self.app                          = self._build_app()
@@ -1221,7 +1224,11 @@ class DashboardServer:
                              log_level="warning")
         print(f"[Dashboard] Type by hand:  {self._ip}:{PORT}  "
               f"(sends you to the secure page)")
-        await uvicorn.Server(cfg).serve()
+        server = uvicorn.Server(cfg)
+        self._redirect_server = server
+        if self._stopping:
+            server.should_exit = True
+        await server.serve()
 
     async def serve(self) -> None:
         if not _DEPS_OK:
@@ -1309,4 +1316,18 @@ class DashboardServer:
 
         print(f"[Dashboard] {self.get_url()}")
         print("[Dashboard] Press 'Remote Control' in JARVIS UI to get the QR code.")
-        await uvicorn.Server(cfg).serve()
+        server = uvicorn.Server(cfg)
+        self._server = server
+        if self._stopping:
+            server.should_exit = True
+        await server.serve()
+
+    def request_shutdown(self) -> None:
+        """Signal both dashboard listeners to stop; safe to call repeatedly."""
+        self._stopping = True
+        for server in (self._server, self._redirect_server):
+            if server is not None:
+                try:
+                    server.should_exit = True
+                except Exception:
+                    pass
