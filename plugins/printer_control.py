@@ -52,9 +52,9 @@ PLUGIN = {
         "camera', 'let me know when it's done'. This is about a PHYSICAL 3D "
         "printer only — never "
         "use it for computer/screen tasks. "
-        "CONFIRMATION RULE: for destructive actions ('stop', 'home') call the "
-        "tool first WITHOUT confirm; it returns a question — relay it, and only "
-        "call again with confirm=true once the user clearly agrees."
+        "CONFIRMATION RULE: 'stop' and 'home' are guarded by the interface's "
+        "human confirmation banner. Call the tool once; never simulate approval "
+        "with a tool parameter."
     ),
     # Used in place of `description` only when a small model is on a tool
     # budget - Gemini still gets the full text. See providers/schema.py.
@@ -91,13 +91,6 @@ PLUGIN = {
                     "°C for set_nozzle_temp/set_bed_temp; fan speed percent (0-100) "
                     "for fan_on; speed profile for set_speed where 1=silent, "
                     "2=standard, 3=sport, 4=ludicrous."
-                ),
-            },
-            "confirm": {
-                "type": "BOOLEAN",
-                "description": (
-                    "Set to true ONLY after the user has clearly confirmed a "
-                    "destructive action (stop, home). Leave unset otherwise."
                 ),
             },
         },
@@ -495,6 +488,39 @@ def _num(value, default=None):
         return default
 
 
+def _critical_action(action: str, player=None) -> str:
+    """Execute a critical printer action only after core.confirm resolves it."""
+    try:
+        backend = get_active_backend(player=player)
+    except PrinterConfigError:
+        return "No printer is set up yet."
+    except PrinterDependencyError as e:
+        return f"Missing component: {e}"
+    except PrinterConnectionError as e:
+        return f"Could not connect to the printer: {e}"
+    except PrinterError as e:
+        return f"Printer error: {e}"
+
+    try:
+        if action == "home":
+            st = backend.get_status()
+            if st.state == "printing":
+                return "Refused: homing is not allowed while a print is running."
+            ok = backend.home()
+            result = "Homing the print head." if ok else "The printer refused the home command."
+        else:
+            ok = backend.stop()
+            result = "Print stopped." if ok else "The printer refused the stop command."
+        if player:
+            try:
+                player.write_log(f"[Printer] {result}")
+            except Exception:
+                pass
+        return result
+    except Exception as e:
+        return f"Printer {action} failed: {e}"
+
+
 def run(parameters: dict, player=None, session_memory=None) -> str:
     action  = (parameters.get("action") or "").strip().lower()
     value   = parameters.get("value")
@@ -518,10 +544,16 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
         return ("Closed the printer camera." if _stop_camera()
                 else "The printer camera isn't open.")
 
-    # Two-stage confirmation for destructive actions — ask first, act only once
-    # the model re-calls with confirm=true after the user agrees.
-    if action in _CRITICAL_PROMPTS and not confirm:
-        return _CRITICAL_PROMPTS[action]
+    # Irreversible printer actions are confirmed by the UI, not by a
+    # model-controlled boolean argument.
+    if action in _CRITICAL_PROMPTS:
+        from core import confirm
+        return confirm.request(
+            key=f"printer_control.{action}",
+            title="3D PRINTER — CONFIRM",
+            detail=_CRITICAL_PROMPTS[action],
+            run=lambda: _critical_action(action, player),
+        )
 
     # Everything else needs the printer. Turn connection problems into calm,
     # spoken guidance instead of raising. Passing `player` lets the connection
