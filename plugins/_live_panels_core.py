@@ -1508,6 +1508,30 @@ def _open(player, kind: str, factory: Callable[[Any, Optional[QWidget]], Board],
     return True
 
 
+def open_panel(player, kind: str, factory: Callable[[Any, Optional[QWidget]], Board]) -> bool:
+    """Open a custom live board using the same HUD lifecycle as system/weather."""
+    return bool(_gui(lambda: _open(player, kind, factory)))
+
+
+def panel_status(kind: str) -> bool:
+    """Return whether a live panel is currently visible."""
+    def check():
+        board = _boards.get(kind)
+        return bool(board is not None and not sip.isdeleted(board) and board.isVisible())
+    return bool(_gui(check))
+
+
+def close_panel(kind: str) -> bool:
+    """Close one live board, if it is open."""
+    def close():
+        board = _boards.get(kind)
+        if board is None or sip.isdeleted(board) or not board.isVisible():
+            return False
+        board.close_view()
+        return True
+    return bool(_gui(close))
+
+
 def show_system(player) -> bool:
     """Open the live diagnostics board. Safe from any thread."""
     return bool(_gui(lambda: _open(player, "system", SystemBoard)))
