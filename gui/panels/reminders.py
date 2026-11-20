@@ -5,7 +5,7 @@ from datetime import datetime
 from PyQt6.QtCore import Qt, pyqtSignal, QDateTime
 from gui.themes.tokens import C
 
-from PyQt6.QtWidgets (
+from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
     QPushButton, QLineEdit, QDateTimeEdit, QMessageBox,
 )
