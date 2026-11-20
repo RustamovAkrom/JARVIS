@@ -339,12 +339,13 @@ def _readout(jpeg: bytes, st) -> bytes:
         return jpeg
 
 
-def _camera_loop(player, win, feed, backend, lit_by_us: bool) -> None:
+def _camera_loop(player, win, feed, backend, lit_by_us: bool,
+                 stop_event: threading.Event) -> None:
     shown = False          # has our page actually reached the screen yet?
     status, status_at = None, 0.0
     try:
         for n, jpeg in enumerate(feed.frames(_CAM_FPS)):
-            if _cam_stop.is_set() or win._cam_stop.is_set():
+            if stop_event.is_set() or win._cam_stop.is_set():
                 break
             if n == 0:
                 win._cam_stream_sig.emit(True)
@@ -364,7 +365,7 @@ def _camera_loop(player, win, feed, backend, lit_by_us: bool) -> None:
                 status_at = time.time()
             win._cam_frame_sig.emit(_readout(jpeg, status))
         else:
-            if not _cam_stop.is_set():
+            if not stop_event.is_set():
                 _log(player, "The printer camera stream ended.")
     except Exception as e:
         _log(player, f"Camera stream error: {e}")
@@ -385,10 +386,15 @@ def _camera_loop(player, win, feed, backend, lit_by_us: bool) -> None:
 
 def _stop_camera(wait: float = 3.0) -> bool:
     global _cam_thread
-    running = _cam_thread is not None and _cam_thread.is_alive()
+    thread = _cam_thread
+    running = thread is not None and thread.is_alive()
     _cam_stop.set()
     if running:
-        _cam_thread.join(wait)
+        thread.join(wait)
+    # Do not forget a worker that did not exit: starting another stream while
+    # it still owns the camera would leak the resource and race the HUD.
+    if thread is not None and thread.is_alive():
+        return False
     _cam_thread = None
     return running
 
@@ -399,7 +405,8 @@ def _start_camera(player) -> str:
     if win is None:
         return ("The live printer camera can only be shown on the desktop "
                 "display, and there isn't one here.")
-    _stop_camera()
+    if _cam_thread is not None and _cam_thread.is_alive() and not _stop_camera():
+        return "The previous printer camera stream is still stopping; try again shortly."
     try:
         feed, backend = open_camera(player=player)
     except PrinterConfigError:
@@ -430,11 +437,26 @@ def _start_camera(player) -> str:
         except Exception:
             pass
 
-    _cam_stop.clear()
+    _cam_stop = threading.Event()
+    stop_event = _cam_stop
     _cam_thread = threading.Thread(target=_camera_loop, name="printer-camera",
-                                   args=(player, win, feed, backend, lit_by_us),
+                                   args=(player, win, feed, backend, lit_by_us, stop_event),
                                    daemon=True)
-    _cam_thread.start()
+    try:
+        _cam_thread.start()
+    except Exception as e:
+        _cam_thread = None
+        stop_event.set()
+        try:
+            feed.close()
+        except Exception:
+            pass
+        if lit_by_us and backend is not None:
+            try:
+                backend.set_light(False)
+            except Exception:
+                pass
+        return f"Could not start printer camera: {e}"
     msg = "The printer camera is live on the display."
     if lit_by_us:
         msg += " I switched the chamber light on so you can see inside; it goes off again when you close the camera."
