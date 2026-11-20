@@ -3765,9 +3765,32 @@ class JarvisLive:
             self._engine = None
             await engine.close()
 
+    def _on_task_notification(self, event: str, task: dict, text: str) -> None:
+        """Deliver task completion through the UI's thread-safe bridge."""
+        title = str(task.get("title") or "Task")
+        status = str(event or task.get("status") or "updated")
+        self.ui.write_log(f"[Tasks] {title}: {status}")
+        if status == "done" and text:
+            self.ui.show_content(title, text, key=f"task:{task.get('id', '')}")
+
     async def run(self):
         self._loop = asyncio.get_event_loop()
         self._reconnect_event = asyncio.Event()
+
+        # Task Engine is optional and independent from the live-session engine.
+        try:
+            from core.tasks.runtime import TaskRuntime
+            self._task_runtime = TaskRuntime(
+                data_root=PATHS.user_data_root,
+                resource_root=PATHS.resource_root,
+                user_agents_dir=PATHS.user_data_root / "agents",
+                notify=self._on_task_notification,
+                log=self.ui.write_log,
+            )
+            self.ui.bind_task_engine(self._task_runtime.engine)
+        except Exception as exc:
+            self._task_runtime = None
+            self.ui.write_log(f"[Tasks] Task Engine disabled: {exc}")
 
         # ── Wire the shared core services to the interface ───────────────────
         # The confirmation gate is useless without a way to ask, and a memory
