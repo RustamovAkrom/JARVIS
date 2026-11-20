@@ -175,6 +175,18 @@ def _model_paths():
                         continue
 
     return result
+def _valid_frame(frame, np):
+    """Accept only ordinary BGR frames suitable for YuNet/SFace."""
+    return (
+        isinstance(frame, np.ndarray)
+        and frame.ndim == 3
+        and frame.shape[2] == 3
+        and frame.shape[0] >= 2
+        and frame.shape[1] >= 2
+        and frame.dtype != object
+    )
+
+
 def _engines(cv2, models):
     detector = cv2.FaceDetectorYN_create(str(models["yunet.onnx"]), "", (320, 320), 0.85, 0.3, 5000)
     recognizer = cv2.FaceRecognizerSF_create(str(models["sface.onnx"]), "")
@@ -222,8 +234,13 @@ def _enroll_face():
         started = time.monotonic()
         next_capture = 0.0
         while time.monotonic() - started < 20 and len(features) < 8:
-            ok, frame = camera.read()
-            if not ok:
+            try:
+                ok, frame = camera.read()
+            except Exception as exc:
+                print(f"[Face Activation] camera read failed: {type(exc).__name__}: {exc}")
+                time.sleep(0.05)
+                continue
+            if not ok or not _valid_frame(frame, np):
                 time.sleep(0.05)
                 continue
             now = time.monotonic()
@@ -289,11 +306,22 @@ def _verify_face():
     started = time.monotonic()
     try:
         while time.monotonic() - started < 8 and tries < 20:
-            ok, frame = camera.read()
-            if not ok:
+            try:
+                ok, frame = camera.read()
+            except Exception as exc:
+                print(f"[Face Activation] camera read failed: {type(exc).__name__}: {exc}")
+                tries += 1
+                time.sleep(0.05)
                 continue
             tries += 1
-            feature, _face = _face_feature(frame, detector, recognizer, cv2, np)
+            if not ok or not _valid_frame(frame, np):
+                time.sleep(0.05)
+                continue
+            try:
+                feature, _face = _face_feature(frame, detector, recognizer, cv2, np)
+            except Exception as exc:
+                print(f"[Face Activation] frame processing failed: {type(exc).__name__}: {exc}")
+                continue
             if feature is None:
                 continue
             scores = enrolled @ feature.reshape(-1)
