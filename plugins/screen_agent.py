@@ -486,50 +486,51 @@ def _stop_from_window() -> None:
 
 
 def _worker(player, goal: str, cfg: dict, show_me: bool = False) -> None:
-    from core import screenview
-    from plugins import _screen_loop as loop
-    if _sensors is not None:
-        try:
-            _sensors.start("screen_agent", "screen", stop=_stop_from_window)
-        except Exception as e:
-            # Sensor Registry is observability/lifecycle integration, not a
-            # dependency of the screen agent itself.
-            print(f"[ScreenAgent] sensor registration failed: {type(e).__name__}: {e}")
-
-    stop = _state["stop"]
-    narrate = _cfg_bool(cfg, "narrate")
-    confirm_raw = confirm_mode(cfg, _state.get("phone_chat") is not None)
-
-    def spent() -> None:
-        with _lock:
-            _state["calls"] += 1
-
-    last_action = {"name": ""}
-
-    def progress(line: str) -> None:
-        if line.startswith("["):
-            with _lock:
-                _state["step"] += 1
-            if narrate:
-                _announce(player, re.sub(r"^\[[^\]]*\]\s*", "", line)[:160])
-        _log_timing(line, last_action)
-        _panel(player, line)
-
-    def approve(description: str, irreversible: bool) -> bool:
-        # Always asked: an older saved "never" no longer skips the question.
-        return _await_approval(player, description, irreversible)
-
-    hooks = loop.Hooks(
-        ask=_make_ask(str(cfg.get("vision_model") or _DEFAULTS["vision_model"]),
-                      thinking=_cfg_bool(cfg, "think")),
-        approve=approve,
-        progress=progress,
-        say=lambda text: _announce(player, text),
-        open_app=_make_open_app(player),
-        spent=spent,
-    )
-
+    # The whole worker lifecycle is guarded. Imports, optional sensor hooks,
+    # model setup and the actual loop can all fail; every failure must release
+    # the running state and HUD busy indicator.
     try:
+        from core import screenview
+        from plugins import _screen_loop as loop
+
+        if _sensors is not None:
+            try:
+                _sensors.start("screen_agent", "screen", stop=_stop_from_window)
+            except Exception as e:
+                print(f"[ScreenAgent] sensor registration failed: {type(e).__name__}: {e}")
+
+        stop = _state["stop"]
+        narrate = _cfg_bool(cfg, "narrate")
+        confirm_raw = confirm_mode(cfg, _state.get("phone_chat") is not None)
+
+        def spent() -> None:
+            with _lock:
+                _state["calls"] += 1
+
+        last_action = {"name": ""}
+
+        def progress(line: str) -> None:
+            if line.startswith("["):
+                with _lock:
+                    _state["step"] += 1
+                if narrate:
+                    _announce(player, re.sub(r"^\[[^\]]*\]\s*", "", line)[:160])
+            _log_timing(line, last_action)
+            _panel(player, line)
+
+        def approve(description: str, irreversible: bool) -> bool:
+            return _await_approval(player, description, irreversible)
+
+        hooks = loop.Hooks(
+            ask=_make_ask(str(cfg.get("vision_model") or _DEFAULTS["vision_model"]),
+                          thinking=_cfg_bool(cfg, "think")),
+            approve=approve,
+            progress=progress,
+            say=lambda text: _announce(player, text),
+            open_app=_make_open_app(player),
+            spent=spent,
+        )
+
         screenview.forget_slow_windows()
         _panel(player, "👀 looking at the screen...")
         result = loop.run(
