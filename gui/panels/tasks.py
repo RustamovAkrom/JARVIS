@@ -25,7 +25,7 @@ class TaskPanel(QWidget):
         self.setStyleSheet("""
         QWidget#TaskPanel { background: transparent; color: #d8e8e8; }
         QWidget#TaskPanel QLabel { color: #c4d8d8; }
-        QWidget#TaskPanel QLabel#task_details_title { color: #67e8d0; font-weight: 600; padding: 5px 2px; }\n        QWidget#TaskPanel QLabel#task_empty { color: #6e9a9c; padding: 18px; }
+        QWidget#TaskPanel QLabel#task_details_title { color: #67e8d0; font-weight: 600; padding: 5px 2px; }\n        QWidget#TaskPanel QLabel#task_empty { color: #6e9a9c; padding: 18px; }\n        QWidget#TaskPanel QLabel#task_stats { color: #5f999a; font-size: 10px; padding: 2px 4px; }
         QWidget#TaskPanel QLineEdit, QWidget#TaskPanel QComboBox {
             background: rgba(3, 18, 23, 220); color: #d8eeee;
             border: 1px solid #245b60; border-radius: 5px; padding: 6px 8px;
@@ -76,6 +76,11 @@ class TaskPanel(QWidget):
         self.agent_filter.setToolTip("Filter by agent profile")
         self.agent_filter.addItem("All Agents", "all")
         controls.addWidget(self.agent_filter, 1)
+        self.sort_box = QComboBox()
+        for label, value in (("Newest", "newest"), ("Oldest", "oldest"), ("Status", "status"), ("Progress", "progress")):
+            self.sort_box.addItem(label, value)
+        self.sort_box.setToolTip("Sort tasks")
+        controls.addWidget(self.sort_box, 1)
         self.new_button = QPushButton("New Task")
         controls.addWidget(self.new_button)
         self.refresh_button = QPushButton("Refresh")
@@ -100,6 +105,9 @@ class TaskPanel(QWidget):
         root.addWidget(self.details_browser, 2)
         self.export_button = QPushButton("Export Report")
         root.addWidget(self.export_button)
+        self.stats_label = QLabel("0 tasks")
+        self.stats_label.setObjectName("task_stats")
+        root.addWidget(self.stats_label)
         self.empty_label = QLabel("No tasks yet. Create your first task.")
         self.empty_label.setObjectName("task_empty")
         self.empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -115,6 +123,7 @@ class TaskPanel(QWidget):
         self.new_button.clicked.connect(self._create_task_dialog)
         self.refresh_button.clicked.connect(self.refresh_requested.emit)
         self.filter_box.currentIndexChanged.connect(self.render)
+        self.sort_box.currentIndexChanged.connect(self.render)
         self.agent_filter.currentIndexChanged.connect(self.render)
         self.search_box.textChanged.connect(self.render)
         self.export_button.clicked.connect(self._export_selected_report)
@@ -311,12 +320,26 @@ class TaskPanel(QWidget):
         item = self.list_widget.currentItem()
         return str(item.data(Qt.ItemDataRole.UserRole) or "") if item else ""
 
+    @staticmethod
+    def _progress(task):
+        used = task.get("used") if isinstance(task.get("used"), dict) else {}
+        budget = task.get("budget") if isinstance(task.get("budget"), dict) else {}
+        rounds = float(used.get("rounds") or 0)
+        total = float(budget.get("rounds") or 0)
+        seconds = float(used.get("seconds") or 0)
+        time_budget = float(budget.get("seconds") or 0)
+        if total:
+            return min(100.0, rounds / total * 100)
+        if time_budget:
+            return min(100.0, seconds / time_budget * 100)
+        return 0.0
+
     def render(self, *_):
         selected = self.selected_task_id()
         mode = self.filter_box.currentData()
         query = self.search_box.text().strip().casefold()
         agent = self.agent_filter.currentData()
-        rows = sorted(self._tasks.values(), key=lambda t: float(t.get("created") or 0), reverse=True)
+        rows = list(self._tasks.values())
         if mode == "active":
             rows = [t for t in rows if t.get("status") in _ACTIVE]
         elif mode == "done":
@@ -330,6 +353,20 @@ class TaskPanel(QWidget):
                     or query in str(t.get("task") or "").casefold()
                     or query in str(t.get("agent") or "").casefold()
                     or query in str(t.get("status") or "").casefold()]
+        sort_mode = self.sort_box.currentData()
+        if sort_mode == "oldest":
+            rows.sort(key=lambda t: float(t.get("created") or 0))
+        elif sort_mode == "status":
+            rows.sort(key=lambda t: (str(t.get("status") or ""), -float(t.get("created") or 0)))
+        elif sort_mode == "progress":
+            rows.sort(key=lambda t: self._progress(t), reverse=True)
+        else:
+            rows.sort(key=lambda t: float(t.get("created") or 0), reverse=True)
+        all_tasks = list(self._tasks.values())
+        running = sum(t.get("status") == "running" for t in all_tasks)
+        done = sum(t.get("status") == "done" for t in all_tasks)
+        failed = sum(t.get("status") == "failed" for t in all_tasks)
+        self.stats_label.setText(f"{len(all_tasks)} tasks · {running} running · {done} done · {failed} failed")
         self.list_widget.clear()
         for task in rows:
             status = str(task.get("status") or "unknown").upper()
