@@ -29,20 +29,29 @@ def new_id() -> str:
 
 
 def write_json(path: Path, data) -> None:
+    """Atomically persist JSON with a unique temporary file per writer."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
-    # A virus scanner or an indexer can hold the target for a moment on Windows;
-    # one of those should cost a retry, not a lost checkpoint.
-    for attempt in range(5):
+    fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent))
+    tmp = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            json.dump(data, stream, ensure_ascii=False, indent=1)
+            stream.flush()
+            os.fsync(stream.fileno())
+        # Retry transient Windows file-lock failures without losing old data.
+        for attempt in range(5):
+            try:
+                os.replace(tmp, path)
+                return
+            except PermissionError:
+                if attempt == 4:
+                    raise
+                time.sleep(0.05 * (attempt + 1))
+    finally:
         try:
-            os.replace(tmp, path)
-            return
-        except PermissionError:
-            if attempt == 4:
-                raise
-            time.sleep(0.05 * (attempt + 1))
-
+            tmp.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 def read_json(path: Path, default):
     try:
