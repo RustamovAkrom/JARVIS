@@ -1,6 +1,6 @@
 """Connected Apps settings UI for optional MCP integrations."""
 from __future__ import annotations
-import json, subprocess, sys
+import json
 from PyQt6.QtCore import Qt, QObject, QRunnable, QThreadPool, pyqtSignal
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QTextEdit, QListWidget, QListWidgetItem, QMessageBox, QInputDialog, QGroupBox
 from core.connected_apps.models import AppDescriptor, TransportType
@@ -33,7 +33,7 @@ class ConnectedAppsPanel(QWidget):
         self.details=QTextEdit();self.details.setObjectName("appsDetails");self.details.setReadOnly(True);self.details.setMinimumHeight(130);self.details.setMaximumHeight(220);layout.addWidget(self.details)
         actions=QHBoxLayout();self.connect_btn=QPushButton("Connect / Reconnect");self.connect_btn.clicked.connect(self.connect_selected);self.disconnect_btn=QPushButton("Disconnect");self.disconnect_btn.clicked.connect(self.disconnect_selected);self.remove_btn=QPushButton("Remove");self.remove_btn.clicked.connect(self.remove_selected)
         actions.addWidget(self.connect_btn);actions.addWidget(self.disconnect_btn);actions.addWidget(self.remove_btn);actions.addStretch(1);layout.addLayout(actions);root.addWidget(group)
-        runtime=QGroupBox("MCP runtime");rrow=QHBoxLayout(runtime);self.runtime_status=QLabel();self.runtime_status.setWordWrap(True);rrow.addWidget(self.runtime_status,1);self.install_btn=QPushButton("Install MCP support");self.install_btn.clicked.connect(self.install_mcp);rrow.addWidget(self.install_btn);root.addWidget(runtime)
+        runtime=QGroupBox("MCP runtime");rrow=QHBoxLayout(runtime);self.runtime_status=QLabel();self.runtime_status.setWordWrap(True);rrow.addWidget(self.runtime_status,1);self.runtime_help=QLabel();self.runtime_help.setWordWrap(True);rrow.addWidget(self.runtime_help,1);root.addWidget(runtime)
         self.status=QLabel("Ready");self.status.setObjectName("appsStatus");self.status.setWordWrap(True);root.addWidget(self.status);root.addStretch(1)
         self.setStyleSheet("""
         #ConnectedAppsPanel{color:#d9f7f4} #appsTitle{font-size:18px;font-weight:700;letter-spacing:1px;color:#52eee0}
@@ -47,31 +47,17 @@ class ConnectedAppsPanel(QWidget):
         """)
         self._check_runtime();self.refresh()
     def _check_runtime(self):
-        try:import mcp
+        try:
+            import mcp  # noqa: F401
         except ImportError:
-            self.runtime_status.setText("MCP SDK missing. Install it to enable STDIO and HTTP connections.")
-            self.install_btn.setEnabled(True)
+            self.runtime_status.setText("MCP SDK is not installed in this environment.")
+            self.runtime_help.setText("Developer setup: run  uv sync --extra connected-apps  from the project root. This keeps MCP optional and out of JARVIS core.")
         else:
-            self.runtime_status.setText("MCP SDK installed. STDIO and HTTP connections are available.")
-            self.install_btn.setText("MCP support installed");self.install_btn.setEnabled(False)
-    def install_mcp(self):
-        self._busy(True,"Bootstrapping pip and installing MCP support…")
-        def install():
-            bootstrap=subprocess.run([sys.executable,"-m","ensurepip","--upgrade"],capture_output=True,text=True,timeout=180)
-            if bootstrap.returncode != 0:
-                raise RuntimeError("ensurepip failed:\n"+(bootstrap.stderr or bootstrap.stdout or "No diagnostic output"))
-            return subprocess.run([sys.executable,"-m","pip","install","--upgrade","pip","mcp>=1.0,<2"],capture_output=True,text=True,timeout=600,check=True)
-        w=_Worker(install);w.signals.finished.connect(self._installed);self.pool.start(w)
-    def _installed(self,result,error):
-        self._busy(False)
-        if error:
-            detail=getattr(error,"stderr","") or str(error)
-            if not detail and getattr(error,"__cause__",None):detail=str(error.__cause__)
-            QMessageBox.warning(self,"MCP installation failed",detail[-4000:]);self.status.setText("MCP installation failed. See diagnostic details.")
-        else:
-            self._check_runtime();self.status.setText("MCP SDK installed. Restart JARVIS if needed.")
+            self.runtime_status.setText("MCP SDK is available. STDIO and HTTP transports are ready.")
+            self.runtime_help.setText("Connected Apps runtime is available.")
+
     def _busy(self,busy,message=""):
-        for w in (self.add_stdio_btn,self.add_http_btn,self.add_oauth_btn,self.connect_btn,self.disconnect_btn,self.remove_btn,self.install_btn):w.setEnabled(not busy)
+        for w in (self.add_stdio_btn,self.add_http_btn,self.add_oauth_btn,self.connect_btn,self.disconnect_btn,self.remove_btn):w.setEnabled(not busy)
         if message:self.status.setText(message)
     def refresh(self,*_):
         query=self.search.text().casefold().strip();selected=self.selected_id();self.list.clear();visible=[]
