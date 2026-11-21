@@ -773,6 +773,8 @@ class JarvisLive:
             getattr(getattr(self.ui, "_win", None), "_chat_plan_mode", False)
         )
         self._briefing_sent = False  # morning briefing fires once per process
+        self._clap_welcome = os.environ.get("JARVIS_WELCOME", "0") == "1"
+        self._clap_welcome_sent = False
         self._sys_monitor = SystemMonitor()  # persistent cooldown state
         self._proactive = ProactiveEngine()
         self._presence = Presence()
@@ -2953,6 +2955,38 @@ class JarvisLive:
 
     # ── Morning briefing ────────────────────────────────────────────────────────
 
+    async def _send_clap_welcome(self) -> None:
+        """A short, tool-free greeting when JARVIS was launched by the clap listener."""
+        if self.ui.auth_locked or not self.session:
+            return
+        memory = await asyncio.to_thread(load_memory)
+        identity = memory.get("identity", {}) if isinstance(memory, dict) else {}
+
+        def value(key: str) -> str:
+            entry = identity.get(key, {})
+            return (entry.get("value", "") if isinstance(entry, dict) else str(entry)).strip()
+
+        language = value("language")
+        name = value("name")
+        prompt = (
+            "JARVIS has just been opened by the user's double-clap activation. "
+            "Give a concise, natural welcome and say you are ready. Do not call tools, "
+            "do not mention the activation mechanism, and keep it to one sentence."
+        )
+        if language:
+            prompt += f" Speak in {language}."
+        if name:
+            prompt += f" Address the user as {name}."
+        try:
+            await self.session.send_client_content(
+                turns={"role": "user", "parts": [{"text": prompt}]},
+                turn_complete=True,
+            )
+            self._clap_welcome_sent = True
+            print("[JARVIS] Clap-launch greeting sent.")
+        except Exception as exc:
+            print(f"[JARVIS] Clap-launch greeting failed: {type(exc).__name__}: {exc}")
+
     async def _send_startup_briefing(self) -> None:
         """
         Two-phase briefing optimized for speed:
@@ -4081,6 +4115,13 @@ class JarvisLive:
                     ):
                         self._briefing_sent = True
                         tg.create_task(self._send_startup_briefing())
+                    elif (
+                        self._clap_welcome
+                        and not self._clap_welcome_sent
+                        and self._awake
+                        and not self.ui.auth_locked
+                    ):
+                        tg.create_task(self._send_clap_welcome())
 
             except KeyboardInterrupt:
                 raise
