@@ -67,12 +67,12 @@ class _Toggle:
 def test_plugin_settings_toggle_uses_local_labels_without_translation_method():
     overlay = _load_overlay_methods()
     toggle = _Toggle(True)
-    overlay._style_toggle(toggle, toggle, True)
+    overlay._style_toggle(toggle, True)
     assert toggle.text == "ON"
     assert "border: 1px solid" in toggle.style and "ON" in toggle.text
 
     toggle.checked = False
-    overlay._style_toggle(toggle, toggle, False)
+    overlay._style_toggle(toggle, False)
     assert toggle.text == "OFF"
 
 
