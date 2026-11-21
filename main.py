@@ -851,7 +851,10 @@ class JarvisLive:
         self._wake_enabled = get_wake_word_enabled()
         self._awake = not self._wake_enabled
         self._wake_detector: WakeWordDetector | None = None
+        self._clap_detector = None
         self._wake_sleep_timeout = WAKE_SLEEP_TIMEOUT
+        if self._wake_enabled:
+            self._ensure_clap_detector()
 
         # Restore the saved push-to-talk preference. Doing it here rather than
         # in __init__ means the hotkey thread only exists once there is a
@@ -889,6 +892,25 @@ class JarvisLive:
             bool(self._wake_detector and self._wake_detector.ready) or wake_is_ready()
         )
         return {"enabled": self._wake_enabled, "awake": self._awake, "ready": ready}
+
+    def _ensure_clap_detector(self) -> bool:
+        """Create the local double-clap detector for sleeping wake-word mode."""
+        if self._clap_detector is not None:
+            return True
+        try:
+            from core.clap import ClapDetector, SENSITIVITY
+            from memory.config_manager import get_clap_launcher
+
+            settings = get_clap_launcher()
+            self._clap_detector = ClapDetector(
+                claps=settings["claps"],
+                sensitivity=SENSITIVITY[settings["sensitivity"]],
+                level=settings["level"],
+            )
+            return True
+        except Exception as exc:
+            print(f"[Wake] Double-clap detector unavailable: {type(exc).__name__}: {exc}")
+            return False
 
     def _ensure_wake_detector(self) -> bool:
         """Load the detector once (model loads on first start). Idempotent."""
@@ -967,6 +989,7 @@ class JarvisLive:
             self._wake_enabled = True
             save_wake_word_enabled(True)
             self._ensure_wake_detector()
+            self._ensure_clap_detector()
             self.sleep(reason="wake word enabled")
             return "enabled"
         else:
@@ -2396,6 +2419,14 @@ class JarvisLive:
                 det = self._wake_detector
                 if det is not None:
                     det.feed(indata)
+                clap = self._clap_detector
+                if clap is not None:
+                    try:
+                        samples = indata[:, 0].astype(np.float32) / 32768.0
+                        if clap.feed(samples):
+                            loop.call_soon_threadsafe(self.wake, "double clap")
+                    except Exception as exc:
+                        print(f"[Wake] Double-clap detection error: {type(exc).__name__}: {exc}")
                 return
             with self._speaking_lock:
                 jarvis_speaking = self._is_speaking
