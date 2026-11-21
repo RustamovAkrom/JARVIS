@@ -7137,10 +7137,17 @@ class _WinPTYTerminal:
     def read(self, blocking=False):
         del blocking
         try:
-            # pywinpty exposes a timeout-aware read; timeout=0 keeps the
-            # Qt polling loop non-blocking when no terminal data is available.
-            return self._process.read(65536, timeout=0) or ""
-        except (BlockingIOError, EOFError, OSError, TimeoutError):
+            # The pywinpty version bundled by JARVIS does not support a
+            # timeout keyword on PtyProcess.read(). Its socket-backed fileobj
+            # is non-blocking, so poll readiness before calling read().
+            import select
+
+            sock = self._process.fileobj
+            ready, _, _ = select.select([sock], [], [], 0)
+            if not ready:
+                return ""
+            return self._process.read(65536) or ""
+        except (BlockingIOError, EOFError, OSError):
             return ""
 
     def write(self, data):
