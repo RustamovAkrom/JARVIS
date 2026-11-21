@@ -681,6 +681,7 @@ class JarvisLive:
         self.ui.on_plan_mode_change = self._set_plan_mode
         self._asst_name = "JARVI    S"  # updated each session from config
         self.session = None
+        self._connected_app_tool_map = {}
         self.audio_in_queue = None
         self.out_queue = None
         self._loop = None
@@ -1559,6 +1560,32 @@ class JarvisLive:
             + self._action_registry.get_tool_declarations()
             + self._plugin_registry.get_tool_declarations()
         )
+        # Expose connected MCP tools directly to the Live model. Names are
+        # namespaced and mapped back to the exact connection/tool pair.
+        self._connected_app_tool_map = {}
+        try:
+            from core.connected_apps.agent import agent as _connected_agent
+            import re as _re
+            for _row in _connected_agent.describe_tools():
+                _conn = str(_row.get("connection_id", ""))
+                _tool = str(_row.get("name", ""))
+                _safe = _re.sub(r"[^a-zA-Z0-9_]", "_", f"mcp_{_conn}_{_tool}")
+                if not _safe or _safe in {d.get("name") for d in _all_decls if isinstance(d, dict)}:
+                    continue
+                _schema = _row.get("input_schema") or {"type": "OBJECT", "properties": {}}
+                if not isinstance(_schema, dict):
+                    _schema = {"type": "OBJECT", "properties": {}}
+                _schema = dict(_schema)
+                _schema.setdefault("type", "OBJECT")
+                _schema.setdefault("properties", {})
+                self._connected_app_tool_map[_safe] = (_conn, _tool)
+                _all_decls.append({
+                    "name": _safe,
+                    "description": f"Connected app {_row.get('app','')}: {_tool}. {_row.get('description','')}".strip(),
+                    "parameters": _schema,
+                })
+        except Exception as _connected_exc:
+            print(f"[Connected Apps] Dynamic tool declarations unavailable: {_connected_exc}")
 
         # An engine that cannot do something is not offered the tool for it.
         #
@@ -1827,6 +1854,28 @@ class JarvisLive:
                         )
                     },
                 )
+
+        if name in self._connected_app_tool_map:
+            connection_id, mcp_tool_name = self._connected_app_tool_map[name]
+            try:
+                from core.connected_apps.agent import agent as _connected_agent
+                _result = await asyncio.to_thread(
+                    _connected_agent.execute,
+                    connection_id,
+                    mcp_tool_name,
+                    args,
+                    read_only=True,
+                )
+                _payload = {"result": str(_result)}
+                self.ui.write_log(f"[TOOL COMPLETE] {name} · connected app")
+                if not self.ui.muted:
+                    self.ui.set_state("LISTENING")
+                return types.FunctionResponse(id=fc.id, name=name, response=_payload)
+            except Exception as _exc:
+                self.ui.write_log(f"[TOOL FAILED] {name} · {type(_exc).__name__}: {_exc}")
+                if not self.ui.muted:
+                    self.ui.set_state("LISTENING")
+                return types.FunctionResponse(id=fc.id, name=name, response={"error": str(_exc)})
 
         if name == "screen_process":
             from memory.config_manager import get_computer_permissions
