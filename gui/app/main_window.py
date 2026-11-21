@@ -17971,8 +17971,19 @@ class JarvisUI:
                 )
                 self._win._task_panel_update_sig.emit(engine.list(limit=100))
                 return {"ok": True, "task": task}
-            if action == "list":
-                return {"ok": True, "tasks": engine.list(limit=100)}
+            if action in {"list", "search"}:
+                tasks = engine.list(limit=100)
+                if action == "search":
+                    query = str(payload.get("query") or "").strip().casefold()
+                    if query:
+                        tasks = [
+                            item for item in tasks
+                            if query in str(item.get("title") or "").casefold()
+                            or query in str(item.get("task") or "").casefold()
+                            or query in str(item.get("report") or item.get("result") or "").casefold()
+                            or query in str(item.get("id") or "").casefold()
+                        ]
+                return {"ok": True, "tasks": tasks}
             if action == "delete":
                 task_id = str(payload.get("task_id") or "").strip()
                 deleted = engine.delete_task(task_id)
