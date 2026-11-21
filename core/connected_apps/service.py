@@ -1,6 +1,6 @@
 """Connected Apps orchestration API."""
 from __future__ import annotations
-import secrets,time
+import secrets,time,threading
 from core.connected_apps.models import AppConnection,AppDescriptor,ConnectionStatus,TransportType
 from core.connected_apps.registry import registry
 from core.connected_apps.store import ConnectedAppsStore
@@ -15,7 +15,35 @@ def _serialize(row):
 class ConnectedAppsService:
     def __init__(self,app_registry=None,store=None):
         self.registry=app_registry or registry
-        self.store=store or ConnectedAppsStore()
+        self.store=store or ConnectedAppsStore()\n        self._adapter_lock=threading.RLock()\n        self._adapters={}
+    @staticmethod
+    def normalize(name):
+        return " ".join(str(name or "").strip().casefold().split())
+    def register(self,adapter,replace=False):
+        key=self.normalize(getattr(adapter,"name",""))
+        if not key or not callable(getattr(adapter,"execute",None)):
+            raise TypeError("Adapter must have a non-empty name and execute()")
+        with self._adapter_lock:
+            if key in self._adapters and not replace: raise ValueError(f"Adapter '{key}' already registered")
+            self._adapters[key]=adapter
+    def get(self,name):
+        key=self.normalize(name)
+        with self._adapter_lock:
+            direct=self._adapters.get(key)
+            if direct:return direct
+            matches=[a for a in self._adapters.values() if self.normalize(getattr(a,"display_name",""))==key]
+            return matches[0] if len(matches)==1 else None
+    def unregister(self,name):
+        key=self.normalize(name)
+        with self._adapter_lock:
+            if key in self._adapters:return self._adapters.pop(key,None) is not None
+            matches=[k for k,a in self._adapters.items() if self.normalize(getattr(a,"display_name",""))==key]
+            return self._adapters.pop(matches[0],None) is not None if len(matches)==1 else False
+    def list_apps(self):
+        with self._adapter_lock:
+            return [{"name":a.name,"display_name":getattr(a,"display_name",a.name)} for a in self._adapters.values()]
+    def summary(self):
+        return ", ".join(a["display_name"] for a in self.list_apps())
     def catalog(self,query="",category=""):
         return self.registry.search(query,category=category)
     def connections(self):
