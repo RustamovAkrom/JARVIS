@@ -31,6 +31,7 @@ server can each announce it their own way.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -49,6 +50,8 @@ ACTIVE = ("queued", "scheduled", "running", "waiting_quota")
 MAX_ATTEMPTS = 3
 QUOTA_WAIT = 300                 # seconds a task sleeps when no model answered
 _RESULT_CAP = 40_000
+_TOOL_LEDGER_LIMIT = 256
+_TOOL_LEDGER_RESULT_CAP = 12_000
 _CONTEXT_CHARS = 160_000         # past this, old tool results are shortened
 _KEEP_RECENT_TOOL_TURNS = 8
 
@@ -223,7 +226,7 @@ class TaskEngine:
             "used": {"rounds": 0, "seconds": 0.0},
             "attempts": 0, "quota_until": 0.0, "wrap_up": False,
             "notes_in": [], "events": [], "files": copied,
-            "result": "", "report": "", "error": "",
+            "result": "", "report": "", "error": "", "tool_ledger": {},
         }
         for key, value in (extra or {}).items():
             task_doc.setdefault(key, value)
@@ -377,7 +380,6 @@ class TaskEngine:
 
         used_s = float(task["used"]["seconds"])
         rounds = int(task["used"]["rounds"])
-        seen: dict[str, str] = {}
         last_text = ""
         while True:
             round_began = self._clock()
@@ -437,16 +439,26 @@ class TaskEngine:
                 self._event(tid, "progress", reply["text"])
                 self._notify("progress", tid, reply["text"])
             results = []
+            batch_results: dict[str, str] = {}
             for call in calls:
                 if flags["cancel"] or flags["halt"]:
                     break
-                sig = call["name"] + json.dumps(call.get("args") or {}, sort_keys=True, ensure_ascii=False)
-                # The same call twice means the result was not taken in. Running it
-                # again costs quota and, for anything that acts, does it twice.
-                if sig not in seen:
-                    self._event(tid, "tool", f"{call['name']} {self._arg_hint(call.get('args'))}")
-                    seen[sig] = tools.execute(call["name"], call.get("args") or {})
-                results.append({"id": call["id"], "name": call["name"], "result": seen[sig]})
+                name, args = call["name"], call.get("args") or {}
+                sig = name + json.dumps(args, sort_keys=True, ensure_ascii=False, default=str)
+                if sig not in batch_results:
+                    self._event(tid, "tool", f"{name} {self._arg_hint(args)}")
+                    # The turn index is stable across a restart until its tool
+                    # results are checkpointed. The ledger therefore reuses a
+                    # completed result or refuses an ambiguous in-flight replay.
+                    round_key = f"main:{len(turns) - 1}"
+                    batch_results[sig] = self.execute_tool_once(
+                        tid,
+                        round_key,
+                        name,
+                        args,
+                        lambda name=name, args=args: tools.execute(name, args),
+                    )
+                results.append({"id": call["id"], "name": name, "result": batch_results[sig]})
             if len(results) < len(calls):
                 # Stopped mid-round: drop the unanswered model turn rather than
                 # checkpoint a call with no result, which the next request would reject.
@@ -458,6 +470,83 @@ class TaskEngine:
             used_s += self._clock() - round_began
             self.store.save_turns(tid, turns)
             self._account(tid, used_s, rounds)
+
+    def execute_tool_once(self, tid: str, round_key: str, name: str,
+                          args: dict, execute) -> str:
+        """Persist tool intent/results to avoid replaying side effects after restart.
+
+        This provides conservative at-most-once recovery: a completed invocation
+        is replayed from its stored result; an invocation left in 'started' state
+        is reported as uncertain and is never blindly executed a second time.
+        """
+        encoded_args = json.dumps(
+            args or {}, sort_keys=True, ensure_ascii=False, default=str
+        )
+        args_hash = hashlib.sha256(encoded_args.encode("utf-8")).hexdigest()
+        operation_id = f"{round_key}:{name}:{args_hash}"
+
+        task = self.store.get(tid)
+        if task is None:
+            raise LookupError(f"task {tid!r} no longer exists")
+        ledger = task.get("tool_ledger") or {}
+        previous = ledger.get(operation_id)
+        if previous:
+            if previous.get("status") == "completed":
+                return str(previous.get("result") or "")
+            return (
+                "[NOT RE-EXECUTED] This tool call was started before an interruption, "
+                "but its completion was not persisted. Its side effects are unknown. "
+                "Verify the outcome manually; do not repeat the operation automatically."
+            )
+
+        now = self._clock()
+
+        def mark_started(current):
+            entries = current.setdefault("tool_ledger", {})
+            entries[operation_id] = {
+                "tool": str(name),
+                "args_hash": args_hash,
+                "round_key": str(round_key),
+                "status": "started",
+                "started_at": now,
+            }
+            if len(entries) > _TOOL_LEDGER_LIMIT:
+                oldest = sorted(
+                    entries.items(),
+                    key=lambda item: float(item[1].get("started_at") or 0),
+                )
+                for old_key, _ in oldest[:len(entries) - _TOOL_LEDGER_LIMIT]:
+                    entries.pop(old_key, None)
+
+        self.store.mutate(tid, mark_started)
+        try:
+            result = str(execute() or "")
+        except Exception as exc:
+            self.store.mutate(
+                tid,
+                lambda current: current.setdefault("tool_ledger", {})
+                .get(operation_id, {})
+                .update(
+                    status="uncertain",
+                    error=f"{type(exc).__name__}: {exc}"[:1000],
+                    finished_at=self._clock(),
+                ),
+            )
+            raise
+
+        stored_result = result[:_TOOL_LEDGER_RESULT_CAP]
+
+        def mark_completed(current):
+            entry = current.setdefault("tool_ledger", {}).get(operation_id)
+            if entry is not None:
+                entry.update(
+                    status="completed",
+                    result=stored_result,
+                    finished_at=self._clock(),
+                )
+
+        self.store.mutate(tid, mark_completed)
+        return result
 
     @staticmethod
     def _arg_hint(args) -> str:
