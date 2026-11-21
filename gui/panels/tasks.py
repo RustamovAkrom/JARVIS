@@ -1011,12 +1011,32 @@ class TaskPanel(QWidget):
         dialog.setWindowTitle(f"Background Task — {task.get('title') or task.get('task') or task_id}")
         dialog.setMinimumSize(560, 420)
         dialog.resize(760, 620)
+        light = self._is_light_theme()
+        dialog_bg = "#f4f7fb" if light else C.PANEL
+        surface = "#ffffff" if light else C.PANEL2
+        text_color = "#1f2937" if light else C.TEXT
+        muted = "#64748b" if light else C.TEXT_DIM
+        border = "#cbd5e1" if light else C.BORDER
+        accent = "#0f766e" if light else C.PRI
+        dialog.setStyleSheet(f"""
+            QDialog {{ background: {dialog_bg}; color: {text_color}; }}
+            QLabel {{ color: {text_color}; background: transparent; }}
+            QLabel#task_dialog_title {{ font-size: 16px; font-weight: 700; color: {accent}; padding: 3px 2px; }}
+            QLabel#task_dialog_status {{ color: {muted}; padding: 2px 2px 6px; }}
+            QTextBrowser {{ background: {surface}; color: {text_color}; border: 1px solid {border}; border-radius: 8px; padding: 10px; selection-background-color: {accent}; }}
+            QPushButton {{ background: {surface}; color: {text_color}; border: 1px solid {border}; border-radius: 7px; padding: 7px 10px; min-height: 30px; }}
+            QPushButton:hover {{ background: {accent}; border-color: {accent}; color: white; }}
+            QPushButton:disabled {{ color: {muted}; background: {dialog_bg}; }}
+        """)
         layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(12, 10, 12, 12)
+        layout.setSpacing(8)
         title = QLabel(str(task.get("title") or task.get("task") or task_id))
         title.setWordWrap(True)
-        title.setStyleSheet("font-weight: 600; font-size: 14px;")
+        title.setObjectName("task_dialog_title")
         layout.addWidget(title)
         status = QLabel(f"{str(task.get('status') or 'unknown').upper()} · {self._progress(task)}%")
+        status.setObjectName("task_dialog_status")
         layout.addWidget(status)
         details = QTextBrowser(dialog)
         details.setOpenExternalLinks(True)
