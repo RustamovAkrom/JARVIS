@@ -112,7 +112,6 @@ class TaskPanel(QWidget):
         self.details_browser.setObjectName("task_details")
         self.details_browser.setOpenExternalLinks(False)
         self.details_browser.setMinimumHeight(0)
-        self.details_browser.setMinimumHeight(0)
         self.details_browser.setMaximumHeight(120)
         self.details_browser.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
@@ -461,9 +460,10 @@ class TaskPanel(QWidget):
             self.progress_bar.setRange(0, 100)
         report_path = self._report_path(task)
         report_available = bool(report_path and report_path.is_file())
-        for button in (self.view_report_button, self.open_report_button,
-                       self.export_button, self.show_report_folder_button):
-            button.setEnabled(report_available)
+        self.view_report_button.setEnabled(report_available)
+        self.open_report_button.setEnabled(report_available)
+        self.show_report_folder_button.setEnabled(report_available)
+        self.export_button.setEnabled(bool(task))
         self.progress_bar.setValue(progress)
         if terminal:
             self.progress_bar.setFormat("Completed" if status.lower() == "done" else status.title())
@@ -608,7 +608,14 @@ class TaskPanel(QWidget):
 
     def _export_selected_report(self):
         task = self._tasks.get(self.selected_task_id(), {})
-        report = self._read_selected_report()
+        report_path = self._report_path(task)
+        report = None
+        if report_path and report_path.is_file():
+            try:
+                report = report_path.read_text(encoding="utf-8")
+            except OSError as exc:
+                QMessageBox.warning(self, "Report unavailable", str(exc))
+                return
         if report is None:
             # Failed/cancelled tasks may not have a report. Export a useful
             # diagnostic summary instead of silently doing nothing.
