@@ -21,6 +21,9 @@ class TaskPanelTests(unittest.TestCase):
                 {"id": "done", "title": "Finished task", "status": "done", "created": 1},
                 {"id": "failed", "title": "Failed task", "status": "failed", "created": 0},
             ])
+            # Active is the product default; switch to All to test snapshots.
+            self.assertEqual(panel.list_widget.count(), 1)
+            panel.filter_box.setCurrentIndex(panel.filter_box.findData("all"))
             self.assertEqual(panel.list_widget.count(), 3)
             panel.list_widget.setCurrentRow(0)
             selected = panel.selected_task_id()
@@ -28,8 +31,8 @@ class TaskPanelTests(unittest.TestCase):
             self.assertEqual(panel.list_widget.count(), 1)
             self.assertEqual(panel.selected_task_id(), selected)
             self.assertTrue(panel.cancel_button.isEnabled())
-            panel.filter_box.setCurrentIndex(panel.filter_box.findData("done"))
-            self.assertEqual(panel.list_widget.count(), 1)
+            panel.filter_box.setCurrentIndex(panel.filter_box.findData("history"))
+            self.assertEqual(panel.list_widget.count(), 2)
             self.assertFalse(panel.cancel_button.isEnabled())
         finally:
             panel.close()
@@ -42,6 +45,7 @@ class TaskPanelTests(unittest.TestCase):
                 {"id": "r1", "title": "Research API", "task": "Find endpoints", "status": "running", "agent": "research"},
                 {"id": "c1", "title": "Fix API", "task": "Patch endpoint", "status": "done", "agent": "coding"},
             ])
+            panel.filter_box.setCurrentIndex(panel.filter_box.findData("all"))
             panel.agent_filter.setCurrentIndex(panel.agent_filter.findData("research"))
             self.assertEqual(panel.list_widget.count(), 1)
             panel.agent_filter.setCurrentIndex(panel.agent_filter.findData("all"))
@@ -61,6 +65,7 @@ class TaskPanelTests(unittest.TestCase):
                  "used": {"rounds": 5}, "budget": {"rounds": 10}},
                 {"id": "failed", "title": "Failed", "status": "failed", "created": 3},
             ])
+            panel.filter_box.setCurrentIndex(panel.filter_box.findData("all"))
             self.assertEqual(panel.list_widget.item(0).data(Qt.ItemDataRole.UserRole), "failed")
             panel.sort_box.setCurrentIndex(panel.sort_box.findData("oldest"))
             self.assertEqual(panel.list_widget.item(0).data(Qt.ItemDataRole.UserRole), "old")
