@@ -9699,6 +9699,41 @@ class MainWindow(QMainWindow):
                 gpu_parts.append("Temperature  N/A")
             self._advanced_labels["gpu"].setText("   ·   ".join(gpu_parts))
 
+            disk_read = float(snap.get("disk_read_bps", 0.0) or 0.0)
+            disk_write = float(snap.get("disk_write_bps", 0.0) or 0.0)
+            disk_total = int(snap.get("disk_total_bytes", 0) or 0)
+            disk_used = int(snap.get("disk_used_bytes", 0) or 0)
+            self._advanced_labels["disk"].setText(
+                f"READ  {_format_rate(disk_read)}   ·   WRITE  {_format_rate(disk_write)}"
+                + (f"   ·   STORAGE  {_format_size(disk_used)} / {_format_size(disk_total)}"
+                   if disk_total else "   ·   STORAGE  N/A")
+            )
+
+            swap_total = int(snap.get("swap_total_bytes", 0) or 0)
+            swap_used = int(snap.get("swap_used_bytes", 0) or 0)
+            swap_percent = float(snap.get("swap_percent", 0.0) or 0.0)
+            self._advanced_labels["swap"].setText(
+                f"{swap_percent:.0f}%   ·   {_format_size(swap_used)} used / "
+                f"{_format_size(swap_total)} total" if swap_total else "N/A"
+            )
+
+            battery_percent = float(snap.get("battery_percent", -1.0))
+            battery_plugged = snap.get("battery_plugged")
+            if battery_percent >= 0:
+                battery_text = f"{battery_percent:.0f}%"
+                if battery_plugged is True:
+                    battery_text += " · AC / charging"
+                elif battery_plugged is False:
+                    battery_text += " · on battery"
+            else:
+                battery_text = "Desktop / battery telemetry unavailable"
+            self._advanced_labels["battery"].setText(battery_text)
+
+            self._advanced_labels["system"].setText(
+                f"{platform.platform()}   ·   {proc_count} processes   ·   "
+                f"{physical} physical / {logical} logical cores"
+            )
+
     def _build_header(self) -> QWidget:
         w = _WindowHeader(self)
         w.setFixedHeight(52)
@@ -10179,7 +10214,11 @@ class MainWindow(QMainWindow):
             ("cpu", "CPU DETAILS"),
             ("memory", "MEMORY"),
             ("network", "NETWORK"),
+            ("disk", "DISK I/O & STORAGE"),
+            ("swap", "SWAP / PAGE FILE"),
             ("gpu", "GPU / VRAM"),
+            ("battery", "BATTERY / POWER"),
+            ("system", "SYSTEM / PROCESSES"),
         )
         for key, caption_text in advanced_rows:
             caption = QLabel(self._tr(caption_text))
