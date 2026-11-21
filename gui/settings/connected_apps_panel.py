@@ -36,14 +36,16 @@ class ConnectedAppsPanel(QWidget):
         runtime=QGroupBox("MCP runtime");rrow=QVBoxLayout(runtime);rrow.setSpacing(6);self.runtime_status=QLabel();self.runtime_status.setWordWrap(True);rrow.addWidget(self.runtime_status);self.runtime_help=QLabel();self.runtime_help.setWordWrap(True);rrow.addWidget(self.runtime_help);root.addWidget(runtime)
         self.status=QLabel("Ready");self.status.setObjectName("appsStatus");self.status.setWordWrap(True);root.addWidget(self.status);root.addStretch(1)
         self.setStyleSheet("""
-        #ConnectedAppsPanel{color:#d9f7f4} #appsTitle{font-size:18px;font-weight:700;letter-spacing:1px;color:#52eee0}
-        #appsSubtitle{color:#8ba9a8} QGroupBox{border:1px solid #155d60;border-radius:10px;margin-top:10px;padding:12px;font-weight:600;color:#6df4e8}
-        QGroupBox::title{subcontrol-origin:margin;left:12px;padding:0 6px}
-        QLineEdit,QTextEdit,QListWidget{background:#031315;border:1px solid #15565a;border-radius:7px;padding:8px;color:#d9f7f4;selection-background-color:#07504d}
-        QListWidget::item{padding:9px;border-radius:5px;margin:2px} QListWidget::item:selected{background:#06403f;color:#66fff0}
-        QPushButton{background:#052326;border:1px solid #176a6d;border-radius:7px;padding:8px 12px;color:#63eee3}
-        QPushButton:hover{background:#0a393b;border-color:#42d8ce} QPushButton:disabled{color:#567171;border-color:#244344}
-        #appsStatus{color:#80d8d1;padding:5px}
+        #appsTitle { font-size: 18px; font-weight: 700; letter-spacing: 1px; }
+        #appsSubtitle { color: palette(mid); }
+        QGroupBox { border: 1px solid palette(mid); border-radius: 10px; margin-top: 10px; padding: 12px; }
+        QGroupBox::title { subcontrol-origin: margin; left: 12px; padding: 0 6px; }
+        QLineEdit, QTextEdit, QListWidget { background: palette(base); color: palette(text); border: 1px solid palette(mid); border-radius: 7px; padding: 8px; }
+        QListWidget::item { padding: 8px; border-radius: 5px; margin: 2px; }
+        QListWidget::item:selected { background: palette(highlight); color: palette(highlighted-text); }
+        QPushButton { border: 1px solid palette(mid); border-radius: 7px; padding: 8px 12px; }
+        QPushButton:hover { border-color: palette(highlight); }
+        #appsStatus { padding: 5px; }
         """)
         self._check_runtime();self.refresh()
     def _check_runtime(self):
