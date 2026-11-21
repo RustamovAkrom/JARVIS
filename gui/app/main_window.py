@@ -11823,8 +11823,15 @@ class MainWindow(QMainWindow):
         ))
 
     def _build_connected_apps_settings_page(self):
-        from gui.settings.connected_apps_panel import ConnectedAppsPanel
-        panel = ConnectedAppsPanel()
+        try:
+            from gui.settings.connected_apps_panel import ConnectedAppsPanel
+            panel = ConnectedAppsPanel()
+        except Exception as exc:
+            panel = QLabel(
+                self._tr("Connected Apps is unavailable. JARVIS core and other settings remain operational.")
+                + f"\\n\\n{type(exc).__name__}: {exc}"
+            )
+            panel.setWordWrap(True)
         return self._embed_settings_panels((
             "Connected Apps",
             "Connect external services and MCP servers. Manage authorization, tools and connection lifecycle.",
