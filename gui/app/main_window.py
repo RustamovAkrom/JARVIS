@@ -13510,6 +13510,18 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             session = self._add_terminal_session("default")
         else:
             session = self._active_terminal_session()
+            if session is None:
+                # Recover a stale active-session ID instead of leaving the panel
+                # blank. Prefer the selected tab, then the first live session.
+                index = self._terminal_tabs.currentIndex()
+                view = self._terminal_tabs.widget(index) if index >= 0 else None
+                session_id = view.property("terminalSessionId") if view else ""
+                session = self._terminal_sessions.get(session_id)
+                if session is None:
+                    session = next(iter(self._terminal_sessions.values()), None)
+                if session is not None:
+                    self._terminal_active_id = session.session_id
+                    self._terminal_tabs.setCurrentWidget(session.view)
         if session is None:
             return
         if session.client_is_ready and session.pty is None:
