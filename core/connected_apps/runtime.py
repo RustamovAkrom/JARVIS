@@ -47,7 +47,7 @@ class MCPRuntime:
             session=await stack.enter_async_context(ClientSession(*transport))
             await session.initialize()
             result=await session.list_tools()
-            tools=[{"name":t.name,"description":t.description or "","input_schema":t.inputSchema or {}} for t in result.tools]
+            tools=[{"name":t.name,"description":t.description or "","input_schema":t.inputSchema or {},\n                "annotations":getattr(t,"annotations",None)} for t in result.tools]
             old=self._sessions.pop(connection_id,None)
             if old: await old[0].aclose()
             self._sessions[connection_id]=(stack,session); self._tools[connection_id]=tools
