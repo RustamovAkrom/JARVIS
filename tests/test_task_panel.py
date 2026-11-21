@@ -158,6 +158,21 @@ class TaskPanelTests(unittest.TestCase):
         finally:
             panel.close()
 
+    def test_identical_task_snapshot_does_not_rebuild_panel(self):
+        panel = TaskPanel()
+        try:
+            snapshot = [{"id": "stable", "title": "Completed", "status": "done", "created": 1}]
+            panel.set_tasks(snapshot)
+            selected = panel.selected_task_id()
+            render_calls = []
+            original_render = panel.render
+            panel.render = lambda *args: render_calls.append(args)
+            panel.set_tasks(snapshot)
+            self.assertEqual(render_calls, [])
+            self.assertEqual(panel.selected_task_id(), selected)
+        finally:
+            panel.close()
+
     def test_invalid_snapshots_are_ignored(self):
         panel = TaskPanel()
         try:
