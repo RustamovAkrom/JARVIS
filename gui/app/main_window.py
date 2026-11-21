@@ -9580,6 +9580,13 @@ class MainWindow(QMainWindow):
             and tabs.currentWidget() is getattr(self, "_system_page", None)
         )
         panel.setVisible(expanded)
+        scroll = getattr(self, "_system_scroll", None)
+        if scroll is not None:
+            scroll.setVerticalScrollBarPolicy(
+                Qt.ScrollBarPolicy.ScrollBarAsNeeded
+                if expanded
+                else Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+            )
 
     def _update_metrics(self):
         snap = _metrics.snapshot()
@@ -10033,12 +10040,16 @@ class MainWindow(QMainWindow):
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         # The compact System tab scrolls with the wheel/trackpad; hide the
         # native bar so it does not consume a permanent strip of the panel.
-        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self._system_scroll = scroll
         scroll.setMinimumHeight(0)
         scroll.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         scroll.setStyleSheet(
             "QScrollArea { background: transparent; border: none; }"
-            "QScrollBar:vertical { width:0; background:transparent; }"
+            f"QScrollBar:vertical {{ width:5px; background:transparent; margin:2px; }}"
+            f"QScrollBar::handle:vertical {{ background:{C.PRI_DIM}; border-radius:2px; min-height:18px; }}"
+            f"QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height:0; }}"
+            f"QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background:transparent; }}"
         )
         scroll.viewport().setAutoFillBackground(False)
         scroll.viewport().setStyleSheet("background: transparent; border: none;")
