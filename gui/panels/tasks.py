@@ -212,6 +212,7 @@ class TaskPanel(QWidget):
         self.open_workspace_button.clicked.connect(self._open_selected_workspace)
         self.download_all_button.clicked.connect(self._export_selected_workspace)
         self.list_widget.currentItemChanged.connect(self._selection_changed)
+        self.list_widget.itemDoubleClicked.connect(self._open_task_details)
         self.retry_button.clicked.connect(self._retry_selected)
         self.cancel_button.clicked.connect(self._cancel_selected)
         self.finish_button.clicked.connect(self._finish_selected)
@@ -954,9 +955,9 @@ class TaskPanel(QWidget):
         task = self._tasks.get(tid, {})
         self._render_details(task)
         has_task = bool(task)
-        self.details_title.setVisible(has_task)
-        self.progress_bar.setVisible(has_task)
-        self.details_browser.setVisible(has_task)
+        self.details_title.setVisible(False)
+        self.progress_bar.setVisible(False)
+        self.details_browser.setVisible(False)
         active = task.get("status") in _ACTIVE
         self.retry_button.setEnabled(task.get("status") in {"failed", "cancelled"})
         self.cancel_button.setEnabled(active)
@@ -965,20 +966,120 @@ class TaskPanel(QWidget):
 
         # Keep the panel compact when no task is selected. Reveal only actions
         # relevant to the selected task, avoiding empty disabled-button rows.
-        self.task_actions_widget.setVisible(has_task)
-        self.history_actions_widget.setVisible(has_task and not active)
+        self.task_actions_widget.setVisible(False)
+        self.history_actions_widget.setVisible(False)
         report_path = self._report_path(task)
         report_available = bool(report_path and report_path.is_file())
-        self.report_actions_widget.setVisible(has_task and report_available)
+        self.report_actions_widget.setVisible(False)
         workspace = self._workspace_path(task)
         workspace_available = bool(workspace and workspace.is_dir())
-        self.workspace_actions_widget.setVisible(has_task and workspace_available)
+        self.workspace_actions_widget.setVisible(False)
         self.retry_button.setVisible(task.get("status") in {"failed", "cancelled"})
         self.cancel_button.setVisible(active)
         self.finish_button.setVisible(active)
         self.steer_button.setVisible(active)
         if tid:
             self.task_selected.emit(tid)
+
+    def _open_task_details(self, item, _column=None):
+        task_id = str(item.data(Qt.ItemDataRole.UserRole) or "")
+        task = self._tasks.get(task_id)
+        if not task:
+            return
+        self.list_widget.setCurrentItem(item)
+        dialog = QDialog(self)
+        dialog.setWindowTitle(f"Background Task — {task.get('title') or task.get('task') or task_id}")
+        dialog.setMinimumSize(560, 420)
+        dialog.resize(760, 620)
+        layout = QVBoxLayout(dialog)
+        title = QLabel(str(task.get("title") or task.get("task") or task_id))
+        title.setWordWrap(True)
+        title.setStyleSheet("font-weight: 600; font-size: 14px;")
+        layout.addWidget(title)
+        status = QLabel(f"{str(task.get('status') or 'unknown').upper()} · {self._progress(task)}%")
+        layout.addWidget(status)
+        details = QTextBrowser(dialog)
+        details.setOpenExternalLinks(True)
+        details.setMarkdown(self._task_details_markdown(task))
+        layout.addWidget(details, 1)
+        actions = QGridLayout()
+        actions.setSpacing(6)
+        buttons = []
+        def add_button(label, callback, enabled=True):
+            button = QPushButton(label)
+            button.setEnabled(enabled)
+            button.clicked.connect(callback)
+            buttons.append(button)
+            actions.addWidget(button, len(buttons) // 2, (len(buttons) - 1) % 2)
+            return button
+        report = self._report_path(task)
+        workspace = self._workspace_path(task)
+        add_button("View Report", lambda: self._view_report_for_task(task_id), bool(report and report.is_file()))
+        add_button("Open Report", lambda: self._open_report_for_task(task_id), bool(report and report.is_file()))
+        add_button("Workspace", lambda: self._open_workspace_for_task(task_id), bool(workspace and workspace.is_dir()))
+        add_button("Download ZIP", lambda: self._export_workspace_for_task(task_id), bool(workspace and workspace.is_dir()))
+        active = task.get("status") in _ACTIVE
+        add_button("Steer", lambda: self._steer_task(task_id), active)
+        add_button("Finish & Report", lambda: self.finish_requested.emit(task_id), active)
+        add_button("Cancel", lambda: self.cancel_requested.emit(task_id), active)
+        add_button("Retry", lambda: self.retry_requested.emit(task_id), task.get("status") in {"failed", "cancelled"})
+        add_button("Delete", lambda: self._confirm_delete_task(task_id), not active)
+        close = QPushButton("Close")
+        close.clicked.connect(dialog.accept)
+        actions.addWidget(close, (len(buttons) + 1) // 2, 0, 1, 2)
+        layout.addLayout(actions)
+        dialog.exec()
+
+    def _task_details_markdown(self, task):
+        title = str(task.get("title") or task.get("task") or "Task")
+        details = self._render_details_text(task)
+        report = self._read_report(task)
+        return f"## {title}\n\n{details}\n\n---\n\n{report or 'No report available yet.'}"
+
+    def _read_report(self, task):
+        path = self._report_path(task)
+        try:
+            return path.read_text(encoding="utf-8") if path and path.is_file() else ""
+        except OSError:
+            return ""
+
+    def _render_details_text(self, task):
+        used = task.get("used") if isinstance(task.get("used"), dict) else {}
+        return "\n".join([
+            f"**Status:** {task.get('status', 'unknown')}",
+            f"**Agent:** {task.get('agent', 'general')}",
+            f"**Created:** {task.get('created_at') or task.get('created') or '—'}",
+            f"**Started:** {task.get('started_at') or task.get('started') or '—'}",
+            f"**Time used:** {used.get('seconds', 0)} seconds",
+            f"**Progress:** {self._progress(task)}%",
+        ])
+
+    def _view_report_for_task(self, task_id):
+        self.list_widget.setCurrentItem(self._item_for_task(task_id))
+        self._view_selected_report()
+
+    def _open_report_for_task(self, task_id):
+        self.list_widget.setCurrentItem(self._item_for_task(task_id))
+        self._open_selected_report()
+
+    def _open_workspace_for_task(self, task_id):
+        self.list_widget.setCurrentItem(self._item_for_task(task_id))
+        self._open_selected_workspace()
+
+    def _export_workspace_for_task(self, task_id):
+        self.list_widget.setCurrentItem(self._item_for_task(task_id))
+        self._export_selected_workspace()
+
+    def _item_for_task(self, task_id):
+        for index in range(self.list_widget.count()):
+            item = self.list_widget.item(index)
+            if str(item.data(Qt.ItemDataRole.UserRole) or "") == task_id:
+                return item
+        return None
+
+    def _steer_task(self, task_id):
+        self.list_widget.setCurrentItem(self._item_for_task(task_id))
+        self._steer_selected()
 
     def _retry_selected(self):
         tid = self.selected_task_id()
