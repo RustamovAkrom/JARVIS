@@ -27,8 +27,8 @@ class ConnectedAppsPanel(QWidget):
         toolbar=QHBoxLayout();self.search=QLineEdit();self.search.setObjectName("appsSearch");self.search.setPlaceholderText("Search connected apps…");self.search.textChanged.connect(self.refresh);toolbar.addWidget(self.search,1)
         self.add_stdio_btn=QPushButton("+ Add STDIO");self.add_stdio_btn.clicked.connect(self.add_custom)
         self.add_http_btn=QPushButton("+ Add HTTP");self.add_http_btn.clicked.connect(self.add_http)
-        self.add_oauth_btn=QPushButton("+ Add OAuth");self.add_oauth_btn.clicked.connect(self.add_oauth_http)
-        toolbar.addWidget(self.add_stdio_btn);toolbar.addWidget(self.add_http_btn);toolbar.addWidget(self.add_oauth_btn);layout.addLayout(toolbar)
+        self.add_oauth_btn=QPushButton("+ Add OAuth");self.add_oauth_btn.clicked.connect(self.add_oauth_http);self.reconnect_all_btn=QPushButton("Reconnect all");self.reconnect_all_btn.clicked.connect(self.reconnect_all)
+        toolbar.addWidget(self.add_stdio_btn);toolbar.addWidget(self.add_http_btn);toolbar.addWidget(self.add_oauth_btn);toolbar.addWidget(self.reconnect_all_btn);layout.addLayout(toolbar)
         self.list=QListWidget();self.list.setObjectName("appsList");self.list.setMinimumHeight(100);self.list.setMaximumHeight(190);self.list.itemSelectionChanged.connect(self.show_selected);layout.addWidget(self.list)
         self.details=QTextEdit();self.details.setObjectName("appsDetails");self.details.setReadOnly(True);self.details.setMinimumHeight(100);self.details.setMaximumHeight(170);layout.addWidget(self.details)
         actions=QHBoxLayout();self.connect_btn=QPushButton("Connect / Reconnect");self.connect_btn.clicked.connect(self.connect_selected);self.disconnect_btn=QPushButton("Disconnect");self.disconnect_btn.clicked.connect(self.disconnect_selected);self.remove_btn=QPushButton("Remove");self.remove_btn.clicked.connect(self.remove_selected)
@@ -59,7 +59,7 @@ class ConnectedAppsPanel(QWidget):
             self.runtime_help.setText("Connected Apps runtime is available.")
 
     def _busy(self,busy,message=""):
-        for w in (self.add_stdio_btn,self.add_http_btn,self.add_oauth_btn,self.connect_btn,self.disconnect_btn,self.remove_btn):w.setEnabled(not busy)
+        for w in (self.add_stdio_btn,self.add_http_btn,self.add_oauth_btn,self.reconnect_all_btn,self.connect_btn,self.disconnect_btn,self.remove_btn):w.setEnabled(not busy)
         if message:self.status.setText(message)
     def refresh(self,*_):
         query=self.search.text().casefold().strip();selected=self.selected_id();self.list.clear();visible=[]
@@ -137,6 +137,26 @@ class ConnectedAppsPanel(QWidget):
         self._busy(True,f"Connecting to {d.name}…");w=_Worker(lambda:service.connect_http(d,connection_id=cid,headers=headers));w.signals.finished.connect(self._connected);self.pool.start(w)
     def _connect_descriptor(self,d,cid=None):
         self._busy(True,f"Connecting to {d.name}…");w=_Worker(lambda:service.connect_stdio(d,connection_id=cid));w.signals.finished.connect(self._connected);self.pool.start(w)
+    def reconnect_all(self):
+        if not service.connections():
+            self.status.setText("No saved connections to reconnect.")
+            return
+        self._busy(True,"Reconnecting saved MCP connections…")
+        w=_Worker(service.reconnect_all);w.signals.finished.connect(self._reconnect_all_done);self.pool.start(w)
+    def _reconnect_all_done(self,results,error):
+        self._busy(False)
+        if error:
+            self.status.setText(f"Reconnect all failed: {self._friendly_error(str(error))}")
+            QMessageBox.warning(self,"Reconnect all",self._friendly_error(str(error)))
+            return
+        connected=sum(1 for row in results if row.get("status")=="connected")
+        failed=len(results)-connected
+        self.status.setText(f"Reconnect complete: {connected} connected, {failed} failed.")
+        if failed:
+            details="\n".join(f"{row.get('name')}: {row.get('error') or row.get('status')}" for row in results if row.get("status")!="connected")
+            QMessageBox.warning(self,"Reconnect results",details)
+        self.refresh()
+
     def connect_selected(self):
         cid=self.selected_id()
         if cid:self._busy(True,"Reconnecting…");w=_Worker(lambda:service.reconnect(cid));w.signals.finished.connect(self._connected);self.pool.start(w)
