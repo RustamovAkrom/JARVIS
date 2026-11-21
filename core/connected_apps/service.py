@@ -15,7 +15,9 @@ def _serialize(row):
 class ConnectedAppsService:
     def __init__(self,app_registry=None,store=None):
         self.registry=app_registry or registry
-        self.store=store or ConnectedAppsStore()\n        self._adapter_lock=threading.RLock()\n        self._adapters={}
+        self.store=store or ConnectedAppsStore()
+        self._adapter_lock=threading.RLock()
+        self._adapters={}
     @staticmethod
     def normalize(name):
         return " ".join(str(name or "").strip().casefold().split())
