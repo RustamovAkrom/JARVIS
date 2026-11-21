@@ -60,6 +60,12 @@ class ConnectedAppsService:
             return self.connect_http(descriptor,connection_id=cid,headers=self._saved_http_headers(cid))
         return self.connect_stdio(descriptor,connection_id=cid)
     def _saved_http_headers(self,cid):
+        provider=self.store.get_credential(cid,"oauth_provider")
+        if provider:
+            from core.connected_apps.auth_service import OAuthService
+            token=OAuthService(self.store).get_access_token(cid)
+            token_type=self.store.get_credential(cid,"token_type") or "Bearer"
+            return {"Authorization":f"{token_type} {token}"}
         value=self.store.get_credential(cid,"authorization_header")
         return {"Authorization":value} if value else {}
     def disconnect(self,cid):
