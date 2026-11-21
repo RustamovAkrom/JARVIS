@@ -68,6 +68,7 @@ class TaskStore:
         # Metadata/checkpoints stay separate from user-generated workspace files.
         self.workspaces_dir = Path(workspaces_dir) if workspaces_dir else self.root / "workspaces"
         self.workspaces_dir.mkdir(parents=True, exist_ok=True)
+        self._migrate_legacy_metadata()
         self._lock = threading.RLock()
         self._tasks: dict[str, dict] = {}
         for path in self.root.glob("*.json"):
@@ -76,6 +77,36 @@ class TaskStore:
             data = read_json(path, None)
             if isinstance(data, dict) and data.get("id"):
                 self._tasks[data["id"]] = data
+
+    def _migrate_legacy_metadata(self) -> None:
+        """Move legacy task JSON/checkpoints from tasks/ into tasks/database/.
+
+        Reports and workspace directories are deliberately left untouched.
+        Existing destination files win; migration never overwrites user data.
+        """
+        legacy_root = self.root.parent
+        if legacy_root == self.root:
+            return
+        try:
+            candidates = list(legacy_root.glob("*.json"))
+        except OSError:
+            return
+        for source in candidates:
+            if not source.is_file() or source.is_symlink():
+                continue
+            destination = self.root / source.name
+            if destination.exists():
+                continue
+            try:
+                # Same-volume rename is atomic; copy fallback supports unusual layouts.
+                source.replace(destination)
+            except OSError:
+                try:
+                    with source.open("rb") as src, destination.open("xb") as dst:
+                        shutil.copyfileobj(src, dst)
+                    source.unlink()
+                except (OSError, FileExistsError):
+                    continue
 
     # ── tasks ────────────────────────────────────────────────────────────────
     def _path(self, tid: str) -> Path:
@@ -87,7 +118,7 @@ class TaskStore:
         if not task_id or Path(task_id).name != task_id or task_id in {".", ".."}:
             raise ValueError("Invalid task ID")
         destination = self.workspaces_dir / task_id
-        legacy = self.root / task_id
+        legacy = self.root.parent / task_id
         # Preserve existing tasks created by older releases without copying data.
         if not destination.exists() and legacy.is_dir():
             try:
