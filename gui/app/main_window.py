@@ -12868,6 +12868,15 @@ body{background:__DARK__}#terminal{box-sizing:border-box;padding:6px 8px;backgro
 .xterm-viewport{scrollbar-width:none!important}
 </style>
 </head><body><div id="terminal"></div>
+<script>
+window.onerror=function(message,source,line,column,error){
+ console.error('[JARVIS terminal frontend]',message,source,line,column,error||'');
+ return false;
+};
+window.addEventListener('unhandledrejection',event=>{
+ console.error('[JARVIS terminal frontend promise]',event.reason);
+});
+</script>
 <script src="xterm.js"></script><script src="qrc:///qtwebchannel/qwebchannel.js"></script>
 <script src="addon-fit.js"></script><script>
 const term=new Terminal({cursorBlink:true,convertEol:true,fontSize:13,scrollback:3000,
