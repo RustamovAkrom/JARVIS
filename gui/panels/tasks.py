@@ -901,6 +901,7 @@ class TaskPanel(QWidget):
         has_rows = self.list_widget.count() > 0
         self.empty_label.setVisible(not has_rows)
         self.list_widget.setVisible(has_rows)
+        self.list_widget.setMaximumHeight(260 if has_rows else 0)
         current = self.list_widget.currentItem()
         self._selection_changed(current, None)
         selected_task = self._tasks.get(self.selected_task_id(), {})
@@ -1010,7 +1011,7 @@ class TaskPanel(QWidget):
             button.setEnabled(enabled)
             button.clicked.connect(callback)
             buttons.append(button)
-            actions.addWidget(button, len(buttons) // 2, (len(buttons) - 1) % 2)
+            actions.addWidget(button, (len(buttons) - 1) // 2, (len(buttons) - 1) % 2)
             return button
         report = self._report_path(task)
         workspace = self._workspace_path(task)
