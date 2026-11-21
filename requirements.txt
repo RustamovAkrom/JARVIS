@@ -10,8 +10,8 @@
 PyQt6>=6.6,<7
 packaging>=24,<27
 PyQt6-WebEngine>=6.6,<7
-# Qt compatibility layer fallback binding (core/qt); main GUI currently uses PyQt6.
-PySide6>=6.6,<7
+# PySide6 is optional; the desktop UI uses PyQt6. For explicit compatibility
+# testing install the optional extra: pip install ".[qt-compat]"
 pywinpty>=3.1.2,<4; sys_platform == "win32"
 sounddevice>=0.4,<1
 numpy>=1.24,<3
