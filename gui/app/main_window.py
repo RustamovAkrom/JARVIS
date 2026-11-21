@@ -11460,9 +11460,10 @@ class MainWindow(QMainWindow):
             if self._settings_center is not None:
                 self._settings_center.show_category("connected_apps")
                 query = str(params.get("search", "")).strip()
-                page = getattr(self._settings_center, "_pages", {}).get("connected_apps")
+                page = getattr(self._settings_center, "_category_pages", {}).get("connected_apps")
+                page = page.widget() if page is not None else None
                 if query and page is not None:
-                    search = page.findChild(QLineEdit)
+                    search = page.findChild(QLineEdit, "connected_apps_search")
                     if search is not None:
                         search.setText(query)
             return True
