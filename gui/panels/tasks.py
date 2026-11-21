@@ -32,6 +32,8 @@ class TaskPanel(QWidget):
         root.setContentsMargins(7, 7, 7, 7)
         root.setSpacing(4)
         root.setSizeConstraint(QVBoxLayout.SizeConstraint.SetMinimumSize)
+        self.setMinimumHeight(0)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         section_label = QLabel("TASKS")
         section_label.setObjectName("task_section_label")
         root.addWidget(section_label)
@@ -91,8 +93,9 @@ class TaskPanel(QWidget):
         self.list_widget = QListWidget()
         self.list_widget.setObjectName("task_list")
         self.list_widget.setMinimumHeight(0)
-        self.list_widget.setMaximumHeight(78)
-        self.list_widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.list_widget.setMinimumHeight(100)
+        self.list_widget.setMaximumHeight(220)
+        self.list_widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.list_widget.setUniformItemSizes(True)
         root.addWidget(self.list_widget, 0)
 
@@ -112,35 +115,45 @@ class TaskPanel(QWidget):
         self.details_browser.setObjectName("task_details")
         self.details_browser.setOpenExternalLinks(False)
         self.details_browser.setMinimumHeight(0)
-        self.details_browser.setMaximumHeight(120)
+        self.details_browser.setMaximumHeight(220)
         self.details_browser.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
         root.addWidget(self.details_browser, 1)
 
-        report_actions = QHBoxLayout()
-        report_actions.setSpacing(4)
-        self.view_report_button = QPushButton("View")
-        self.open_report_button = QPushButton("Open")
+        # Keep actions in a compact two-column grid. A single horizontal row
+        # caused controls to disappear when the right panel was narrowed.
+        report_actions = QGridLayout()
+        report_actions.setHorizontalSpacing(4)
+        report_actions.setVerticalSpacing(3)
+        self.view_report_button = QPushButton("View Report")
+        self.open_report_button = QPushButton("Open Report")
         self.export_button = QPushButton("Save As")
-        self.show_report_folder_button = QPushButton("Folder")
+        self.show_report_folder_button = QPushButton("Report Folder")
         self.open_workspace_button = QPushButton("Workspace")
-        self.download_all_button = QPushButton("Download All")
-        for button in (
+        self.download_all_button = QPushButton("Download ZIP")
+        report_buttons = (
             self.view_report_button, self.open_report_button,
             self.export_button, self.show_report_folder_button,
-        ):
+        )
+        for index, button in enumerate(report_buttons):
             button.setMinimumWidth(0)
-            button.setMaximumHeight(28)
-            button.setSizePolicy(
-                QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
-            )
-            report_actions.addWidget(button, 1)
+            button.setMaximumHeight(30)
+            button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            report_actions.addWidget(button, index // 2, index % 2)
+        report_actions.setColumnStretch(0, 1)
+        report_actions.setColumnStretch(1, 1)
         root.addLayout(report_actions)
-        workspace_actions = QHBoxLayout()
-        workspace_actions.setSpacing(4)
-        workspace_actions.addWidget(self.open_workspace_button, 1)
-        workspace_actions.addWidget(self.download_all_button, 1)
+        workspace_actions = QGridLayout()
+        workspace_actions.setHorizontalSpacing(4)
+        workspace_actions.setVerticalSpacing(3)
+        for index, button in enumerate((self.open_workspace_button, self.download_all_button)):
+            button.setMinimumWidth(0)
+            button.setMaximumHeight(30)
+            button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            workspace_actions.addWidget(button, 0, index)
+        workspace_actions.setColumnStretch(0, 1)
+        workspace_actions.setColumnStretch(1, 1)
         root.addLayout(workspace_actions)
         history_actions = QGridLayout()
         history_actions.setHorizontalSpacing(5)
@@ -245,12 +258,12 @@ class TaskPanel(QWidget):
         }}
         QWidget#TaskPanel QPushButton {{
             background: {surface}; color: {text}; border: 1px solid {border};
-            border-radius: 6px; padding: 2px 4px; min-height: 18px; max-height: 28px;
+            border-radius: 6px; padding: 3px 5px; min-height: 22px; max-height: 30px;
         }}
         QWidget#TaskPanel QPushButton:hover {{ background: {selected_bg}; border-color: {accent}; }}
         QWidget#TaskPanel QPushButton:disabled {{ color: {muted}; border-color: {border}; }}
-        QWidget#TaskPanel QListWidget {{ background: {bg}; border: 1px solid {border}; border-radius: 7px; padding: 3px; outline: none; }}
-        QWidget#TaskPanel QListWidget::item {{ color: {text}; background: {surface}; border: 1px solid {border}; border-radius: 5px; padding: 4px 5px; margin: 1px 0; }}
+        QWidget#TaskPanel QListWidget {{ background: {bg}; border: 1px solid {border}; border-radius: 7px; padding: 4px; outline: none; }}
+        QWidget#TaskPanel QListWidget::item {{ color: {text}; background: {surface}; border: 1px solid {border}; border-radius: 5px; padding: 7px 6px; margin: 2px 0; }}
         QWidget#TaskPanel QListWidget::item:selected {{ color: {text}; background: {selected_bg}; border: 1px solid {accent}; }}
         QWidget#TaskPanel QProgressBar {{ background: {surface}; color: {text}; border: 1px solid {border}; border-radius: 5px; text-align: center; min-height: 15px; max-height: 18px; }}
         QWidget#TaskPanel QProgressBar::chunk {{ background: {accent}; border-radius: 4px; }}
