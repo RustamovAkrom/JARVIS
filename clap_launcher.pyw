@@ -338,15 +338,6 @@ def main() -> int:
     # Instant standby was never integrated with main.py's lifecycle and could
     # start a second live assistant. It remains disabled until a GUI-only
     # standby protocol exists.
-    def standby_alive() -> bool:
-        return False
-
-    def ensure_standby() -> None:
-        return
-
-    def stop_standby() -> None:
-        return
-
     # ── starting JARVIS ──────────────────────────────────────────────────────
     def launch(source: str) -> None:
         if time.monotonic() - state["launched_at"] < 8.0:
@@ -381,7 +372,6 @@ def main() -> int:
                    f"Details: {LOG_DIR / 'jarvis.log'}", 6000, critical=True)
             state.update(child=None, running=False, launched_at=0.0)
             open_mic()
-            # No standby process is used.
 
     def on_clap() -> None:
         log("pattern heard")
@@ -432,7 +422,6 @@ def main() -> int:
         if (was or (child is not None and child.poll() is not None)) and not state["closed_at"]:
             state["closed_at"] = time.monotonic()
             state["child"] = None
-            # Re-arm after JARVIS closes.
         if time.monotonic() - (state["closed_at"] or 0.0) >= _REARM_S:
             state["closed_at"] = 0.0
             open_mic()
@@ -488,7 +477,7 @@ def main() -> int:
 
         def answer():
             buffer["data"].extend(bytes(sock.readAll()))
-            if b"\\n" not in buffer["data"]:
+            if b"\n not in buffer["data"]:
                 return
             line = bytes(buffer["data"].split(b"\\n", 1)[0]).decode("utf-8", "replace").strip().lower()
             if line == "status":
@@ -602,13 +591,11 @@ def main() -> int:
             pass
         refresh()
 
-    app.aboutToQuit.connect(lambda: None)
     tray.show()
 
     state["running"] = jarvis_running()
     if not state["running"]:
         open_mic()
-        ensure_standby()
         notify(f"Listening. {pattern()[0].upper() + pattern()[1:]} starts JARVIS. "
                "Sound is analysed on this computer only.")
     refresh()
