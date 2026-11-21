@@ -206,11 +206,10 @@ class _SysMetrics:
         # NVIDIA telemetry can be queried through the bounded nvidia-smi
         # subprocess on Windows without entering a COM apartment.
         if _OS == "Windows":
-            smi = self._read_nvidia_smi()
-            if smi is not None:
-                gpu, used, total, temperature = smi
-                self._set_gpu_details(used, total, temperature)
-                return gpu
+            # Keep GPU probing disabled on Windows. Even bounded subprocess
+            # probes can interfere with sampler lifecycle and are not needed
+            # for the compact monitor. A dedicated telemetry provider can be
+            # added later without touching the UI thread.
             return -1.0
 
         # nvidia-smi works on Linux/macOS desktop drivers and headless systems.
