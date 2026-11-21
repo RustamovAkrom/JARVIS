@@ -911,7 +911,13 @@ class TaskPanel(QWidget):
             "No tasks match your search or filters." if not rows else
             "No tasks yet. Create your first task."
         )
-        self.active_summary.setVisible(bool(active))
+        active_count = running + queued + waiting
+        self.active_summary.setText(
+            f"{active_count} active background task(s) · {running} running · "
+            f"{queued} queued · {waiting} waiting"
+            if active_count else "No active background tasks"
+        )
+        self.active_summary.setVisible(active_count > 0)
         current = self.list_widget.currentItem()
         self._selection_changed(current, None)
         selected_task = self._tasks.get(self.selected_task_id(), {})
