@@ -24,11 +24,11 @@ class OAuthService:
             value=tokens.get(key)
             if value:self.store.set_credential(cid,key,str(value))
         self.store.set_credential(cid,"token_type",str(tokens.get("token_type","Bearer")))
-        self.store.set_credential(cid,"expires_at",str(time.time()+int(tokens.get("expires_in",0))))
+        self.store.set_credential(cid,"expires_at",str(time.time()+int(tokens["expires_in"])) if tokens.get("expires_in") else "0")
     def get_access_token(self,cid,refresh=True):
         token=self.store.get_credential(cid,"access_token")
         expires=float(self.store.get_credential(cid,"expires_at") or 0)
-        if token and expires>time.time()+60:return token
+        if token and (expires<=0 or expires>time.time()+60):return token
         refresh_token=self.store.get_credential(cid,"refresh_token")
         provider=get_provider(self.store.get_credential(cid,"oauth_provider"))
         client_id=self.store.get_credential(cid,"oauth_client_id")
