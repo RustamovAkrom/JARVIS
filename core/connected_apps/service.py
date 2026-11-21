@@ -98,6 +98,22 @@ class ConnectedAppsService:
             return {"Authorization":f"{token_type} {token}"}
         value=self.store.get_credential(cid,"authorization_header")
         return {"Authorization":value} if value else {}
+    def reconnect_all(self):
+        """Re-establish persisted MCP sessions after application startup."""
+        results=[]
+        for row in self.connections():
+            if not row.get("enabled",True):
+                continue
+            cid=row.get("id")
+            if not cid:
+                continue
+            try:
+                result=self.reconnect(cid)
+                results.append({"id":cid,"name":row.get("display_name",""),"status":result.get("status","error") if result else "missing","error":result.get("last_error","") if result else "Connection record disappeared"})
+            except Exception as exc:
+                results.append({"id":cid,"name":row.get("display_name",""),"status":"error","error":f"{type(exc).__name__}: {exc}"})
+        return results
+
     def disconnect(self,cid):
         runtime.disconnect(cid)
         row=self.store.get_connection(cid)
