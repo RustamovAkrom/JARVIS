@@ -124,8 +124,8 @@ def default_context() -> dict:
 class TaskEngine:
     def __init__(self, root, reports_dir, agents_dirs, notify=None, max_parallel: int = 2,
                  tools_factory=None, ask_fn=None, clock=time.time, tick: float = 1.0,
-                 log=print, context_fn=None, autostart: bool = True):
-        self.store = TaskStore(Path(root))
+                 log=print, context_fn=None, autostart: bool = True, workspaces_dir=None):
+        self.store = TaskStore(Path(root), workspaces_dir=Path(workspaces_dir) if workspaces_dir else None)
         self.reports_dir = Path(reports_dir)
         self.agents_dirs = [Path(d) for d in agents_dirs]
         self.notify = notify or (lambda *_a: None)
