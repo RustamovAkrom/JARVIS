@@ -789,6 +789,79 @@ def save_output_device(name: str) -> None:
     _patch_config(output_device=(name or "").strip())
 
 
+# ── Clap launcher ────────────────────────────────────────────────────────────
+CLAP_LAUNCHER_DEFAULTS = {
+    "claps": 2,
+    "sensitivity": "normal",
+    "level": None,
+    "notify_heard": False,
+    "preload": False,
+    "greet": True,
+}
+
+
+def get_clap_launcher() -> dict:
+    """Return validated clap-launcher settings, falling back safely on corrupt data."""
+    raw = load_api_keys().get("clap_launcher", {})
+    raw = raw if isinstance(raw, dict) else {}
+    defaults = dict(CLAP_LAUNCHER_DEFAULTS)
+
+    try:
+        claps = int(raw.get("claps", defaults["claps"]))
+    except (TypeError, ValueError):
+        claps = defaults["claps"]
+    defaults["claps"] = claps if claps in (1, 2) else 2
+
+    sensitivity = str(raw.get("sensitivity", defaults["sensitivity"])).lower()
+    defaults["sensitivity"] = sensitivity if sensitivity in ("low", "normal", "high") else "normal"
+
+    level = raw.get("level")
+    try:
+        level = float(level) if level is not None else None
+    except (TypeError, ValueError):
+        level = None
+    defaults["level"] = level if level is not None and 0.0 < level <= 1.0 else None
+
+    for key in ("notify_heard", "preload", "greet"):
+        defaults[key] = bool(raw.get(key, defaults[key]))
+
+    # Standby/preload was never connected to the main application's lifecycle.
+    # Keep reading legacy config but force the unsupported feature off.
+    defaults["preload"] = False
+    return defaults
+
+
+def save_clap_launcher(**updates) -> dict:
+    """Persist validated clap-launcher settings without touching other config."""
+    current = get_clap_launcher()
+    allowed = set(CLAP_LAUNCHER_DEFAULTS)
+    unknown = set(updates) - allowed
+    if unknown:
+        raise ValueError(f"Unknown clap-launcher settings: {', '.join(sorted(unknown))}")
+
+    for key, value in updates.items():
+        if key == "claps":
+            value = int(value)
+            if value not in (1, 2):
+                raise ValueError("claps must be 1 or 2")
+        elif key == "sensitivity":
+            value = str(value).lower()
+            if value not in ("low", "normal", "high"):
+                raise ValueError("sensitivity must be low, normal, or high")
+        elif key == "level":
+            if value is not None:
+                value = float(value)
+                if not 0.0 < value <= 1.0:
+                    raise ValueError("level must be between 0 and 1")
+        elif key in ("notify_heard", "preload", "greet"):
+            value = bool(value)
+        current[key] = value
+
+    current["preload"] = False
+    _patch_config(clap_launcher=current)
+    return current
+
+
 def get_plugins_subsystem_enabled() -> bool:
     """Global optional-plugin switch. Built-in actions are unaffected."""
     value = load_api_keys().get("plugins_subsystem_enabled", True)
