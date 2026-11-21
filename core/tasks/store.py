@@ -62,9 +62,12 @@ def read_json(path: Path, default):
 
 
 class TaskStore:
-    def __init__(self, root: Path):
+    def __init__(self, root: Path, workspaces_dir: Path | None = None):
         self.root = Path(root)
         self.root.mkdir(parents=True, exist_ok=True)
+        # Metadata/checkpoints stay separate from user-generated workspace files.
+        self.workspaces_dir = Path(workspaces_dir) if workspaces_dir else self.root / "workspaces"
+        self.workspaces_dir.mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()
         self._tasks: dict[str, dict] = {}
         for path in self.root.glob("*.json"):
@@ -79,7 +82,20 @@ class TaskStore:
         return self.root / f"{tid}.json"
 
     def workdir(self, tid: str) -> Path:
-        return self.root / tid
+        # Task IDs are generated internally; reject path-like IDs defensively.
+        task_id = str(tid or "")
+        if not task_id or Path(task_id).name != task_id or task_id in {".", ".."}:
+            raise ValueError("Invalid task ID")
+        destination = self.workspaces_dir / task_id
+        legacy = self.root / task_id
+        # Preserve existing tasks created by older releases without copying data.
+        if not destination.exists() and legacy.is_dir():
+            try:
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(legacy), str(destination))
+            except OSError:
+                return legacy
+        return destination
 
     def create(self, task: dict) -> dict:
         with self._lock:
