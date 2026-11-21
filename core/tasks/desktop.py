@@ -70,7 +70,9 @@ def shutdown(wait: float = 5.0) -> bool:
     current.shutdown(wait=wait)
     # Keep the singleton reference: a bounded shutdown must not permit another
     # engine to start beside workers that are still blocked in provider/tool I/O.
-    return not any(thread.is_alive() for thread in current._workers.values())
+    workers_alive = any(thread.is_alive() for thread in current._workers.values())
+    scheduler = current._thread
+    return not workers_alive and not (scheduler and scheduler.is_alive())
 
 
 def _call(method: str, *args) -> None:
