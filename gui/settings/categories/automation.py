@@ -9,7 +9,7 @@ from PyQt6.QtCore import QTimer, QUrl, Qt
 from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtWidgets import (
     QCheckBox, QLabel, QLineEdit, QListWidget, QListWidgetItem, QPushButton,
-    QSpinBox, QVBoxLayout, QWidget,
+    QSpinBox, QVBoxLayout, QWidget, QComboBox,
 )
 from gui.components.settings import SettingRow, SettingsSection
 from gui.themes.tokens import C, Space
