@@ -121,12 +121,11 @@ def _migrate_legacy_background_tasks(engine) -> None:
             imported += 1
         # Retain the old file as a backup after every record has been imported.
         backup = legacy_path.with_name("background_tasks.json.migrated")
-        if not backup.exists():
-            legacy_path.replace(backup)
-        else:
-            # A prior backup exists; keep the source file if its contents differ.
-            if backup.read_bytes() == legacy_path.read_bytes():
-                legacy_path.unlink()
+        if backup.exists():
+            backup = legacy_path.with_name(
+                f"background_tasks.json.migrated.{int(time.time())}"
+            )
+        legacy_path.replace(backup)
         if imported:
             print(f"[Tasks] Imported {imported} legacy background research task(s).")
     except Exception as exc:
