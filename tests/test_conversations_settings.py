@@ -24,36 +24,24 @@ def test_conversation_settings_ui_persists(monkeypatch, tmp_path):
     assert config.get_conversation_memory()["days"] == 30
 
 
-def test_delete_all_removes_chat_store_legacy_files_and_recall(monkeypatch, tmp_path):
-    import json
-    from pathlib import Path
+
+def test_delete_all_only_removes_local_recall_history(monkeypatch, tmp_path):
     from PyQt6.QtWidgets import QMessageBox
     from gui.settings.categories import conversations as settings_module
-    from gui.app.chat_store import ChatStore
 
     app = QApplication.instance() or QApplication([])
-    store_path = tmp_path / "ui_chats.json"
-    legacy_chat = tmp_path / "ui_chat.json"
-    legacy_history = tmp_path / "ui_history.json"
     recall_dir = tmp_path / "recall"
-
-    store = ChatStore(store_path)
-    chat = store.get_active_chat()
-    chat["turns"] = [{"id": "1", "request": "hello", "result": "world"}]
-    chat["context"] = [{"role": "user", "text": "hello"}]
-    store.save_chat(chat)
-
-    legacy_chat.write_text(json.dumps({"turns": [{"request": "legacy"}]}), encoding="utf-8")
-    legacy_history.write_text(json.dumps({"turns": [{"request": "archived"}]}), encoding="utf-8")
     recall_dir.mkdir()
     recall_file = recall_dir / "2026-11-21.jsonl"
     recall_file.write_text('{"user":"recall"}\\n', encoding="utf-8")
 
-    monkeypatch.setattr(settings_module, "CHAT_STORE_FILE", store_path)
-    monkeypatch.setattr(settings_module, "LEGACY_CHAT_FILE", legacy_chat)
-    monkeypatch.setattr(settings_module, "LEGACY_HISTORY_FILE", legacy_history)
     monkeypatch.setattr(conversations, "DIR", recall_dir)
-    monkeypatch.setattr(conversations, "flush", lambda timeout=3.0: True)
+    monkeypatch.setattr(conversations, "flush", lambda timeout=10.0: True)
+    monkeypatch.setattr(
+        conversations,
+        "forget",
+        lambda everything=True: (recall_file.unlink(), 1)[1],
+    )
     monkeypatch.setattr(
         QMessageBox,
         "question",
@@ -63,11 +51,5 @@ def test_delete_all_removes_chat_store_legacy_files_and_recall(monkeypatch, tmp_
     page = ConversationMemoryPage()
     page._delete_all()
 
-    cleared = ChatStore(store_path).list_chats()
-    assert len(cleared) == 1
-    assert cleared[0]["turns"] == []
-    assert cleared[0]["context"] == []
-    assert json.loads(legacy_chat.read_text(encoding="utf-8"))["turns"] == []
-    assert json.loads(legacy_history.read_text(encoding="utf-8"))["turns"] == []
     assert not recall_file.exists()
-    assert "All chats deleted" in page.status.text()
+    assert "Chat archive is unchanged" in page.status.text()
