@@ -182,10 +182,32 @@ def _win_do(action: str, hwnd, monitor: str = "") -> tuple[bool, str]:
         time.sleep(0.25)
         return not _user32.IsIconic(hwnd) and not _user32.IsZoomed(hwnd), "restored"
     if action == "focus":
-        from core import appidentity
-        appidentity.raise_hwnd(int(hwnd))
-        time.sleep(0.25)
-        return int(_user32.GetForegroundWindow() or 0) == int(hwnd), "brought to the front"
+        # Restore minimized windows and request foreground focus directly.
+        # appidentity.raise_hwnd() is not part of the public API.
+        if _user32.IsIconic(hwnd):
+            _user32.ShowWindow(hwnd, _SW_RESTORE)
+        if _user32.SetForegroundWindow(hwnd):
+            time.sleep(0.25)
+            return int(_user32.GetForegroundWindow() or 0) == int(hwnd), "brought to the front"
+
+        # Windows may deny foreground activation to a background process.
+        # Temporarily attach to the foreground thread's input queue.
+        fore = _user32.GetForegroundWindow()
+        if not fore:
+            return False, "could not focus the window"
+        their = _user32.GetWindowThreadProcessId(fore, None)
+        ours = ctypes.windll.kernel32.GetCurrentThreadId()
+        if their == ours:
+            return False, "could not focus the window"
+        if not _user32.AttachThreadInput(ours, their, True):
+            return False, "Windows denied focus"
+        try:
+            _user32.BringWindowToTop(hwnd)
+            _user32.SetForegroundWindow(hwnd)
+            time.sleep(0.25)
+            return int(_user32.GetForegroundWindow() or 0) == int(hwnd), "brought to the front"
+        finally:
+            _user32.AttachThreadInput(ours, their, False)
     if action in ("snap_left", "snap_right"):
         l, t, r, b = _work_area(hwnd)
         mid = (l + r) // 2
