@@ -5,25 +5,21 @@ core/qt — the one place that knows which Qt binding is running.
     from core.qt.QtGui import QColor
     from core.qt import isdeleted, image_buffer, BINDING
 
-WHY PYSIDE6
-    It is the binding the packaged build uses. Nuitka's PyQt6 plugin warns
-    that Qt threading is not supported with it, and this app runs Qt signals
-    from worker threads everywhere (the Live session, the task engine, the
-    screen agent). PySide6 is also LGPL, which a closed binary may ship.
+WHY PyQt6 IS THE DEFAULT
+    The desktop UI and many existing modules import PyQt6 directly. Keeping it
+    first prevents core.qt from loading a second Qt runtime into that process.
 
-WHY PyQt6 IS STILL ACCEPTED
-    An open-source install that updates its code but not its packages has
-    PyQt6 and no PySide6. It keeps working: the fallback is automatic. Both
-    bindings expose the same Qt 6 classes; the differences the app touches are
-    the three names re-exported here (Signal, Slot, Property) and the two
-    helpers below. `QT_API=pyside6` or `QT_API=pyqt6` forces one — the same
-    variable matplotlib and qtpy read, so one setting governs all of them.
+WHY PYSIDE6 IS OPTIONAL
+    PySide6 can be selected explicitly with QT_API=pyside6 for compatibility
+    testing or an isolated build. It is not the packaged desktop default and
+    must not be installed as a mandatory dependency merely because the alias
+    layer supports its API.
 
-WHY `import PyQt6` IS REDIRECTED WHEN PYSIDE6 RUNS
+WHY `import PyQt6` IS REDIRECTED WHEN PYSIDE6 IS SELECTED
     Plugins written for earlier versions say `from PyQt6.QtCore import
     pyqtSignal`. Loading real PyQt6 next to PySide6 puts two copies of Qt in one
-    process, which crashes on the first widget shared between them. So while
-    PySide6 is the binding, `PyQt6.*` resolves to PySide6 behind a thin module
+    process, which can crash when widgets cross the bindings. When PySide6 is
+    explicitly selected, `PyQt6.*` resolves to PySide6 behind a thin module
     that also answers `pyqtSignal`/`pyqtSlot`/`pyqtProperty` and `PyQt6.sip`.
 """
 from __future__ import annotations
@@ -35,10 +31,8 @@ import os
 import sys
 import types
 
-# Jarvis is built on PyQt6 (ui.py, gui/ import it directly). Plugins that ask
-# for core.qt must get the SAME binding: two Qt copies in one process crash
-# on the first widget they share. So PyQt6 first here; PySide6 only when
-# PyQt6 is missing (or QT_API says so).
+# PyQt6 remains the default because the desktop UI imports it directly.
+# PySide6 is opt-in via QT_API or used only when PyQt6 is unavailable.
 _ORDER = ("PyQt6", "PySide6")
 
 
