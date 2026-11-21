@@ -1,9 +1,8 @@
-"""Build and package a Windows JARVIS release using PyInstaller and Velopack."""
+"""Build and package a Windows JARVIS release plus an optional clap launcher."""
 
 from __future__ import annotations
 
 import argparse
-import os
 import re
 import shutil
 import subprocess
@@ -28,9 +27,7 @@ def main() -> int:
 
     if sys.platform != "win32":
         raise SystemExit("The production Windows installer must be built on Windows.")
-    version = tomllib.loads((ROOT / "pyproject.toml").read_text("utf-8"))["project"][
-        "version"
-    ]
+    version = tomllib.loads((ROOT / "pyproject.toml").read_text("utf-8"))["project"]["version"]
     if not re.fullmatch(r"\d+\.\d+\.\d+", version):
         raise SystemExit(f"Release version must be MAJOR.MINOR.PATCH, got {version!r}")
     if not shutil.which("vpk"):
@@ -39,61 +36,35 @@ def main() -> int:
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
     dist = ROOT / "dist" / "JARVIS"
-    if dist.exists():
-        raise SystemExit(
-            f"Build output already exists at {dist}. Inspect or remove it before rebuilding."
-        )
-    run([sys.executable, "-m", "PyInstaller", "--noconfirm", "JARVIS.spec"])
-    smoke = dist / "JARVIS.exe"
-    run([str(smoke), "--smoke-test"])
+    launcher_dist = ROOT / "dist" / "JARVISClapLauncher"
+    for stale in (dist, launcher_dist, ROOT / "dist" / "JARVISClapLauncher.exe"):
+        if stale.exists():
+            shutil.rmtree(stale) if stale.is_dir() else stale.unlink()
 
-    # The double-clap listener is a separate, lightweight tray process. It
-    # uses the same user-data configuration and starts the packaged JARVIS.exe.
-    launcher = ROOT / "clap_launcher.pyw"
-    run(
-        [
-            sys.executable,
-            "-m",
-            "PyInstaller",
-            "--noconfirm",
-            "--onefile",
-            "--windowed",
-            "--name",
-            "JARVISClapLauncher",
-            "--paths",
-            str(ROOT),
-            "--hidden-import",
-            "PyQt6.QtNetwork",
-            str(launcher),
-        ]
-    )
-    clap_exe = ROOT / "dist" / "JARVISClapLauncher.exe"
+    run([sys.executable, "-m", "PyInstaller", "--noconfirm", "JARVIS.spec"])
+    run([str(dist / "JARVIS.exe"), "--smoke-test"])
+
+    # Optional companion is built independently and published outside the
+    # Velopack main-app package. Users may install/run it only if desired.
+    run([sys.executable, "-m", "PyInstaller", "--noconfirm", "JARVISClapLauncher.spec"])
+    clap_exe = launcher_dist / "JARVISClapLauncher.exe"
+    if not clap_exe.is_file():
+        raise SystemExit(f"Clap launcher build did not produce {clap_exe}")
     run([str(clap_exe), "--smoke-test"])
-    shutil.copy2(clap_exe, dist / "JARVISClapLauncher.exe")
-    run(
-        [
-            "vpk",
-            "pack",
-            "--packId",
-            "JARVIS",
-            "--packVersion",
-            version,
-            "--packDir",
-            str(dist),
-            "--mainExe",
-            "JARVIS.exe",
-            "--packTitle",
-            "JARVIS",
-            "--channel",
-            args.channel,
-            "--icon",
-            str(ROOT / "config" / "jarvis.ico"),
-            "--outputDir",
-            str(output),
-            "--packAuthors",
-            "JARVIS",
-        ]
-    )
+    shutil.copy2(clap_exe, output / "JARVISClapLauncher.exe")
+
+    run([
+        "vpk", "pack",
+        "--packId", "JARVIS",
+        "--packVersion", version,
+        "--packDir", str(dist),
+        "--mainExe", "JARVIS.exe",
+        "--packTitle", "JARVIS",
+        "--channel", args.channel,
+        "--icon", str(ROOT / "config" / "jarvis.ico"),
+        "--outputDir", str(output),
+        "--packAuthors", "JARVIS",
+    ])
     return 0
 
 
