@@ -152,8 +152,11 @@ class Autostart:
                                 r"Software\Microsoft\Windows\CurrentVersion\Run", 0,
                                 winreg.KEY_SET_VALUE) as k:
                 if on:
-                    winreg.SetValueEx(k, _APP_ID, 0, winreg.REG_SZ,
-                                      f'"{python_exe()}" "{script}"')
+                    command = (
+                        f'"{script}"' if FROZEN
+                        else f'"{python_exe()}" "{script}"'
+                    )
+                    winreg.SetValueEx(k, _APP_ID, 0, winreg.REG_SZ, command)
                 else:
                     try:
                         winreg.DeleteValue(k, _APP_ID)
