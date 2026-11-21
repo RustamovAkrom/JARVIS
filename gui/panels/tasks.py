@@ -158,9 +158,12 @@ class TaskPanel(QWidget):
         self.sort_box.currentIndexChanged.connect(self.render)
         self.agent_filter.currentIndexChanged.connect(self.render)
         self.search_box.textChanged.connect(self.render)
+        self.view_report_button.clicked.connect(self._view_selected_report)
+        self.open_report_button.clicked.connect(self._open_selected_report)
         self.export_button.clicked.connect(self._export_selected_report)
         self.delete_button.clicked.connect(self._delete_selected)
         self.clear_history_button.clicked.connect(self._delete_history)
+        self.show_report_folder_button.clicked.connect(self._show_selected_report_folder)
         self.list_widget.currentItemChanged.connect(self._selection_changed)
         self.retry_button.clicked.connect(self._retry_selected)
         self.cancel_button.clicked.connect(self._cancel_selected)
@@ -405,7 +408,9 @@ class TaskPanel(QWidget):
             self.details_browser.clear()
             self.progress_bar.setVisible(False)
             self.details_browser.setVisible(False)
-            self.export_button.setEnabled(False)
+            for button in (self.view_report_button, self.open_report_button,
+                           self.export_button, self.show_report_folder_button):
+                button.setEnabled(False)
             return
 
         title = str(task.get("title") or task.get("task") or task.get("id") or "Task")
@@ -436,6 +441,11 @@ class TaskPanel(QWidget):
             self.progress_bar.setRange(0, 0)  # Busy indicator: rounds/budget are not completion percentage.
         else:
             self.progress_bar.setRange(0, 100)
+        report_path = self._report_path(task)
+        report_available = bool(report_path and report_path.is_file())
+        for button in (self.view_report_button, self.open_report_button,
+                       self.export_button, self.show_report_folder_button):
+            button.setEnabled(report_available)
         self.progress_bar.setValue(progress)
         if terminal:
             self.progress_bar.setFormat("Completed" if status.lower() == "done" else status.title())
@@ -460,9 +470,15 @@ class TaskPanel(QWidget):
             lines.append("<br><b>Recovery:</b> Resumed after interruption")
         if task.get("error"):
             lines.append(f"<br><b>Error:</b> {self._html(task['error'])}")
-        result = task.get("result") or task.get("report")
+        result = task.get("result")
         if result:
-            lines.append(f"<br><b>Result:</b><br>{self._html(result)}")
+            lines.append(f"<br><b>Summary:</b><br>{self._html(result)}")
+        report_path = self._report_path(task)
+        if report_path:
+            if report_path.is_file():
+                lines.append("<br><b>Report:</b> Ready to view or export")
+            else:
+                lines.append(f"<br><b>Report:</b> Missing file — {self._html(report_path.name)}")
         events = task.get("events") or []
         if events:
             lines.append("<br><b>Event history:</b>")
@@ -490,8 +506,91 @@ class TaskPanel(QWidget):
         except (TypeError, ValueError, OSError):
             return "—"
 
+    def _report_path(self, task):
+        from pathlib import Path
+        value = task.get("report_path") or task.get("report") or ""
+        if not value:
+            return None
+        path = Path(str(value))
+        # Older task records stored the report path in the "report" field.
+        return path if path.suffix.lower() in {".md", ".txt"} else None
+
+    def _read_selected_report(self):
+        task = self._tasks.get(self.selected_task_id(), {})
+        path = self._report_path(task)
+        if not path or not path.is_file():
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.information(self, "Report unavailable", "The report file is missing or unavailable.")
+            return None
+        try:
+            return path.read_text(encoding="utf-8")
+        except OSError as exc:
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "Report unavailable", str(exc))
+            return None
+
+    def _view_selected_report(self):
+        report = self._read_selected_report()
+        if report is None:
+            return
+        task = self._tasks.get(self.selected_task_id(), {})
+        dialog = QDialog(self)
+        dialog.setWindowTitle(f"Task Report — {task.get('title') or 'Report'}")
+        dialog.resize(760, 620)
+        layout = QVBoxLayout(dialog)
+        viewer = QTextBrowser(dialog)
+        viewer.setMarkdown(report)
+        viewer.setOpenExternalLinks(True)
+        layout.addWidget(viewer, 1)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        buttons.rejected.connect(dialog.reject)
+        buttons.accepted.connect(dialog.accept)
+        layout.addWidget(buttons)
+        dialog.exec()
+
+    def _open_selected_report(self):
+        task = self._tasks.get(self.selected_task_id(), {})
+        path = self._report_path(task)
+        if not path or not path.is_file():
+            self._read_selected_report()
+            return
+        try:
+            import os
+            import sys
+            import subprocess
+            if sys.platform.startswith("win"):
+                os.startfile(str(path))
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", str(path)])
+            else:
+                subprocess.Popen(["xdg-open", str(path)])
+        except Exception as exc:
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "Open report failed", str(exc))
+
+    def _show_selected_report_folder(self):
+        task = self._tasks.get(self.selected_task_id(), {})
+        path = self._report_path(task)
+        if not path or not path.is_file():
+            self._read_selected_report()
+            return
+        try:
+            import os
+            import sys
+            import subprocess
+            if sys.platform.startswith("win"):
+                subprocess.Popen(["explorer", "/select,", str(path)])
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", "-R", str(path)])
+            else:
+                subprocess.Popen(["xdg-open", str(path.parent)])
+        except Exception as exc:
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "Open folder failed", str(exc))
+
     def _export_selected_report(self):
         task = self._tasks.get(self.selected_task_id(), {})
+<<<<<<< HEAD
         report = str(task.get("report") or task.get("result") or "").strip()
         if not report:
             # Failed/cancelled tasks may not have a report. Export a useful
@@ -531,10 +630,12 @@ class TaskPanel(QWidget):
         if not path:
             return
         try:
+            from pathlib import Path
             Path(path).write_text(report, encoding="utf-8")
         except OSError as exc:
             from PyQt6.QtWidgets import QMessageBox
-            QMessageBox.warning(self, "Export failed", str(exc))
+            QMessageBox.warning(self, "Export failed", str(exc)
+);
 
     def selected_task_id(self):
         item = self.list_widget.currentItem()

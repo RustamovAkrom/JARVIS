@@ -17,6 +17,8 @@ config/ui_history.json
 config/ui_reminders.json
 memory/pomodoro_state.json
 cache/
+holo_desk/
+tasks/
 
 **/token*.json
 **/client_secret*.json
