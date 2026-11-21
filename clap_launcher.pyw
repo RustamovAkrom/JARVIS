@@ -386,7 +386,7 @@ def main() -> int:
 
     def _out(source: str):
         out = open(LOG_DIR / "jarvis.log", "a", encoding="utf-8")
-        out.write(f"\\n===== {source} at {time.ctime()} =====\\n")
+        out.write(f"\n===== {source} at {time.ctime()} =====\n")
         out.flush()
         return out
 
