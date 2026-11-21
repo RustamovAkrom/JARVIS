@@ -103,6 +103,22 @@ class RuntimePaths:
     debug: bool = False
 
     @property
+    def tasks_dir(self) -> Path:
+        return self.user_data_root / "tasks"
+
+    @property
+    def task_database_dir(self) -> Path:
+        return self.tasks_dir / "database"
+
+    @property
+    def task_workspaces_dir(self) -> Path:
+        return self.tasks_dir / "workspaces"
+
+    @property
+    def task_reports_dir(self) -> Path:
+        return self.tasks_dir / "reports"
+
+    @property
     def config_dir(self) -> Path:
         return self.user_data_root / "config"
 
@@ -152,6 +168,10 @@ class RuntimePaths:
             self.cache_dir,
             self.lectures_dir,
             self.temp_update_dir,
+            self.tasks_dir,
+            self.task_database_dir,
+            self.task_workspaces_dir,
+            self.task_reports_dir,
         ):
             path.mkdir(parents=True, exist_ok=True)
 
