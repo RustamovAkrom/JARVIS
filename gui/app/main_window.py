@@ -13407,6 +13407,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
 
         self._workspace_path = ""
         self._current_file = None
+        self._refresh_project_history()
         self._update_project_explorer_state()
         self._show_dashboard()
         home = str(Path.home())
@@ -16860,7 +16861,10 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         self._notify_chat_switch(chat)
 
     def _refresh_history(self):
-        chats = self._chat_store.list_chats()
+        chats = [
+            chat for chat in self._chat_store.list_chats()
+            if chat.get("turns") or chat.get("context")
+        ]
         for widget in (
             getattr(self, "_history_list", None),
             getattr(self, "_chat_switcher_list", None),
