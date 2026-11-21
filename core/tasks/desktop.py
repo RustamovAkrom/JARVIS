@@ -61,6 +61,18 @@ def engine():
     return _engine
 
 
+def shutdown(wait: float = 5.0) -> bool:
+    """Stop the singleton TaskEngine and report whether workers have exited."""
+    with _lock:
+        current = _engine
+    if current is None:
+        return True
+    current.shutdown(wait=wait)
+    # Keep the singleton reference: a bounded shutdown must not permit another
+    # engine to start beside workers that are still blocked in provider/tool I/O.
+    return not any(thread.is_alive() for thread in current._workers.values())
+
+
 def _call(method: str, *args) -> None:
     fn = getattr(_player, method, None)
     if callable(fn):
@@ -82,19 +94,24 @@ def _notify(event: str, task: dict | None, text: str) -> None:
         if deliver == "silent":
             return
         report = task.get("report") or ""
-        # The panel title is the app's own English label; the task's title is the
-        # user's words and goes in the body, where it is not upper-cased.
+        report_error = task.get("report_error") or ""
         body = f"{title}\n\n{(task.get('result') or '').strip()}"
         if report:
             body += f"\n\n— Full report: {report}"
+        elif task.get("report_status") == "failed":
+            body += f"\n\n— Report file could not be saved: {report_error or 'unknown error'}"
         _call("show_content", "BACKGROUND TASK", body[:4000])
         if deliver == "voice":
             from core import outcome
+            delivery_note = (
+                "The full result is on the screen and saved as a report."
+                if report
+                else "The result is on the screen, but the report file could not be saved."
+            )
             _call("request_say",
                   "[BACKGROUND TASK FINISHED] A task the user gave you earlier is done: "
                   f"'{(task.get('task') or '')[:200]}'. Tell the user in one or two sentences "
-                  "what came of it — the headline, not the whole result — and that the full "
-                  "result is on the screen and saved as a report. Speak in the user's language. "
+                  f"what came of it and that {delivery_note} Speak in the user's language. "
                   "Do not call any tool for this.\n"
                   + outcome.untrusted("task-result", (task.get("result") or "")[:3000]))
     elif event == "failed":
