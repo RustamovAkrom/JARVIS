@@ -75,3 +75,6 @@ build = [
     "pyinstaller>=6.22.3,<7",
     "pyinstaller-hooks-contrib>=2026.8",
 ]
+qt-compat = [
+    "PySide6>=6.6,<7",
+]
