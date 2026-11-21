@@ -211,7 +211,7 @@ def main() -> int:
         print(f"JARVIS Clap Launcher smoke test passed (claps={settings['claps']}).")
         return 0
 
-    from PyQt6.QtCore import QObject, QTimer, pyqtSignal
+    from PyQt6.QtCore import QObject, QTimer, QLockFile, pyqtSignal
     from PyQt6.QtGui import QAction, QActionGroup, QIcon
     from PyQt6.QtNetwork import QLocalServer
     from PyQt6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
@@ -222,14 +222,22 @@ def main() -> int:
     app.setQuitOnLastWindowClosed(False)
     app.setApplicationName("JARVIS Clap Launcher")
 
-    # One per user. A second copy tells the first to say where it is, and goes.
-    if clap_ipc.ask("show") is not None:
-        log("already running - told it to show itself; this copy exits")
+    # QLockFile provides a real singleton guarantee. A socket alone is not
+    # enough: a slow/unresponsive active launcher must not be unlinked by a
+    # second process and replaced with another microphone listener.
+    lock = QLockFile(str(PATHS.user_data_root / "clap_launcher.lock"))
+    lock.setStaleLockTime(30_000)
+    if not lock.tryLock(0):
+        clap_ipc.ask("show", timeout_ms=1200)
+        log("another launcher instance owns the lock; this copy exits")
         return 0
+
     server = QLocalServer()
-    QLocalServer.removeServer(clap_ipc.server_name())     # a crashed copy's leftover
+    QLocalServer.removeServer(clap_ipc.server_name())  # safe while holding the singleton lock
     if not server.listen(clap_ipc.server_name()):
         log(f"could not open the control channel: {server.errorString()}")
+        lock.unlock()
+        return 1
 
     import sounddevice as sd
 
@@ -269,7 +277,7 @@ def main() -> int:
     tray = QSystemTrayIcon(base_icon)
     if not QSystemTrayIcon.isSystemTrayAvailable():
         log("no system tray on this desktop: running without an icon "
-            "(stop it from JARVIS: SETUP -> CLAP LAUNCHER)")
+            "(stop it from JARVIS Setup -> Double-clap activation)")
 
     def notify(text: str, ms: int = 3000, critical: bool = False) -> None:
         tray.showMessage("JARVIS Clap Launcher", text,
