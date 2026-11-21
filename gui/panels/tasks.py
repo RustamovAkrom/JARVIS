@@ -93,11 +93,11 @@ class TaskPanel(QWidget):
         self.list_widget = QListWidget()
         self.list_widget.setObjectName("task_list")
         self.list_widget.setMinimumHeight(0)
-        self.list_widget.setMinimumHeight(100)
-        self.list_widget.setMaximumHeight(220)
+        self.list_widget.setMinimumHeight(90)
+        self.list_widget.setMaximumHeight(260)
         self.list_widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.list_widget.setUniformItemSizes(True)
-        root.addWidget(self.list_widget, 0)
+        root.addWidget(self.list_widget, 1)
 
         self.details_title = QLabel("Select a task")
         self.details_title.setObjectName("task_details_title")
@@ -143,7 +143,9 @@ class TaskPanel(QWidget):
             report_actions.addWidget(button, index // 2, index % 2)
         report_actions.setColumnStretch(0, 1)
         report_actions.setColumnStretch(1, 1)
-        root.addLayout(report_actions)
+        self.report_actions_widget = QWidget()
+        self.report_actions_widget.setLayout(report_actions)
+        root.addWidget(self.report_actions_widget, 0)
         workspace_actions = QGridLayout()
         workspace_actions.setHorizontalSpacing(4)
         workspace_actions.setVerticalSpacing(3)
@@ -154,7 +156,9 @@ class TaskPanel(QWidget):
             workspace_actions.addWidget(button, 0, index)
         workspace_actions.setColumnStretch(0, 1)
         workspace_actions.setColumnStretch(1, 1)
-        root.addLayout(workspace_actions)
+        self.workspace_actions_widget = QWidget()
+        self.workspace_actions_widget.setLayout(workspace_actions)
+        root.addWidget(self.workspace_actions_widget, 0)
         history_actions = QGridLayout()
         history_actions.setHorizontalSpacing(5)
         history_actions.setVerticalSpacing(2)
@@ -166,7 +170,9 @@ class TaskPanel(QWidget):
         history_actions.addWidget(self.clear_history_button, 0, 1)
         history_actions.setColumnStretch(0, 1)
         history_actions.setColumnStretch(1, 1)
-        root.addLayout(history_actions, 0)
+        self.history_actions_widget = QWidget()
+        self.history_actions_widget.setLayout(history_actions)
+        root.addWidget(self.history_actions_widget, 0)
         self.stats_label = QLabel("0 tasks")
         self.stats_label.setObjectName("task_stats")
         self.stats_label.setWordWrap(True)
@@ -188,7 +194,9 @@ class TaskPanel(QWidget):
             actions.addWidget(button, index // 2, index % 2)
         actions.setColumnStretch(0, 1)
         actions.setColumnStretch(1, 1)
-        root.addLayout(actions, 0)
+        self.task_actions_widget = QWidget()
+        self.task_actions_widget.setLayout(actions)
+        root.addWidget(self.task_actions_widget, 0)
         self.new_button.clicked.connect(self._create_task_dialog)
         self.refresh_button.clicked.connect(self.refresh_requested.emit)
         self.filter_box.currentIndexChanged.connect(self.render)
@@ -820,10 +828,12 @@ class TaskPanel(QWidget):
         queued = sum(t.get("status") in {"queued", "scheduled"} for t in all_tasks)
         waiting = sum(t.get("status") == "waiting_quota" for t in all_tasks)
         cancelled = sum(t.get("status") == "cancelled" for t in all_tasks)
-        self.stats_label.setText(
+        stats = (
             f"{len(all_tasks)} tasks · {queued} queued · {running} running · "
             f"{waiting} waiting · {done} done · {failed} failed · {cancelled} cancelled"
         )
+        if self.stats_label.text() != stats:
+            self.stats_label.setText(stats)
         self.list_widget.clear()
         for task in rows:
             status = str(task.get("status") or "unknown").upper()
@@ -891,8 +901,24 @@ class TaskPanel(QWidget):
         self.details_browser.setVisible(has_task)
         active = task.get("status") in _ACTIVE
         self.retry_button.setEnabled(task.get("status") in {"failed", "cancelled"})
-        for button in (self.cancel_button, self.finish_button, self.steer_button):
-            button.setEnabled(active)
+        self.cancel_button.setEnabled(active)
+        self.finish_button.setEnabled(active)
+        self.steer_button.setEnabled(active)
+
+        # Keep the panel compact when no task is selected. Reveal only actions
+        # relevant to the selected task, avoiding empty disabled-button rows.
+        self.task_actions_widget.setVisible(has_task)
+        self.history_actions_widget.setVisible(has_task and not active)
+        report_path = self._report_path(task)
+        report_available = bool(report_path and report_path.is_file())
+        self.report_actions_widget.setVisible(has_task and report_available)
+        workspace = self._workspace_path(task)
+        workspace_available = bool(workspace and workspace.is_dir())
+        self.workspace_actions_widget.setVisible(has_task and workspace_available)
+        self.retry_button.setVisible(task.get("status") in {"failed", "cancelled"})
+        self.cancel_button.setVisible(active)
+        self.finish_button.setVisible(active)
+        self.steer_button.setVisible(active)
         if tid:
             self.task_selected.emit(tid)
 
