@@ -1,9 +1,14 @@
+import importlib.util
 import os
 import subprocess
 import sys
 
+import pytest
+
 
 def test_pyside6_binding_aliases_qt_modules_in_clean_process():
+    if importlib.util.find_spec("PySide6") is None:
+        pytest.skip("PySide6 is installed only in the dedicated compatibility job")
     script = r"""
 from core.qt import BINDING
 from core.qt.QtCore import QObject, Signal, Slot
