@@ -419,6 +419,10 @@ class TaskPanel(QWidget):
         for task in tasks or []:
             if isinstance(task, dict) and str(task.get("id") or "").strip():
                 rows[str(task["id"])] = dict(task)
+        # Avoid repainting/rebuilding the task list when the scheduler returns
+        # an identical snapshot (common for completed tasks during polling).
+        if rows == self._tasks:
+            return
         self._tasks = rows
         active = sorted(
             (task for task in rows.values() if task.get("status") in _ACTIVE),
@@ -426,7 +430,7 @@ class TaskPanel(QWidget):
             reverse=True,
         )
         if not active:
-            self.active_summary.setText("No active background tasks")
+            summary = "No active background tasks"
         else:
             lines = [f"ACTIVE BACKGROUND TASKS · {len(active)}"]
             for task in active[:3]:
@@ -436,7 +440,9 @@ class TaskPanel(QWidget):
                 lines.append(f"• {title[:48]} — {status} · {progress}%")
             if len(active) > 3:
                 lines.append(f"+ {len(active) - 3} more")
-            self.active_summary.setText("\n".join(lines))
+            summary = "\n".join(lines)
+        if self.active_summary.text() != summary:
+            self.active_summary.setText(summary)
         self.render()
 
     def _render_details(self, task):
