@@ -209,6 +209,7 @@ class TaskEngine:
         not_before = float(not_before or 0)
         task_doc = {
             "id": tid, "agent": prof.name, "title": _title(title or text), "task": text,
+            "workspace": str(self.store.workdir(tid)),
             "origin": origin, "deliver": deliver if deliver in ("voice", "panel", "silent") else "voice",
             "status": "scheduled" if not_before > now else "queued",
             "created": now, "started": 0.0, "finished": 0.0, "not_before": not_before,
