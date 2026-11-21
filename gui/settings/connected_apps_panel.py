@@ -40,11 +40,19 @@ class ConnectedAppsPanel(QWidget):
 
     def refresh(self,*_):
         query=self.search.text().casefold().strip();selected=self.selected_id();self.list.clear()
-        for row in service.connections():
+        rows=service.connections()
+        visible=[]
+        for row in rows:
             if query and query not in (row.get("display_name","")+" "+row.get("app_id","")).casefold():continue
+            visible.append(row)
             item=QListWidgetItem(f"{row.get('display_name')} · {row.get('status','unknown')}")
             item.setData(Qt.ItemDataRole.UserRole,row.get("id"));self.list.addItem(item)
             if selected and item.data(Qt.ItemDataRole.UserRole)==selected:self.list.setCurrentItem(item)
+        if not visible:
+            message="No connected apps yet. Add an MCP server using STDIO, HTTP, or OAuth." if not query else "No apps match your search."
+            placeholder=QListWidgetItem(message)
+            placeholder.setFlags(Qt.ItemFlag.NoItemFlags)
+            self.list.addItem(placeholder)
         self.show_selected()
 
     def selected_id(self):
