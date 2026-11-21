@@ -92,8 +92,9 @@ class MCPRuntime:
             old = self._sessions.pop(cid, None)
             if old:
                 await old[0].aclose()
-            self._sessions[cid] = (stack, session)
-            self._tools[cid] = tools
+            with self._lock:
+                self._sessions[cid] = (stack, session)
+                self._tools[cid] = tools
             return tools
         except BaseException:
             await stack.aclose()
@@ -136,13 +137,15 @@ class MCPRuntime:
 
     async def _close(self, cid):
         entry = self._sessions.pop(cid, None)
-        self._tools.pop(cid, None)
+        with self._lock:
+            self._tools.pop(cid, None)
         if entry:
             await entry[0].aclose()
 
     def tools(self, cid):
+        # Return a detached snapshot; callers may serialize it on other threads.
         with self._lock:
-            return list(self._tools.get(cid, []))
+            return [dict(row) for row in self._tools.get(cid, [])]
 
     def call(self, cid, tool, args=None):
         return self._submit(self._call(cid, tool, args or {}), 120)
@@ -154,7 +157,9 @@ class MCPRuntime:
             pass
 
     def shutdown(self):
-        for cid in list(self._sessions):
+        with self._lock:
+            connection_ids = list(self._sessions)
+        for cid in connection_ids:
             self.disconnect(cid)
         if self._loop and self._loop.is_running():
             self._loop.call_soon_threadsafe(self._loop.stop)
