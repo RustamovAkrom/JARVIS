@@ -850,7 +850,9 @@ class JarvisLive:
         # _awake gates the mic (see _listen_audio) and the background speakers.
         # It is True whenever wake word is OFF, so default behaviour is unchanged.
         self._wake_enabled = get_wake_word_enabled()
-        self._awake = not self._wake_enabled
+        # A clap-launch is an explicit activation, so start awake even when
+        # wake-word mode is normally configured to start asleep.
+        self._awake = not self._wake_enabled or self._clap_launch
         self._wake_detector: WakeWordDetector | None = None
         self._clap_detector = None
         self._wake_sleep_timeout = WAKE_SLEEP_TIMEOUT
@@ -4069,11 +4071,16 @@ class JarvisLive:
                     # until the user says "Hey Jarvis" or taps wake in the UI.
                     if self._wake_enabled:
                         self._ensure_wake_detector()
-                        self._awake = False
-                        self.ui.set_state("SLEEPING")
-                        self.ui.write_log(
-                            "SYS: JARVIS online — sleeping. Say 'Hey Jarvis' to wake me."
-                        )
+                        if self._clap_launch:
+                            self._awake = True
+                            self.ui.set_state("LISTENING")
+                            self.ui.write_log("SYS: JARVIS online — activated by double clap.")
+                        else:
+                            self._awake = False
+                            self.ui.set_state("SLEEPING")
+                            self.ui.write_log(
+                                "SYS: JARVIS online — sleeping. Say 'Hey Jarvis' to wake me."
+                            )
                     else:
                         self._awake = True
                         self.ui.set_state("LISTENING")
