@@ -5,6 +5,8 @@ import shutil
 import subprocess
 import sys
 import re
+import threading
+import time
 import uuid
 from xml.sax.saxutils import escape
 from datetime import datetime
@@ -303,18 +305,55 @@ def _schedule_linux(target_dt: datetime, task_name: str, script_path: Path) -> s
 
 
 
-def list_reminders() -> list[dict]:
-    """Return the persisted reminder index, newest first."""
+_REMINDER_CLEANUP_LOCK = threading.Lock()
+_REMINDER_CLEANUP_STATE = threading.local()
+_REMINDER_RETENTION_SECONDS = 30 * 24 * 60 * 60
+
+
+def _read_reminder_index() -> list[dict]:
     index = PATHS.config_dir / "ui_reminders.json"
     try:
         data = json.loads(index.read_text(encoding="utf-8")) if index.exists() else {}
         rows = data.get("reminders", []) if isinstance(data, dict) else []
-        return sorted(
-            [row for row in rows if isinstance(row, dict)],
-            key=lambda row: float(row.get("due", 0)),
-        )
+        return [row for row in rows if isinstance(row, dict)]
     except (OSError, json.JSONDecodeError, TypeError, ValueError):
         return []
+
+
+def list_reminders() -> list[dict]:
+    """Return reminders newest first and opportunistically prune old stale jobs.
+
+    Cleanup only considers reminders more than 30 days past due. The OS
+    scheduler remains authoritative: cancel_reminder must verify cancellation
+    (or verified absence) before the local index row and generated script go.
+    """
+    rows = _read_reminder_index()
+    if not getattr(_REMINDER_CLEANUP_STATE, "active", False):
+        with _REMINDER_CLEANUP_LOCK:
+            _REMINDER_CLEANUP_STATE.active = True
+            try:
+                cutoff = time.time() - _REMINDER_RETENTION_SECONDS
+                for row in rows:
+                    try:
+                        due = float(row.get("due") or 0)
+                    except (TypeError, ValueError):
+                        continue
+                    reminder_id = str(row.get("id") or "").strip()
+                    if reminder_id and due > 0 and due < cutoff:
+                        # cancel_reminder() calls list_reminders(); the
+                        # thread-local guard prevents recursive cleanup.
+                        cancel_reminder(reminder_id)
+            finally:
+                _REMINDER_CLEANUP_STATE.active = False
+        rows = _read_reminder_index()
+
+    def _due(row):
+        try:
+            return float(row.get("due") or 0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    return sorted(rows, key=_due)
 
 
 def cancel_reminder(reminder_id: str) -> tuple[bool, str]:
@@ -330,8 +369,32 @@ def cancel_reminder(reminder_id: str) -> tuple[bool, str]:
     platform_name = str(row.get("platform") or _get_os())
     try:
         if platform_name == "windows":
-            subprocess.run(["schtasks", "/Delete", "/TN", job_id, "/F"],
-                           capture_output=True, text=True, **_CNW, check=True)
+            result = subprocess.run(
+                ["schtasks", "/Delete", "/TN", job_id, "/F"],
+                capture_output=True,
+                text=True,
+                **_CNW,
+                check=False,
+            )
+            if result.returncode != 0:
+                probe = subprocess.run(
+                    ["schtasks", "/Query", "/TN", job_id],
+                    capture_output=True,
+                    text=True,
+                    **_CNW,
+                    check=False,
+                )
+                if probe.returncode == 0:
+                    return False, "Windows Task Scheduler still reports the reminder."
+                detail = (probe.stderr or probe.stdout).lower()
+                if not any(
+                    marker in detail
+                    for marker in ("cannot find", "does not exist", "no tasks are running")
+                ):
+                    return False, (
+                        "Could not verify Windows scheduler cancellation: "
+                        + (probe.stderr or probe.stdout or result.stderr or "unknown response")
+                    )
         elif platform_name == "mac":
             plist = Path.home() / "Library" / "LaunchAgents" / f"{job_id}.plist"
             result = subprocess.run(
@@ -366,8 +429,29 @@ def cancel_reminder(reminder_id: str) -> tuple[bool, str]:
                     )
             plist.unlink(missing_ok=True)
         elif job_id.startswith("at:"):
-            subprocess.run(["atrm", job_id.split(":", 1)[1]],
-                           capture_output=True, text=True, check=True)
+            job_number = job_id.split(":", 1)[1]
+            result = subprocess.run(
+                ["atrm", job_number],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode != 0:
+                probe = subprocess.run(
+                    ["atq"], capture_output=True, text=True, check=False
+                )
+                if probe.returncode != 0:
+                    return False, (
+                        "Could not verify at-job cancellation: "
+                        + (probe.stderr or result.stderr or "atq failed")
+                    )
+                pending = {
+                    line.split()[0]
+                    for line in probe.stdout.splitlines()
+                    if line.split() and line.split()[0].isdigit()
+                }
+                if not job_number.isdigit() or job_number in pending:
+                    return False, "The at scheduler still reports this reminder as pending."
         else:
             unit = job_id.removeprefix("systemd:")
             result = subprocess.run(
