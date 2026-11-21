@@ -355,6 +355,15 @@ def cancel_reminder(reminder_id: str) -> tuple[bool, str]:
                         "launchd still reports this reminder as loaded: "
                         + (detail or probe.stdout.strip())
                     )
+                probe_detail = (probe.stderr or probe.stdout).lower()
+                if not any(
+                    marker in probe_detail
+                    for marker in ("could not find service", "service is not loaded", "not found")
+                ):
+                    return False, (
+                        "Could not verify launchd cancellation: "
+                        + (probe.stderr or probe.stdout or detail or "unknown scheduler response")
+                    )
             plist.unlink(missing_ok=True)
         elif job_id.startswith("at:"):
             subprocess.run(["atrm", job_id.split(":", 1)[1]],
