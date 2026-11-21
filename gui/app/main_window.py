@@ -10148,6 +10148,13 @@ class MainWindow(QMainWindow):
         )
         self._new_folder_btn.setIconSize(QSize(16, 16))
         self._refresh_files_btn = small_tool("↻", self._tr("Refresh files"), self._refresh_project_files)
+        self._project_history = QComboBox()
+        self._project_history.setObjectName("project_history")
+        self._project_history.setToolTip(self._tr("Recent projects"))
+        self._project_history.setMinimumWidth(0)
+        self._project_history.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self._project_history.currentIndexChanged.connect(self._select_recent_project)
+        project_row.addWidget(self._project_history)
         page_layout.addLayout(project_row)
 
         self._workspace_label = QLabel()
@@ -13275,6 +13282,30 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         root_index = self._file_model.setRootPath(self._workspace_path)
         self._file_tree.setRootIndex(root_index)
 
+    def _refresh_project_history(self):
+        if not hasattr(self, "_project_history"):
+            return
+        from memory.config_manager import get_project_history
+        current = self._workspace_path
+        entries = get_project_history()
+        self._project_history.blockSignals(True)
+        self._project_history.clear()
+        self._project_history.addItem(self._tr("Recent Projects"), "")
+        for entry in entries:
+            self._project_history.addItem(entry["name"], entry["path"])
+            index = self._project_history.count() - 1
+            self._project_history.setItemData(index, entry["path"], Qt.ItemDataRole.ToolTipRole)
+        index = self._project_history.findData(current)
+        self._project_history.setCurrentIndex(index if index >= 0 else 0)
+        self._project_history.blockSignals(False)
+
+    def _select_recent_project(self, index: int):
+        if index <= 0 or not hasattr(self, "_project_history"):
+            return
+        path = self._project_history.itemData(index)
+        if path and path != self._workspace_path:
+            self._set_workspace_path(path)
+
     def _select_workspace_folder(self):
         start = self._workspace_path or str(Path.home())
         path = QFileDialog.getExistingDirectory(
@@ -13292,6 +13323,12 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             QMessageBox.warning(self, self._tr("Project folder unavailable"), str(exc))
             return
         self._workspace_path = str(Path(path).expanduser().resolve())
+        try:
+            from memory.config_manager import add_project_to_history
+            add_project_to_history(self._workspace_path)
+        except (ValueError, OSError) as exc:
+            QMessageBox.warning(self, self._tr("Project history unavailable"), str(exc))
+        self._refresh_project_history()
         from memory.config_manager import save_active_project_file
 
         try:
