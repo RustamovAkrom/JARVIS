@@ -12,7 +12,9 @@ test harness or a plugin without main.py still gets an engine.
 """
 from __future__ import annotations
 
+import json
 import threading
+import time
 from pathlib import Path
 
 _BASE = Path(__file__).resolve().parent.parent.parent
@@ -41,6 +43,96 @@ def _max_parallel() -> int:
         return 2
 
 
+def _migrate_legacy_background_tasks(engine) -> None:
+    """Import the retired research-only JSON store once, without discarding it."""
+    from core.runtime_paths import PATHS
+    from core.tasks.store import new_id
+
+    legacy_path = PATHS.databases_dir / "background_tasks.json"
+    if not legacy_path.is_file():
+        return
+    try:
+        payload = json.loads(legacy_path.read_text(encoding="utf-8"))
+        rows = payload.get("tasks", []) if isinstance(payload, dict) else []
+        if not isinstance(rows, list):
+            raise ValueError("legacy task store has no tasks list")
+        profiles = engine.agents()
+        profile = profiles.get("researcher") or profiles.get("general")
+        imported = 0
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            source_id = str(row.get("id") or "").strip()
+            query = " ".join(str(row.get("query") or "").split())
+            if not source_id or not query:
+                continue
+            already_imported = any(
+                task.get("legacy_source_id") == source_id
+                for task in engine.store.all()
+            )
+            if already_imported:
+                continue
+            old_status = str(row.get("status") or "queued").lower()
+            status = old_status if old_status in {"done", "failed", "cancelled"} else "queued"
+            tid = new_id()
+            created = float(row.get("created") or time.time())
+            finished = float(row.get("updated") or 0) if status in {
+                "done", "failed", "cancelled"
+            } else 0.0
+            task = {
+                "id": tid,
+                "agent": profile.name if profile else "general",
+                "title": query[:70],
+                "task": query,
+                "workspace": str(engine.store.workdir(tid)),
+                "origin": "legacy-background-research",
+                "legacy_source_id": source_id,
+                "deliver": "panel",
+                "status": status,
+                "created": created,
+                "started": created if old_status == "running" else 0.0,
+                "finished": finished,
+                "not_before": 0.0,
+                "budget": {
+                    "minutes": profile.minutes if profile else 10,
+                    "rounds": profile.rounds if profile else 40,
+                },
+                "used": {"rounds": 0, "seconds": 0.0},
+                "attempts": 1 if old_status == "running" else 0,
+                "quota_until": 0.0,
+                "wrap_up": False,
+                "notes_in": [],
+                "events": [],
+                "files": [],
+                "result": str(row.get("result") or "")[:40_000],
+                "report": "",
+                "report_path": "",
+                "report_status": "not_available" if status == "done" else "",
+                "report_error": "",
+                "error": str(row.get("error") or "")[:1000],
+            }
+            engine.store.create(task)
+            engine._event(
+                tid,
+                "state",
+                "imported from legacy background research; "
+                + ("queued to resume" if status == "queued" else status),
+            )
+            imported += 1
+        # Retain the old file as a backup after every record has been imported.
+        backup = legacy_path.with_name("background_tasks.json.migrated")
+        if not backup.exists():
+            legacy_path.replace(backup)
+        else:
+            # A prior backup exists; keep the source file if its contents differ.
+            if backup.read_bytes() == legacy_path.read_bytes():
+                legacy_path.unlink()
+        if imported:
+            print(f"[Tasks] Imported {imported} legacy background research task(s).")
+    except Exception as exc:
+        print(f"[Tasks] Legacy background task migration was not completed: {exc}")
+
+
 def ensure(player=None):
     global _engine, _player
     with _lock:
@@ -48,8 +140,16 @@ def ensure(player=None):
             _player = player
         if _engine is None:
             from core.tasks.engine import TaskEngine
-            _engine = TaskEngine(tasks_dir(), reports_dir(), [agents_dir()],
-                                 notify=_notify, max_parallel=_max_parallel())
+            _engine = TaskEngine(
+                tasks_dir(),
+                reports_dir(),
+                [agents_dir()],
+                notify=_notify,
+                max_parallel=_max_parallel(),
+                autostart=False,
+            )
+            _migrate_legacy_background_tasks(_engine)
+            _engine.start_scheduler()
         return _engine
 
 
