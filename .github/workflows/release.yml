@@ -47,6 +47,12 @@ jobs:
         run: dotnet tool install --global vpk --version 1.2.161
       - name: Build and smoke test package
         run: python tools/build_release.py --output release
+      - name: Verify optional clap launcher artifact
+        shell: pwsh
+        run: |
+          if (-not (Test-Path release/JARVISClapLauncher.exe) -or (Get-Item release/JARVISClapLauncher.exe).Length -lt 1000000) {
+            throw "The optional clap launcher executable is missing or unexpectedly small."
+          }
       - name: Add SHA-256 manifest
         shell: pwsh
         run: Get-ChildItem release -File | Get-FileHash -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $((Split-Path $_.Path -Leaf))" } | Set-Content release/SHA256SUMS.txt
