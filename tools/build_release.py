@@ -46,6 +46,30 @@ def main() -> int:
     run([sys.executable, "-m", "PyInstaller", "--noconfirm", "JARVIS.spec"])
     smoke = dist / "JARVIS.exe"
     run([str(smoke), "--smoke-test"])
+
+    # The double-clap listener is a separate, lightweight tray process. It
+    # uses the same user-data configuration and starts the packaged JARVIS.exe.
+    launcher = ROOT / "clap_launcher.pyw"
+    run(
+        [
+            sys.executable,
+            "-m",
+            "PyInstaller",
+            "--noconfirm",
+            "--onefile",
+            "--windowed",
+            "--name",
+            "JARVISClapLauncher",
+            "--paths",
+            str(ROOT),
+            "--hidden-import",
+            "PyQt6.QtNetwork",
+            str(launcher),
+        ]
+    )
+    clap_exe = ROOT / "dist" / "JARVISClapLauncher.exe"
+    run([str(clap_exe), "--smoke-test"])
+    shutil.copy2(clap_exe, dist / "JARVISClapLauncher.exe")
     run(
         [
             "vpk",
