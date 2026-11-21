@@ -371,6 +371,25 @@ def main() -> int:
             log(f"microphone released: {reason}")
         refresh()
 
+    def _env(standby: bool = False) -> dict:
+        # The legacy argument is retained for compatibility with the launch call.
+        del standby
+        env = dict(
+            os.environ,
+            JARVIS_WELCOME="1" if settings["greet"] else "0",
+            JARVIS_CLAP_LAUNCH="1",
+            PYTHONIOENCODING="utf-8",
+            PYTHONUNBUFFERED="1",
+        )
+        env.pop("JARVIS_STANDBY", None)
+        return env
+
+    def _out(source: str):
+        out = open(LOG_DIR / "jarvis.log", "a", encoding="utf-8")
+        out.write(f"\\n===== {source} at {time.ctime()} =====\\n")
+        out.flush()
+        return out
+
     # Instant standby was never integrated with main.py's lifecycle and could
     # start a second live assistant. It remains disabled until a GUI-only
     # standby protocol exists.
