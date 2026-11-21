@@ -11451,6 +11451,23 @@ class MainWindow(QMainWindow):
         self._settings_center.raise_()
         self._settings_center.activateWindow()
 
+    def open_panel(self, panel: str, params: dict | None = None):
+        """Open a named JARVIS panel through the Settings Center routing."""
+        panel = str(panel or "").strip().casefold()
+        params = params or {}
+        if panel in {"apps", "connected_apps"}:
+            self._open_settings_center()
+            if self._settings_center is not None:
+                self._settings_center.show_category("connected_apps")
+                query = str(params.get("search", "")).strip()
+                page = getattr(self._settings_center, "_pages", {}).get("connected_apps")
+                if query and page is not None:
+                    search = page.findChild(QLineEdit)
+                    if search is not None:
+                        search.setText(query)
+            return True
+        return False
+
     def _on_settings_center_closed(self):
         button = getattr(self, "_drawer_btn", None)
         if button is not None:
