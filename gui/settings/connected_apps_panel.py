@@ -77,13 +77,16 @@ class ConnectedAppsPanel(QWidget):
         if not ok or not name.strip():return
         endpoint,ok=QInputDialog.getText(self,"MCP HTTP Server","Server URL (HTTP(S)):")
         if not ok or not endpoint.strip():return
+        token,ok=QInputDialog.getText(self,"MCP HTTP Authentication","Bearer token (optional):",QLineEdit.EchoMode.Password)
+        if not ok:return
         descriptor=AppDescriptor(id="http-"+name.strip().lower().replace(" ","-"),name=name.strip(),
             description="Custom MCP HTTP server",source="user",transport=TransportType.HTTP,endpoint=endpoint.strip())
-        self._connect_http_descriptor(descriptor)
+        headers={"Authorization":f"Bearer {token}"} if token.strip() else {}
+        self._connect_http_descriptor(descriptor,headers=headers)
 
-    def _connect_http_descriptor(self,descriptor,cid=None):
+    def _connect_http_descriptor(self,descriptor,cid=None,headers=None):
         self.status.setText(f"Connecting to {descriptor.name}…")
-        worker=_Worker(lambda:service.connect_http(descriptor,connection_id=cid))
+        worker=_Worker(lambda:service.connect_http(descriptor,connection_id=cid,headers=headers))
         worker.signals.finished.connect(self._connected);self.pool.start(worker)
     def _connect_descriptor(self,descriptor,cid=None):
         self.status.setText(f"Connecting to {descriptor.name}…")
