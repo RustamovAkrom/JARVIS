@@ -334,16 +334,56 @@ def cancel_reminder(reminder_id: str) -> tuple[bool, str]:
                            capture_output=True, text=True, **_CNW, check=True)
         elif platform_name == "mac":
             plist = Path.home() / "Library" / "LaunchAgents" / f"{job_id}.plist"
-            subprocess.run(["launchctl", "unload", str(plist)],
-                           capture_output=True, text=True, check=False)
+            result = subprocess.run(
+                ["launchctl", "unload", str(plist)],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode != 0:
+                detail = (result.stderr or result.stdout).strip()
+                # A failed unload is acceptable only when launchd confirms that
+                # the label is no longer registered (for example, already fired).
+                probe = subprocess.run(
+                    ["launchctl", "list", job_id],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if probe.returncode == 0:
+                    return False, (
+                        "launchd still reports this reminder as loaded: "
+                        + (detail or probe.stdout.strip())
+                    )
             plist.unlink(missing_ok=True)
         elif job_id.startswith("at:"):
             subprocess.run(["atrm", job_id.split(":", 1)[1]],
                            capture_output=True, text=True, check=True)
         else:
             unit = job_id.removeprefix("systemd:")
-            subprocess.run(["systemctl", "--user", "stop", f"{unit}.timer", f"{unit}.service"],
-                           capture_output=True, text=True, check=False)
+            result = subprocess.run(
+                ["systemctl", "--user", "stop", f"{unit}.timer", f"{unit}.service"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode != 0:
+                probe = subprocess.run(
+                    [
+                        "systemctl", "--user", "show",
+                        f"{unit}.timer", f"{unit}.service",
+                        "--property=ActiveState", "--value",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                states = [line.strip().lower() for line in probe.stdout.splitlines()]
+                if probe.returncode != 0 or len(states) < 2:
+                    detail = (result.stderr or result.stdout or probe.stderr).strip()
+                    return False, f"Could not verify scheduler cancellation: {detail}"
+                if any(state in {"active", "activating", "reloading", "deactivating"} for state in states):
+                    return False, "systemd still reports the reminder timer or service active."
     except (OSError, subprocess.CalledProcessError) as exc:
         return False, f"Could not cancel system reminder: {exc}"
     remaining = [r for r in rows if str(r.get("id")) != reminder_id]
