@@ -13,7 +13,7 @@ class ConnectedAppsAgent:
             for tool in service.tools(connection["id"]):
                 out.append({"app": connection["display_name"], "app_id": connection["app_id"],
                     "connection_id": connection["id"], "name": tool["name"],
-                    "description": tool.get("description",""), "input_schema": tool.get("input_schema",{})})
+                    "description": tool.get("description",""), "input_schema": tool.get("input_schema",{}),\n                    "annotations": tool.get("annotations")})
         return out
 
     def find_tools(self, query="", app=""):
