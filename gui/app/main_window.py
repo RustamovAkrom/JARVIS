@@ -12877,7 +12877,23 @@ window.terminal=term;window.clearTerminal=()=>term.clear();
 window.setTerminalTheme=theme=>{term.options.theme=theme;document.body.style.background=theme.background;
  document.getElementById('terminal').style.background=theme.background;};
 new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.bridge;
- bridge.output.connect(chunk=>term.write(chunk));term.onData(data=>bridge.send(data));
+ // Serialize writes so large/rapid QProcess output cannot overlap xterm's parser.
+ // WebChannel normally delivers strings, but validate the boundary explicitly.
+ const writeQueue=[];let queuedBytes=0;let writing=false;const MAX_QUEUED=1048576;
+ const drain=()=>{if(writing||!writeQueue.length)return;writing=true;
+  const chunk=writeQueue.shift();queuedBytes-=chunk.length;
+  term.write(chunk,()=>{writing=false;drain();});};
+ bridge.output.connect(chunk=>{
+  if(typeof chunk!=='string'){console.warn('Terminal received non-text output');return;}
+  if(!chunk)return;
+  if(queuedBytes+chunk.length>MAX_QUEUED){
+   writeQueue.length=0;queuedBytes=0;
+   const warning='\\r\\n[terminal output queue overflow; excess output discarded]\\r\\n';
+   writeQueue.push(warning);queuedBytes=warning.length;
+  }else{writeQueue.push(chunk);queuedBytes+=chunk.length;}
+  drain();
+ });
+ term.onData(data=>bridge.send(data));
  const fit=()=>{fitAddon.fit();bridge.resize(term.cols,term.rows)};
  new ResizeObserver(fit).observe(document.body);window.addEventListener('resize',fit);setTimeout(fit,120);
  bridge.ready();
@@ -13584,7 +13600,17 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                     program = shutil.which("pwsh") or shutil.which("powershell.exe")
                     if not program:
                         raise FileNotFoundError("PowerShell is not available")
-                    arguments = ["-NoLogo", "-NoProfile", "-NoExit"]
+                    # QProcess is not a real Windows console/ConPTY. PowerShell's
+                    # built-in Clear-Host can call Console APIs that fail in this
+                    # redirected environment. Override clear/cls with xterm-safe VT.
+                    clear_host = (
+                        "function Clear-Host { "
+                        "[Console]::Write([char]27 + '[2J' + [char]27 + '[H') "
+                        "}; Set-Alias cls Clear-Host"
+                    )
+                    arguments = [
+                        "-NoLogo", "-NoProfile", "-NoExit", "-Command", clear_host
+                    ]
                 else:
                     program = shutil.which("pwsh") or shutil.which("powershell.exe")
                     if program:
@@ -13600,6 +13626,12 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                     QProcess.ProcessChannelMode.MergedChannels
                 )
                 process.setWorkingDirectory(session.cwd)
+                # Make the redirected Windows shell advertise the same VT
+                # capabilities as the xterm.js renderer.
+                process.setProcessEnvironment(
+                    __import__("PyQt6.QtCore", fromlist=["QProcessEnvironment"])
+                    .QProcessEnvironment.systemEnvironment()
+                )
                 process.start(program, arguments)
                 if not process.waitForStarted(3000):
                     detail = process.errorString() or "Windows shell failed to start"
