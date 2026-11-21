@@ -1,21 +1,14 @@
-"""QtMultimedia from whichever binding core/qt chose. See core/qt/__init__.py.
-"""
+"""QtMultimedia from whichever binding core/qt chose. See core/qt/__init__.py."""
 from core.qt import BINDING as _BINDING
-from core.platform_support import choose_qt_audio_backend
 
-# Before Qt Multimedia picks a sound backend (it crashes on a PipeWire
-# library with no PipeWire server; see platform_support).
-choose_qt_audio_backend()
-
-# Spelled out rather than imported by name at runtime, so a compiler that
-# follows imports (Nuitka) sees which Qt modules the app needs.
+# Keep concrete imports visible to Nuitka/PyInstaller dependency analysis.
 if _BINDING == "PySide6":
     from PySide6 import QtMultimedia as _real
 else:
     from PyQt6 import QtMultimedia as _real
 
-__all__ = [n for n in dir(_real) if not n.startswith("_")]
+__all__ = [name for name in dir(_real) if not name.startswith("_")]
 
 
-def __getattr__(name):
+def __getattr__(name: str):
     return getattr(_real, name)
