@@ -44,6 +44,9 @@ def background_tasks(parameters: dict, player=None) -> str:
                 status=task["status"],
                 query=task["query"],
                 error=task.get("error") or None,
+                report_status=task.get("report_status") or None,
+                report_error=task.get("report_error") or None,
+                report_path=task.get("report_path") or None,
             )
         if action == "result":
             if task["status"] != "done":
@@ -66,7 +69,14 @@ def background_tasks(parameters: dict, player=None) -> str:
                     status=task["status"],
                 )
             return (
-                outcome.done("background_tasks", task_id=task_id, status="done")
+                outcome.done(
+                    "background_tasks",
+                    task_id=task_id,
+                    status="done",
+                    report_status=task.get("report_status") or None,
+                    report_error=task.get("report_error") or None,
+                    report_path=task.get("report_path") or None,
+                )
                 + "\n"
                 + outcome.untrusted("background-research", task["result"])
             )
