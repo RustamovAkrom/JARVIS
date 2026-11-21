@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from pathlib import Path
 
 from memory import config_manager as config
 
@@ -76,3 +77,8 @@ def test_save_clap_launcher_rejects_invalid_settings(monkeypatch, updates):
 
     with pytest.raises(ValueError):
         config.save_clap_launcher(**updates)
+
+
+def test_clap_launcher_source_compiles():
+    source = Path(__file__).resolve().parents[1] / "clap_launcher.pyw"
+    compile(source.read_text(encoding="utf-8"), str(source), "exec")
