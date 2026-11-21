@@ -41,6 +41,10 @@ class RuntimePathTests(unittest.TestCase):
         self.assertEqual(paths.memory_dir, checkout / "memory")
         self.assertEqual(paths.api_config_file, checkout / "config" / "api_keys.json")
         self.assertEqual(paths.long_term_memory_file, checkout / "memory" / "long_term.json")
+        self.assertEqual(paths.tasks_dir, checkout / "tasks")
+        self.assertEqual(paths.task_database_dir, checkout / "tasks" / "database")
+        self.assertEqual(paths.task_workspaces_dir, checkout / "tasks" / "workspaces")
+        self.assertEqual(paths.task_reports_dir, checkout / "tasks" / "reports")
 
     def test_source_checkout_creates_gitignored_env_with_debug_enabled(self):
         from unittest.mock import patch
