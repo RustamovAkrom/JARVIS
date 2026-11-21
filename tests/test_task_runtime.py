@@ -18,12 +18,13 @@ class TaskRuntimeTests(unittest.TestCase):
                 max_parallel=3,
             )
             kwargs = engine_cls.call_args.kwargs
-            self.assertEqual(kwargs["root"], data_root / "tasks")
+            self.assertEqual(kwargs["root"], data_root / "tasks" / "database")
             self.assertEqual(kwargs["reports_dir"], data_root / "tasks" / "reports")
             self.assertEqual(
                 kwargs["agents_dirs"],
                 [resource_root / "core" / "tasks" / "agents", user_agents],
             )
+            self.assertEqual(kwargs["workspaces_dir"], data_root / "tasks" / "workspaces")
             self.assertEqual(kwargs["max_parallel"], 3)
             self.assertTrue(kwargs["autostart"])
             self.assertIs(runtime.engine, engine_cls.return_value)
