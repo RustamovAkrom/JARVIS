@@ -318,7 +318,7 @@ class ResearchRunner:
                 pass
         return out
 
-    def _record(self, sid: int, args: dict) -> str:
+    def _record(self, sid: int, args: dict, round_key: str) -> str:
         claim = " ".join(str(args.get("claim") or "").split())[:700]
         url = str(args.get("source_url") or "").strip()
         if not claim or not url.startswith(("http://", "https://")):
@@ -329,7 +329,13 @@ class ResearchRunner:
             # checked against the page rather than taken on trust.
             self._auto_tried.add(_url_key(url))
             self.e._event(self.tid, "tool", f"fetch_page {url[:120]} (to check a quote)")
-            self.tools.execute("fetch_page", {"url": url})
+            self.e.execute_tool_once(
+                self.tid,
+                round_key,
+                "fetch_page",
+                {"url": url},
+                lambda: self.tools.execute("fetch_page", {"url": url}),
+            )
             page = self._page_text(url)
         src = self._source(url, title=args.get("source_title") or "")
         quote = " ".join(str(args.get("quote") or "").split())[:500]
@@ -513,21 +519,35 @@ Investigate ONE question from the plan.
                 self._progress(reply["text"])
 
             results, closed = [], False
-            batch_results: dict[str, str] = {}
+            batch_results: dict[str, object] = {}
             round_key = f"research:{sid}:{len(turns) - 1}"
             for call in calls:
                 if self.flags["cancel"] or self.flags["halt"]:
                     break
                 name, args = call["name"], call.get("args") or {}
-                if name == "record_finding":
-                    res = self._record(sid, args)
-                elif name == "subquestion_done":
-                    res, closed = self._close(sid, args, wrap, spent_here / max(1.0, allot_s))
-                else:
-                    sig = name + json.dumps(
-                        args, sort_keys=True, ensure_ascii=False, default=str
-                    )
-                    if sig not in batch_results:
+                sig = name + json.dumps(
+                    args, sort_keys=True, ensure_ascii=False, default=str
+                )
+                if sig not in batch_results:
+                    if name == "record_finding":
+                        batch_results[sig] = self.e.execute_tool_once(
+                            self.tid,
+                            round_key,
+                            name,
+                            args,
+                            lambda sid=sid, args=args: self._record(sid, args, round_key),
+                        )
+                    elif name == "subquestion_done":
+                        batch_results[sig] = self.e.execute_tool_once(
+                            self.tid,
+                            round_key,
+                            name,
+                            args,
+                            lambda sid=sid, args=args: self._close(
+                                sid, args, wrap, spent_here / max(1.0, allot_s)
+                            ),
+                        )
+                    else:
                         self.e._event(self.tid, "tool", f"{name} {self.e._arg_hint(args)}")
                         batch_results[sig] = self.e.execute_tool_once(
                             self.tid,
@@ -536,7 +556,12 @@ Investigate ONE question from the plan.
                             args,
                             lambda name=name, args=args: self.tools.execute(name, args),
                         )
-                    res = batch_results[sig]
+                value = batch_results[sig]
+                if name == "subquestion_done":
+                    res, was_closed = value
+                    closed = closed or bool(was_closed)
+                else:
+                    res = value
                 results.append({"id": call["id"], "name": name, "result": res})
             if len(results) < len(calls):
                 turns.pop()
