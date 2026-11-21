@@ -121,7 +121,7 @@ class _SysMetrics:
             tmp = self.tmp
 
         try:
-            root = psutil.disk_usage("C:\\\\") if _OS == "Windows" else psutil.disk_usage("/")
+            root = psutil.disk_usage("C:\\") if _OS == "Windows" else psutil.disk_usage("/")
             disk_total_bytes, disk_used_bytes = int(root.total), int(root.used)
         except Exception:
             disk_total_bytes = disk_used_bytes = 0
