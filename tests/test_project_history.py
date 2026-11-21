@@ -41,7 +41,7 @@ def test_project_history_deduplicates_and_caps(tmp_path, monkeypatch):
     assert len({item["path"] for item in history}) == len(history)
 
 
-def test_project_history_skips_missing_paths_and_can_remove(tmp_path, monkeypatch):
+def test_project_history_retains_missing_paths_until_user_removes_them(tmp_path, monkeypatch):
     config = tmp_path / "config.json"
     monkeypatch.setattr(config_manager, "CONFIG_FILE", config)
     monkeypatch.setattr(config_manager, "CONFIG_DIR", tmp_path)
@@ -49,5 +49,12 @@ def test_project_history_skips_missing_paths_and_can_remove(tmp_path, monkeypatc
     project = tmp_path / "project"
     project.mkdir()
     config_manager.add_project_to_history(str(project))
+    project.rmdir()
+
+    history = config_manager.get_project_history()
+    assert len(history) == 1
+    assert history[0]["path"] == str(project.resolve())
+    assert history[0]["available"] is False
+
     assert config_manager.remove_project_from_history(str(project)) == []
     assert config_manager.get_project_history() == []
