@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import sys
 import re
+import uuid
 from xml.sax.saxutils import escape
 from datetime import datetime
 from pathlib import Path
@@ -383,7 +384,7 @@ def reminder(
 
     os_name = _get_os()
     safe_msg = _sanitise(message)
-    task_name = f"JARVISReminder_{target_dt.strftime('%Y%m%d_%H%M%S')}"
+    task_name = f"JARVISReminder_{target_dt.strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
 
     try:
         script_path = _write_notify_script(task_name, safe_msg, os_name)
