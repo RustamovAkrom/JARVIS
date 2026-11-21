@@ -72,6 +72,19 @@ def log(msg: str) -> None:
             pass
 
 
+def _open_jarvis_log(source: str):
+    """Open the child-process log and write a launch separator."""
+    path = LOG_DIR / "jarvis.log"
+    out = open(path, "a", encoding="utf-8")
+    try:
+        out.write(f"\\n===== {source} at {time.ctime()} =====\\n")
+        out.flush()
+    except Exception:
+        out.close()
+        raise
+    return out
+
+
 # ── platform ──────────────────────────────────────────────────────────────────
 def python_exe() -> str:
     """Interpreter for source runs; packaged runs use the sibling JARVIS.exe."""
@@ -384,12 +397,6 @@ def main() -> int:
         env.pop("JARVIS_STANDBY", None)
         return env
 
-    def _out(source: str):
-        out = open(LOG_DIR / "jarvis.log", "a", encoding="utf-8")
-        out.write(f"\n===== {source} at {time.ctime()} =====\n")
-        out.flush()
-        return out
-
     # Instant standby was never integrated with main.py's lifecycle and could
     # start a second live assistant. It remains disabled until a GUI-only
     # standby protocol exists.
@@ -402,7 +409,7 @@ def main() -> int:
             return
         close_mic("starting JARVIS")
         try:
-            out = _out(f"started by {source}")
+            out = _open_jarvis_log(f"started by {source}")
             command = [python_exe()] if FROZEN else [python_exe(), str(ROOT / "main.py")]
             state["child"] = subprocess.Popen(
                 command, cwd=str(ROOT), env=_env(False),
