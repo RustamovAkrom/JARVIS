@@ -180,6 +180,50 @@ def save_workspace_path(path: str) -> None:
     _save_flag("workspace_path", str(resolved))
 
 
+PROJECT_HISTORY_LIMIT = 20
+
+def get_project_history() -> list[dict]:
+    """Recent project folders, newest first; invalid or deleted paths are skipped."""
+    raw = load_api_keys().get("project_history", [])
+    if not isinstance(raw, list):
+        return []
+    result = []
+    seen = set()
+    for item in raw:
+        if not isinstance(item, dict) or not isinstance(item.get("path"), str):
+            continue
+        try:
+            path = Path(item["path"]).expanduser().resolve()
+        except (OSError, RuntimeError):
+            continue
+        if not path.is_dir() or str(path) in seen:
+            continue
+        seen.add(str(path))
+        result.append({"path": str(path), "name": str(item.get("name") or path.name),
+                      "last_opened": float(item.get("last_opened") or 0)})
+    return result[:PROJECT_HISTORY_LIMIT]
+
+
+def add_project_to_history(path: str) -> list[dict]:
+    """Persist an opened project and make it the active workspace."""
+    resolved = Path(path).expanduser().resolve(strict=True)
+    if not resolved.is_dir():
+        raise ValueError("Project path is not a directory.")
+    now = time.time()
+    history = [entry for entry in get_project_history() if entry["path"] != str(resolved)]
+    history.insert(0, {"path": str(resolved), "name": resolved.name, "last_opened": now})
+    history = history[:PROJECT_HISTORY_LIMIT]
+    _patch_config(workspace_path=str(resolved), project_history=history, active_project_file="")
+    return history
+
+
+def remove_project_from_history(path: str) -> list[dict]:
+    resolved = str(Path(path).expanduser().resolve())
+    history = [entry for entry in get_project_history() if entry["path"] != resolved]
+    _patch_config(project_history=history)
+    return history
+
+
 def get_project_open_mode() -> str:
     """Return whether project files open internally or in the OS default app."""
     value = load_api_keys().get("project_open_mode", "jarvis")
