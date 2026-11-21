@@ -27,7 +27,7 @@ class ConnectedAppsPanel(QWidget):
         row=QHBoxLayout();self.search=QLineEdit();self.search.setObjectName("connected_apps_search")
         self.search.setPlaceholderText("Search connected apps…");self.search.textChanged.connect(self.refresh);row.addWidget(self.search,1)
         add=QPushButton("+ Add STDIO");add.clicked.connect(self.add_custom)
-        http=QPushButton("+ Add HTTP");http.clicked.connect(self.add_http);row.addWidget(add);row.addWidget(http);root.addLayout(row)
+        http=QPushButton("+ Add HTTP");http.clicked.connect(self.add_http)\n        oauth=QPushButton("+ Add OAuth");oauth.clicked.connect(self.add_oauth_http)\n        row.addWidget(add);row.addWidget(http);row.addWidget(oauth);root.addLayout(row)
         self.list=QListWidget();self.list.setMinimumHeight(180);self.list.itemSelectionChanged.connect(self.show_selected);root.addWidget(self.list)
         self.details=QTextEdit();self.details.setReadOnly(True);self.details.setMinimumHeight(110);root.addWidget(self.details)
         buttons=QHBoxLayout();self.connect_btn=QPushButton("Connect / Reconnect");self.connect_btn.clicked.connect(self.connect_selected)
@@ -83,6 +83,38 @@ class ConnectedAppsPanel(QWidget):
             description="Custom MCP HTTP server",source="user",transport=TransportType.HTTP,endpoint=endpoint.strip())
         headers={"Authorization":f"Bearer {token}"} if token.strip() else {}
         self._connect_http_descriptor(descriptor,headers=headers)
+
+    def add_oauth_http(self):
+        from core.connected_apps.providers import list_providers,get_provider
+        provider_names=[provider.name for provider in list_providers()]
+        provider_name,ok=QInputDialog.getItem(self,"OAuth Provider","Provider:",provider_names,0,False)
+        if not ok:return
+        provider=next((x for x in list_providers() if x.name==provider_name),None)
+        if not provider:return
+        name,ok=QInputDialog.getText(self,"OAuth MCP Server","Display name:")
+        if not ok or not name.strip():return
+        endpoint,ok=QInputDialog.getText(self,"OAuth MCP Server","MCP HTTP URL:")
+        if not ok or not endpoint.strip():return
+        client_id,ok=QInputDialog.getText(self,"OAuth Setup","OAuth Client ID:")
+        if not ok or not client_id.strip():return
+        client_secret,ok=QInputDialog.getText(self,"OAuth Setup","Client Secret (if required):",QLineEdit.EchoMode.Password)
+        if not ok:return
+        scopes,ok=QInputDialog.getText(self,"OAuth Setup","Scopes (space-separated):",text=" ".join(provider.default_scopes))
+        if not ok:return
+        descriptor=AppDescriptor(id="oauth-"+provider.id+"-"+name.strip().lower().replace(" ","-"),
+            name=name.strip(),description=f"{provider.name} OAuth MCP server",source="user",
+            transport=TransportType.HTTP,endpoint=endpoint.strip())
+        self.status.setText("Starting OAuth authorization in browser…")
+        def authorize_and_connect():
+            from core.connected_apps.auth_service import OAuthService
+            auth=OAuthService(service.store)
+            auth.authorize_connection(descriptor.id,provider.id,client_id.strip(),
+                scopes=scopes.split(),client_secret=client_secret)
+            token=service.store.get_credential(descriptor.id,"access_token")
+            token_type=service.store.get_credential(descriptor.id,"token_type") or "Bearer"
+            return service.connect_http(descriptor,headers={"Authorization":f"{token_type} {token}"})
+        worker=_Worker(authorize_and_connect)
+        worker.signals.finished.connect(self._connected);self.pool.start(worker)
 
     def _connect_http_descriptor(self,descriptor,cid=None,headers=None):
         self.status.setText(f"Connecting to {descriptor.name}…")
