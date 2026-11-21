@@ -7137,8 +7137,14 @@ class _WinPTYTerminal:
     def read(self, blocking=False):
         del blocking
         try:
-            return self._process.read(65536)
-        except (BlockingIOError, EOFError):
+            import select
+
+            sock = self._process.fileobj
+            ready, _, _ = select.select([sock], [], [], 0)
+            if not ready:
+                return ""
+            return self._process.read(65536, timeout=0)
+        except (BlockingIOError, EOFError, OSError):
             return ""
 
     def write(self, data):
@@ -13833,6 +13839,8 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                         termios.TIOCSWINSZ,
                         struct.pack("HHHH", rows, columns, 0, 0),
                     )
+                elif isinstance(session.pty, _WinPTYTerminal):
+                    session.pty.set_size(columns, rows)
                 else:
                     session.pty.set_size(columns, rows)
             except Exception:
