@@ -11431,6 +11431,7 @@ class MainWindow(QMainWindow):
                     "cursor": self._build_cursor_assistant_settings_page,
                     "permissions": self._build_permissions_settings_page,
                     "integrations": self._build_integrations_settings_page,
+                    "connected_apps": self._build_connected_apps_settings_page,
                     "plugins": self._build_plugins_settings_page,
                     "memory": self._build_memory_settings_page,
                     "conversations": self._build_conversations_settings_page,
@@ -11800,6 +11801,15 @@ class MainWindow(QMainWindow):
         return self._embed_settings_panels((
             "Personalization",
             "Set the JARVIS accent and window opacity. Identity and voice live in their own settings category.",
+            panel,
+        ))
+
+    def _build_connected_apps_settings_page(self):
+        from gui.settings.connected_apps_panel import ConnectedAppsPanel
+        panel = ConnectedAppsPanel()
+        return self._embed_settings_panels((
+            "Connected Apps",
+            "Connect external services and MCP servers. Manage authorization, tools and connection lifecycle.",
             panel,
         ))
 
