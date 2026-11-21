@@ -134,7 +134,7 @@ class Autostart:
             import winreg
             with winreg.OpenKey(winreg.HKEY_CURRENT_USER,
                                 r"Software\Microsoft\Windows\CurrentVersion\Run", 0,
-                                winreg.KEY_ALL_ACCESS) as k:
+                                winreg.KEY_SET_VALUE) as k:
                 if on:
                     winreg.SetValueEx(k, _APP_ID, 0, winreg.REG_SZ,
                                       f'"{python_exe()}" "{script}"')
@@ -221,7 +221,7 @@ def main() -> int:
     bridge = Bridge()
 
     state = {"stream": None, "paused": False, "child": None, "launched_at": 0.0,
-             "standby": None, "standby_at": 0.0, "standby_fails": 0, "running": False,
+             "running": False,
              "closed_at": 0.0, "learning": None}
 
     def pattern() -> str:
@@ -335,61 +335,17 @@ def main() -> int:
             log(f"microphone released: {reason}")
         refresh()
 
-    # ── the standby copy ─────────────────────────────────────────────────────
-    def _env(standby: bool) -> dict:
-        env = dict(os.environ, JARVIS_WELCOME="1" if settings["greet"] else "0",
-                   PYTHONIOENCODING="utf-8", PYTHONUNBUFFERED="1")
-        env.pop("JARVIS_STANDBY", None)
-        if standby:
-            env["JARVIS_STANDBY"] = "1"
-        return env
-
-    def _out(source: str):
-        out = open(LOG_DIR / "jarvis.log", "a", encoding="utf-8")
-        out.write(f"\n===== {source} at {time.ctime()} =====\n")
-        out.flush()
-        return out
-
+    # Instant standby was never integrated with main.py's lifecycle and could
+    # start a second live assistant. It is intentionally disabled until a real
+    # GUI-only standby protocol exists.
     def standby_alive() -> bool:
-        sb = state["standby"]
-        return sb is not None and sb.poll() is None
+        return False
 
     def ensure_standby() -> None:
-        if (not settings["preload"] or standby_alive() or state["running"]
-                or state["standby_fails"] >= 3):
-            return
-        sb = state["standby"]
-        if sb is not None and time.monotonic() - state["standby_at"] < 30:
-            # It died soon after starting: counted, so a JARVIS that cannot
-            # start is not restarted for ever in the background.
-            state["standby_fails"] += 1
-            log(f"standby copy exited with code {sb.returncode} - see logs/jarvis.log")
-            if state["standby_fails"] >= 3:
-                log("instant start disabled after 3 failures - claps start JARVIS normally")
-                return
-        try:
-            out = _out("standby copy started")
-            state["standby"] = subprocess.Popen(
-                [python_exe(), str(ROOT / "main.py")], cwd=str(ROOT), env=_env(True),
-                stdin=subprocess.PIPE, stdout=out, stderr=subprocess.STDOUT, **_no_window())
-            out.close()
-            state["standby_at"] = time.monotonic()
-            log(f"standby copy loading, pid {state['standby'].pid}")
-        except Exception as e:
-            state["standby"] = None
-            log(f"could not start a standby copy: {e!r}")
+        return
 
     def stop_standby() -> None:
-        sb, state["standby"] = state["standby"], None
-        if sb is not None and sb.poll() is None:
-            try:
-                sb.stdin.close()            # end of input: it exits by itself
-                sb.wait(3)
-            except Exception:
-                try:
-                    sb.kill()
-                except Exception:
-                    pass
+        return
 
     # ── starting JARVIS ──────────────────────────────────────────────────────
     def launch(source: str) -> None:
@@ -399,21 +355,6 @@ def main() -> int:
             notify("JARVIS is already running.", 2500)
             return
         close_mic("starting JARVIS")
-        if standby_alive():
-            try:
-                sb = state["standby"]
-                sb.stdin.write(b"go\n")
-                sb.stdin.flush()
-                state["child"], state["standby"] = sb, None
-                state["launched_at"] = time.monotonic()
-                state["running"] = True
-                log(f"JARVIS started from standby ({source}), pid {sb.pid}")
-                refresh()
-                QTimer.singleShot(4000, check_started)
-                return
-            except Exception as e:
-                log(f"standby copy did not take the start ({e!r}) - starting normally")
-                stop_standby()
         try:
             out = _out(f"started by {source}")
             state["child"] = subprocess.Popen(
@@ -545,8 +486,13 @@ def main() -> int:
         if sock is None:
             return
 
+        buffer = {"data": bytearray()}
+
         def answer():
-            line = bytes(sock.readAll()).decode("utf-8", "replace").strip().lower()
+            buffer["data"].extend(bytes(sock.readAll()))
+            if b"\\n" not in buffer["data"]:
+                return
+            line = bytes(buffer["data"].split(b"\\n", 1)[0]).decode("utf-8", "replace").strip().lower()
             if line == "status":
                 reply = json.dumps({"listening": state["stream"] is not None,
                                     "paused": state["paused"], "jarvis": state["running"],
@@ -618,10 +564,6 @@ def main() -> int:
     a_notify.setChecked(settings["notify_heard"])
     a_notify.toggled.connect(lambda on: set_setting("notify_heard", on))
     menu.addSeparator()
-    a_preload = menu.addAction("Instant start (keeps JARVIS ready, ~250 MB)")
-    a_preload.setCheckable(True)
-    a_preload.setChecked(settings["preload"])
-    a_preload.toggled.connect(lambda on: set_setting("preload", on))
     a_greet = menu.addAction("Greet me when it starts")
     a_greet.setCheckable(True)
     a_greet.setChecked(settings["greet"])
@@ -657,11 +599,9 @@ def main() -> int:
         log(f"setting {key} = {value}")
         if key in ("claps", "sensitivity") and state["learning"] is None:
             detector["d"] = make_detector()
-        if key in ("preload", "greet"):
-            # The waiting copy was started with the old choice.
-            stop_standby()
-            state["standby_fails"] = 0
-            ensure_standby()
+        if key == "greet":
+            # Greeting is evaluated by main.py on a fresh launch.
+            pass
         refresh()
 
     app.aboutToQuit.connect(stop_standby)
