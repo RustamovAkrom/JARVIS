@@ -34,6 +34,7 @@ CATEGORIES = (
         "Manage Chat and Agent modes, per-action access, approval rules and authentication.",
         (("Review computer permissions", "security_info"), ("Authentication integration", "security_info")),
     ),
+    SettingsCategory("connected_apps", "Connected Apps", "External applications, MCP servers, authorization and tool permissions.", (("Manage connected applications", "connected_apps"),)),
     SettingsCategory("integrations", "AI Providers", "Choose where JARVIS runs its models: Online cloud services or Offline models on this device.", (("AI provider settings", "providers"),)),
     SettingsCategory("plugins", "Plugins", "Installed extensions and their settings.", (("Plugin manager", "plugins"), ("Plugin settings", "plugin_settings"))),
     SettingsCategory("memory", "Memory", "Facts JARVIS has saved. Conversation history is kept separately in Conversations.", (("Open memory", "memory"),)),
