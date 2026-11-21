@@ -10137,12 +10137,19 @@ class MainWindow(QMainWindow):
             f"QFrame#MetricSurface {{ background:{C.PANEL2}; "
             f"border:1px solid {C.BORDER}; border-radius:8px; }}"
         )
-        gauge_layout = QVBoxLayout(gauge_surface)
+        gauge_layout = QHBoxLayout(gauge_surface)
         gauge_layout.setContentsMargins(6, 6, 6, 6)
-        gauge_layout.setSpacing(3)
-        gauge_layout.addWidget(_gauge_row(self._gauge_cpu, self._gauge_mem))
-        gauge_layout.addWidget(_gauge_row(self._gauge_net, self._gauge_gpu))
-        gauge_layout.addWidget(_gauge_row(self._gauge_tmp))
+        gauge_layout.setSpacing(8)
+
+        gauge_column = QWidget()
+        gauge_column.setStyleSheet("background:transparent;")
+        gauge_column_layout = QVBoxLayout(gauge_column)
+        gauge_column_layout.setContentsMargins(0, 0, 0, 0)
+        gauge_column_layout.setSpacing(3)
+        gauge_column_layout.addWidget(_gauge_row(self._gauge_cpu, self._gauge_mem))
+        gauge_column_layout.addWidget(_gauge_row(self._gauge_net, self._gauge_gpu))
+        gauge_column_layout.addWidget(_gauge_row(self._gauge_tmp))
+        gauge_layout.addWidget(gauge_column, 0)
         lay.addWidget(gauge_surface)
 
         self._trend_chart = MetricTrendChart(
@@ -10220,6 +10227,10 @@ class MainWindow(QMainWindow):
         advanced_layout = QVBoxLayout(self._advanced_panel)
         advanced_layout.setContentsMargins(7, 7, 7, 7)
         advanced_layout.setSpacing(4)
+        self._advanced_panel.setMinimumWidth(260)
+        self._advanced_panel.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
         advanced_title = QLabel(self._tr("ADVANCED TELEMETRY"))
         advanced_title.setFont(QFont(FONT_MONO, 7, QFont.Weight.Bold))
         advanced_title.setStyleSheet(f"color:{C.PRI}; background:transparent;")
@@ -10236,19 +10247,33 @@ class MainWindow(QMainWindow):
             ("battery", "BATTERY / POWER"),
             ("system", "SYSTEM / PROCESSES"),
         )
-        for key, caption_text in advanced_rows:
+        telemetry_grid = QGridLayout()
+        telemetry_grid.setContentsMargins(0, 0, 0, 0)
+        telemetry_grid.setHorizontalSpacing(8)
+        telemetry_grid.setVerticalSpacing(4)
+        for index, (key, caption_text) in enumerate(advanced_rows):
+            card = QFrame()
+            card.setStyleSheet(
+                f"QFrame {{ background:{C.PANEL}; border:1px solid {C.BORDER}; "
+                f"border-radius:5px; }}"
+            )
+            card_layout = QVBoxLayout(card)
+            card_layout.setContentsMargins(6, 4, 6, 4)
+            card_layout.setSpacing(2)
             caption = QLabel(self._tr(caption_text))
             caption.setFont(QFont(FONT_MONO, 6, QFont.Weight.Bold))
             caption.setStyleSheet(f"color:{C.TEXT_DIM}; background:transparent;")
-            advanced_layout.addWidget(caption)
+            card_layout.addWidget(caption)
             value = QLabel("Collecting telemetry…")
             value.setObjectName(f"advanced_{key}")
             value.setWordWrap(True)
             value.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-            value.setFont(QFont(FONT_MONO, 8))
+            value.setFont(QFont(FONT_MONO, 7))
             value.setStyleSheet(f"color:{C.TEXT}; background:transparent;")
-            advanced_layout.addWidget(value)
+            card_layout.addWidget(value)
             self._advanced_labels[key] = value
+            telemetry_grid.addWidget(card, index // 2, index % 2)
+        advanced_layout.addLayout(telemetry_grid)
 
         self._network_trend_chart = MetricTrendChart(
             self._tr("NETWORK TRAFFIC HISTORY"),
@@ -10266,9 +10291,13 @@ class MainWindow(QMainWindow):
             primary_label=self._tr("READ"),
         )
         self._disk_trend_chart.setMinimumHeight(92)
-        advanced_layout.addWidget(self._disk_trend_chart)
+        chart_row = QHBoxLayout()
+        chart_row.setSpacing(5)
+        chart_row.addWidget(self._network_trend_chart, 1)
+        chart_row.addWidget(self._disk_trend_chart, 1)
+        advanced_layout.addLayout(chart_row)
         self._advanced_panel.hide()
-        lay.addWidget(self._advanced_panel)
+        gauge_layout.addWidget(self._advanced_panel, 1)
 
         self._left_tabs.addTab(system_page, "SYS")
         self._left_tabs.setTabToolTip(0, self._tr("SYSTEM MONITOR"))
