@@ -50,20 +50,16 @@ def _place_label(place: dict) -> str:
 
 
 def run(parameters: dict, player=None, session_memory=None) -> str:
-    """Fetch a forecast and queue the WeatherBoard on the HUD."""
+    """Fetch weather using the shared MET Norway pipeline and open the HUD board."""
     params = parameters if isinstance(parameters, dict) else {}
     action = str(params.get("action") or "open").strip().lower()
 
     if action == "close":
         try:
-            closed = _live_panels.close_weather()
+            _live_panels.close_all()
+            return "Weather dashboard closed."
         except Exception as exc:
-            return f"I couldn't close the weather dashboard: {exc}"
-        return (
-            "Weather dashboard closed."
-            if closed
-            else "The weather dashboard is not open."
-        )
+            return f"I couldn't close the weather dashboard: {type(exc).__name__}: {exc}"
 
     if action not in {"open", "refresh"}:
         return "Weather dashboard action must be open, refresh, or close."
@@ -73,37 +69,34 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
         return "Which city should I show in the weather dashboard?"
     if player is None:
         return "The weather dashboard needs the JARVIS HUD to be running."
+
     compact_state = getattr(
         player, "is_compact_mode", getattr(player, "is_mini", False)
     )
     if compact_state() if callable(compact_state) else bool(compact_state):
-        return "Weather dashboard is unavailable in Mini Orb or Top Dock mode. Expand JARVIS with F9 or the FULL button first."
+        return (
+            "Weather dashboard is unavailable in Mini Orb or Top Dock mode. "
+            "Expand JARVIS with F9 or the FULL button first."
+        )
 
     try:
-        place = _live_panels.geocode(city)
-        if not place:
-            return f"I couldn't find a location called '{city}'. Please try a city and country."
+        # The core API is weather_for(city), not the old Open-Meteo
+        # geocode()/forecast() API. It uses the shared MET Norway pipeline.
+        place, forecast = _live_panels.weather_for(city)
+        current = forecast.get("current") or {}
+        daily = forecast.get("daily") or {}
+        if not current or not daily.get("time"):
+            return f"I couldn't retrieve a complete forecast for {city}."
 
-        forecast = _live_panels.forecast(place["latitude"], place["longitude"])
-        if not forecast.get("current") or not forecast.get("daily"):
-            return f"I couldn't retrieve a complete forecast for {_place_label(place) or city}."
+        opened = _live_panels.show_weather(player, place, forecast)
+        if not opened:
+            return f"I retrieved the forecast for {city}, but couldn't open the dashboard."
 
-        if not _live_panels.open_panel(
-            player,
-            "weather",
-            _live_panels.WeatherBoard,
-            lambda board: board.set_data(place, forecast),
-        ):
-            return "I got the forecast, but couldn't open the weather dashboard."
-
-        current = forecast["current"]
         temperature = round(float(current.get("temperature_2m", 0)))
         condition = _live_panels._WMO.get(
             current.get("weather_code", 0), ("weather conditions", "cloud")
         )[0].lower()
-        return (
-            f"Weather dashboard opened for {_place_label(place) or city}: "
-            f"{temperature}°, {condition}."
-        )
+        label = _place_label(place) or city
+        return f"Weather dashboard opened for {label}: {temperature}°C, {condition}."
     except Exception as exc:
-        return f"I couldn't load the weather for {city}: {exc}"
+        return f"I couldn't load the weather for {city}: {type(exc).__name__}: {exc}"
