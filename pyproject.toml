@@ -66,6 +66,7 @@ dependencies = [
     "youtube-transcript-api>=1.2.4",
     "yt-dlp>=2026.8.19",
     "pytest>=8,<10",
+    "mcp>=1.30.0",
 ]
 
 [project.optional-dependencies]
