@@ -120,3 +120,36 @@ def exchange_code(config: OAuthConfig, code: str, verifier: str, redirect_uri: s
     if not isinstance(data, dict) or not data.get("access_token"):
         raise RuntimeError("OAuth token response did not contain an access_token")
     return data
+
+def refresh_tokens(config: OAuthConfig, refresh_token: str) -> dict[str, Any]:
+    """Refresh OAuth tokens when the provider supports refresh_token grants."""
+    import httpx
+    payload={"grant_type":"refresh_token","refresh_token":refresh_token,"client_id":config.client_id}
+    if config.client_secret:
+        payload["client_secret"]=config.client_secret
+    response=httpx.post(config.token_url,data=payload,timeout=30)
+    response.raise_for_status()
+    data=response.json()
+    if not isinstance(data,dict) or not data.get("access_token"):
+        raise RuntimeError("OAuth refresh response did not contain an access_token")
+    return data
+
+def authorize(config: OAuthConfig, *, timeout=180, open_browser=True) -> dict[str, Any]:
+    """Run PKCE authorization in the user's browser and return token response."""
+    import webbrowser
+    callback=OAuthCallbackServer()
+    state=callback.start()
+    verifier,challenge=create_pkce()
+    state.verifier=verifier
+    config.redirect_uri=state.redirect_uri
+    url=build_authorization_url(config,state,challenge)
+    try:
+        if open_browser:
+            if not webbrowser.open(url):
+                raise RuntimeError("Could not open the authorization browser")
+        result=callback.wait(timeout)
+        if result.error:
+            raise RuntimeError(result.error)
+        return exchange_code(config,result.code,result.verifier,result.redirect_uri)
+    finally:
+        callback.close()
