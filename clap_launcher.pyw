@@ -20,10 +20,10 @@ ALWAYS VISIBLE, ALWAYS STOPPABLE
     opening the shortcut again while it runs says it is already listening
     instead of starting a second copy.
 
-INSTANT START (optional, on by default with 6 GB of memory or more)
-    A copy of JARVIS that has done its importing and built its window waits
-    hidden, with no microphone and no connection open, and a clap only has to
-    show it: a tenth of a second instead of three. About 250 MB of memory.
+NO SECOND JARVIS PROCESS
+    The launcher starts the normal application on a clap. A standby process was
+    removed because main.py had no standby lifecycle protocol and it could open
+    a second live session or contend for the microphone.
 
 RUN IT
     Start it from JARVIS Setup -> Double-clap activation, or:
