@@ -24,7 +24,7 @@ def describe():
         connected=", ".join(row["display_name"] for row in apps if row.get("status")=="connected")
         return PLUGIN["description"]+f" Connected apps: {connected or 'none'}."
     except Exception:
-        return PLUGIN["description"]
+        return "Connected Apps: "+PLUGIN["description"]+" Backend status is temporarily unavailable; existing JARVIS functions remain operational."
 
 def run(parameters, player=None, session_memory=None):
     p=parameters or {}; action=str(p.get("action","")).lower()
