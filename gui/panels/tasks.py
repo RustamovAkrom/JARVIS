@@ -129,7 +129,6 @@ class TaskPanel(QWidget):
         for button in (
             self.view_report_button, self.open_report_button,
             self.export_button, self.show_report_folder_button,
-            self.open_workspace_button, self.download_all_button,
         ):
             button.setMinimumWidth(0)
             button.setMaximumHeight(28)
@@ -435,7 +434,8 @@ class TaskPanel(QWidget):
             self.details_browser.clear()
             self.progress_bar.setVisible(False)
             self.details_browser.setVisible(False)
-            for button in (self.view_report_button, self.open_report_button,                           self.export_button, self.show_report_folder_button,
+            for button in (self.view_report_button, self.open_report_button,
+                           self.export_button, self.show_report_folder_button,
                            self.open_workspace_button, self.download_all_button):
                 button.setEnabled(False)
             return
@@ -507,7 +507,15 @@ class TaskPanel(QWidget):
         report_path = self._report_path(task)
         if report_path:
             if report_path.is_file():
-                lines.append("<br><b>Report:</b> Ready to view or export")
+                try:
+                    report_preview = report_path.read_text(encoding="utf-8")
+                    preview_limit = 1400
+                    preview = report_preview[:preview_limit]
+                    if len(report_preview) > preview_limit:
+                        preview += "\\n\\n… Report preview truncated. Use View to open the full report."
+                    lines.append("<br><b>Result preview:</b><br>" + self._html(preview))
+                except OSError as exc:
+                    lines.append(f"<br><b>Report:</b> Unable to preview — {self._html(exc)}")
             else:
                 lines.append(f"<br><b>Report:</b> Missing file — {self._html(report_path.name)}")
         events = task.get("events") or []
