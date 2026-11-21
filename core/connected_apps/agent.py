@@ -108,6 +108,36 @@ class ConnectedAppsAgent:
             if (not app or app in t["app"].casefold() or app in t["app_id"].casefold())
             and (not query or query in (t["name"]+" "+t["description"]+" "+t["app"]).casefold())]
 
+    def rank_tools(self,query,app="",limit=8):
+        """Rank tools by semantic keyword overlap for AI-assisted discovery."""
+        import re
+        terms=set(re.findall(r"[a-z0-9_]{2,}",(query or "").casefold()))
+        rows=self.find_tools(app=app)
+        scored=[]
+        for row in rows:
+            name_tokens=set(re.findall(r"[a-z0-9_]{2,}",row["name"].casefold().replace("_"," ")))
+            desc_tokens=set(re.findall(r"[a-z0-9_]{2,}",row["description"].casefold()))
+            app_tokens=set(re.findall(r"[a-z0-9_]{2,}",row["app"].casefold()))
+            overlap=len(terms & (name_tokens|desc_tokens|app_tokens))
+            phrase=(query or "").casefold().strip()
+            exact_name=phrase and phrase in row["name"].casefold()
+            exact_desc=phrase and phrase in row["description"].casefold()
+            score=overlap*2+(5 if exact_name else 0)+(2 if exact_desc else 0)
+            if score:
+                row=dict(row);row["match_score"]=score;scored.append(row)
+        scored.sort(key=lambda item:(item["match_score"],item["app"],item["name"]),reverse=True)
+        return scored[:max(1,min(int(limit),20))]
+
+    def execute_best(self,query,arguments=None,*,app="",auto_read_only=True):
+        candidates=self.rank_tools(query,app=app,limit=5)
+        if not candidates:
+            raise ValueError("No connected app tool matches this request")
+        top=candidates[0]
+        if len(candidates)>1 and candidates[1]["match_score"]==top["match_score"]:
+            choices=", ".join(f"{x['app']}.{x['name']}" for x in candidates if x["match_score"]==top["match_score"])
+            raise ValueError("Ambiguous tool match; specify app/tool: "+choices)
+        return self.execute(top["connection_id"],top["name"],arguments or {},read_only=auto_read_only),top
+
     def execute(self,connection_id,tool_name,arguments=None,*,read_only=False,destructive=False):
         args=arguments or {}
         if not isinstance(args,dict): raise ValueError("Arguments must be a JSON object")
