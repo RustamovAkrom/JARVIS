@@ -124,9 +124,12 @@ class TaskPanel(QWidget):
         self.open_report_button = QPushButton("Open")
         self.export_button = QPushButton("Save As")
         self.show_report_folder_button = QPushButton("Folder")
+        self.open_workspace_button = QPushButton("Workspace")
+        self.download_all_button = QPushButton("Download All")
         for button in (
             self.view_report_button, self.open_report_button,
             self.export_button, self.show_report_folder_button,
+            self.open_workspace_button, self.download_all_button,
         ):
             button.setMinimumWidth(0)
             button.setMaximumHeight(28)
@@ -135,6 +138,11 @@ class TaskPanel(QWidget):
             )
             report_actions.addWidget(button, 1)
         root.addLayout(report_actions)
+        workspace_actions = QHBoxLayout()
+        workspace_actions.setSpacing(4)
+        workspace_actions.addWidget(self.open_workspace_button, 1)
+        workspace_actions.addWidget(self.download_all_button, 1)
+        root.addLayout(workspace_actions)
         history_actions = QGridLayout()
         history_actions.setHorizontalSpacing(5)
         history_actions.setVerticalSpacing(2)
@@ -181,6 +189,8 @@ class TaskPanel(QWidget):
         self.delete_button.clicked.connect(self._delete_selected)
         self.clear_history_button.clicked.connect(self._delete_history)
         self.show_report_folder_button.clicked.connect(self._show_selected_report_folder)
+        self.open_workspace_button.clicked.connect(self._open_selected_workspace)
+        self.download_all_button.clicked.connect(self._export_selected_workspace)
         self.list_widget.currentItemChanged.connect(self._selection_changed)
         self.retry_button.clicked.connect(self._retry_selected)
         self.cancel_button.clicked.connect(self._cancel_selected)
@@ -425,8 +435,8 @@ class TaskPanel(QWidget):
             self.details_browser.clear()
             self.progress_bar.setVisible(False)
             self.details_browser.setVisible(False)
-            for button in (self.view_report_button, self.open_report_button,
-                           self.export_button, self.show_report_folder_button):
+            for button in (self.view_report_button, self.open_report_button,                           self.export_button, self.show_report_folder_button,
+                           self.open_workspace_button, self.download_all_button):
                 button.setEnabled(False)
             return
 
@@ -464,6 +474,9 @@ class TaskPanel(QWidget):
         self.open_report_button.setEnabled(report_available)
         self.show_report_folder_button.setEnabled(report_available)
         self.export_button.setEnabled(bool(task))
+        workspace = self._workspace_path(task)
+        self.open_workspace_button.setEnabled(bool(workspace))
+        self.download_all_button.setEnabled(bool(workspace and workspace.is_dir() and any(workspace.rglob('*'))))
         self.progress_bar.setValue(progress)
         if terminal:
             self.progress_bar.setFormat("Completed" if status.lower() == "done" else status.title())
@@ -546,6 +559,68 @@ class TaskPanel(QWidget):
             from PyQt6.QtWidgets import QMessageBox
             QMessageBox.warning(self, "Report unavailable", str(exc))
             return None
+
+    def _workspace_path(self, task):
+        from pathlib import Path
+        value = task.get("workspace") or ""
+        if not value:
+            return None
+        try:
+            return Path(str(value))
+        except (TypeError, ValueError):
+            return None
+
+    def _open_selected_workspace(self):
+        task = self._tasks.get(self.selected_task_id(), {})
+        path = self._workspace_path(task)
+        if not path:
+            return
+        try:
+            path.mkdir(parents=True, exist_ok=True)
+            import sys
+            import subprocess
+            if sys.platform.startswith("win"):
+                subprocess.Popen(["explorer", str(path)])
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", str(path)])
+            else:
+                subprocess.Popen(["xdg-open", str(path)])
+        except Exception as exc:
+            QMessageBox.warning(self, "Workspace unavailable", str(exc))
+
+    def _export_selected_workspace(self):
+        task = self._tasks.get(self.selected_task_id(), {})
+        workspace = self._workspace_path(task)
+        if not workspace or not workspace.is_dir():
+            QMessageBox.information(self, "Workspace unavailable", "No task workspace exists yet.")
+            return
+        import zipfile
+        from pathlib import Path
+        files = [p for p in workspace.rglob("*") if p.is_file() and not p.is_symlink()
+                 and ".git" not in p.parts and "__pycache__" not in p.parts]
+        report_path = self._report_path(task)
+        if report_path and report_path.is_file():
+            files.append(report_path)
+        if not files:
+            QMessageBox.information(self, "No files", "This task has no generated files to export.")
+            return
+        suggested = (str(task.get("title") or "task").strip() or "task").replace("/", "-").replace("\\", "-")
+        path, _ = QFileDialog.getSaveFileName(self, "Export task files", f"{suggested}.zip", "ZIP archive (*.zip)")
+        if not path:
+            return
+        destination = Path(path)
+        if destination.suffix.lower() != ".zip":
+            destination = destination.with_suffix(".zip")
+        try:
+            with zipfile.ZipFile(destination, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+                for file_path in files:
+                    if file_path == report_path:
+                        archive.write(file_path, f"report{file_path.suffix}")
+                    else:
+                        archive.write(file_path, file_path.relative_to(workspace))
+            QMessageBox.information(self, "Export complete", f"Exported {len(files)} file(s) to:\\n{destination}")
+        except OSError as exc:
+            QMessageBox.warning(self, "Export failed", str(exc))
 
     def _view_selected_report(self):
         report = self._read_selected_report()
