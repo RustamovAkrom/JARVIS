@@ -4014,12 +4014,12 @@ class JarvisLive:
                     print("[LiveDiag][GATES] Gate state initialized.")
 
                     try:
-                        from core.background_tasks import get_background_task_manager
+                        from core.tasks.desktop import attach
 
-                        get_background_task_manager(self.ui)
+                        attach(self.ui)
                     except (OSError, RuntimeError, ValueError) as exc:
                         self.ui.write_log(
-                            f"ERR: Background research could not be restored: {exc}"
+                            f"ERR: Background tasks could not be restored: {exc}"
                         )
 
                     # What this machine will not permit, said once, on screen.
@@ -4324,11 +4324,9 @@ class JarvisLive:
                     f"{type(exc).__name__}: {exc}"
                 )
             try:
-                from core.background_tasks import shutdown_background_task_manager
+                from core.tasks.desktop import shutdown as shutdown_tasks
 
-                tasks_stopped = await asyncio.to_thread(
-                    shutdown_background_task_manager, 5.0
-                )
+                tasks_stopped = await asyncio.to_thread(shutdown_tasks, 5.0)
                 if not tasks_stopped:
                     print(
                         "[BackgroundTasks] Workers are still finishing; "
