@@ -5,7 +5,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from PyQt6.QtCore import QTimer, QUrl
+from PyQt6.QtCore import QTimer, QUrl, Qt
 from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtWidgets import (
     QCheckBox, QLabel, QLineEdit, QListWidget, QListWidgetItem, QPushButton,
@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import (
 )
 from gui.components.settings import SettingRow, SettingsSection
 from gui.themes.tokens import C, Space
-from memory.config_manager import (get_presence_settings, save_presence_settings,\n                                   get_clap_launcher, save_clap_launcher)
+from memory.config_manager import (\n    get_presence_settings, save_presence_settings,\n    get_clap_launcher, save_clap_launcher,\n)
 from core.runtime_paths import PATHS
 
 CLAP_RELEASES_URL = "https://github.com/RustamovAkrom/JARVIS/releases/latest"
