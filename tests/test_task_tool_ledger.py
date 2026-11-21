@@ -8,35 +8,25 @@ from core.tasks.engine import TaskEngine
 class DurableToolLedgerTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
-        self.root = Path(self.tmp.name)
-        self.tasks_dir = self.root / "tasks"
-        self.reports_dir = self.root / "reports"
-        self.engines = [
-            TaskEngine(
-                root=self.tasks_dir,
-                reports_dir=self.reports_dir,
-                agents_dirs=[],
-                autostart=False,
-                log=lambda *_args: None,
-            )
-        ]
+        root = Path(self.tmp.name)
+        self.tasks_dir = root / "tasks"
+        self.reports_dir = root / "reports"
+        self.engines = [self._make_engine()]
         self.task = self.engines[0].start("Test durable tool execution")
 
-    def tearDown(self):
-        for engine in self.engines:
-            engine.shutdown(wait=0)
-        self.tmp.cleanup()
-
-    def _new_engine(self):
-        engine = TaskEngine(
+    def _make_engine(self):
+        return TaskEngine(
             root=self.tasks_dir,
             reports_dir=self.reports_dir,
             agents_dirs=[],
             autostart=False,
             log=lambda *_args: None,
         )
-        self.engines.append(engine)
-        return engine
+
+    def tearDown(self):
+        for engine in self.engines:
+            engine.shutdown(wait=0)
+        self.tmp.cleanup()
 
     def test_completed_result_is_reused_after_engine_restart(self):
         calls = []
@@ -52,7 +42,8 @@ class DurableToolLedgerTests(unittest.TestCase):
             {"path": "notes/result.txt", "content": "hello"},
             execute,
         )
-        restarted = self._new_engine()
+        restarted = self._make_engine()
+        self.engines.append(restarted)
         replay = restarted.execute_tool_once(
             self.task["id"],
             "main:3",
