@@ -55,20 +55,34 @@ def test_routine_settings_list_toggle_remove_and_quiet(monkeypatch):
     assert engine.quiet=="22:00-07:00"
 
 
-def test_clap_launcher_controls_persist_config(monkeypatch, tmp_path):
+def test_clap_launcher_missing_executable_disables_toggle(monkeypatch):
     app = QApplication.instance() or QApplication([])
-    monkeypatch.setattr(config, "CONFIG_FILE", tmp_path / "api_keys.json")
-    monkeypatch.setattr(config, "CONFIG_DIR", tmp_path)
     monkeypatch.setattr(AutomationSettingsPage, "_clap_executable", lambda self: None)
     monkeypatch.setattr(AutomationSettingsPage, "_clap_running", lambda self: False)
 
     page = AutomationSettingsPage()
+
     assert not page.clap_enabled.isEnabled()
-    assert page.clap_download.isVisible() is False  # page is not shown in this test
+    assert page.clap_status.text().startswith("Not installed.")
+    assert page.clap_download.isEnabled()
 
-    page.clap_pattern.setCurrentIndex(page.clap_pattern.findData(1))
-    page.clap_sensitivity.setCurrentIndex(page.clap_sensitivity.findData("high"))
 
-    saved = config.get_clap_launcher()
-    assert saved["claps"] == 1
-    assert saved["sensitivity"] == "high"
+def test_clap_launcher_toggle_starts_and_stops(monkeypatch, tmp_path):
+    app = QApplication.instance() or QApplication([])
+    executable = tmp_path / "JARVISClapLauncher.exe"
+    executable.touch()
+    monkeypatch.setattr(AutomationSettingsPage, "_clap_executable", lambda self: executable)
+    monkeypatch.setattr(AutomationSettingsPage, "_clap_running", lambda self: False)
+
+    import gui.settings.categories.automation as automation
+    started = []
+    monkeypatch.setattr(automation.subprocess, "Popen", lambda *args, **kwargs: started.append((args, kwargs)))
+    monkeypatch.setattr("core.clap_ipc.ask", lambda command, timeout_ms=700: "ok")
+
+    page = AutomationSettingsPage()
+    page._toggle_clap_launcher(True)
+    assert started
+    assert "Starting" in page.clap_status.text()
+
+    page._toggle_clap_launcher(False)
+    assert page.clap_status.text() != "Could not stop the launcher. Try quitting it from the system tray."
