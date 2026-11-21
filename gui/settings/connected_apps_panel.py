@@ -94,7 +94,7 @@ class ConnectedAppsPanel(QWidget):
         except Exception as exc: QMessageBox.warning(self,"Could not register server",str(exc)); return
         self._connect_descriptor(descriptor)
 
-    def connect_selected(self):
+    def add_http(self):\n        name,ok=QInputDialog.getText(self,"Add MCP HTTP Server","Display name:")\n        if not ok or not name.strip(): return\n        endpoint,ok=QInputDialog.getText(self,"MCP HTTP Server","Server URL (HTTP(S)):")\n        if not ok or not endpoint.strip(): return\n        descriptor=AppDescriptor(id="http-"+name.strip().lower().replace(" ","-"),name=name.strip(),\n            description="Custom MCP HTTP server",source="user",transport=TransportType.HTTP,endpoint=endpoint.strip())\n        try: registry.register(descriptor,replace=True)\n        except Exception as exc: QMessageBox.warning(self,"Could not register server",str(exc)); return\n        self._connect_http_descriptor(descriptor)\n\n    def _connect_http_descriptor(self,descriptor,cid=None):\n        self.status.setText(f"Connecting to {descriptor.name}…")\n        worker=_Worker(lambda:service.connect_http(descriptor,connection_id=cid))\n        worker.signals.finished.connect(self._connected)\n        self.pool.start(worker)\n\n    def connect_selected(self):
         cid=self.selected_id()
         row=service.store.get_connection(cid) if cid else None
         descriptor=registry.get(row.get("app_id")) if row else None
