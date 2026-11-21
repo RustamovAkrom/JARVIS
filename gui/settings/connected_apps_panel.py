@@ -30,7 +30,7 @@ class ConnectedAppsPanel(QWidget):
         subtitle.setWordWrap(True)
         root.addWidget(title); root.addWidget(subtitle)
         row=QHBoxLayout()
-        self.search=QLineEdit(); self.search.setPlaceholderText("Search connected apps…")
+        self.search=QLineEdit(); self.search.setObjectName("connected_apps_search"); self.search.setPlaceholderText("Search connected apps…")
         self.search.textChanged.connect(self.refresh)
         row.addWidget(self.search,1)
         add=QPushButton("+ Add MCP Server"); add.clicked.connect(self.add_custom)
