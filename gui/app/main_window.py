@@ -7113,6 +7113,57 @@ class _TerminalBridge(QObject):
 
 
 
+class _WinPTYTerminal:
+    """Interactive Windows terminal backed by pywinpty's real PTY."""
+
+    def __init__(self, process):
+        self._process = process
+        # pywinpty's high-level reader uses a socket. Make it non-blocking so
+        # the GUI polling timer never waits for terminal output.
+        self._process.fileobj.setblocking(False)
+
+    @classmethod
+    def spawn(cls, argv, *, cwd, env, rows=24, columns=80):
+        from winpty import PtyProcess
+
+        process = PtyProcess.spawn(
+            argv,
+            cwd=cwd,
+            env=env,
+            dimensions=(rows, columns),
+        )
+        return cls(process)
+
+    def read(self, blocking=False):
+        del blocking
+        try:
+            return self._process.read(65536)
+        except (BlockingIOError, EOFError):
+            return ""
+
+    def write(self, data):
+        if self.isalive():
+            self._process.write(data)
+
+    def isalive(self):
+        return bool(self._process.isalive())
+
+    def set_size(self, columns, rows):
+        self._process.setwinsize(max(2, rows), max(2, columns))
+
+    def terminate(self):
+        try:
+            self._process.close(force=True)
+        except Exception:
+            try:
+                self._process.terminate(force=True)
+            except Exception:
+                pass
+
+    def dispose(self):
+        self.terminate()
+
+
 class _QProcessTerminal:
     """Qt-managed Windows shell adapter used by the existing xterm bridge."""
 
@@ -13587,9 +13638,9 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             return
         try:
             if platform.system() == "Windows":
-                # Use Qt-managed processes instead of the native WinPTY
-                # extension, which can destabilize the desktop process on
-                # some Windows/Python combinations.
+                # Windows shells require a real PTY/ConPTY for interactive
+                # editing, cursor movement, Ctrl+C and ANSI output. QProcess
+                # pipes are not a terminal and break readline-style editing.
                 if session.shell_kind.startswith("kali:"):
                     program = shutil.which("wsl.exe") or shutil.which("wsl")
                     if not program:
@@ -13601,59 +13652,31 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                         if drive
                         else "~"
                     )
-                    arguments = [
-                        "-d", distro, "--cd", linux_cwd, "--exec", "bash", "-i"
-                    ]
+                    argv = [program, "-d", distro, "--cd", linux_cwd, "--exec", "bash", "-i"]
                 elif session.shell_kind == "cmd":
                     program = os.environ.get("COMSPEC") or shutil.which("cmd.exe")
                     if not program:
                         raise FileNotFoundError("Command Prompt is not available")
-                    arguments = ["/Q", "/D", "/K"]
-                elif session.shell_kind == "powershell":
-                    program = shutil.which("pwsh") or shutil.which("powershell.exe")
-                    if not program:
-                        raise FileNotFoundError("PowerShell is not available")
-                    # QProcess is not a real Windows console/ConPTY. PowerShell's
-                    # built-in Clear-Host can call Console APIs that fail in this
-                    # redirected environment. Override clear/cls with xterm-safe VT.
-                    clear_host = (
-                        "function Clear-Host { "
-                        "[Console]::Write([char]27 + '[2J' + [char]27 + '[H') "
-                        "}; function clear { Clear-Host }; function cls { Clear-Host }"
-                    )
-                    arguments = [
-                        "-NoLogo", "-NoProfile", "-NoExit", "-Command", clear_host
-                    ]
+                    argv = [program, "/Q", "/D"]
                 else:
-                    program = shutil.which("pwsh") or shutil.which("powershell.exe")
-                    if program:
-                        clear_host = (
-                            "function Clear-Host { "
-                            "[Console]::Write([char]27 + '[2J' + [char]27 + '[H') "
-                            "}; function clear { Clear-Host }; function cls { Clear-Host }"
-                        )
-                        arguments = [
-                            "-NoLogo", "-NoProfile", "-NoExit", "-Command", clear_host
-                        ]
+                    program = (
+                        shutil.which("pwsh")
+                        or shutil.which("powershell.exe")
+                        or os.environ.get("COMSPEC")
+                        or shutil.which("cmd.exe")
+                    )
+                    if not program:
+                        raise FileNotFoundError("No supported Windows shell was found")
+                    if os.path.basename(program).lower().startswith(("pwsh", "powershell")):
+                        argv = [program, "-NoLogo", "-NoProfile"]
                     else:
-                        program = os.environ.get("COMSPEC") or shutil.which("cmd.exe")
-                        if not program:
-                            raise FileNotFoundError("No supported Windows shell was found")
-                        arguments = ["/Q", "/D", "/K"]
+                        argv = [program, "/Q", "/D"]
 
-                process = QProcess(self)
-                process.setProcessChannelMode(
-                    QProcess.ProcessChannelMode.MergedChannels
+                session.pty = _WinPTYTerminal.spawn(
+                    argv,
+                    cwd=session.cwd,
+                    env={**os.environ, "TERM": "xterm-256color"},
                 )
-                process.setWorkingDirectory(session.cwd)
-                # Make the redirected Windows shell advertise the same VT
-                # capabilities as the xterm.js renderer.
-                process.start(program, arguments)
-                if not process.waitForStarted(3000):
-                    detail = process.errorString() or "Windows shell failed to start"
-                    process.deleteLater()
-                    raise RuntimeError(detail)
-                session.pty = _QProcessTerminal(process)
             else:
                 import pty as _pty
 
