@@ -112,3 +112,39 @@ def test_qt_widgets_wrapper_exports_selected_binding():
     assert QApplication is not None
     assert QWidget is not None
     assert QPushButton is not None
+
+
+def test_qt_compat_wrappers_export_core_modules():
+    from core.qt import BINDING
+    from core.qt.QtCore import QObject, Signal, Slot
+    from core.qt.QtGui import QColor
+    from core.qt.QtWidgets import QApplication, QWidget
+    from core.qt.QtNetwork import QNetworkAccessManager
+    from core.qt.QtMultimedia import QMediaPlayer
+
+    assert BINDING in {"PyQt6", "PySide6"}
+    assert all(value is not None for value in (QObject, Signal, Slot, QColor, QApplication, QWidget, QNetworkAccessManager, QMediaPlayer))
+
+
+def test_pyside6_binding_can_be_selected_when_installed():
+    import importlib.util
+    import os
+    import subprocess
+    import sys
+
+    if importlib.util.find_spec("PySide6") is None:
+        import pytest
+        pytest.skip("PySide6 is not installed")
+
+    script = (
+        "from core.qt import BINDING; "
+        "from core.qt.QtCore import QObject, Signal; "
+        "from core.qt.QtWidgets import QWidget; "
+        "from PyQt6.QtWidgets import QWidget as CompatQWidget; "
+        "assert BINDING == 'PySide6'; "
+        "assert QWidget is CompatQWidget"
+    )
+    env = os.environ.copy()
+    env["QT_API"] = "pyside6"
+    result = subprocess.run([sys.executable, "-c", script], env=env, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
