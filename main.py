@@ -1572,10 +1572,27 @@ class JarvisLive:
                 _safe = _re.sub(r"[^a-zA-Z0-9_]", "_", f"mcp_{_conn}_{_tool}")
                 if not _safe or _safe in {d.get("name") for d in _all_decls if isinstance(d, dict)}:
                     continue
-                _schema = _row.get("input_schema") or {"type": "OBJECT", "properties": {}}
+                _schema = _row.get("input_schema") or {"type": "object", "properties": {}}
                 if not isinstance(_schema, dict):
-                    _schema = {"type": "OBJECT", "properties": {}}
-                _schema = dict(_schema)
+                    _schema = {"type": "object", "properties": {}}
+                # MCP schemas are JSON Schema (lowercase types and may contain
+                # unsupported metadata). Normalize to Gemini's schema shape.
+                _type_map = {"object": "OBJECT", "string": "STRING", "integer": "INTEGER",
+                    "number": "NUMBER", "boolean": "BOOLEAN", "array": "ARRAY"}
+                _allowed = {"type", "description", "enum", "required", "properties",
+                    "items", "nullable", "format"}
+                def _gemini_schema(_node):
+                    if not isinstance(_node, dict):
+                        return {}
+                    _out = {k: v for k, v in _node.items() if k in _allowed}
+                    if isinstance(_out.get("type"), str):
+                        _out["type"] = _type_map.get(_out["type"].lower(), _out["type"].upper())
+                    if isinstance(_out.get("properties"), dict):
+                        _out["properties"] = {k: _gemini_schema(v) for k, v in _out["properties"].items()}
+                    if isinstance(_out.get("items"), dict):
+                        _out["items"] = _gemini_schema(_out["items"])
+                    return _out
+                _schema = _gemini_schema(_schema)
                 _schema.setdefault("type", "OBJECT")
                 _schema.setdefault("properties", {})
                 self._connected_app_tool_map[_safe] = (_conn, _tool)
