@@ -35,7 +35,7 @@ class ConnectedAppsService:
             created_at=time.time(),metadata={"transport":"http","endpoint":descriptor.endpoint})
         self.store.upsert_connection(_serialize(row))
         try:
-            tools=runtime.connect_http(cid,descriptor.endpoint,headers=headers)
+            headers=headers or {}\n            tools=runtime.connect_http(cid,descriptor.endpoint,headers=headers)\n            if headers.get("Authorization"):\n                self.store.set_credential(cid,"authorization_header",headers["Authorization"])
             row.status=ConnectionStatus.CONNECTED; row.metadata["tools"]=tools
         except Exception as exc: row.status=ConnectionStatus.ERROR; row.last_error=f"{type(exc).__name__}: {exc}"
         data=_serialize(row); self.store.upsert_connection(data); return data
@@ -46,8 +46,8 @@ class ConnectedAppsService:
         descriptor=AppDescriptor(id=row["app_id"],name=row["display_name"],source="stored",
             transport=TransportType.HTTP if meta.get("transport")=="http" else TransportType.STDIO,
             endpoint=meta.get("endpoint",""),command=meta.get("command",""),args=meta.get("args",[]))
-        return self.connect_http(descriptor,connection_id=cid) if descriptor.transport==TransportType.HTTP else self.connect_stdio(descriptor,connection_id=cid)
-    def disconnect(self,cid):
+        return self.connect_http(descriptor,connection_id=cid,headers=self._saved_http_headers(cid)) if descriptor.transport==TransportType.HTTP else self.connect_stdio(descriptor,connection_id=cid)
+    def _saved_http_headers(self,cid):\n        value=self.store.get_credential(cid,"authorization_header")\n        return {"Authorization":value} if value else {}\n    def disconnect(self,cid):
         runtime.disconnect(cid); row=self.store.get_connection(cid)
         if not row:return False
         row["status"]=ConnectionStatus.DISCONNECTED.value; row["updated_at"]=time.time()
