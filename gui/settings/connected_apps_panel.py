@@ -55,14 +55,21 @@ class ConnectedAppsPanel(QWidget):
             self.runtime_status.setText("MCP SDK installed. STDIO and HTTP connections are available.")
             self.install_btn.setText("MCP support installed");self.install_btn.setEnabled(False)
     def install_mcp(self):
-        self._busy(True,"Installing MCP support…")
-        w=_Worker(lambda:subprocess.run([sys.executable,"-m","pip","install","mcp>=1.0,<2"],capture_output=True,text=True,timeout=600,check=True))
-        w.signals.finished.connect(self._installed);self.pool.start(w)
+        self._busy(True,"Bootstrapping pip and installing MCP support…")
+        def install():
+            bootstrap=subprocess.run([sys.executable,"-m","ensurepip","--upgrade"],capture_output=True,text=True,timeout=180)
+            if bootstrap.returncode != 0:
+                raise RuntimeError("ensurepip failed:\n"+(bootstrap.stderr or bootstrap.stdout or "No diagnostic output"))
+            return subprocess.run([sys.executable,"-m","pip","install","--upgrade","pip","mcp>=1.0,<2"],capture_output=True,text=True,timeout=600,check=True)
+        w=_Worker(install);w.signals.finished.connect(self._installed);self.pool.start(w)
     def _installed(self,result,error):
         self._busy(False)
         if error:
-            detail=getattr(error,"stderr","") or str(error);QMessageBox.warning(self,"MCP installation failed",detail[-4000:]);self.status.setText("MCP installation failed.")
-        else:self._check_runtime();self.status.setText("MCP SDK installed. Restart JARVIS if needed.")
+            detail=getattr(error,"stderr","") or str(error)
+            if not detail and getattr(error,"__cause__",None):detail=str(error.__cause__)
+            QMessageBox.warning(self,"MCP installation failed",detail[-4000:]);self.status.setText("MCP installation failed. See diagnostic details.")
+        else:
+            self._check_runtime();self.status.setText("MCP SDK installed. Restart JARVIS if needed.")
     def _busy(self,busy,message=""):
         for w in (self.add_stdio_btn,self.add_http_btn,self.add_oauth_btn,self.connect_btn,self.disconnect_btn,self.remove_btn,self.install_btn):w.setEnabled(not busy)
         if message:self.status.setText(message)
