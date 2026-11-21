@@ -66,7 +66,7 @@ class MCPRuntime:
         if not url.lower().startswith(("https://","http://")): raise ValueError("MCP URL must be HTTP(S)")
         async def factory():
             from mcp.client.streamable_http import streamablehttp_client
-            client=streamablehttp_client(url,headers=dict(headers or {}))\n            async def adapter():\n                transport=await client.__aenter__()\n                return transport[:2]\n            return adapter()
+            return streamablehttp_client(url,headers=dict(headers or {}))
         return self._submit(self._connect(connection_id,factory),timeout=90)
 
     async def _call(self,connection_id,tool,arguments):
