@@ -9708,6 +9708,11 @@ class MainWindow(QMainWindow):
                 + (f"   ·   STORAGE  {_format_size(disk_used)} / {_format_size(disk_total)}"
                    if disk_total else "   ·   STORAGE  N/A")
             )
+            disk_scale_bps = 50 * 1024 * 1024
+            self._disk_trend_chart.set_values(
+                min(100.0, disk_read * 100.0 / disk_scale_bps),
+                min(100.0, disk_write * 100.0 / disk_scale_bps),
+            )
 
             swap_total = int(snap.get("swap_total_bytes", 0) or 0)
             swap_used = int(snap.get("swap_used_bytes", 0) or 0)
@@ -10242,6 +10247,15 @@ class MainWindow(QMainWindow):
         )
         self._network_trend_chart.setMinimumHeight(92)
         advanced_layout.addWidget(self._network_trend_chart)
+
+        self._disk_trend_chart = MetricTrendChart(
+            self._tr("DISK I/O HISTORY"),
+            self._tr("COLLECTING DISK I/O"),
+            self._tr("WRITE"),
+            primary_label=self._tr("READ"),
+        )
+        self._disk_trend_chart.setMinimumHeight(92)
+        advanced_layout.addWidget(self._disk_trend_chart)
         self._advanced_panel.hide()
         lay.addWidget(self._advanced_panel)
 
