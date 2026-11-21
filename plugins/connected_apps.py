@@ -8,9 +8,9 @@ PLUGIN = {
     "tier": "core",
     "description": "Manage and use connected MCP applications. Discover apps and tools before execution. Read-only tools may run automatically only when the MCP server marks them read-only. All other actions require confirmation.",
     "parameters": {"type":"OBJECT","properties":{
-        "action":{"type":"STRING","enum":["connect","list_apps","list_tools","execute","disconnect","remove"]},
+        "action":{"type":"STRING","enum":["connect","list_apps","list_tools","execute","smart_execute","disconnect","remove"]},
         "app":{"type":"STRING"},"connection_id":{"type":"STRING"},
-        "tool":{"type":"STRING"},"arguments":{"type":"OBJECT"},
+        "tool":{"type":"STRING"},"arguments":{"type":"OBJECT"},"query":{"type":"STRING"},
         "query":{"type":"STRING"}},
         "required":["action"]}
 }
@@ -40,6 +40,14 @@ def run(parameters, player=None, session_memory=None):
         if action=="list_tools":
             rows=agent.find_tools(query=p.get("query",""),app=p.get("app",""))
             return outcome.done("connected_apps.tools",tools=rows)
+        if action=="smart_execute":
+            query=str(p.get("query","")).strip()
+            if not query:return outcome.failed("connected_apps.smart_execute","A task query is required.")
+            try:
+                result,tool=agent.execute_best(query,p.get("arguments",{}),app=p.get("app",""),auto_read_only=True)
+                return outcome.done("connected_apps.smart_execute",app=tool["app"],tool=tool["name"],result=result)
+            except Exception as exc:
+                return outcome.failed("connected_apps.smart_execute",f"{type(exc).__name__}: {exc}")
         if action=="execute":
             connection_id=str(p.get("connection_id","")); tool=str(p.get("tool",""))
             matches=[x for x in agent.describe_tools() if x["connection_id"]==connection_id and x["name"]==tool]
