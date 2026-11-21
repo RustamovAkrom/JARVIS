@@ -12877,21 +12877,11 @@ window.terminal=term;window.clearTerminal=()=>term.clear();
 window.setTerminalTheme=theme=>{term.options.theme=theme;document.body.style.background=theme.background;
  document.getElementById('terminal').style.background=theme.background;};
 new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.bridge;
- // Serialize writes so large/rapid QProcess output cannot overlap xterm's parser.
- // WebChannel normally delivers strings, but validate the boundary explicitly.
- const writeQueue=[];let queuedBytes=0;let writing=false;const MAX_QUEUED=1048576;
- const drain=()=>{if(writing||!writeQueue.length)return;writing=true;
-  const chunk=writeQueue.shift();queuedBytes-=chunk.length;
-  term.write(chunk,()=>{writing=false;drain();});};
+ // Keep the Qt WebChannel boundary strict. QProcess output is text decoded
+ // by the backend; xterm.js owns terminal escape-sequence parsing.
  bridge.output.connect(chunk=>{
   if(typeof chunk!=='string'){console.warn('Terminal received non-text output');return;}
-  if(!chunk)return;
-  if(queuedBytes+chunk.length>MAX_QUEUED){
-   writeQueue.length=0;queuedBytes=0;
-   const warning='\r\n[terminal output queue overflow; excess output discarded]\r\n';
-   writeQueue.push(warning);queuedBytes=warning.length;
-  }else{writeQueue.push(chunk);queuedBytes+=chunk.length;}
-  drain();
+  if(chunk.length)term.write(chunk);
  });
  term.onData(data=>bridge.send(data));
  const fit=()=>{fitAddon.fit();bridge.resize(term.cols,term.rows)};
@@ -12931,6 +12921,8 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             shell_label=shell_label,
         )
         self._terminal_sessions[session_id] = session
+        if not self._terminal_active_id:
+            self._terminal_active_id = session_id
         index = self._terminal_tabs.addTab(
             view, f"{shell_label} {self._terminal_sequence}"
         )
