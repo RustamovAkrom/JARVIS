@@ -41,10 +41,10 @@ class ConnectedAppsService:
             status=ConnectionStatus.CONNECTING,auth_type=descriptor.auth_type,scopes=list(descriptor.scopes),
             created_at=time.time(),metadata={"transport":"http","endpoint":descriptor.endpoint})
         self.store.upsert_connection(_serialize(row))
+        if headers.get("Authorization"):
+            self.store.set_credential(cid,"authorization_header",headers["Authorization"])
         try:
             tools=runtime.connect_http(cid,descriptor.endpoint,headers=headers)
-            auth=headers.get("Authorization")
-            if auth:self.store.set_credential(cid,"authorization_header",auth)
             row.status=ConnectionStatus.CONNECTED;row.metadata["tools"]=tools
         except Exception as exc:
             row.status=ConnectionStatus.ERROR;row.last_error=f"{type(exc).__name__}: {exc}"
