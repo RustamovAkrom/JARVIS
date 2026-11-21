@@ -19,6 +19,8 @@ memory/pomodoro_state.json
 cache/
 holo_desk/
 tasks/
+cloud_state/
+databases/
 
 **/token*.json
 **/client_secret*.json
