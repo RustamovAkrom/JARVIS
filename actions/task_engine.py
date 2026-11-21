@@ -25,12 +25,13 @@ def task_engine(parameters: dict, player=None) -> str:
             status=task.get("status", "queued"),
             note="Task is running in the shared Tasks panel. Continue with other work.",
         )
-    if action == "list":
+    if action in {"list", "search"}:
         tasks = result.get("tasks") or []
         if not tasks:
-            return "Task Engine: no tasks."
+            return "Task Engine: no matching tasks."
         return "\n".join(
-            f"{t.get('id')} [{t.get('status')}] {t.get('title') or t.get('task', '')[:100]}"
+            f"{t.get('id')} [{t.get('status')}] {t.get('title') or t.get('task', '')[:100]} "
+            f"progress={t.get('progress', 0)} report={bool(t.get('report') or t.get('result'))}"
             for t in tasks
         )
     task = result.get("task") or {}
@@ -59,10 +60,11 @@ TOOL = {
     "parameters": {
         "type": "OBJECT",
         "properties": {
-            "action": {"type": "STRING", "enum": ["start", "list", "status", "result", "steer", "finish", "cancel", "retry"]},
+            "action": {"type": "STRING", "enum": ["start", "list", "search", "status", "result", "steer", "finish", "cancel", "retry"]},
             "task": {"type": "STRING", "description": "Self-contained task instructions for start."},
             "title": {"type": "STRING"},
             "task_id": {"type": "STRING"},
+            "query": {"type": "STRING", "description": "Search task titles, instructions and results."},
             "agent": {"type": "STRING"},
             "minutes": {"type": "INTEGER"},
             "rounds": {"type": "INTEGER"},
