@@ -183,7 +183,11 @@ def save_workspace_path(path: str) -> None:
 PROJECT_HISTORY_LIMIT = 20
 
 def get_project_history() -> list[dict]:
-    """Recent project folders, newest first; invalid or deleted paths are skipped."""
+    """Recent project paths, including missing folders, newest first.
+
+    Missing or moved folders remain in history so the UI can mark them
+    unavailable and let the user remove the stale entry deliberately.
+    """
     raw = load_api_keys().get("project_history", [])
     if not isinstance(raw, list):
         return []
@@ -192,15 +196,31 @@ def get_project_history() -> list[dict]:
     for item in raw:
         if not isinstance(item, dict) or not isinstance(item.get("path"), str):
             continue
+        raw_path = item["path"].strip()
+        if not raw_path:
+            continue
         try:
-            path = Path(item["path"]).expanduser().resolve()
-        except (OSError, RuntimeError):
+            path = Path(raw_path).expanduser().resolve()
+            normalized = str(path)
+            name = str(item.get("name") or path.name or raw_path)
+            available = path.is_dir()
+        except (OSError, RuntimeError, ValueError):
+            normalized = raw_path
+            name = str(item.get("name") or Path(raw_path).name or raw_path)
+            available = False
+        if normalized in seen:
             continue
-        if not path.is_dir() or str(path) in seen:
-            continue
-        seen.add(str(path))
-        result.append({"path": str(path), "name": str(item.get("name") or path.name),
-                      "last_opened": float(item.get("last_opened") or 0)})
+        seen.add(normalized)
+        try:
+            last_opened = float(item.get("last_opened") or 0)
+        except (TypeError, ValueError):
+            last_opened = 0.0
+        result.append({
+            "path": normalized,
+            "name": name,
+            "last_opened": last_opened,
+            "available": available,
+        })
     return result[:PROJECT_HISTORY_LIMIT]
 
 
