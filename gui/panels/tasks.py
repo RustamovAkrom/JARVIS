@@ -916,7 +916,7 @@ class TaskPanel(QWidget):
         summary = [f"ACTIVE BACKGROUND TASKS · {active_count}"]
         for task in active_tasks[:2]:
             title = str(task.get("title") or task.get("task") or task.get("id") or "Task")
-            summary.append(f"• {title[:42]} · {self._progress(task)}%")
+            summary.append(f"• {title[:42]} · {self._progress(task):g}%")
         if active_count > 2:
             summary.append(f"and {active_count - 2} more")
         self.active_summary.setText("\n".join(summary) if active_count else "No active background tasks")
