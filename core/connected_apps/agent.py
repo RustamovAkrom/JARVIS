@@ -93,9 +93,9 @@ class ConnectedAppsAgent:
 
     def describe_tools(self):
         out=[]
-        for connection in service.connections():
+        for connection in self._service.connections():
             if connection.get("status")!="connected" or not connection.get("enabled",True): continue
-            for tool in service.tools(connection["id"]):
+            for tool in self._service.tools(connection["id"]):
                 out.append({"app":connection["display_name"],"app_id":connection["app_id"],
                     "connection_id":connection["id"],"name":tool["name"],
                     "description":tool.get("description",""),"input_schema":tool.get("input_schema",{}),
@@ -119,10 +119,10 @@ class ConnectedAppsAgent:
         # marks the operation read-only. All other calls fail closed.
         safe_read=_annotation(tool,"readOnlyHint") and not _annotation(tool,"destructiveHint")
         if read_only and safe_read and not destructive:
-            return service.call_tool(connection_id,tool_name,args)
+            return self._service.call_tool(connection_id,tool_name,args)
         return confirm.request(key=f"connected_apps:{connection_id}:{tool_name}",
             title=f"Connected App — {tool_name}",
             detail=f"Execute tool {tool_name} with arguments:\n\n{args!r}",
-            run=lambda: str(service.call_tool(connection_id,tool_name,args)))
+            run=lambda: str(self._service.call_tool(connection_id,tool_name,args)))
 
 agent=ConnectedAppsAgent(service)
