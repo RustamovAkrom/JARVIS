@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 from PyQt6.QtWidgets import (
     QCheckBox,
@@ -18,21 +17,6 @@ from gui.components.settings import SettingRow, SettingsSection
 from gui.themes.tokens import C, Space
 from memory.config_manager import get_conversation_memory, save_conversation_memory
 from memory import conversations
-from core.runtime_paths import PATHS
-from core.user_data import update_json
-from gui.app.chat_store import ChatStore
-
-
-CHAT_STORE_FILE = PATHS.config_dir / "ui_chats.json"
-LEGACY_CHAT_FILE = PATHS.config_dir / "ui_chat.json"
-LEGACY_HISTORY_FILE = PATHS.config_dir / "ui_history.json"
-
-
-def _clear_legacy_file(path: Path) -> None:
-    """Clear a legacy transcript file without deleting unrelated JSON keys."""
-    def replace(data: dict) -> None:
-        data["turns"] = []
-    update_json(path, replace)
 
 
 class ConversationMemoryPage(QWidget):
@@ -114,18 +98,15 @@ class ConversationMemoryPage(QWidget):
     def _delete_all(self) -> None:
         result = QMessageBox.question(
             self,
-            "Delete conversation history",
-            "Permanently delete all archived chats, the active chat, legacy chat files, "
-            "and local conversation-recall transcripts? Saved memories will remain.",
+            "Delete local conversation history",
+            "Delete all locally stored conversation-recall transcript files? "
+            "Chat archive and saved memories will remain.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
         if result != QMessageBox.StandardButton.Yes:
             return
 
-        # Stop pending transcript writes before removing files. A timeout is
-        # treated as a failure to avoid reporting a successful deletion while
-        # a queued writer could recreate history afterward.
         if not conversations.flush(timeout=10.0):
             QMessageBox.warning(
                 self,
@@ -135,28 +116,18 @@ class ConversationMemoryPage(QWidget):
             return
 
         try:
-            store = ChatStore(
-                CHAT_STORE_FILE,
-                legacy_chat_path=LEGACY_CHAT_FILE,
-                legacy_history_path=LEGACY_HISTORY_FILE,
-            )
-            store.clear_all()
-            _clear_legacy_file(LEGACY_CHAT_FILE)
-            _clear_legacy_file(LEGACY_HISTORY_FILE)
-            deleted_recall_files = conversations.forget(everything=True)
+            deleted = conversations.forget(everything=True)
         except Exception as exc:
             QMessageBox.critical(
                 self,
-                "Could not delete conversation history",
-                f"History deletion failed: {type(exc).__name__}: {exc}",
+                "Could not delete local history",
+                f"Deletion failed: {type(exc).__name__}: {exc}",
             )
             self.refresh()
             return
 
         self.refresh()
-        self.status.setText(
-            f"All chats deleted. Removed {deleted_recall_files} local recall file(s)."
-        )
+        self.status.setText(f"Deleted {deleted} local history file(s). Chat archive is unchanged.")
 
     def refresh(self) -> None:
         stats = conversations.stats()
