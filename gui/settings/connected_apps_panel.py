@@ -112,7 +112,7 @@ class ConnectedAppsPanel(QWidget):
                 scopes=scopes.split(),client_secret=client_secret)
             token=service.store.get_credential(descriptor.id,"access_token")
             token_type=service.store.get_credential(descriptor.id,"token_type") or "Bearer"
-            return service.connect_http(descriptor,headers={"Authorization":f"{token_type} {token}"})
+            return service.connect_http(descriptor,connection_id=descriptor.id,headers={"Authorization":f"{token_type} {token}"})
         worker=_Worker(authorize_and_connect)
         worker.signals.finished.connect(self._connected);self.pool.start(worker)
 
