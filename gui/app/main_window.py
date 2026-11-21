@@ -10231,7 +10231,7 @@ class MainWindow(QMainWindow):
         page_layout.addWidget(self._empty_project, 1)
         self._refresh_project_history()
 
-        self._open_folder_btn =(self._tr("Open Folder"))
+        self._open_folder_btn = QPushButton(self._tr("Open Folder"))
         self._open_folder_btn.setMinimumHeight(30)
         self._open_folder_btn.setStyleSheet(_ghost_qss())
         self._open_folder_btn.setToolTip(self._tr("Choose a project folder"))
