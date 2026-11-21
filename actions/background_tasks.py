@@ -17,7 +17,7 @@ def background_tasks(parameters: dict, player=None) -> str:
                 "background_tasks",
                 task_id=task["id"],
                 status=task["status"],
-                note="the research report will appear in the content panel",
+                note="the research report will appear in the Tasks panel and reports directory",
             )
 
         if action == "list":
