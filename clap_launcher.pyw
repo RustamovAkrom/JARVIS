@@ -477,9 +477,9 @@ def main() -> int:
 
         def answer():
             buffer["data"].extend(bytes(sock.readAll()))
-            if b"\n not in buffer["data"]:
+            if b"\x0a" not in buffer["data"]:
                 return
-            line = bytes(buffer["data"].split(b"\\n", 1)[0]).decode("utf-8", "replace").strip().lower()
+            line = bytes(buffer["data"].split(b"\x0a", 1)[0]).decode("utf-8", "replace").strip().lower()
             if line == "status":
                 reply = json.dumps({"listening": state["stream"] is not None,
                                     "paused": state["paused"], "jarvis": state["running"],
