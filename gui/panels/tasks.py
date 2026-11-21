@@ -112,12 +112,30 @@ class TaskPanel(QWidget):
         self.details_browser.setObjectName("task_details")
         self.details_browser.setOpenExternalLinks(False)
         self.details_browser.setMinimumHeight(0)
-        self.details_browser.setMaximumHeight(64)
-        self.details_browser.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        root.addWidget(self.details_browser, 0)
-        self.export_button = QPushButton("Export")
-        self.export_button.setMaximumHeight(28)
-        root.addWidget(self.export_button, 0)
+        self.details_browser.setMinimumHeight(0)
+        self.details_browser.setMaximumHeight(120)
+        self.details_browser.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
+        root.addWidget(self.details_browser, 1)
+
+        report_actions = QHBoxLayout()
+        report_actions.setSpacing(4)
+        self.view_report_button = QPushButton("View")
+        self.open_report_button = QPushButton("Open")
+        self.export_button = QPushButton("Save As")
+        self.show_report_folder_button = QPushButton("Folder")
+        for button in (
+            self.view_report_button, self.open_report_button,
+            self.export_button, self.show_report_folder_button,
+        ):
+            button.setMinimumWidth(0)
+            button.setMaximumHeight(28)
+            button.setSizePolicy(
+                QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+            )
+            report_actions.addWidget(button, 1)
+        root.addLayout(report_actions)
         history_actions = QGridLayout()
         history_actions.setHorizontalSpacing(5)
         history_actions.setVerticalSpacing(2)
@@ -590,15 +608,14 @@ class TaskPanel(QWidget):
 
     def _export_selected_report(self):
         task = self._tasks.get(self.selected_task_id(), {})
-<<<<<<< HEAD
-        report = str(task.get("report") or task.get("result") or "").strip()
-        if not report:
+        report = self._read_selected_report()
+        if report is None:
             # Failed/cancelled tasks may not have a report. Export a useful
             # diagnostic summary instead of silently doing nothing.
             used = task.get("used") if isinstance(task.get("used"), dict) else {}
             budget = task.get("budget") if isinstance(task.get("budget"), dict) else {}
             events = task.get("events") if isinstance(task.get("events"), list) else []
-            report_lines = [
+            lines = [
                 f"# {task.get('title') or task.get('task') or 'Background task'}",
                 "",
                 f"- Status: {str(task.get('status') or 'unknown').upper()}",
@@ -609,33 +626,38 @@ class TaskPanel(QWidget):
                 f"- Rounds: {used.get('rounds', 0)} / {budget.get('rounds', 'unlimited')}",
                 "",
                 "## Task",
-                str(task.get('task') or ""),
+                str(task.get("task") or ""),
             ]
             if task.get("error"):
-                report_lines.extend(["", "## Error", str(task.get("error"))])
+                lines.extend(["", "## Error", str(task.get("error"))])
             if events:
-                report_lines.extend(["", "## Event history"])
+                lines.extend(["", "## Event history"])
                 for event in events:
                     if isinstance(event, dict):
-                        report_lines.append(
+                        lines.append(
                             f"- [{self._format_time(event.get('t'))}] "
                             f"{event.get('kind') or 'event'}: {event.get('text') or ''}"
                         )
-            report = "\n".join(report_lines)
-        from pathlib import Path
-        path, _ = QFileDialog.getSaveFileName(
-            self, "Export Task Report", f"{task.get('title') or 'task-report'}.md",
+            report = "\\n".join(lines)
+
+        suggested = str(task.get("title") or "task-report").strip() or "task-report"
+        path, selected_filter = QFileDialog.getSaveFileName(
+            self, "Save Task Report", f"{suggested}.md",
             "Markdown (*.md);;Text (*.txt)"
         )
         if not path:
             return
         try:
             from pathlib import Path
-            Path(path).write_text(report, encoding="utf-8")
+            destination = Path(path)
+            if selected_filter.startswith("Text") and destination.suffix.lower() != ".txt":
+                destination = destination.with_suffix(".txt")
+            elif destination.suffix.lower() not in {".md", ".txt"}:
+                destination = destination.with_suffix(".md")
+            destination.write_text(report, encoding="utf-8")
+            QMessageBox.information(self, "Report saved", f"Report saved to:\\n{destination}")
         except OSError as exc:
-            from PyQt6.QtWidgets import QMessageBox
-            QMessageBox.warning(self, "Export failed", str(exc)
-);
+            QMessageBox.warning(self, "Export failed", str(exc))
 
     def selected_task_id(self):
         item = self.list_widget.currentItem()
