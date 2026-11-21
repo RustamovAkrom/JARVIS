@@ -774,6 +774,7 @@ class JarvisLive:
             getattr(getattr(self.ui, "_win", None), "_chat_plan_mode", False)
         )
         self._briefing_sent = False  # morning briefing fires once per process
+        self._clap_launch = os.environ.get("JARVIS_CLAP_LAUNCH", "0") == "1"
         self._clap_welcome = os.environ.get("JARVIS_WELCOME", "0") == "1"
         self._clap_welcome_sent = False
         self._sys_monitor = SystemMonitor()  # persistent cooldown state
@@ -4142,6 +4143,7 @@ class JarvisLive:
                     if (
                         not self._briefing_sent
                         and get_brief_enabled()
+                        and (not self._clap_launch or self._clap_welcome)
                         and self._awake
                         and not self.ui.auth_locked
                     ):
