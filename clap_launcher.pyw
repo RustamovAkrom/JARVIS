@@ -26,9 +26,9 @@ INSTANT START (optional, on by default with 6 GB of memory or more)
     show it: a tenth of a second instead of three. About 250 MB of memory.
 
 RUN IT
-    The desktop shortcut from JARVIS's SETUP drawer, or:  python clap_launcher.pyw
-    (pythonw on Windows, so no console window). "Start when I log in" in the
-    menu keeps it there from then on.
+    Start it from JARVIS Setup -> Double-clap activation, or:
+    python clap_launcher.pyw (pythonw on Windows, no console window).
+    "Start when I log in" keeps the listener in the system tray.
 
 LOGS
     logs/clap_launcher.log  — what it heard and did (the detector's decisions too)
@@ -86,7 +86,7 @@ def _no_window() -> dict:
 
 def jarvis_running(exclude=()) -> bool:
     """Is a JARVIS from THIS folder running, however it was started? `exclude`:
-    pids that do not count — the launcher's own standby copy."""
+    pids that do not count. The launcher no longer creates a second standby JARVIS."""
     import psutil
     main = os.path.normcase(str(ROOT / "main.py"))
     root = os.path.normcase(str(ROOT))
@@ -487,7 +487,7 @@ def main() -> int:
                                     "text": status_text()})
             elif line == "show":
                 notify(f"{status_text()}. To stop it: right-click this icon -> Quit, "
-                       f"or in JARVIS: SETUP -> CLAP LAUNCHER.", 5000)
+                       f"or in JARVIS: Setup -> Double-clap activation.", 5000)
                 reply = "ok"
             elif line == "quit":
                 log("stopped from JARVIS")
