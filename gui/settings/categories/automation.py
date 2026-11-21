@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import (
 )
 from gui.components.settings import SettingRow, SettingsSection
 from gui.themes.tokens import C, Space
-from memory.config_manager import get_presence_settings, save_presence_settings
+from memory.config_manager import (get_presence_settings, save_presence_settings,\n                                   get_clap_launcher, save_clap_launcher)
 from core.runtime_paths import PATHS
 
 CLAP_RELEASES_URL = "https://github.com/RustamovAkrom/JARVIS/releases/latest"
@@ -160,7 +160,15 @@ class AutomationSettingsPage(QWidget):
         else:
             self.clap_enabled.setEnabled(True)
             self.clap_download.setVisible(False)
-            self.clap_status.setText("Running — listening for claps." if running else "Stopped.")
+            if running:
+                try:
+                    from core.clap_ipc import status
+                    live = status() or {}
+                    self.clap_status.setText(str(live.get("text") or "Running."))
+                except Exception:
+                    self.clap_status.setText("Running.")
+            else:
+                self.clap_status.setText("Stopped.")
         self.clap_download.setEnabled(executable is None)
 
     def _toggle_clap_launcher(self, enabled: bool):
