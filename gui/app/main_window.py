@@ -10225,15 +10225,17 @@ class MainWindow(QMainWindow):
             f"border:1px solid {C.BORDER}; border-radius:7px; }}"
         )
         advanced_layout = QVBoxLayout(self._advanced_panel)
-        advanced_layout.setContentsMargins(7, 7, 7, 7)
-        advanced_layout.setSpacing(4)
+        advanced_layout.setContentsMargins(9, 8, 9, 8)
+        advanced_layout.setSpacing(7)
         self._advanced_panel.setMinimumWidth(260)
         self._advanced_panel.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
         advanced_title = QLabel(self._tr("ADVANCED TELEMETRY"))
-        advanced_title.setFont(QFont(FONT_MONO, 7, QFont.Weight.Bold))
-        advanced_title.setStyleSheet(f"color:{C.PRI}; background:transparent;")
+        advanced_title.setFont(QFont(FONT_MONO, 8, QFont.Weight.Bold))
+        advanced_title.setStyleSheet(
+            f"color:{C.PRI}; background:transparent; letter-spacing:1px;"
+        )
         advanced_layout.addWidget(advanced_title)
 
         self._advanced_labels = {}
@@ -10253,23 +10255,31 @@ class MainWindow(QMainWindow):
         telemetry_grid.setVerticalSpacing(4)
         for index, (key, caption_text) in enumerate(advanced_rows):
             card = QFrame()
+            card.setObjectName(f"TelemetryCard_{key}")
+            card.setMinimumHeight(43)
             card.setStyleSheet(
-                f"QFrame {{ background:{C.PANEL}; border:1px solid {C.BORDER}; "
-                f"border-radius:5px; }}"
+                f"QFrame#TelemetryCard_{key} {{ background:{C.PANEL2}; "
+                f"border:1px solid {C.BORDER}; border-left:2px solid {C.PRI_DIM}; "
+                f"border-radius:6px; }}"
             )
             card_layout = QVBoxLayout(card)
-            card_layout.setContentsMargins(6, 4, 6, 4)
-            card_layout.setSpacing(2)
+            card_layout.setContentsMargins(8, 5, 7, 5)
+            card_layout.setSpacing(4)
             caption = QLabel(self._tr(caption_text))
-            caption.setFont(QFont(FONT_MONO, 6, QFont.Weight.Bold))
-            caption.setStyleSheet(f"color:{C.TEXT_DIM}; background:transparent;")
+            caption.setFont(QFont(FONT_MONO, 7, QFont.Weight.Bold))
+            caption.setStyleSheet(
+                f"color:{C.PRI}; background:transparent; border:none; "
+                f"letter-spacing:1px;"
+            )
             card_layout.addWidget(caption)
             value = QLabel("Collecting telemetry…")
             value.setObjectName(f"advanced_{key}")
             value.setWordWrap(True)
             value.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-            value.setFont(QFont(FONT_MONO, 7))
-            value.setStyleSheet(f"color:{C.TEXT}; background:transparent;")
+            value.setFont(QFont(FONT_MONO, 8))
+            value.setStyleSheet(
+                f"color:{C.TEXT}; background:transparent; border:none;"
+            )
             card_layout.addWidget(value)
             self._advanced_labels[key] = value
             telemetry_grid.addWidget(card, index // 2, index % 2)
@@ -10281,7 +10291,7 @@ class MainWindow(QMainWindow):
             self._tr("UPLOAD"),
             primary_label=self._tr("DOWNLOAD"),
         )
-        self._network_trend_chart.setMinimumHeight(92)
+        self._network_trend_chart.setMinimumHeight(112)
         advanced_layout.addWidget(self._network_trend_chart)
 
         self._disk_trend_chart = MetricTrendChart(
@@ -10290,11 +10300,16 @@ class MainWindow(QMainWindow):
             self._tr("WRITE"),
             primary_label=self._tr("READ"),
         )
-        self._disk_trend_chart.setMinimumHeight(92)
+        self._disk_trend_chart.setMinimumHeight(112)
         chart_row = QHBoxLayout()
-        chart_row.setSpacing(5)
-        chart_row.addWidget(self._network_trend_chart, 1)
-        chart_row.addWidget(self._disk_trend_chart, 1)
+        chart_row.setContentsMargins(0, 2, 0, 0)
+        chart_row.setSpacing(7)
+        for chart in (self._network_trend_chart, self._disk_trend_chart):
+            chart.setStyleSheet(
+                f"QWidget {{ background:{C.PANEL2}; border:1px solid {C.BORDER}; "
+                f"border-radius:6px; }}"
+            )
+            chart_row.addWidget(chart, 1)
         advanced_layout.addLayout(chart_row)
         self._advanced_panel.hide()
         gauge_layout.addWidget(self._advanced_panel, 1)
