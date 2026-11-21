@@ -2,7 +2,7 @@
 from __future__ import annotations
 import json
 from PyQt6.QtCore import Qt, QObject, QRunnable, QThreadPool, pyqtSignal
-from PyQt6.QtWidgets import QWidget,QVBoxLayout,QHBoxLayout,QLabel,QPushButton,QLineEdit,QTextEdit,QListWidget,QListWidgetItem,QMessageBox,QInputDialog
+from PyQt6.QtWidgets import QWidget,QVBoxLayout,QHBoxLayout,QLabel,QPushButton,QLineEdit,QTextEdit,QListWidget,QListWidgetItem,QMessageBox,QInputDialog,QLineEdit
 from core.connected_apps.models import AppDescriptor,TransportType
 from core.connected_apps.registry import registry
 from core.connected_apps.service import service
