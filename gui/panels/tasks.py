@@ -888,7 +888,7 @@ class TaskPanel(QWidget):
                 delete = QPushButton("Delete")
                 delete.setToolTip("Delete task and its files")
                 delete.setMaximumHeight(22)
-                delete.clicked.connect(lambda _checked=False, tid=task_id: self.delete_task_requested.emit(tid))
+                delete.clicked.connect(lambda _checked=False, tid=task_id: self._confirm_delete_task(tid))
                 mini_actions.addWidget(delete)
             mini_actions.addStretch(1)
             card_layout.addLayout(mini_actions)
@@ -906,6 +906,20 @@ class TaskPanel(QWidget):
         terminal = selected_task.get("status") not in _ACTIVE
         self.delete_button.setEnabled(bool(selected_task) and terminal)
         self.clear_history_button.setEnabled(any(t.get("status") not in _ACTIVE for t in all_tasks))
+
+    def _confirm_delete_task(self, tid):
+        task = self._tasks.get(str(tid), {})
+        if not tid or task.get("status") in _ACTIVE:
+            return
+        title = str(task.get("title") or task.get("task") or tid)
+        answer = QMessageBox.question(
+            self, "Delete task",
+            f"Permanently delete '{title}' and its task data/report?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer == QMessageBox.StandardButton.Yes:
+            self.delete_task_requested.emit(str(tid))
 
     def _delete_selected(self):
         tid = self.selected_task_id()
