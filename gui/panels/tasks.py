@@ -446,9 +446,9 @@ class TaskPanel(QWidget):
             lines = [f"ACTIVE BACKGROUND TASKS · {len(active)}"]
             for task in active[:3]:
                 status = str(task.get("status") or "active").upper()
-                progress = int(self._progress(task))
+                progress = self._progress(task)
                 title = str(task.get("title") or task.get("task") or "Untitled task").replace("\n", " ")
-                lines.append(f"• {title[:48]} — {status} · {progress}%")
+                lines.append(f"• {title[:48]} — {status} · {progress:g}%")
             if len(active) > 3:
                 lines.append(f"+ {len(active) - 3} more")
             summary = "\n".join(lines)
