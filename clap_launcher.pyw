@@ -336,8 +336,8 @@ def main() -> int:
         refresh()
 
     # Instant standby was never integrated with main.py's lifecycle and could
-    # start a second live assistant. It is intentionally disabled until a real
-    # GUI-only standby protocol exists.
+    # start a second live assistant. It remains disabled until a GUI-only
+    # standby protocol exists.
     def standby_alive() -> bool:
         return False
 
@@ -381,7 +381,7 @@ def main() -> int:
                    f"Details: {LOG_DIR / 'jarvis.log'}", 6000, critical=True)
             state.update(child=None, running=False, launched_at=0.0)
             open_mic()
-            ensure_standby()
+            # No standby process is used.
 
     def on_clap() -> None:
         log("pattern heard")
@@ -405,8 +405,7 @@ def main() -> int:
         if busy["checking"]:
             return
         busy["checking"] = True
-        sb = state["standby"]
-        exclude = {sb.pid} if sb is not None else set()
+        exclude = set()
 
         def work():
             try:
@@ -433,12 +432,11 @@ def main() -> int:
         if (was or (child is not None and child.poll() is not None)) and not state["closed_at"]:
             state["closed_at"] = time.monotonic()
             state["child"] = None
-            ensure_standby()              # the copy loads now; listening waits
+            # Re-arm after JARVIS closes.
         if time.monotonic() - (state["closed_at"] or 0.0) >= _REARM_S:
             state["closed_at"] = 0.0
             open_mic()
-            ensure_standby()
-        refresh()
+            refresh()
 
     bridge.running.connect(apply)
     timer = QTimer()
@@ -496,7 +494,7 @@ def main() -> int:
             if line == "status":
                 reply = json.dumps({"listening": state["stream"] is not None,
                                     "paused": state["paused"], "jarvis": state["running"],
-                                    "pattern": pattern(), "preloaded": standby_alive(),
+                                    "pattern": pattern(), "preloaded": False,
                                     "text": status_text()})
             elif line == "show":
                 notify(f"{status_text()}. To stop it: right-click this icon -> Quit, "
@@ -604,7 +602,7 @@ def main() -> int:
             pass
         refresh()
 
-    app.aboutToQuit.connect(stop_standby)
+    app.aboutToQuit.connect(lambda: None)
     tray.show()
 
     state["running"] = jarvis_running()
