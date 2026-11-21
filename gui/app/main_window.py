@@ -13614,7 +13614,14 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                 else:
                     program = shutil.which("pwsh") or shutil.which("powershell.exe")
                     if program:
-                        arguments = ["-NoLogo", "-NoProfile", "-NoExit"]
+                        clear_host = (
+                            "function Clear-Host { "
+                            "[Console]::Write([char]27 + '[2J' + [char]27 + '[H') "
+                            "}; function clear { Clear-Host }; function cls { Clear-Host }"
+                        )
+                        arguments = [
+                            "-NoLogo", "-NoProfile", "-NoExit", "-Command", clear_host
+                        ]
                     else:
                         program = os.environ.get("COMSPEC") or shutil.which("cmd.exe")
                         if not program:
