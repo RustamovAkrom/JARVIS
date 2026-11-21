@@ -1,5 +1,6 @@
 """AI-facing Connected Apps tool discovery and guarded execution."""
 from __future__ import annotations
+import threading
 from typing import Any
 from core import confirm
 from core.connected_apps.service import service
