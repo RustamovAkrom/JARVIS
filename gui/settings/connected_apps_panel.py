@@ -94,21 +94,12 @@ class ConnectedAppsPanel(QWidget):
         worker.signals.finished.connect(self._connected);self.pool.start(worker)
 
     def connect_selected(self):
-        cid=self.selected_id();row=service.store.get_connection(cid) if cid else None
-        if not row:return
-        meta=row.get("metadata",{})
-        descriptor=registry.get(row.get("app_id"))
-        if not descriptor:
-            if meta.get("transport")=="http" and meta.get("endpoint"):
-                descriptor=AppDescriptor(id=row["app_id"],name=row["display_name"],source="stored",
-                    transport=TransportType.HTTP,endpoint=meta["endpoint"])
-            elif meta.get("command"):
-                descriptor=AppDescriptor(id=row["app_id"],name=row["display_name"],source="stored",
-                    transport=TransportType.STDIO,command=meta["command"],args=meta.get("args",[]))
-            else:
-                QMessageBox.information(self,"Reconnect","Saved server configuration is unavailable.");return
-        if descriptor.transport==TransportType.HTTP:self._connect_http_descriptor(descriptor,cid)
-        else:self._connect_descriptor(descriptor,cid)
+        cid=self.selected_id()
+        if not cid:return
+        self.status.setText("Reconnecting…")
+        worker=_Worker(lambda:service.reconnect(cid))
+        worker.signals.finished.connect(self._connected)
+        self.pool.start(worker)
 
     def _connected(self,row,error):
         self.status.setText(f"Connection failed: {error}" if error else
