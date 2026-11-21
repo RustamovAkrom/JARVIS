@@ -54,4 +54,4 @@ class ConnectedAppsAgent:
             detail=f"Execute tool {tool_name} with arguments:\n\n{args!r}",
             run=lambda: str(service.call_tool(connection_id,tool_name,args)))
 
-agent=ConnectedAppsAgent()
+agent=ConnectedAppsAgent(service)
