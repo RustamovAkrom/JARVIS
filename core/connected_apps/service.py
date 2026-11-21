@@ -27,7 +27,7 @@ class ConnectedAppsService:
         connection_id=connection_id or secrets.token_urlsafe(16)
         row=AppConnection(id=connection_id,app_id=descriptor.id,
             display_name=display_name or descriptor.name,status=ConnectionStatus.CONNECTING,
-            auth_type=descriptor.auth_type,scopes=list(descriptor.scopes),created_at=time.time())
+            auth_type=descriptor.auth_type,scopes=list(descriptor.scopes),created_at=time.time(),metadata={"command":descriptor.command,"args":list(descriptor.args),"transport":descriptor.transport.value if descriptor.transport else "stdio"})
         data=_serialize(row); self.store.upsert_connection(data)
         try:
             tools=runtime.connect_stdio(connection_id,descriptor.command,descriptor.args,descriptor.env)
