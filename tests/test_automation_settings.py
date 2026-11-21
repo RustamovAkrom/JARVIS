@@ -53,3 +53,22 @@ def test_routine_settings_list_toggle_remove_and_quiet(monkeypatch):
     page.quiet_hours.setText("22:00-07:00")
     page.save_quiet_hours()
     assert engine.quiet=="22:00-07:00"
+
+
+def test_clap_launcher_controls_persist_config(monkeypatch, tmp_path):
+    app = QApplication.instance() or QApplication([])
+    monkeypatch.setattr(config, "CONFIG_FILE", tmp_path / "api_keys.json")
+    monkeypatch.setattr(config, "CONFIG_DIR", tmp_path)
+    monkeypatch.setattr(AutomationSettingsPage, "_clap_executable", lambda self: None)
+    monkeypatch.setattr(AutomationSettingsPage, "_clap_running", lambda self: False)
+
+    page = AutomationSettingsPage()
+    assert not page.clap_enabled.isEnabled()
+    assert page.clap_download.isVisible() is False  # page is not shown in this test
+
+    page.clap_pattern.setCurrentIndex(page.clap_pattern.findData(1))
+    page.clap_sensitivity.setCurrentIndex(page.clap_sensitivity.findData("high"))
+
+    saved = config.get_clap_launcher()
+    assert saved["claps"] == 1
+    assert saved["sensitivity"] == "high"
