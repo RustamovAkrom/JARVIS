@@ -40,3 +40,27 @@ def test_task_history_is_not_pruned_on_create(tmp_path):
     for index in range(105):
         store.create(_task(f"done-{index}", "done"))
     assert len(store.all()) == 105
+
+
+def test_task_workspace_is_separate_from_metadata(tmp_path):
+    metadata = tmp_path / "tasks" / "database"
+    workspaces = tmp_path / "tasks" / "workspaces"
+    store = TaskStore(metadata, workspaces_dir=workspaces)
+    store.create(_task("task-1", "queued"))
+    workspace = store.workdir("task-1")
+    assert workspace == workspaces / "task-1"
+    workspace.mkdir(parents=True)
+    (workspace / "generated.txt").write_text("result", encoding="utf-8")
+    assert (metadata / "task-1.json").is_file()
+    assert (workspace / "generated.txt").read_text(encoding="utf-8") == "result"
+
+
+def test_task_store_rejects_path_like_ids(tmp_path):
+    store = TaskStore(tmp_path)
+    for task_id in ("../outside", "nested/task", ".", ".."):
+        try:
+            store.workdir(task_id)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"path-like task ID accepted: {task_id}")
