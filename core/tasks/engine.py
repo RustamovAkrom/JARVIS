@@ -472,7 +472,7 @@ class TaskEngine:
             self._account(tid, used_s, rounds)
 
     def execute_tool_once(self, tid: str, round_key: str, name: str,
-                          args: dict, execute) -> str:
+                          args: dict, execute):
         """Persist tool intent/results to avoid replaying side effects after restart.
 
         This provides conservative at-most-once recovery: a completed invocation
@@ -492,7 +492,14 @@ class TaskEngine:
         previous = ledger.get(operation_id)
         if previous:
             if previous.get("status") == "completed":
-                return str(previous.get("result") or "")
+                saved = previous.get("result")
+                return tuple(saved) if isinstance(saved, list) else saved
+            self.store.mutate(
+                tid,
+                lambda current: current.setdefault("tool_ledger", {})
+                .get(operation_id, {})
+                .update(status="uncertain", recovered_at=self._clock()),
+            )
             return (
                 "[NOT RE-EXECUTED] This tool call was started before an interruption, "
                 "but its completion was not persisted. Its side effects are unknown. "
@@ -520,7 +527,7 @@ class TaskEngine:
 
         self.store.mutate(tid, mark_started)
         try:
-            result = str(execute() or "")
+            result = execute()
         except Exception as exc:
             self.store.mutate(
                 tid,
@@ -534,7 +541,12 @@ class TaskEngine:
             )
             raise
 
-        stored_result = result[:_TOOL_LEDGER_RESULT_CAP]
+        if isinstance(result, str):
+            stored_result = result[:_TOOL_LEDGER_RESULT_CAP]
+        else:
+            # Research control tools return small tuples (message, closed); keep
+            # their JSON-compatible shape so a resumed round sees the same value.
+            stored_result = json.loads(json.dumps(result, ensure_ascii=False, default=str))
 
         def mark_completed(current):
             entry = current.setdefault("tool_ledger", {}).get(operation_id)
