@@ -45,10 +45,13 @@ import time
 import traceback
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
+FROZEN = bool(getattr(sys, "frozen", False))
+ROOT = Path(sys.executable).resolve().parent if FROZEN else Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
-LOG_DIR = ROOT / "logs"
-LOG_DIR.mkdir(exist_ok=True)
+from core.runtime_paths import PATHS
+
+LOG_DIR = PATHS.logs_dir
+LOG_DIR.mkdir(parents=True, exist_ok=True)
 _LOG = LOG_DIR / "clap_launcher.log"
 _REARM_S = 8.0          # after JARVIS closes, this long before listening again:
                         # talking while closing it must not start it straight back
@@ -71,7 +74,9 @@ def log(msg: str) -> None:
 
 # ── platform ──────────────────────────────────────────────────────────────────
 def python_exe() -> str:
-    """The interpreter to start JARVIS with — pythonw on Windows (no console)."""
+    """Interpreter for source runs; packaged runs use the sibling JARVIS.exe."""
+    if FROZEN:
+        return str(ROOT / "JARVIS.exe")
     exe = Path(sys.executable)
     if sys.platform == "win32":
         w = exe.with_name("pythonw.exe")
@@ -89,12 +94,23 @@ def jarvis_running(exclude=()) -> bool:
     pids that do not count. The launcher no longer creates a second standby JARVIS."""
     import psutil
     main = os.path.normcase(str(ROOT / "main.py"))
+    jarvis_exe = os.path.normcase(str(ROOT / "JARVIS.exe"))
     root = os.path.normcase(str(ROOT))
     # Names first: asking every process for its command line and folder took
     # 1.6 s on Windows; only the Python processes are asked.
     for p in psutil.process_iter(["name"]):
         try:
-            if p.pid in exclude or not (p.info.get("name") or "").lower().startswith("python"):
+            if p.pid in exclude:
+                continue
+            name = (p.info.get("name") or "").lower()
+            if FROZEN and name == "jarvis.exe":
+                try:
+                    if os.path.normcase(p.exe()) == jarvis_exe:
+                        return True
+                except Exception:
+                    pass
+                continue
+            if not name.startswith("python"):
                 continue
             cmd = [os.path.normcase(str(c)) for c in p.cmdline()]
             if main in cmd:
@@ -129,7 +145,7 @@ class Autostart:
 
     @classmethod
     def set(cls, on: bool) -> None:
-        script = str(ROOT / "clap_launcher.pyw")
+        script = str(Path(sys.executable).resolve() if FROZEN else ROOT / "clap_launcher.pyw")
         if sys.platform == "win32":
             import winreg
             with winreg.OpenKey(winreg.HKEY_CURRENT_USER,
@@ -186,6 +202,15 @@ def open_file(path: Path) -> None:
 
 # ── the program ───────────────────────────────────────────────────────────────
 def main() -> int:
+    if "--smoke-test" in sys.argv:
+        from core.clap import ClapDetector
+        from memory.config_manager import get_clap_launcher
+
+        settings = get_clap_launcher()
+        detector = ClapDetector(claps=settings["claps"])
+        print(f"JARVIS Clap Launcher smoke test passed (claps={settings['claps']}).")
+        return 0
+
     from PyQt6.QtCore import QObject, QTimer, pyqtSignal
     from PyQt6.QtGui import QAction, QActionGroup, QIcon
     from PyQt6.QtNetwork import QLocalServer
@@ -348,8 +373,9 @@ def main() -> int:
         close_mic("starting JARVIS")
         try:
             out = _out(f"started by {source}")
+            command = [python_exe()] if FROZEN else [python_exe(), str(ROOT / "main.py")]
             state["child"] = subprocess.Popen(
-                [python_exe(), str(ROOT / "main.py")], cwd=str(ROOT), env=_env(False),
+                command, cwd=str(ROOT), env=_env(False),
                 stdout=out, stderr=subprocess.STDOUT, **_no_window())
             out.close()             # the child holds its own handle
             state["launched_at"] = time.monotonic()
