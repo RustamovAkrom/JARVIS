@@ -99,8 +99,9 @@ TOOL = {
     "name": "background_tasks",
     "description": (
         "Run longer, read-only web research in the background while the conversation continues. "
-        "Use start with the user's research question; the completed report appears in the content "
-        "panel. Use list, status, result, or cancel to manage tasks. For a quick answer, use "
+        "Use start with the user's research question; the task appears in the Tasks panel and "
+        "a report file is saved when available. Use list, status, result, or cancel to manage tasks. "
+        "For a quick answer, use "
         "web_search instead. This tool cannot control the computer or modify files."
     ),
     "tier": "core",
