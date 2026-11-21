@@ -837,6 +837,7 @@ class TaskPanel(QWidget):
         )
         if self.stats_label.text() != stats:
             self.stats_label.setText(stats)
+        self.stats_label.setVisible(bool(all_tasks))
         self.list_widget.clear()
         for task in rows:
             status = str(task.get("status") or "unknown").upper()
