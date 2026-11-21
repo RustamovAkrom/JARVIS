@@ -153,10 +153,10 @@ class ConversationMemoryPage(QWidget):
             self.refresh()
             return
 
-        self.status.setText(
-            f"Conversation archive cleared. Deleted {deleted_recall_files} local recall file(s)."
-        )
         self.refresh()
+        self.status.setText(
+            f"All chats deleted. Removed {deleted_recall_files} local recall file(s)."
+        )
 
     def refresh(self) -> None:
         stats = conversations.stats()
