@@ -500,11 +500,12 @@ class TaskEngine:
                 .get(operation_id, {})
                 .update(status="uncertain", recovered_at=self._clock()),
             )
-            return (
+            warning = (
                 "[NOT RE-EXECUTED] This tool call was started before an interruption, "
                 "but its completion was not persisted. Its side effects are unknown. "
                 "Verify the outcome manually; do not repeat the operation automatically."
             )
+            return (warning, False) if name == "subquestion_done" else warning
 
         now = self._clock()
 
@@ -528,6 +529,8 @@ class TaskEngine:
         self.store.mutate(tid, mark_started)
         try:
             result = execute()
+            if result is None:
+                result = ""
         except Exception as exc:
             self.store.mutate(
                 tid,
