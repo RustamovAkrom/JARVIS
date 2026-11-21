@@ -174,9 +174,13 @@ class TaskEngine:
             for flags in self._flags.values():
                 flags["halt"] = True
             workers = list(self._workers.values())
-        deadline = time.monotonic() + wait
+        deadline = time.monotonic() + max(0.0, wait)
+        scheduler = self._thread
+        if scheduler is not None and scheduler is not threading.current_thread():
+            scheduler.join(max(0.0, deadline - time.monotonic()))
         for th in workers:
-            th.join(max(0.0, deadline - time.monotonic()))
+            if th is not threading.current_thread():
+                th.join(max(0.0, deadline - time.monotonic()))
 
     def _recover(self) -> None:
         for t in self.store.all():
