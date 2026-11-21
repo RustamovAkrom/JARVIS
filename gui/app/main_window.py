@@ -9274,6 +9274,46 @@ class MainWindow(QMainWindow):
         # display-only). Everything else lands here as a last resort.
         return home / "Desktop"
 
+    def _open_clap_launcher(self):
+        """Start or bring forward the optional double-clap launcher."""
+        script = PATHS.resource_root / "clap_launcher.pyw"
+        if not script.is_file():
+            QMessageBox.warning(
+                self,
+                self._tr("Double-clap activation"),
+                self._tr("The clap launcher is not installed in this build."),
+            )
+            return
+
+        try:
+            from core import clap_ipc
+
+            if clap_ipc.ask("show", timeout_ms=300) == "ok":
+                self.write_log("SYS: Double-clap launcher is already running.")
+                return
+        except Exception:
+            pass
+
+        python = Path(sys.executable)
+        if platform.system() == "Windows":
+            pythonw = python.with_name("pythonw.exe")
+            if pythonw.exists():
+                python = pythonw
+
+        try:
+            subprocess.Popen(
+                [str(python), str(script)],
+                cwd=str(PATHS.resource_root),
+                **_WIN_HIDE,
+            )
+            self.write_log("SYS: Double-clap launcher started.")
+        except Exception as exc:
+            QMessageBox.warning(
+                self,
+                self._tr("Double-clap activation"),
+                self._tr("Could not start the clap launcher: {error}", error=str(exc)),
+            )
+
     def _create_desktop_shortcut(self):
         """
         Create a desktop shortcut on Windows / macOS / Linux.
@@ -10763,6 +10803,16 @@ class MainWindow(QMainWindow):
         remote_btn.clicked.connect(self._open_remote)
         remote_btn.setToolTip(self._tr("Open a temporary control link for your phone."))
         lay.addWidget(remote_btn)
+
+        clap_btn = QPushButton(self._tr("Double-clap activation"))
+        _icon_button(clap_btn, "power.svg")
+        clap_btn.setFixedHeight(26)
+        clap_btn.setFont(QFont(FONT_MONO, 7))
+        clap_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        clap_btn.setStyleSheet(_BTN_STYLE_DIM)
+        clap_btn.clicked.connect(self._open_clap_launcher)
+        clap_btn.setToolTip(self._tr("Run the background double-clap launcher."))
+        lay.addWidget(clap_btn)
 
         sc_btn = QPushButton(self._tr("Create desktop shortcut"))
         _icon_button(sc_btn, "shortcut.svg")
