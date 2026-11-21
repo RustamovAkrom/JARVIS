@@ -480,7 +480,6 @@ Investigate ONE question from the plan.
   recorded, or when searching only repeats what you have. Then call subquestion_done.
 - Only recorded findings reach the report. Do not write the report here.""")
         decls = self.tools.declarations() + [FINDING_DECL, DONE_DECL]
-        seen: dict[str, str] = {}
         wrap_rounds = 0
         while True:
             self._check()
@@ -514,6 +513,8 @@ Investigate ONE question from the plan.
                 self._progress(reply["text"])
 
             results, closed = [], False
+            batch_results: dict[str, str] = {}
+            round_key = f"research:{sid}:{len(turns) - 1}"
             for call in calls:
                 if self.flags["cancel"] or self.flags["halt"]:
                     break
@@ -523,11 +524,19 @@ Investigate ONE question from the plan.
                 elif name == "subquestion_done":
                     res, closed = self._close(sid, args, wrap, spent_here / max(1.0, allot_s))
                 else:
-                    sig = name + json.dumps(args, sort_keys=True, ensure_ascii=False)
-                    if sig not in seen:
+                    sig = name + json.dumps(
+                        args, sort_keys=True, ensure_ascii=False, default=str
+                    )
+                    if sig not in batch_results:
                         self.e._event(self.tid, "tool", f"{name} {self.e._arg_hint(args)}")
-                        seen[sig] = self.tools.execute(name, args)
-                    res = seen[sig]
+                        batch_results[sig] = self.e.execute_tool_once(
+                            self.tid,
+                            round_key,
+                            name,
+                            args,
+                            lambda name=name, args=args: self.tools.execute(name, args),
+                        )
+                    res = batch_results[sig]
                 results.append({"id": call["id"], "name": name, "result": res})
             if len(results) < len(calls):
                 turns.pop()
