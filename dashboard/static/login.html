@@ -68,10 +68,10 @@
   </main>
   <script>
     const inp=document.getElementById('key'),err=document.getElementById('err'),btn=document.getElementById('connect'),progress=document.getElementById('progress'),card=document.getElementById('card');
-    const VALID=/^[A-HJ-NP-Z2-9]{8}$/;
+    const VALID=/^[A-HJKMNP-Z2-9]{8}$/;
     inp.focus();
     inp.addEventListener('input',()=>{
-      inp.value=inp.value.toUpperCase().replace(/[^A-Z0-9]/g,'').replace(/[ILO0]/g,'');
+      inp.value=inp.value.toUpperCase().replace(/[^A-HJKMNP-Z2-9]/g,'');
       progress.style.width=(inp.value.length/8*100)+'%';
       err.textContent='';
       inp.classList.remove('invalid');
