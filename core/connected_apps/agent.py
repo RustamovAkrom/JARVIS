@@ -20,6 +20,76 @@ def _validate_arguments(schema: dict[str,Any], args: dict[str,Any]) -> None:
         if unknown: raise ValueError("Unknown tool arguments: "+", ".join(unknown))
 
 class ConnectedAppsAgent:
+    def __init__(self, app_service=None):
+        self._service = app_service or service
+        self._lock = threading.RLock()
+        self._tasks = {}
+
+    def start(self, app, task, *, say=None):
+        adapter = self._service.get(app)
+        if adapter is None:
+            return f"status=failed app={app} reason=not_connected"
+        key = self._service.normalize(getattr(adapter, "name", app))
+        cancel = threading.Event()
+
+        def worker():
+            try:
+                result = adapter.execute(task, cancel)
+                if say and not cancel.is_set():
+                    say(str(result or "Task completed"))
+            except Exception as exc:
+                if say and not cancel.is_set():
+                    say(f"Connected Apps task failed: {exc}")
+            finally:
+                with self._lock:
+                    if self._tasks.get(key) is cancel:
+                        self._tasks.pop(key, None)
+
+        classifier = getattr(adapter, "requires_confirmation", None)
+        try:
+            requires_confirmation = bool(classifier(task)) if callable(classifier) else True
+        except Exception:
+            requires_confirmation = True
+
+        def launch():
+            with self._lock:
+                if key in self._tasks:
+                    return "status=failed reason=task_already_running"
+                self._tasks[key] = cancel
+            thread = threading.Thread(target=worker, daemon=True, name=f"connected-app-{key}")
+            try:
+                thread.start()
+            except Exception as exc:
+                with self._lock:
+                    self._tasks.pop(key, None)
+                return f"status=failed reason=start_error error={exc}"
+            return "status=done task=started"
+
+        if requires_confirmation:
+            from core import confirm
+            return confirm.request(
+                key=f"connected_apps.{key}",
+                title=f"CONNECTED APP — {app}",
+                detail=f"Allow this task in {app}?\n\n{task}",
+                run=launch,
+            )
+        return launch()
+
+    def stop(self, app=""):
+        key = self._service.normalize(app)
+        with self._lock:
+            if app:
+                adapter = self._service.get(app)
+                key = self._service.normalize(getattr(adapter, "name", app)) if adapter else key
+                cancel = self._tasks.get(key)
+                if not cancel:
+                    return "status=failed reason=no_running_task"
+                cancel.set()
+            else:
+                for cancel in self._tasks.values():
+                    cancel.set()
+        return "status=done cancellation_requested"
+
     def describe_tools(self):
         out=[]
         for connection in service.connections():
