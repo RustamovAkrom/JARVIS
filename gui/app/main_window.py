@@ -9276,12 +9276,33 @@ class MainWindow(QMainWindow):
 
     def _open_clap_launcher(self):
         """Start or bring forward the optional double-clap launcher."""
-        script = PATHS.resource_root / "clap_launcher.pyw"
-        if not script.is_file():
+        frozen = bool(getattr(sys, "frozen", False))
+        if frozen:
+            executable = PATHS.app_root / "JARVISClapLauncher.exe"
+            command = [str(executable)]
+            cwd = PATHS.app_root
+        else:
+            script = PATHS.resource_root / "clap_launcher.pyw"
+            if not script.is_file():
+                QMessageBox.warning(
+                    self,
+                    self._tr("Double-clap activation"),
+                    self._tr("The clap launcher source file is missing."),
+                )
+                return
+            python = Path(sys.executable)
+            if platform.system() == "Windows":
+                pythonw = python.with_name("pythonw.exe")
+                if pythonw.exists():
+                    python = pythonw
+            command = [str(python), str(script)]
+            cwd = PATHS.resource_root
+
+        if frozen and not executable.is_file():
             QMessageBox.warning(
                 self,
                 self._tr("Double-clap activation"),
-                self._tr("The clap launcher is not installed in this build."),
+                self._tr("The clap launcher is not included in this installation."),
             )
             return
 
@@ -9294,16 +9315,10 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
-        python = Path(sys.executable)
-        if platform.system() == "Windows":
-            pythonw = python.with_name("pythonw.exe")
-            if pythonw.exists():
-                python = pythonw
-
         try:
             subprocess.Popen(
-                [str(python), str(script)],
-                cwd=str(PATHS.resource_root),
+                command,
+                cwd=str(cwd),
                 **_WIN_HIDE,
             )
             self.write_log("SYS: Double-clap launcher started.")
