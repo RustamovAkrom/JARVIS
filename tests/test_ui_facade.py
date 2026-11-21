@@ -46,9 +46,13 @@ class UiFacadeTests(unittest.TestCase):
             panel = window._left_panel
             scroll = panel.findChild(QScrollArea)
             self.assertIsNotNone(scroll)
-            self.assertEqual(window._left_tabs.count(), 4)
-            self.assertEqual(window._left_tabs.tabText(2), "ACTIVITY")
-            self.assertEqual(window._left_tabs.tabText(3), "TASKS")
+            # The left rail contains System, Explorer and Activity. Tasks
+            # moved to the central workspace tabs and are not a left-rail tab.
+            self.assertEqual(window._left_tabs.count(), 3)
+            self.assertEqual(window._left_tabs.tabText(0), "SYS")
+            self.assertEqual(window._left_tabs.tabText(1), "EXP")
+            self.assertEqual(window._left_tabs.tabText(2), "ACT")
+            self.assertEqual(window._work_tabs.tabText(2), "TASKS")
             self.assertTrue(window._debug_toggle_btn.isHidden())
             self.assertEqual(
                 window._work_tabs.tabBar().elideMode(),
