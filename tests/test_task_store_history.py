@@ -64,3 +64,24 @@ def test_task_store_rejects_path_like_ids(tmp_path):
             pass
         else:
             raise AssertionError(f"path-like task ID accepted: {task_id}")
+
+
+def test_legacy_task_metadata_and_workspace_migrate_without_overwrite(tmp_path):
+    legacy_root = tmp_path / "tasks"
+    database = legacy_root / "database"
+    workspace_root = legacy_root / "workspaces"
+    legacy_root.mkdir()
+    (legacy_root / "legacy-1.json").write_text('{"id":"legacy-1","status":"done","created":1}', encoding="utf-8")
+    (legacy_root / "legacy-1.turns.json").write_text('[{"role":"assistant","text":"checkpoint"}]', encoding="utf-8")
+    legacy_workspace = legacy_root / "legacy-1"
+    legacy_workspace.mkdir()
+    (legacy_workspace / "result.txt").write_text("legacy result", encoding="utf-8")
+
+    store = TaskStore(database, workspaces_dir=workspace_root)
+
+    assert store.get("legacy-1") is not None
+    assert (database / "legacy-1.json").is_file()
+    assert store.load_turns("legacy-1")[0]["text"] == "checkpoint"
+    migrated_workspace = store.workdir("legacy-1")
+    assert migrated_workspace == workspace_root / "legacy-1"
+    assert (migrated_workspace / "result.txt").read_text(encoding="utf-8") == "legacy result"
