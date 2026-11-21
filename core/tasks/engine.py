@@ -32,7 +32,9 @@ server can each announce it their own way.
 from __future__ import annotations
 
 import json
+import os
 import re
+import tempfile
 import threading
 import time
 import traceback
@@ -478,11 +480,21 @@ class TaskEngine:
     def _complete(self, tid: str, result: str) -> None:
         task = self.store.get(tid)
         report = ""
+        report_error = ""
         try:
             report = str(self._write_report(task, result))
-        except Exception as e:
-            self._log(f"[Tasks] report for {tid} could not be written: {e}")
-        self._finish(tid, "done", result=result[:_RESULT_CAP], report_path=report, report=report)
+        except Exception as exc:
+            report_error = f"{type(exc).__name__}: {exc}"
+            self._log(f"[Tasks] report for {tid} could not be written: {report_error}")
+        self._finish(
+            tid,
+            "done",
+            result=result[:_RESULT_CAP],
+            report_path=report,
+            report=report,
+            report_status="created" if report else "failed",
+            report_error=report_error,
+        )
 
     def _write_report(self, task: dict, result: str) -> Path:
         self.reports_dir.mkdir(parents=True, exist_ok=True)
@@ -498,7 +510,30 @@ class TaskEngine:
                  f"{minutes:.1f} min", "", f"**Task:** {task['task']}", "", "---", "", result.strip(), ""]
         if notes.exists():
             parts += ["", "---", "", "## Working notes", "", notes.read_text(encoding="utf-8").strip(), ""]
-        path.write_text("\n".join(parts), encoding="utf-8")
+        content = "\n".join(parts)
+        fd, temp_name = tempfile.mkstemp(
+            prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent)
+        )
+        temp_path = Path(temp_name)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as stream:
+                stream.write(content)
+                stream.flush()
+                os.fsync(stream.fileno())
+            # Same-directory replacement is atomic. Retry transient Windows locks.
+            for attempt in range(5):
+                try:
+                    os.replace(temp_path, path)
+                    break
+                except PermissionError:
+                    if attempt == 4:
+                        raise
+                    time.sleep(0.05 * (attempt + 1))
+        finally:
+            try:
+                temp_path.unlink(missing_ok=True)
+            except OSError:
+                pass
         return path
 
     def _finish(self, tid: str, status: str, **fields) -> None:
