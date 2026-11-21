@@ -10154,6 +10154,11 @@ class MainWindow(QMainWindow):
         self._project_history.setMinimumWidth(0)
         self._project_history.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._project_history.currentIndexChanged.connect(self._select_recent_project)
+        history_view = self._project_history.view()
+        history_view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        history_view.customContextMenuRequested.connect(
+            self._show_project_history_context_menu
+        )
         project_row.addWidget(self._project_history)
         page_layout.addLayout(project_row)
 
@@ -13287,25 +13292,75 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         if not hasattr(self, "_project_history"):
             return
         from memory.config_manager import get_project_history
+
         current = self._workspace_path
         entries = get_project_history()
         self._project_history.blockSignals(True)
         self._project_history.clear()
         self._project_history.addItem(self._tr("Recent Projects"), "")
         for entry in entries:
-            self._project_history.addItem(entry["name"], entry["path"])
+            path = entry["path"]
+            available = bool(entry.get("available", Path(path).expanduser().is_dir()))
+            label = entry["name"] if available else (
+                f"{entry['name']} — {self._tr('Unavailable')}"
+            )
+            self._project_history.addItem(label, path)
             index = self._project_history.count() - 1
-            self._project_history.setItemData(index, entry["path"], Qt.ItemDataRole.ToolTipRole)
+            tooltip = path if available else (
+                f"{path}\n{self._tr('This folder was moved or deleted. Remove it from history or locate it again.')}"
+            )
+            self._project_history.setItemData(index, tooltip, Qt.ItemDataRole.ToolTipRole)
+            if not available:
+                model_item = self._project_history.model().item(index)
+                if model_item is not None:
+                    model_item.setEnabled(False)
         index = self._project_history.findData(current)
         self._project_history.setCurrentIndex(index if index >= 0 else 0)
         self._project_history.blockSignals(False)
+
+    def _show_project_history_context_menu(self, position):
+        view = self._project_history.view()
+        index = view.indexAt(position)
+        if not index.isValid() or index.row() <= 0:
+            return
+        path = self._project_history.itemData(index.row())
+        if not path:
+            return
+        menu = QMenu(self)
+        remove_action = menu.addAction(self._tr("Remove from Recent Projects"))
+        if menu.exec(view.mapToGlobal(position)) != remove_action:
+            return
+        from memory.config_manager import remove_project_from_history
+
+        remove_project_from_history(path)
+        self._refresh_project_history()
 
     def _select_recent_project(self, index: int):
         if index <= 0 or not hasattr(self, "_project_history"):
             return
         path = self._project_history.itemData(index)
-        if path and path != self._workspace_path:
-            self._set_workspace_path(path)
+        if not path or path == self._workspace_path:
+            return
+        if not Path(path).expanduser().is_dir():
+            QMessageBox.warning(
+                self,
+                self._tr("Project folder unavailable"),
+                self._tr("This project folder no longer exists. Remove the stale history entry or choose another folder."),
+            )
+            self._refresh_project_history()
+            return
+        if self._workspace_path:
+            answer = QMessageBox.question(
+                self,
+                self._tr("Switch project"),
+                self._tr("Switch the active project folder?"),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if answer != QMessageBox.StandardButton.Yes:
+                self._refresh_project_history()
+                return
+        self._set_workspace_path(path)
 
     def _select_workspace_folder(self):
         start = self._workspace_path or str(Path.home())
