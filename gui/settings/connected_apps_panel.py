@@ -29,11 +29,11 @@ class ConnectedAppsPanel(QWidget):
         self.add_http_btn=QPushButton("+ Add HTTP");self.add_http_btn.clicked.connect(self.add_http)
         self.add_oauth_btn=QPushButton("+ Add OAuth");self.add_oauth_btn.clicked.connect(self.add_oauth_http)
         toolbar.addWidget(self.add_stdio_btn);toolbar.addWidget(self.add_http_btn);toolbar.addWidget(self.add_oauth_btn);layout.addLayout(toolbar)
-        self.list=QListWidget();self.list.setObjectName("appsList");self.list.setMinimumHeight(150);self.list.itemSelectionChanged.connect(self.show_selected);layout.addWidget(self.list)
-        self.details=QTextEdit();self.details.setObjectName("appsDetails");self.details.setReadOnly(True);self.details.setMinimumHeight(130);self.details.setMaximumHeight(220);layout.addWidget(self.details)
+        self.list=QListWidget();self.list.setObjectName("appsList");self.list.setMinimumHeight(100);self.list.setMaximumHeight(190);self.list.itemSelectionChanged.connect(self.show_selected);layout.addWidget(self.list)
+        self.details=QTextEdit();self.details.setObjectName("appsDetails");self.details.setReadOnly(True);self.details.setMinimumHeight(100);self.details.setMaximumHeight(170);layout.addWidget(self.details)
         actions=QHBoxLayout();self.connect_btn=QPushButton("Connect / Reconnect");self.connect_btn.clicked.connect(self.connect_selected);self.disconnect_btn=QPushButton("Disconnect");self.disconnect_btn.clicked.connect(self.disconnect_selected);self.remove_btn=QPushButton("Remove");self.remove_btn.clicked.connect(self.remove_selected)
         actions.addWidget(self.connect_btn);actions.addWidget(self.disconnect_btn);actions.addWidget(self.remove_btn);actions.addStretch(1);layout.addLayout(actions);root.addWidget(group)
-        runtime=QGroupBox("MCP runtime");rrow=QHBoxLayout(runtime);self.runtime_status=QLabel();self.runtime_status.setWordWrap(True);rrow.addWidget(self.runtime_status,1);self.runtime_help=QLabel();self.runtime_help.setWordWrap(True);rrow.addWidget(self.runtime_help,1);root.addWidget(runtime)
+        runtime=QGroupBox("MCP runtime");rrow=QVBoxLayout(runtime);rrow.setSpacing(6);self.runtime_status=QLabel();self.runtime_status.setWordWrap(True);rrow.addWidget(self.runtime_status);self.runtime_help=QLabel();self.runtime_help.setWordWrap(True);rrow.addWidget(self.runtime_help);root.addWidget(runtime)
         self.status=QLabel("Ready");self.status.setObjectName("appsStatus");self.status.setWordWrap(True);root.addWidget(self.status);root.addStretch(1)
         self.setStyleSheet("""
         #ConnectedAppsPanel{color:#d9f7f4} #appsTitle{font-size:18px;font-weight:700;letter-spacing:1px;color:#52eee0}
@@ -80,7 +80,7 @@ class ConnectedAppsPanel(QWidget):
         self.details.setPlainText("\n".join(lines))
     @staticmethod
     def _friendly_error(error):
-        if "MCP SDK is missing" in error or "No module named 'mcp'" in error:return "Install MCP support using the button below, then restart JARVIS."
+        if "MCP SDK is missing" in error or "No module named 'mcp'" in error:return "Install the optional Connected Apps dependency with: uv sync --extra connected-apps"
         if "FileNotFoundError" in error:return "Command not found. Install the server runtime and verify executable PATH."
         if "timed out" in error.lower():return "Server did not respond. Check command, network and logs."
         return error
