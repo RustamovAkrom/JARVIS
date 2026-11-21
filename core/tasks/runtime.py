@@ -24,7 +24,12 @@ class TaskRuntime:
         log: Callable[[str], None] = print,
         max_parallel: int = 2,
     ) -> None:
-        root = Path(data_root) / "tasks"
+        tasks_root = Path(data_root) / "tasks"
+        root = tasks_root / "database"
+        workspaces_dir = tasks_root / "workspaces"
+        reports_dir = tasks_root / "reports"
+        for directory in (root, workspaces_dir, reports_dir):
+            directory.mkdir(parents=True, exist_ok=True)
         shipped_agents = Path(resource_root) / "core" / "tasks" / "agents"
         agents_dirs = [shipped_agents]
         if user_agents_dir is not None:
@@ -32,11 +37,12 @@ class TaskRuntime:
 
         self.engine = TaskEngine(
             root=root,
-            reports_dir=root / "reports",
+            reports_dir=reports_dir,
             agents_dirs=agents_dirs,
             notify=notify,
             max_parallel=max_parallel,
             log=log,
+            workspaces_dir=workspaces_dir,
             autostart=True,
         )
         self._closed = False
