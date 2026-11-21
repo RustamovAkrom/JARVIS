@@ -114,7 +114,7 @@ def exchange_code(config: OAuthConfig, code: str, verifier: str, redirect_uri: s
                "client_id":config.client_id, "code_verifier":verifier}
     if config.client_secret:
         payload["client_secret"] = config.client_secret
-    response = httpx.post(config.token_url, data=payload, timeout=30)
+    response = httpx.post(config.token_url, data=payload, headers={"Accept":"application/json"}, timeout=30)
     response.raise_for_status()
     data=response.json()
     if not isinstance(data, dict) or not data.get("access_token"):
@@ -127,7 +127,7 @@ def refresh_tokens(config: OAuthConfig, refresh_token: str) -> dict[str, Any]:
     payload={"grant_type":"refresh_token","refresh_token":refresh_token,"client_id":config.client_id}
     if config.client_secret:
         payload["client_secret"]=config.client_secret
-    response=httpx.post(config.token_url,data=payload,timeout=30)
+    response=httpx.post(config.token_url,data=payload,headers={"Accept":"application/json"},timeout=30)
     response.raise_for_status()
     data=response.json()
     if not isinstance(data,dict) or not data.get("access_token"):
