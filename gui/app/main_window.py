@@ -12888,7 +12888,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
   if(!chunk)return;
   if(queuedBytes+chunk.length>MAX_QUEUED){
    writeQueue.length=0;queuedBytes=0;
-   const warning='\\r\\n[terminal output queue overflow; excess output discarded]\\r\\n';
+   const warning='\r\n[terminal output queue overflow; excess output discarded]\r\n';
    writeQueue.push(warning);queuedBytes=warning.length;
   }else{writeQueue.push(chunk);queuedBytes+=chunk.length;}
   drain();
@@ -13606,7 +13606,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                     clear_host = (
                         "function Clear-Host { "
                         "[Console]::Write([char]27 + '[2J' + [char]27 + '[H') "
-                        "}; Set-Alias cls Clear-Host"
+                        "}; function clear { Clear-Host }; function cls { Clear-Host }"
                     )
                     arguments = [
                         "-NoLogo", "-NoProfile", "-NoExit", "-Command", clear_host
@@ -13628,10 +13628,6 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                 process.setWorkingDirectory(session.cwd)
                 # Make the redirected Windows shell advertise the same VT
                 # capabilities as the xterm.js renderer.
-                process.setProcessEnvironment(
-                    __import__("PyQt6.QtCore", fromlist=["QProcessEnvironment"])
-                    .QProcessEnvironment.systemEnvironment()
-                )
                 process.start(program, arguments)
                 if not process.waitForStarted(3000):
                     detail = process.errorString() or "Windows shell failed to start"
