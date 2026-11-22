@@ -401,3 +401,44 @@ def test_connected_apps_error_redaction_masks_common_credentials():
     assert "refresh" not in message
     assert "password" not in message
     assert "[redacted]" in message
+
+
+@pytest.mark.parametrize("transport", ["stdio", "http", "sse"])
+def test_failed_mcp_connect_closes_stale_runtime_session(monkeypatch, transport):
+    import importlib
+    from core.connected_apps.models import AppDescriptor, TransportType
+    from core.connected_apps.service import ConnectedAppsService
+
+    module = importlib.import_module("core.connected_apps.service")
+
+    class Store:
+        def __init__(self):
+            self.rows = {}
+        def get_connection(self, cid):
+            row = self.rows.get(cid)
+            return dict(row) if row else None
+        def upsert_connection(self, row):
+            self.rows[row["id"]] = dict(row)
+        def list_connections(self):
+            return list(self.rows.values())
+
+    store = Store()
+    svc = ConnectedAppsService(store=store)
+    disconnected = []
+    monkeypatch.setattr(module.runtime, "disconnect", lambda cid: disconnected.append(cid))
+    def fail(*args, **kwargs):
+        raise RuntimeError("connection failed")
+    if transport == "stdio":
+        monkeypatch.setattr(module.runtime, "connect_stdio", fail)
+        descriptor = AppDescriptor(id="demo", name="Demo", transport=TransportType.STDIO, command="python")
+        result = svc.connect_stdio(descriptor, connection_id="c1")
+    elif transport == "http":
+        monkeypatch.setattr(module.runtime, "connect_http", fail)
+        descriptor = AppDescriptor(id="demo", name="Demo", transport=TransportType.HTTP, endpoint="https://example.com/mcp")
+        result = svc.connect_http(descriptor, connection_id="c1")
+    else:
+        monkeypatch.setattr(module.runtime, "connect_sse", fail)
+        descriptor = AppDescriptor(id="demo", name="Demo", transport=TransportType.SSE, endpoint="https://example.com/mcp")
+        result = svc.connect_sse(descriptor, connection_id="c1")
+    assert result["status"] == "error"
+    assert disconnected == ["c1"]
