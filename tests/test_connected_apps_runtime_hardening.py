@@ -294,3 +294,32 @@ def test_health_check_does_not_change_disconnected_connection(monkeypatch):
     assert result["healthy"] is False
     assert result["status"] == "disconnected"
     assert store.get_connection("c1")["status"] == "disconnected"
+
+def test_connected_apps_enable_disable_lifecycle(monkeypatch):
+    import importlib
+    module = importlib.import_module("core.connected_apps.service")
+    from core.connected_apps.service import ConnectedAppsService
+
+    class Store:
+        def __init__(self):
+            self.rows = {"c1": {"id": "c1", "app_id": "demo", "display_name": "Demo",
+                "status": "connected", "enabled": True, "metadata": {"transport": "stdio"},
+                "last_error": "", "updated_at": 0}}
+        def get_connection(self, cid):
+            return dict(self.rows[cid]) if cid in self.rows else None
+        def upsert_connection(self, row):
+            self.rows[row["id"]] = dict(row)
+        def list_connections(self):
+            return list(self.rows.values())
+
+    store = Store()
+    svc = ConnectedAppsService(store=store)
+    disconnected = []
+    monkeypatch.setattr(module.runtime, "disconnect", lambda cid: disconnected.append(cid))
+    result = svc.set_enabled("c1", False)
+    assert result["enabled"] is False
+    assert result["status"] == "disconnected"
+    assert disconnected == ["c1"]
+    result = svc.set_enabled("c1", True, reconnect=False)
+    assert result["enabled"] is True
+    assert result["status"] == "disconnected"
