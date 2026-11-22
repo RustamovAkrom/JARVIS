@@ -397,10 +397,17 @@ class ConnectedAppsService:
         return self.reconnect(cid) if reconnect else row
 
     def disconnect(self, cid):
-        runtime.disconnect(cid)
         row = self.store.get_connection(cid)
         if not row:
             return False
+        try:
+            runtime.disconnect(cid)
+        except Exception as exc:
+            row["status"] = ConnectionStatus.ERROR.value
+            row["last_error"] = _safe_error(exc)
+            row["updated_at"] = time.time()
+            self.store.upsert_connection(row)
+            raise RuntimeError(f"Disconnect failed: {row['last_error']}") from exc
         row["status"] = ConnectionStatus.DISCONNECTED.value
         row["last_error"] = ""
         row["updated_at"] = time.time()
