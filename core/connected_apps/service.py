@@ -31,7 +31,7 @@ def _safe_error(exc: Exception) -> str:
     )
     text = re.sub(r"(?i)(://[^:/@]+:)[^@]+@", r"\1[redacted]@", text)
     text = re.sub(r"(?i)(https?://)[^/@\s]+@", r"\1[redacted]@", text)
-    return f"{type(exc).__name__}: {text[:500]}
+    return f"{type(exc).__name__}: {text[:500]}"
 
 class ConnectedAppsService:
     def __init__(self, app_registry=None, store=None):
