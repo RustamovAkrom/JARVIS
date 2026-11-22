@@ -155,7 +155,12 @@ class MCPRuntime:
                     pass
             return tools
         except BaseException:
-            await stack.aclose()
+            # Preserve the original connect/initialize failure. A transport
+            # cleanup error must not replace the actionable root cause.
+            try:
+                await stack.aclose()
+            except BaseException:
+                logger.warning("MCP transport cleanup failed after connection error", exc_info=True)
             raise
 
     def connect_stdio(self, cid, command, args=None, env=None):
