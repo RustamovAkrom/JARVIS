@@ -2,7 +2,7 @@
 from __future__ import annotations
 import json
 from PyQt6.QtCore import Qt, QObject, QRunnable, QThreadPool, pyqtSignal
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QTextEdit, QListWidget, QListWidgetItem, QMessageBox, QInputDialog, QGroupBox, QCheckBox, QApplication, QFrame, QMenu
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QTextEdit, QListWidget, QListWidgetItem, QMessageBox, QInputDialog, QGroupBox, QCheckBox, QApplication, QFrame, QMenu, QTabWidget, QDialog, QDialogButtonBox
 from core.connected_apps.models import AppDescriptor, TransportType
 from core.connected_apps.service import service
 
@@ -75,7 +75,7 @@ class ConnectedAppsPanel(QWidget):
         self.native_list.setMaximumHeight(120)
         self.native_list.itemSelectionChanged.connect(self._native_selection_changed)
         native_layout.addWidget(self.native_list)
-        root.addWidget(native_group)
+        # Apps and MCP are placed into peer tabs below.
 
         mcp_group=QGroupBox("MCP Servers")
         mcp_layout=QVBoxLayout(mcp_group)
@@ -135,7 +135,12 @@ class ConnectedAppsPanel(QWidget):
         self.list.setMaximumHeight(170)
         self.list.itemSelectionChanged.connect(self.show_selected)
         mcp_layout.addWidget(self.list)
-        root.addWidget(mcp_group)
+        # Keep Apps and MCP Servers at the same navigation level.
+        self.sections=QTabWidget()
+        self.sections.setObjectName("connectedAppsSections")
+        self.sections.addTab(native_group,"Apps")
+        self.sections.addTab(mcp_group,"MCP Servers")
+        root.addWidget(self.sections,1)
 
         details_group=QGroupBox("Connection details")
         details_layout=QVBoxLayout(details_group)
@@ -183,6 +188,13 @@ class ConnectedAppsPanel(QWidget):
         self.auto_read_checkbox.setToolTip("Only tools marked read-only and non-destructive by the MCP server can run without confirmation. Enable only for servers you trust.")
         self.auto_read_checkbox.toggled.connect(self._set_auto_read)
         details_layout.addWidget(self.auto_read_checkbox)
+        self.details_group=details_group
+        self.details_group.setVisible(False)
+        self.details_toggle=QPushButton("Show connection details and permissions")
+        self.details_toggle.setCheckable(True)
+        self.details_toggle.setObjectName("detailsToggle")
+        self.details_toggle.toggled.connect(self.details_group.setVisible)
+        root.addWidget(self.details_toggle)
         root.addWidget(details_group)
 
         runtime=QGroupBox("Runtime")
@@ -202,11 +214,18 @@ class ConnectedAppsPanel(QWidget):
         root.addStretch(1)
 
         self.setStyleSheet("""
+        #connectedAppsSections::pane { border: 0; }
+        QTabBar::tab { padding: 10px 18px; margin-right: 5px; border: 1px solid palette(mid); border-radius: 8px; }
+        QTabBar::tab:selected { background: palette(alternate-base); font-weight: 600; }
+        #detailsToggle { text-align: left; font-weight: 600; }
         #appsTitle { font-size: 22px; font-weight: 700; }
         #appsSubtitle { color: palette(mid); }
         QGroupBox { border: 1px solid palette(mid); border-radius: 10px; margin-top: 10px; padding: 12px; }
         QGroupBox::title { subcontrol-origin: margin; left: 12px; padding: 0 6px; font-weight: 600; }
-        #nativeAppCard { border: 1px solid palette(mid); border-radius: 9px; background: palette(alternate-base); }
+        #nativeAppCard { border: 1px solid palette(mid); border-radius: 9px; background: palette(alternate-base); padding: 4px; }
+        #nativeAppsList { min-height: 100px; }
+        #nativeAppsList::item { border: 1px solid palette(mid); border-radius: 10px; padding: 14px; margin: 5px; }
+        #nativeAppsList::item:selected { border: 2px solid palette(highlight); background: palette(alternate-base); }
         #nativeAppName { font-size: 15px; font-weight: 700; }
         #nativeAppDescription { color: palette(mid); }
         QLineEdit, QTextEdit, QListWidget { background: palette(base); color: palette(text); border: 1px solid palette(mid); border-radius: 7px; padding: 8px; }
