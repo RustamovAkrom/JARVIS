@@ -154,6 +154,20 @@ class MCPRuntime:
 
         return self._submit(self._connect(cid, factory), 90)
 
+    def connect_sse(self, cid, url, headers=None):
+        url = _validate_http_endpoint(url)
+        headers = dict(headers or {})
+        if not all(isinstance(k, str) and isinstance(v, str) for k, v in headers.items()):
+            raise ValueError("MCP HTTP headers must be string values")
+        if any("\r" in v or "\n" in v for v in headers.values()):
+            raise ValueError("MCP HTTP headers cannot contain newline characters")
+
+        async def factory():
+            from mcp.client.sse import sse_client
+            return sse_client(url, headers=headers)
+
+        return self._submit(self._connect(cid, factory), 90)
+
     async def _call(self, cid, tool, args):
         with self._lock:
             entry = self._sessions.get(cid)
