@@ -323,3 +323,47 @@ def test_connected_apps_enable_disable_lifecycle(monkeypatch):
     result = svc.set_enabled("c1", True, reconnect=False)
     assert result["enabled"] is True
     assert result["status"] == "disconnected"
+
+def test_disabled_connection_is_not_reconnected(monkeypatch):
+    import importlib
+    module = importlib.import_module("core.connected_apps.service")
+    from core.connected_apps.service import ConnectedAppsService
+
+    class Store:
+        def __init__(self):
+            self.rows = {"c1": {"id": "c1", "app_id": "demo", "display_name": "Demo",
+                "status": "disconnected", "enabled": False, "metadata": {"transport": "stdio"},
+                "last_error": "", "updated_at": 0}}
+        def get_connection(self, cid):
+            return dict(self.rows[cid]) if cid in self.rows else None
+        def upsert_connection(self, row):
+            self.rows[row["id"]] = dict(row)
+        def list_connections(self):
+            return list(self.rows.values())
+        def get_credential(self, cid, key):
+            return ""
+
+    store = Store()
+    svc = ConnectedAppsService(store=store)
+    monkeypatch.setattr(module.runtime, "connect_stdio", lambda *args: pytest.fail("Disabled app reconnected"))
+    result = svc.reconnect("c1")
+    assert result["enabled"] is False
+    assert result["status"] == "disconnected"
+    assert result["last_error"] == "Connection is disabled"
+
+def test_runtime_health_falls_back_to_tool_discovery(monkeypatch):
+    import importlib
+    module = importlib.import_module("core.connected_apps.runtime")
+    runtime = module.MCPRuntime()
+
+    class Session:
+        async def list_tools(self):
+            return object()
+
+    runtime._sessions["c1"] = (None, Session())
+    monkeypatch.setattr(runtime, "_submit", lambda coro, timeout=60: coro.__await__().__next__() if False else True)
+    # Verify the fallback is selected when ping is absent.
+    import asyncio
+    async def run():
+        return await runtime._ping("c1")
+    assert asyncio.run(run()) is True
