@@ -492,3 +492,47 @@ def test_service_uses_stable_per_connection_operation_locks():
     other = service._connection_lock("connection-2")
     assert first is second
     assert first is not other
+
+
+@pytest.mark.parametrize("transport", ["stdio", "http", "sse"])
+def test_failed_connect_cleanup_error_does_not_replace_original_error(monkeypatch, transport):
+    import importlib
+    from core.connected_apps.models import AppDescriptor, TransportType
+    from core.connected_apps.service import ConnectedAppsService
+
+    module = importlib.import_module("core.connected_apps.service")
+
+    class Store:
+        def __init__(self):
+            self.rows = {}
+        def get_connection(self, cid):
+            row = self.rows.get(cid)
+            return dict(row) if row else None
+        def upsert_connection(self, row):
+            self.rows[row["id"]] = dict(row)
+        def list_connections(self):
+            return list(self.rows.values())
+
+    svc = ConnectedAppsService(store=Store())
+    def fail_connect(*args, **kwargs):
+        raise RuntimeError("original connect failure")
+    def fail_cleanup(cid):
+        raise RuntimeError("cleanup failure")
+    monkeypatch.setattr(module.runtime, "disconnect", fail_cleanup)
+
+    if transport == "stdio":
+        monkeypatch.setattr(module.runtime, "connect_stdio", fail_connect)
+        descriptor = AppDescriptor(id="demo", name="Demo", transport=TransportType.STDIO, command="python")
+        result = svc.connect_stdio(descriptor, connection_id="c1")
+    elif transport == "http":
+        monkeypatch.setattr(module.runtime, "connect_http", fail_connect)
+        descriptor = AppDescriptor(id="demo", name="Demo", transport=TransportType.HTTP, endpoint="https://example.com/mcp")
+        result = svc.connect_http(descriptor, connection_id="c1")
+    else:
+        monkeypatch.setattr(module.runtime, "connect_sse", fail_connect)
+        descriptor = AppDescriptor(id="demo", name="Demo", transport=TransportType.SSE, endpoint="https://example.com/mcp")
+        result = svc.connect_sse(descriptor, connection_id="c1")
+
+    assert result["status"] == "error"
+    assert "original connect failure" in result["last_error"]
+    assert "cleanup failure" not in result["last_error"]
