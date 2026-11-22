@@ -88,7 +88,7 @@ class ConnectedAppsService:
             id=cid, app_id=descriptor.id, display_name=display_name or descriptor.name,
             status=ConnectionStatus.CONNECTING, auth_type=descriptor.auth_type,
             scopes=list(descriptor.scopes), created_at=(previous or {}).get("created_at", time.time()),
-            metadata={"transport": transport, **metadata},
+            metadata={**dict((previous or {}).get("metadata") or {}), "transport": transport, **metadata},
         )
         self.store.upsert_connection(_serialize(row))
         return row
