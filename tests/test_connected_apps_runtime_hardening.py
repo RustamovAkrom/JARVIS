@@ -460,3 +460,14 @@ def test_runtime_disconnect_reports_stopped_loop_without_unawaited_coroutine():
     runtime = MCPRuntime()
     with pytest.raises(RuntimeUnavailable, match="not running"):
         runtime.disconnect("c1")
+
+
+def test_runtime_uses_stable_per_connection_lock():
+    from core.connected_apps.runtime import MCPRuntime
+
+    runtime = MCPRuntime()
+    first = runtime._connection_lock("connection-1")
+    second = runtime._connection_lock("connection-1")
+    other = runtime._connection_lock("connection-2")
+    assert first is second
+    assert first is not other
