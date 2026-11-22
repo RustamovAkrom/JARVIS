@@ -49,3 +49,25 @@ def test_oauth_callback_rejects_wrong_path_and_invalid_state_without_aborting():
         assert not result.error
     finally:
         server.close()
+
+def test_mcp_oauth_discovery_reads_protected_resource_and_server_metadata(monkeypatch):
+    import core.connected_apps.oauth as oauth
+    class Response:
+        status_code=200
+        def __init__(self,payload):self.payload=payload
+        def json(self):return self.payload
+    class Client:
+        def __init__(self,**kwargs):pass
+        def __enter__(self):return self
+        def __exit__(self,*args):pass
+        def get(self,url):
+            if "oauth-protected-resource" in url:
+                return Response({"authorization_servers":["https://auth.example"],"scopes_supported":["read"]})
+            if "oauth-authorization-server" in url:
+                return Response({"issuer":"https://auth.example","authorization_endpoint":"https://auth.example/authorize","token_endpoint":"https://auth.example/token"})
+            return Response({})
+    monkeypatch.setattr("httpx.Client",Client)
+    discovery=oauth.discover_mcp_oauth("https://mcp.example/api")
+    assert discovery["issuer"]=="https://auth.example"
+    assert discovery["authorization_server"]["token_endpoint"]=="https://auth.example/token"
+    assert discovery["resource"]["scopes_supported"]==["read"]
