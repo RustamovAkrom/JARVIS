@@ -21,11 +21,16 @@ def _serialize(row):
 
 
 def _safe_error(exc: Exception) -> str:
-    # Do not persist arbitrary exception text that may include headers/tokens.
-    text = str(exc).replace("\r", " ").replace("\n", " ")
-    for marker in ("Bearer ", "bearer ", "token=", "access_token="):
-        if marker in text:
-            text = text.split(marker, 1)[0] + marker + "[redacted]"
+    # Exception messages from transports/providers may contain credentials or URLs.
+    import re
+    text = str(exc).replace("\\r", " ").replace("\\n", " ")
+    text = re.sub(r"(?i)\\bBearer\\s+[^\\s,;]+", "Bearer [redacted]", text)
+    text = re.sub(
+        r"(?i)(access_token|refresh_token|token|secret|password|api[_-]?key|authorization)(\\s*[=:]\\s*)[^\\s,;]+",
+        r"\\1\\2[redacted]",
+        text,
+    )
+    text = re.sub(r"(?i)(://[^:/@]+:)[^@]+@", r"\\1[redacted]@", text)
     return f"{type(exc).__name__}: {text[:500]}"
 
 
