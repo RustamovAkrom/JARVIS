@@ -26,9 +26,9 @@ class ConnectedAppsPanel(QWidget):
         group=QGroupBox("Connection setup");layout=QVBoxLayout(group);layout.setSpacing(10)
         toolbar=QHBoxLayout();self.search=QLineEdit();self.search.setObjectName("appsSearch");self.search.setPlaceholderText("Search connected apps…");self.search.textChanged.connect(self.refresh);toolbar.addWidget(self.search,1)
         self.add_stdio_btn=QPushButton("+ Add STDIO");self.add_stdio_btn.clicked.connect(self.add_custom)
-        self.add_http_btn=QPushButton("+ Add HTTP");self.add_http_btn.clicked.connect(self.add_http)
+        self.add_http_btn=QPushButton("+ Add HTTP");self.add_http_btn.clicked.connect(self.add_http);self.add_sse_btn=QPushButton("+ Add SSE");self.add_sse_btn.clicked.connect(self.add_sse)
         self.add_oauth_btn=QPushButton("+ Add OAuth");self.add_oauth_btn.clicked.connect(self.add_oauth_http);self.reconnect_all_btn=QPushButton("Reconnect all");self.reconnect_all_btn.clicked.connect(self.reconnect_all)
-        toolbar.addWidget(self.add_stdio_btn);toolbar.addWidget(self.add_http_btn);toolbar.addWidget(self.add_oauth_btn);toolbar.addWidget(self.reconnect_all_btn);layout.addLayout(toolbar)
+        toolbar.addWidget(self.add_stdio_btn);toolbar.addWidget(self.add_http_btn);toolbar.addWidget(self.add_sse_btn);toolbar.addWidget(self.add_oauth_btn);toolbar.addWidget(self.reconnect_all_btn);layout.addLayout(toolbar)
         self.list=QListWidget();self.list.setObjectName("appsList");self.list.setMinimumHeight(100);self.list.setMaximumHeight(190);self.list.itemSelectionChanged.connect(self.show_selected);layout.addWidget(self.list)
         self.details=QTextEdit();self.details.setObjectName("appsDetails");self.details.setReadOnly(True);self.details.setMinimumHeight(100);self.details.setMaximumHeight(170);layout.addWidget(self.details)
         actions=QHBoxLayout();self.connect_btn=QPushButton("Connect / Reconnect");self.connect_btn.clicked.connect(self.connect_selected);self.disconnect_btn=QPushButton("Disconnect");self.disconnect_btn.clicked.connect(self.disconnect_selected);self.remove_btn=QPushButton("Remove");self.remove_btn.clicked.connect(self.remove_selected)
@@ -59,7 +59,7 @@ class ConnectedAppsPanel(QWidget):
             self.runtime_help.setText("Connected Apps runtime is available.")
 
     def _busy(self,busy,message=""):
-        for w in (self.add_stdio_btn,self.add_http_btn,self.add_oauth_btn,self.reconnect_all_btn,self.connect_btn,self.disconnect_btn,self.remove_btn):w.setEnabled(not busy)
+        for w in (self.add_stdio_btn,self.add_http_btn,self.add_sse_btn,self.add_oauth_btn,self.reconnect_all_btn,self.connect_btn,self.disconnect_btn,self.remove_btn):w.setEnabled(not busy)
         if message:self.status.setText(message)
     def refresh(self,*_):
         query=self.search.text().casefold().strip();selected=self.selected_id();self.list.clear();visible=[]
@@ -130,6 +130,19 @@ class ConnectedAppsPanel(QWidget):
         token,ok=QInputDialog.getText(self,"Authentication","Bearer token (optional):",QLineEdit.EchoMode.Password)
         if not ok:return
         d=AppDescriptor(id="http-"+self._slug(name),name=name.strip(),description="Custom MCP HTTP server",source="user",transport=TransportType.HTTP,endpoint=endpoint.strip());headers={"Authorization":f"Bearer {token}"} if token.strip() else {};self._connect_http_descriptor(d,headers=headers)
+    def add_sse(self):
+        name,ok=QInputDialog.getText(self,"Add MCP SSE server","Display name:")
+        if not ok or not name.strip():return
+        endpoint,ok=QInputDialog.getText(self,"MCP SSE server","Server URL (HTTP(S)):")
+        if not ok or not endpoint.strip():return
+        token,ok=QInputDialog.getText(self,"Authentication","Bearer token (optional):",QLineEdit.EchoMode.Password)
+        if not ok:return
+        d=AppDescriptor(id="sse-"+self._slug(name),name=name.strip(),description="Custom MCP SSE server",source="user",transport=TransportType.SSE,endpoint=endpoint.strip())
+        headers={"Authorization":f"Bearer {token}"} if token.strip() else {}
+        self._busy(True,f"Connecting to {d.name}…")
+        w=_Worker(lambda:service.connect_sse(d,headers=headers))
+        w.signals.finished.connect(self._connected)
+        self.pool.start(w)
     def add_oauth_http(self):
         from core.connected_apps.providers import list_providers
         providers=list_providers();names=[p.name for p in providers]
