@@ -471,3 +471,13 @@ def test_runtime_uses_stable_per_connection_lock():
     other = runtime._connection_lock("connection-2")
     assert first is second
     assert first is not other
+
+
+def test_runtime_loop_starts_without_lock_deadlock():
+    from core.connected_apps.runtime import MCPRuntime
+
+    runtime = MCPRuntime()
+    runtime._ensure_loop()
+    assert runtime._loop is not None
+    assert runtime._loop.is_running()
+    runtime.shutdown()
