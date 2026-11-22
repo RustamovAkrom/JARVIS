@@ -230,7 +230,6 @@ class ConnectedAppsPanel(QWidget):
         root.addStretch(1)
 
         self._apply_theme_styles()
-)
         self._check_runtime()
         self.refresh()
     def refresh_state(self):
