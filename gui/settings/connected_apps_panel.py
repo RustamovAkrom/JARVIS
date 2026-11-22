@@ -74,7 +74,17 @@ class ConnectedAppsPanel(QWidget):
         item=self.list.currentItem();return item.data(Qt.ItemDataRole.UserRole) if item else None
     def show_selected(self):
         cid=self.selected_id();row=service.store.get_connection(cid) if cid else None
-        if not row:self.details.setPlainText("Select a connection to inspect status and discovered tools.\n\nSTDIO launches a local MCP process. HTTP connects to a remote endpoint. OAuth opens your browser for authorization.");return;self.auto_read_checkbox.setEnabled(False);self.auto_read_checkbox.blockSignals(True);self.auto_read_checkbox.setChecked(False);self.auto_read_checkbox.blockSignals(False);return
+        if not row:
+            self.details.setPlainText(
+                "Select a connection to inspect status and discovered tools.\n\n"
+                "STDIO launches a local MCP process. HTTP connects to a remote endpoint. "
+                "OAuth opens your browser for authorization."
+            )
+            self.auto_read_checkbox.setEnabled(False)
+            self.auto_read_checkbox.blockSignals(True)
+            self.auto_read_checkbox.setChecked(False)
+            self.auto_read_checkbox.blockSignals(False)
+            return
         meta=row.get("metadata",{});tools=meta.get("tools",[]) or service.tools(cid);self.auto_read_checkbox.setEnabled(row.get("status")=="connected");self.auto_read_checkbox.blockSignals(True);self.auto_read_checkbox.setChecked(meta.get("auto_approve_read_only") is True);self.auto_read_checkbox.blockSignals(False)
         lines=[f"App: {row.get('display_name')}",f"Status: {row.get('status')}",f"Transport: {meta.get('transport','unknown')}",f"Endpoint: {meta.get('endpoint') or meta.get('command','')}",f"Last error: {row.get('last_error') or 'None'}","",f"Tools ({len(tools)}):"]
         lines.extend(f"• {t.get('name')}: {t.get('description','')}" for t in tools)
