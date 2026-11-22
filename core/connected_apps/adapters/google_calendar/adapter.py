@@ -151,5 +151,5 @@ class GoogleCalendarAdapter(NativeAppAdapter):
         raise ValueError(f"Unknown Google Calendar tool: {tool_name}")
 
     def health_check(self, connection_id):
-        self._request(connection_id, "GET", "/users/me/calendarList", {"maxResults": 1})
+        self._request(connection_id, "GET", "/calendars/primary/events", {"maxResults": 1})
         return True
