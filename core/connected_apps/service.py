@@ -21,7 +21,7 @@ def _serialize(row):
 
 
 def _safe_error(exc: Exception) -> str:
-    # Exception messages from transports/providers may contain credentials or URLs.
+    """Return a bounded error message with common secrets and URL credentials redacted."""
     import re
     text = str(exc).replace("\\r", " ").replace("\\n", " ")
     text = re.sub(r"(?i)\\bBearer\\s+[^\\s,;]+", "Bearer [redacted]", text)
@@ -31,8 +31,10 @@ def _safe_error(exc: Exception) -> str:
         text,
     )
     text = re.sub(r"(?i)(://[^:/@]+:)[^@]+@", r"\\1[redacted]@", text)
+    # Redact URL user-info without accidentally inserting a literal regex backreference.
+    text = re.sub(r"(?i)(https?://)[^/@\\s]+@",
+                  r"\\1[redacted]@", text)
     return f"{type(exc).__name__}: {text[:500]}"
-
 
 class ConnectedAppsService:
     def __init__(self, app_registry=None, store=None):
