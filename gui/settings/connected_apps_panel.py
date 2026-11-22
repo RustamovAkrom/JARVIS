@@ -121,7 +121,7 @@ class ConnectedAppsPanel(QWidget):
         self.native_list.setSpacing(3)
         self.native_list.setMinimumHeight(0)
         self.native_list.setMaximumHeight(132)
-        self.native_list.setIconSize(QSize(24,24)
+        self.native_list.setIconSize(QSize(24, 24))
         self.native_list.itemSelectionChanged.connect(self._native_selection_changed)
         self.native_list.itemDoubleClicked.connect(lambda *_: self.open_connection_details(native=True))
         native_layout.addWidget(self.native_list)
@@ -377,9 +377,7 @@ class ConnectedAppsPanel(QWidget):
             status = str(row.get("status") or "unknown").replace("_", " ").title()
             item=QListWidgetItem(f"{row.get('display_name', app_id)}  ·  {status}")
             item.setData(Qt.ItemDataRole.UserRole,row.get("id"))
-            icon_path = self._native_icon_path(app_id)
-            if icon_path:
-                item.setIcon(QIcon(str(icon_path)))
+            item.setIcon(QIcon(str(self._native_icon_path(app_id))) if self._native_icon_path(app_id) else QIcon())
             self.native_list.addItem(item)
             if native_selected and item.data(Qt.ItemDataRole.UserRole)==native_selected:
                 self.native_list.setCurrentItem(item)
@@ -406,20 +404,24 @@ class ConnectedAppsPanel(QWidget):
         cid=self.native_selected_id()
         row=service.store.get_connection(cid) if cid else None
         connected=bool(row and row.get("status")=="connected")
-        self.add_github_btn.setText("Reconnect GitHub" if row else "Connect GitHub")
-        self.native_disconnect_btn.setEnabled(connected)
+        app_id=str((row or {}).get("app_id") or "").casefold()
+        if app_id == "google_calendar":
+            self.add_calendar_btn.setText("Reconnect" if row else "Connect")
+            self.native_disconnect_btn.setEnabled(connected)
+        else:
+            self.add_github_btn.setText("Reconnect" if row else "Connect")
+            self.native_disconnect_btn.setEnabled(connected)
         if not row:
             return
-        metadata=row.get("metadata") or {}
-        tools=service.tools(cid)
+        tools=service.native_tools(cid)
         lines=[
-            f"GitHub account connection",
+            f"{row.get('display_name','Connected App')}",
             f"Status: {row.get('status','unknown')}",
             f"Tools: {len(tools)}",
             f"Last error: {row.get('last_error') or 'None'}",
         ]
         self.details.setPlainText("\n".join(lines))
-        self.status.setText(f"GitHub: {row.get('status','unknown')} · {len(tools)} tools")
+        self.status.setText(f"{row.get('display_name','Connected App')}: {row.get('status','unknown')} · {len(tools)} tools")
 
     def disconnect_native_selected(self):
         cid=self.native_selected_id()
