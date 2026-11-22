@@ -4,7 +4,7 @@ from __future__ import annotations
 import secrets
 import time
 import threading
-from core.connected_apps.models import AppConnection, AppDescriptor, ConnectionStatus, TransportType
+from core.connected_apps.models import AppConnection, AppDescriptor, AuthType, ConnectionStatus, TransportType
 from core.connected_apps.registry import registry
 from core.connected_apps.store import ConnectedAppsStore
 from core.connected_apps.runtime import runtime
@@ -40,6 +40,14 @@ class ConnectedAppsService:
         self.store = store or ConnectedAppsStore()
         self._adapter_lock = threading.RLock()
         self._adapters = {}
+        try:
+            from core.connected_apps.adapters.github import GitHubAdapter
+            from core.connected_apps.native import native_registry
+            if native_registry.get("github") is None:
+                native_registry.register(GitHubAdapter(self.store))
+        except Exception:
+            # Native integrations are optional; MCP/core remain available.
+            pass
 
     @staticmethod
     def normalize(name):
@@ -244,7 +252,7 @@ class ConnectedAppsService:
             id=cid, app_id=adapter.descriptor.id,
             display_name=display_name or adapter.descriptor.name,
             status=ConnectionStatus.CONNECTING,
-            auth_type=adapter.descriptor.auth_provider and AppConnection.__dataclass_fields__["auth_type"].default or AppConnection.__dataclass_fields__["auth_type"].default,
+            auth_type=AuthType.OAUTH2,
             scopes=list(adapter.descriptor.scopes),
             created_at=(previous or {}).get("created_at", time.time()),
             metadata={**dict((previous or {}).get("metadata") or {}),
