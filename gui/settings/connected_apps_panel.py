@@ -374,8 +374,12 @@ class ConnectedAppsPanel(QWidget):
         native_status={str(row.get("app_id") or "").casefold(): str(row.get("status") or "unknown") for row in native_rows}
         self.github_status_label.setText(native_status.get("github","not connected").replace("_"," ").title())
         self.calendar_status_label.setText(native_status.get("google_calendar","not connected").replace("_"," ").title())
-        self.add_github_btn.setText("Reconnect" if native_status.get("github") else "Connect")
-        self.add_calendar_btn.setText("Reconnect" if native_status.get("google_calendar") else "Connect")
+        github_connected = native_status.get("github") == "connected"
+        calendar_connected = native_status.get("google_calendar") == "connected"
+        self.add_github_btn.setText("Connected" if github_connected else "Connect")
+        self.add_github_btn.setEnabled(not github_connected)
+        self.add_calendar_btn.setText("Connected" if calendar_connected else "Connect")
+        self.add_calendar_btn.setEnabled(not calendar_connected)
         self.native_list.clear()
         for row in native_rows:
             app_id = str(row.get("app_id") or "").casefold()
@@ -411,10 +415,12 @@ class ConnectedAppsPanel(QWidget):
         connected=bool(row and row.get("status")=="connected")
         app_id=str((row or {}).get("app_id") or "").casefold()
         if app_id == "google_calendar":
-            self.add_calendar_btn.setText("Reconnect" if row else "Connect")
+            self.add_calendar_btn.setText("Connected" if connected else "Connect")
+            self.add_calendar_btn.setEnabled(not connected)
             self.native_disconnect_btn.setEnabled(connected)
         else:
-            self.add_github_btn.setText("Reconnect" if row else "Connect")
+            self.add_github_btn.setText("Connected" if connected else "Connect")
+            self.add_github_btn.setEnabled(not connected)
             self.native_disconnect_btn.setEnabled(connected)
         if not row:
             return
@@ -674,6 +680,9 @@ class ConnectedAppsPanel(QWidget):
     @staticmethod
     def _slug(value):return "-".join(value.strip().lower().split()) or "app"
     def connect_google_calendar(self):
+        if self.calendar_status_label.text().casefold() == "connected":
+            self.status.setText("Google Calendar is already connected. Disconnect it before reconnecting.")
+            return
         client_id,ok=QInputDialog.getText(
             self,"Connect Google Calendar","Google OAuth Client ID:"
         )
@@ -699,6 +708,9 @@ class ConnectedAppsPanel(QWidget):
         self.pool.start(worker)
 
     def connect_github_oauth(self):
+        if self.github_status_label.text().casefold() == "connected":
+            self.status.setText("GitHub is already connected. Disconnect it before reconnecting.")
+            return
         client_id,ok=QInputDialog.getText(
             self,"Connect GitHub","GitHub OAuth App Client ID:"
         )
