@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import threading
+import re
 from typing import Any
 
 from core.connected_apps.service import service
@@ -24,13 +25,39 @@ def _validate_value(schema: dict[str, Any], value: Any, path: str) -> None:
     }
     if expected in types:
         target = types[expected]
-        # bool is an int subclass in Python; JSON Schema treats them separately.
         if expected in {"integer", "number"} and isinstance(value, bool):
             raise ValueError(f"{path} must be {expected}")
         if not isinstance(value, target):
             raise ValueError(f"{path} must be {expected}")
     if "enum" in schema and value not in schema["enum"]:
         raise ValueError(f"{path} must be one of the allowed values")
+    if "const" in schema and value != schema["const"]:
+        raise ValueError(f"{path} must match the required value")
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        if "minimum" in schema and value < schema["minimum"]:
+            raise ValueError(f"{path} must be >= {schema['minimum']}")
+        if "maximum" in schema and value > schema["maximum"]:
+            raise ValueError(f"{path} must be <= {schema['maximum']}")
+        if "exclusiveMinimum" in schema and value <= schema["exclusiveMinimum"]:
+            raise ValueError(f"{path} must be > {schema['exclusiveMinimum']}")
+        if "exclusiveMaximum" in schema and value >= schema["exclusiveMaximum"]:
+            raise ValueError(f"{path} must be < {schema['exclusiveMaximum']}")
+        if "multipleOf" in schema and schema["multipleOf"]:
+            quotient = value / schema["multipleOf"]
+            if abs(quotient - round(quotient)) > 1e-9:
+                raise ValueError(f"{path} must be a multiple of {schema['multipleOf']}")
+    if isinstance(value, str):
+        if "minLength" in schema and len(value) < schema["minLength"]:
+            raise ValueError(f"{path} is too short")
+        if "maxLength" in schema and len(value) > schema["maxLength"]:
+            raise ValueError(f"{path} is too long")
+        pattern = schema.get("pattern")
+        if pattern:
+            try:
+                if re.search(pattern, value) is None:
+                    raise ValueError(f"{path} does not match the required pattern")
+            except re.error:
+                raise ValueError(f"{path} has an invalid validation pattern") from None
     if isinstance(value, dict):
         properties = schema.get("properties", {})
         required = schema.get("required", [])
@@ -38,6 +65,10 @@ def _validate_value(schema: dict[str, Any], value: Any, path: str) -> None:
             missing = [key for key in required if key not in value]
             if missing:
                 raise ValueError(f"{path} missing required arguments: {', '.join(missing)}")
+        if "minProperties" in schema and len(value) < schema["minProperties"]:
+            raise ValueError(f"{path} has too few properties")
+        if "maxProperties" in schema and len(value) > schema["maxProperties"]:
+            raise ValueError(f"{path} has too many properties")
         if schema.get("additionalProperties") is False:
             unknown = [key for key in value if key not in properties]
             if unknown:
@@ -46,9 +77,20 @@ def _validate_value(schema: dict[str, Any], value: Any, path: str) -> None:
             child = properties.get(key) if isinstance(properties, dict) else None
             if child is not None:
                 _validate_value(child, item, f"{path}.{key}")
-    elif isinstance(value, list) and isinstance(schema.get("items"), dict):
-        for index, item in enumerate(value):
-            _validate_value(schema["items"], item, f"{path}[{index}]")
+    elif isinstance(value, list):
+        if "minItems" in schema and len(value) < schema["minItems"]:
+            raise ValueError(f"{path} has too few items")
+        if "maxItems" in schema and len(value) > schema["maxItems"]:
+            raise ValueError(f"{path} has too many items")
+        if schema.get("uniqueItems") is True:
+            try:
+                if len({repr(item) for item in value}) != len(value):
+                    raise ValueError(f"{path} items must be unique")
+            except TypeError:
+                pass
+        if isinstance(schema.get("items"), dict):
+            for index, item in enumerate(value):
+                _validate_value(schema["items"], item, f"{path}[{index}]")
 
 
 def _validate_arguments(schema: dict[str, Any], args: dict[str, Any]) -> None:
