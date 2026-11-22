@@ -414,14 +414,9 @@ class ConnectedAppsPanel(QWidget):
         row=service.store.get_connection(cid) if cid else None
         connected=bool(row and row.get("status")=="connected")
         app_id=str((row or {}).get("app_id") or "").casefold()
-        if app_id == "google_calendar":
-            self.add_calendar_btn.setText("Connect")
-            self.add_calendar_btn.setVisible(not connected)
-            self.native_disconnect_btn.setEnabled(connected)
-        else:
-            self.add_github_btn.setText("Connect")
-            self.add_github_btn.setVisible(not connected)
-            self.native_disconnect_btn.setEnabled(connected)
+        # Connect visibility is app-global and is set by refresh(); selection
+        # must not re-show a button for an already-connected app.
+        self.native_disconnect_btn.setEnabled(connected)
         if not row:
             return
         tools=service.native_tools(cid)
