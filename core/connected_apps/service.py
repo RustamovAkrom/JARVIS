@@ -98,6 +98,11 @@ class ConnectedAppsService:
         row = self._begin_connection(cid, descriptor, display_name, "stdio",
                                      {"command": descriptor.command, "args": list(descriptor.args)})
         env = dict(descriptor.env or {})
+        previous_env_keys = set((self.store.get_connection(cid) or {}).get("metadata", {}).get("env_keys", []))
+        delete_credential = getattr(self.store, "delete_credential", None)
+        if callable(delete_credential):
+            for stale_key in previous_env_keys - set(env):
+                delete_credential(cid, f"stdio_env:{stale_key}")
         for key, value in env.items():
             self.store.set_credential(cid, f"stdio_env:{key}", value)
         row.metadata["env_keys"] = list(env)
@@ -120,6 +125,9 @@ class ConnectedAppsService:
         authorization = headers.get("Authorization")
         if authorization:
             self.store.set_credential(cid, "authorization_header", authorization)
+        else:
+            delete_credential = getattr(self.store, "delete_credential", None)
+            if callable(delete_credential): delete_credential(cid, "authorization_header")
         try:
             tools = runtime.connect_http(cid, descriptor.endpoint, headers=headers)
             row.status = ConnectionStatus.CONNECTED
@@ -139,6 +147,9 @@ class ConnectedAppsService:
         authorization = headers.get("Authorization")
         if authorization:
             self.store.set_credential(cid, "authorization_header", authorization)
+        else:
+            delete_credential = getattr(self.store, "delete_credential", None)
+            if callable(delete_credential): delete_credential(cid, "authorization_header")
         try:
             tools = runtime.connect_sse(cid, descriptor.endpoint, headers=headers)
             row.status = ConnectionStatus.CONNECTED
