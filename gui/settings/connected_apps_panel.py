@@ -434,12 +434,13 @@ class ConnectedAppsPanel(QWidget):
             return
         self._busy(True,"Disconnecting selected app…")
         worker=_Worker(lambda:service.disconnect(cid))
-        worker.signals.finished.connect(self._native_disconnected)
+        worker.signals.finished.connect(
+            lambda result, error, connection_id=cid: self._native_disconnected(connection_id, result, error)
+        )
         self.pool.start(worker)
 
-    def _native_disconnected(self,result,error):
+    def _native_disconnected(self,cid,result,error):
         self._busy(False)
-        cid=self.native_selected_id()
         row=service.store.get_connection(cid) if cid else None
         app_name=(row or {}).get("display_name","Connected App")
         if error:
@@ -563,8 +564,10 @@ class ConnectedAppsPanel(QWidget):
             QPushButton#dangerAction {{ color: {C.RED}; border-color: {C.RED}; }}
         """)
         def save_enabled(value):
-            service.set_enabled(cid,value,reconnect=value)
-            self.refresh()
+            self._busy(True, "Enabling and reconnecting…" if value else "Disabling connection…")
+            worker = _Worker(lambda: service.set_enabled(cid, value, reconnect=value))
+            worker.signals.finished.connect(self._enabled_changed)
+            self.pool.start(worker)
         def save_auto(value):
             current=service.store.get_connection(cid)
             meta=dict(current.get("metadata") or {})
