@@ -216,3 +216,33 @@ def test_oauth_save_atomically_clears_stale_optional_tokens():
     assert "id_token" not in store.values
     assert len(store.batch_calls) == 1
     assert set(store.batch_calls[0][2]) == {"refresh_token", "id_token"}
+
+
+@pytest.mark.parametrize("redirect_uri", [
+    "https://attacker.example/callback",
+    "http://192.168.1.10/callback",
+    "http://127.0.0.1/other",
+    "http://127.0.0.1/callback?next=https://attacker.example",
+    "http://user:pass@127.0.0.1/callback",
+])
+def test_oauth_redirect_uri_must_be_loopback_callback(redirect_uri):
+    from core.connected_apps.oauth import OAuthConfig, OAuthState, build_authorization_url
+
+    config = OAuthConfig(
+        authorization_url="https://auth.example/authorize",
+        token_url="https://auth.example/token",
+        client_id="client",
+        redirect_uri=redirect_uri,
+        scopes=[],
+    )
+    state = OAuthState(state="state", verifier="verifier", redirect_uri=redirect_uri)
+    with pytest.raises(ValueError, match="redirect URI"):
+        build_authorization_url(config, state, "challenge")
+
+
+@pytest.mark.parametrize("host", ["0.0.0.0", "192.168.1.5", "example.com"])
+def test_oauth_callback_server_rejects_non_loopback_bind(host):
+    from core.connected_apps.oauth import OAuthCallbackServer
+
+    with pytest.raises(ValueError, match="loopback"):
+        OAuthCallbackServer(host=host)
