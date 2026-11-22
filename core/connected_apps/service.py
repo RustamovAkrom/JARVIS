@@ -319,8 +319,6 @@ class ConnectedAppsService:
         if row.get("status") != ConnectionStatus.CONNECTED:
             raise RuntimeError("Connected App is not connected")
         adapter = self._native_adapters.get(str(row.get("app_id") or "").casefold())
-        if not adapter:
-            raise RuntimeError("Native adapter is unavailable")
         tool = next((item for item in adapter.tools if item.name == tool_name), None)
         if not tool:
             raise ValueError("Native tool is not available")
