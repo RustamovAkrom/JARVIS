@@ -65,6 +65,8 @@ Finish the Connected Apps subsystem without scope drift: stabilize existing MCP 
 - [x] Prevent native app lifecycle operations from calling the MCP runtime.
 - [x] Preserve original HTTP/SSE connection errors when cleanup fails.
 - [x] Add regression tests for native lifecycle and HTTP/SSE cleanup failures.
+- [x] Preserve original MCP connection errors when transport cleanup also fails.
+- [x] Audit timeout cancellation and event-loop pending-task cleanup paths; cancellation is propagated and loop shutdown drains pending tasks.
 - [ ] Final focused test run and review remaining timeout/cancellation behavior.
 - [ ] Timeout and cancellation audit.
 - [x] Fix runtime event-loop startup deadlock caused by ready-thread lock acquisition.
@@ -92,8 +94,12 @@ Finish the Connected Apps subsystem without scope drift: stabilize existing MCP 
 - [x] Persist refresh-token rotation when provider returns a replacement.
 - [x] Persist token sets and stale-token removals in one atomic store write when supported.
 - [x] Clear stale refresh/id tokens when the new token response omits them.
+- [x] Normalize unsafe OAuth discovery endpoint validation failures into stable discovery errors.
+- [x] Audit token refresh failure handling: preserve stored refresh credentials and require reauthorization only when refresh cannot proceed.
 - [ ] Audit refresh failure state and authorization metadata persistence.
 - [x] Atomic token-set persistence and stale optional-token cleanup.
+- [x] Local credential revocation removes the complete credential set and refresh-lock state.
+- [x] OAuth token storage fallback supports credential stores without an optional delete method.
 - [ ] Credential deletion/revocation behavior.
 - [x] Redact OAuth token exchange and refresh request exceptions from user-facing errors.
 - [ ] Audit secret redaction in logs, diagnostics, and UI.
