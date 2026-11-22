@@ -376,10 +376,10 @@ class ConnectedAppsPanel(QWidget):
         self.calendar_status_label.setText(native_status.get("google_calendar","not connected").replace("_"," ").title())
         github_connected = native_status.get("github") == "connected"
         calendar_connected = native_status.get("google_calendar") == "connected"
-        self.add_github_btn.setText("Connected" if github_connected else "Connect")
-        self.add_github_btn.setEnabled(not github_connected)
-        self.add_calendar_btn.setText("Connected" if calendar_connected else "Connect")
-        self.add_calendar_btn.setEnabled(not calendar_connected)
+        self.add_github_btn.setText("Connect")
+        self.add_github_btn.setVisible(not github_connected)
+        self.add_calendar_btn.setText("Connect")
+        self.add_calendar_btn.setVisible(not calendar_connected)
         self.native_list.clear()
         for row in native_rows:
             app_id = str(row.get("app_id") or "").casefold()
@@ -415,12 +415,12 @@ class ConnectedAppsPanel(QWidget):
         connected=bool(row and row.get("status")=="connected")
         app_id=str((row or {}).get("app_id") or "").casefold()
         if app_id == "google_calendar":
-            self.add_calendar_btn.setText("Connected" if connected else "Connect")
-            self.add_calendar_btn.setEnabled(not connected)
+            self.add_calendar_btn.setText("Connect")
+            self.add_calendar_btn.setVisible(not connected)
             self.native_disconnect_btn.setEnabled(connected)
         else:
-            self.add_github_btn.setText("Connected" if connected else "Connect")
-            self.add_github_btn.setEnabled(not connected)
+            self.add_github_btn.setText("Connect")
+            self.add_github_btn.setVisible(not connected)
             self.native_disconnect_btn.setEnabled(connected)
         if not row:
             return
