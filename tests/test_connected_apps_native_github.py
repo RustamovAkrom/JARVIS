@@ -28,6 +28,10 @@ def test_github_adapter_catalog_has_read_and_write_tools():
         "github_list_pull_requests",
         "github_get_file",
         "github_create_issue",
+        "github_search_code",
+        "github_get_pull_request",
+        "github_list_commits",
+        "github_create_issue_comment",
     } <= names
     create = next(tool for tool in GitHubAdapter.tools if tool.name == "github_create_issue")
     assert create.read_only is False
@@ -200,3 +204,16 @@ def test_native_github_tools_use_confirmation_for_write(monkeypatch):
         result=agent.execute("c1","github_create_issue",{"repository":"owner/repo","title":"Test"})
     assert result=="pending"
     assert captured["key"]=="connected_apps:c1:github_create_issue"
+
+def test_github_code_search_and_pr_requests(monkeypatch):
+    adapter=GitHubAdapter(Store())
+    calls=[]
+    monkeypatch.setattr(adapter,"_request",lambda cid,method,path,query=None,payload=None: calls.append((method,path,query,payload)) or {})
+    adapter.execute("c1","github_search_code",{"query":"repo:owner/repo TODO","limit":7})
+    adapter.execute("c1","github_get_pull_request",{"repository":"owner/repo","number":12})
+    adapter.execute("c1","github_list_commits",{"repository":"owner/repo","branch":"main","limit":4})
+    assert calls[0][1]=="/search/code"
+    assert calls[0][2]=={"q":"repo:owner/repo TODO","per_page":7}
+    assert calls[1][1]=="/repos/owner/repo/pulls/12"
+    assert calls[2][1]=="/repos/owner/repo/commits"
+    assert calls[2][2]=={"per_page":4,"sha":"main"}
