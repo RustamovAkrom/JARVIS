@@ -54,6 +54,9 @@ Finish the Connected Apps subsystem without scope drift: stabilize existing MCP 
 - [x] Fix test_connected_apps_tool_calls_record_activity_and_errors to mock runtime tool discovery.
 - [x] Prevent native GitHub/Google Calendar duplicate connect actions while already connected.
 - [x] Use schema-valid arguments in runtime-error activity regression test.
+- [x] Serialize service lifecycle, health-check, and tool execution operations per connection ID using reentrant locks.
+- [x] Hide native Connect buttons when the app is already connected; connected status remains visible.
+- [x] Add regression tests for hidden native Connect actions and service-level lock identity.
 - [ ] Connect/reconnect/disconnect/remove race audit at service/store level.
 - [ ] Timeout and cancellation audit.
 - [x] Fix runtime event-loop startup deadlock caused by ready-thread lock acquisition.
