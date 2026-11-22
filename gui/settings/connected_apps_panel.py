@@ -439,12 +439,15 @@ class ConnectedAppsPanel(QWidget):
 
     def _native_disconnected(self,result,error):
         self._busy(False)
+        cid=self.native_selected_id()
+        row=service.store.get_connection(cid) if cid else None
+        app_name=(row or {}).get("display_name","Connected App")
         if error:
             message=self._friendly_error(str(error))
-            self.status.setText(f"GitHub disconnect failed: {message}")
-            QMessageBox.warning(self,"GitHub",message)
+            self.status.setText(f"{app_name} disconnect failed: {message}")
+            QMessageBox.warning(self,app_name,message)
         else:
-            self.status.setText("GitHub disconnected.")
+            self.status.setText(f"{app_name} disconnected.")
             self.connections_changed.emit()
         self.refresh()
     def open_connection_details(self,native=False):
