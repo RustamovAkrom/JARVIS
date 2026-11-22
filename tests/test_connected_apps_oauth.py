@@ -280,3 +280,19 @@ def test_mcp_oauth_discovery_rejects_invalid_authorization_server_metadata(monke
     monkeypatch.setattr("httpx.Client", Client)
     with pytest.raises(RuntimeError):
         oauth.discover_mcp_oauth("https://mcp.example/api")
+
+
+@pytest.mark.parametrize("scopes", [["read scope"], [""], ["read", "x\nmalicious"]])
+def test_oauth_authorization_url_rejects_invalid_scope_tokens(scopes):
+    from core.connected_apps.oauth import OAuthConfig, OAuthState, build_authorization_url
+
+    config = OAuthConfig(
+        authorization_url="https://auth.example/authorize",
+        token_url="https://auth.example/token",
+        client_id="client",
+        redirect_uri="http://127.0.0.1:1234/callback",
+        scopes=scopes,
+    )
+    state = OAuthState(state="state", verifier="verifier", redirect_uri=config.redirect_uri)
+    with pytest.raises(ValueError, match="scopes"):
+        build_authorization_url(config, state, "challenge")
