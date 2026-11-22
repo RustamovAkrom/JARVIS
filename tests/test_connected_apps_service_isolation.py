@@ -44,7 +44,8 @@ def test_native_health_check_uses_service_local_adapter(monkeypatch):
 def test_service_call_tool_enforces_connection_and_permissions(monkeypatch):
     from core.connected_apps.service import ConnectedAppsService
     from core.connected_apps.models import ConnectionStatus
-    from core.connected_apps import service as service_module
+    import importlib
+    service_module = importlib.import_module("core.connected_apps.service")
 
     class Store:
         def __init__(self, row):
