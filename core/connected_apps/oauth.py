@@ -205,6 +205,8 @@ def discover_mcp_oauth(resource_url: str) -> dict[str, Any]:
                 continue
         if not isinstance(authorization_metadata, dict):
             raise RuntimeError("Could not discover OAuth authorization-server metadata")
+        _validate_metadata_url(authorization_metadata.get("authorization_endpoint", ""))
+        _validate_metadata_url(authorization_metadata.get("token_endpoint", ""))
     return {
         "resource": resource_metadata,
         "issuer": issuer,
@@ -247,6 +249,8 @@ def refresh_tokens(config: OAuthConfig, refresh_token: str) -> dict[str, Any]:
         "refresh_token": refresh_token,
         "client_id": config.client_id,
     }
+    if config.extra_authorize_params and config.extra_authorize_params.get("resource"):
+        payload["resource"] = config.extra_authorize_params["resource"]
     if config.client_secret:
         payload["client_secret"] = config.client_secret
     response = httpx.post(
