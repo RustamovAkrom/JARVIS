@@ -259,3 +259,14 @@ def test_connected_apps_tool_calls_record_activity_and_errors(monkeypatch):
     metadata = store.get_connection("c1")["metadata"]
     assert metadata["tool_call_count"] == 2
     assert metadata["last_tool_error"].startswith("RuntimeError:")
+
+def test_mcp_catalog_contains_database_and_developer_integrations():
+    from core.connected_apps.catalog import list_templates, get_template
+
+    ids = {item.id for item in list_templates()}
+    assert {"filesystem", "playwright", "fetch", "memory", "sequential-thinking",
+            "github", "postgres", "sqlite", "brave-search"} <= ids
+    github = get_template("github")
+    assert github is not None
+    assert "GITHUB_PERSONAL_ACCESS_TOKEN" in github.env_keys
+    assert get_template("brave-search").env_keys == ("BRAVE_API_KEY",)
