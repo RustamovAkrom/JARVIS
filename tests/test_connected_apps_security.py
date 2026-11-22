@@ -22,7 +22,7 @@ def test_schema_validation_enforces_numeric_string_and_array_constraints():
         "name":{"type":"string","minLength":2,"maxLength":5,"pattern":"^[a-z]+$"},
         "tags":{"type":"array","items":{"type":"string"},"maxItems":2,"uniqueItems":True},
     },"additionalProperties":False}
-    _validate_arguments(schema,{"limit":5,"name":"jarvis","tags":["a","b"]})
+    _validate_arguments(schema,{"limit":5,"name":"jarv","tags":["a","b"]})
     for args in (
         {"limit":0,"name":"ok","tags":[]},
         {"limit":11,"name":"ok","tags":[]},
