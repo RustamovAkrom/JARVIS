@@ -4,6 +4,9 @@ from __future__ import annotations
 import asyncio
 import threading
 import re
+import logging
+
+logger = logging.getLogger(__name__)
 from contextlib import AsyncExitStack
 from urllib.parse import urlsplit
 
@@ -88,11 +91,17 @@ class MCPRuntime:
                 raise RuntimeUnavailable("Could not start MCP runtime")
 
     def _submit(self, coro, timeout=60):
-        self._ensure_loop()
+        try:
+            self._ensure_loop()
+        except Exception:
+            if hasattr(coro, "close"):
+                coro.close()
+            raise
         with self._lock:
             loop = self._loop
         if not loop or not loop.is_running():
-            coro.close()
+            if hasattr(coro, "close"):
+                coro.close()
             raise RuntimeUnavailable("MCP runtime event loop is not running")
         future = asyncio.run_coroutine_threadsafe(coro, loop)
         try:
@@ -245,10 +254,17 @@ class MCPRuntime:
         return self._submit(self._call(cid, tool, args or {}), 120)
 
     def disconnect(self, cid):
+        # Avoid creating a coroutine when the runtime is already stopped.
+        with self._lock:
+            loop = self._loop
+        if not loop or not loop.is_running():
+            return False
         try:
             self._submit(self._close(cid), 15)
+            return True
         except Exception:
-            pass
+            logger.exception("Failed to disconnect MCP connection %s", cid)
+            return False
 
     def shutdown(self):
         with self._lock:
