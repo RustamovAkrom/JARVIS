@@ -40,11 +40,14 @@ class ConnectedAppsService:
         self.store = store or ConnectedAppsStore()
         self._adapter_lock = threading.RLock()
         self._adapters = {}
+        self._native_adapters = {}
         try:
             from core.connected_apps.adapters.github import GitHubAdapter
             from core.connected_apps.native import native_registry
+            adapter = GitHubAdapter(self.store)
+            self._native_adapters["github"] = adapter
             if native_registry.get("github") is None:
-                native_registry.register(GitHubAdapter(self.store))
+                native_registry.register(adapter)
         except Exception:
             # Native integrations are optional; MCP/core remain available.
             pass
@@ -183,8 +186,7 @@ class ConnectedAppsService:
                     "last_error": "Connection is disabled"}
         meta = row.get("metadata", {})
         if meta.get("native"):
-            from core.connected_apps.native import native_registry
-            adapter = native_registry.get(row.get("app_id"))
+            adapter = self._native_adapters.get(str(row.get("app_id") or "").casefold())
             if not adapter:
                 row["status"] = ConnectionStatus.ERROR.value
                 row["last_error"] = "Native adapter is unavailable"
@@ -261,8 +263,7 @@ class ConnectedAppsService:
         return [adapter.descriptor for adapter in native_registry.adapters()]
 
     def connect_native(self, app_id, *, display_name=None, access_token="", connection_id=None):
-        from core.connected_apps.native import native_registry
-        adapter = native_registry.get(app_id)
+        adapter = self._native_adapters.get(str(app_id or "").casefold())
         if adapter is None:
             raise ValueError(f"Unknown native Connected App: {app_id}")
         if not access_token:
@@ -299,8 +300,7 @@ class ConnectedAppsService:
         row = self.store.get_connection(cid)
         if not row or not row.get("enabled", True) or not row.get("metadata", {}).get("native"):
             return []
-        from core.connected_apps.native import native_registry
-        adapter = native_registry.get(row.get("app_id"))
+        adapter = self._native_adapters.get(str(row.get("app_id") or "").casefold())
         if not adapter:
             return []
         return [{
