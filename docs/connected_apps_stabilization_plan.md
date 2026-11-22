@@ -24,8 +24,15 @@ Finish the Connected Apps subsystem without scope drift: stabilize existing MCP 
 - [x] Fix native adapter initialization so each optional adapter fails independently.
 - [x] Fix native health checks to use the service's own adapter/store instance.
 - [x] Make native disconnect feedback provider-neutral.
+- [x] Enforce enabled/connected state, blocked-tool policy, and schema validation at service-level MCP execution.
+- [x] Fail closed for missing native adapters and invalid argument types.
+- [x] Close stale MCP sessions after failed STDIO/HTTP/SSE connect attempts.
+- [x] Capture native connection ID in disconnect callbacks to prevent selection races.
+- [x] Run reconnect from Details dialog in a worker instead of blocking Qt UI.
+- [x] Audit Connected Apps theme-token references; no undefined tokens remain.
+- [x] Add regression tests for service guards, adapter isolation, and failed-connect cleanup.
 - [ ] Continue audit for lifecycle, OAuth, permissions, and UI regressions.
-- [ ] Add tests for fixes and run focused Connected Apps suite.
+- [ ] Run focused Connected Apps suite locally.
 
 ### Stage 2 — Runtime lifecycle and concurrency
 - [ ] Connect/reconnect/disconnect/remove race audit.
