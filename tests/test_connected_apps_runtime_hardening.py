@@ -367,3 +367,24 @@ def test_runtime_health_falls_back_to_tool_discovery(monkeypatch):
     async def run():
         return await runtime._ping("c1")
     assert asyncio.run(run()) is True
+
+def test_connected_apps_rename_validates_and_persists_name():
+    from core.connected_apps.service import ConnectedAppsService
+
+    class Store:
+        def __init__(self):
+            self.rows = {"c1": {"id": "c1", "display_name": "Original", "updated_at": 0}}
+        def get_connection(self, cid):
+            return dict(self.rows[cid]) if cid in self.rows else None
+        def upsert_connection(self, row):
+            self.rows[row["id"]] = dict(row)
+
+    store = Store()
+    svc = ConnectedAppsService(store=store)
+    result = svc.rename("c1", "  My  GitHub  ")
+    assert result["display_name"] == "My GitHub"
+    assert store.get_connection("c1")["display_name"] == "My GitHub"
+    with pytest.raises(ValueError):
+        svc.rename("c1", "  ")
+    with pytest.raises(ValueError):
+        svc.rename("c1", "x" * 121)
