@@ -10,8 +10,7 @@ PLUGIN = {
     "parameters": {"type":"OBJECT","properties":{
         "action":{"type":"STRING","enum":["connect","list_apps","list_tools","execute","smart_execute","disconnect","remove"]},
         "app":{"type":"STRING"},"connection_id":{"type":"STRING"},
-        "tool":{"type":"STRING"},"arguments":{"type":"OBJECT"},"query":{"type":"STRING"},
-        "query":{"type":"STRING"}},
+        "tool":{"type":"STRING"},"arguments":{"type":"OBJECT"},"query":{"type":"STRING"}},
         "required":["action"]}
 }
 
