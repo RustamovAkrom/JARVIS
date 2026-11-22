@@ -61,18 +61,25 @@ Finish the Connected Apps subsystem without scope drift: stabilize existing MCP 
 - [x] Add regression test ensuring native selection does not reveal Connect.
 - [x] Make failed-connect and reconnect-retry cleanup best-effort so cleanup errors cannot mask the original failure.
 - [x] Add regression tests for cleanup failures across STDIO, HTTP, and SSE.
-- [ ] Connect/reconnect/disconnect/remove race audit at service/store level.
+- [x] Audit service lifecycle serialization and native-vs-MCP disconnect/remove behavior.
+- [x] Prevent native app lifecycle operations from calling the MCP runtime.
+- [x] Preserve original HTTP/SSE connection errors when cleanup fails.
+- [x] Add regression tests for native lifecycle and HTTP/SSE cleanup failures.
+- [ ] Final focused test run and review remaining timeout/cancellation behavior.
 - [ ] Timeout and cancellation audit.
 - [x] Fix runtime event-loop startup deadlock caused by ready-thread lock acquisition.
 - [x] Add regression test for runtime loop startup and shutdown.
 - [ ] Event-loop shutdown and pending-task cleanup.
-- [ ] Reconnect-all behavior and backoff.
+- [x] Reconnect-all behavior and exponential retry backoff implemented.
+- [ ] Audit reconnect-all cancellation and shutdown interaction.
 - [ ] Health check state transitions.
 - [x] Ensure failed connect cleanup is best-effort and original connection error remains visible.
 - [ ] Ensure failed connect does not leave stale sessions or credentials.
 
 ### Stage 3 — OAuth and credential security
-- [ ] PKCE/state/callback validation.
+- [x] Validate authorization/token endpoint URL schemes and hosts.
+- [x] Validate client ID, authorization code, verifier, state, and PKCE inputs.
+- [ ] PKCE/state/callback validation audit and additional edge-case tests.
 - [ ] OAuth metadata and endpoint validation.
 - [ ] Token refresh locking and rotation.
 - [ ] Credential deletion/revocation behavior.
