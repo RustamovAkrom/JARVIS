@@ -3,9 +3,10 @@ from __future__ import annotations
 
 import threading
 import time
+import json
 
 from core.connected_apps.providers import get_provider
-from core.connected_apps.oauth import authorize, refresh_tokens
+from core.connected_apps.oauth import authorize, refresh_tokens, OAuthConfig, discover_mcp_oauth
 
 
 class OAuthService:
@@ -29,6 +30,33 @@ class OAuthService:
         self.store.set_credential(connection_id, "oauth_scopes", " ".join(selected_scopes))
         return {
             "provider": provider.id,
+            "scopes": tokens.get("scope", selected_scopes),
+            "expires_at": time.time() + int(tokens.get("expires_in", 0))
+            if tokens.get("expires_in") else None,
+        }
+
+    def authorize_mcp_connection(self, connection_id, resource_url, client_id, scopes=None, client_secret=""):
+        discovery = discover_mcp_oauth(resource_url)
+        metadata = discovery["authorization_server"]
+        selected_scopes = list(scopes or discovery["resource"].get("scopes_supported") or [])
+        config = OAuthConfig(
+            authorization_url=metadata["authorization_endpoint"],
+            token_url=metadata["token_endpoint"],
+            client_id=client_id,
+            redirect_uri="",
+            scopes=selected_scopes,
+            client_secret=client_secret,
+            extra_authorize_params={"resource": resource_url},
+        )
+        tokens = authorize(config)
+        self._save(connection_id, tokens)
+        self.store.set_credential(connection_id, "oauth_client_id", client_id)
+        self.store.set_credential(connection_id, "oauth_client_secret", client_secret)
+        self.store.set_credential(connection_id, "oauth_scopes", " ".join(selected_scopes))
+        self.store.set_credential(connection_id, "oauth_resource", resource_url)
+        self.store.set_credential(connection_id, "oauth_metadata", json.dumps(discovery, separators=(",", ":")))
+        return {
+            "issuer": discovery["issuer"],
             "scopes": tokens.get("scope", selected_scopes),
             "expires_at": time.time() + int(tokens.get("expires_in", 0))
             if tokens.get("expires_in") else None,
@@ -77,9 +105,26 @@ class OAuthService:
             client_id = self.store.get_credential(cid, "oauth_client_id")
             client_secret = self.store.get_credential(cid, "oauth_client_secret")
             scopes = self.store.get_credential(cid, "oauth_scopes").split()
-            if not refresh_token or not provider or not client_id:
+            if not refresh_token or not client_id:
                 raise RuntimeError("OAuth authorization required; token expired or unavailable")
-            config = provider.config(client_id, "", scopes, client_secret)
+            if provider:
+                config = provider.config(client_id, "", scopes, client_secret)
+            else:
+                raw_metadata = self.store.get_credential(cid, "oauth_metadata")
+                try:
+                    metadata = json.loads(raw_metadata)
+                    authorization_server = metadata["authorization_server"]
+                    config = OAuthConfig(
+                        authorization_url=authorization_server["authorization_endpoint"],
+                        token_url=authorization_server["token_endpoint"],
+                        client_id=client_id,
+                        redirect_uri="",
+                        scopes=scopes,
+                        client_secret=client_secret,
+                        extra_authorize_params={"resource": self.store.get_credential(cid, "oauth_resource")},
+                    )
+                except (ValueError, KeyError, TypeError):
+                    raise RuntimeError("OAuth authorization required; metadata is unavailable") from None
             updated = refresh_tokens(config, refresh_token)
             self._save(cid, updated)
             refreshed = self.store.get_credential(cid, "access_token")
