@@ -38,6 +38,13 @@ Finish the Connected Apps subsystem without scope drift: stabilize existing MCP 
 - [x] Make permission apply persist read-only automation and enabled/reconnect state together.
 - [x] Fix tool activity regression test to mock discovered runtime tools.
 - [x] Add regression test for runtime disconnect when event loop is stopped.
+- [x] Fix HTTP/SSE failed-connect stale-session cleanup.
+- [x] Fix runtime shutdown disconnect handling and avoid unawaited coroutine warnings.
+- [x] Surface disconnect failures through Service/UI instead of silently marking disconnected.
+- [x] Replace implicit permission checkbox persistence with explicit Apply permissions action.
+- [x] Persist read-only automation and enabled/reconnect state together.
+- [x] Fix tool activity regression test to mock discovered runtime tools.
+- [x] Add regression test for runtime disconnect when event loop is stopped.
 - [ ] Continue audit for lifecycle, OAuth, permissions, and UI regressions.
 - [ ] Run focused Connected Apps suite locally.
 
