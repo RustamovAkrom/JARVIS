@@ -195,7 +195,7 @@ class ConnectedAppsAgent:
         _validate_arguments(tool.get("input_schema") or {}, args)
         # Automatic execution is permitted only when the MCP server explicitly
         # marks the operation read-only and non-destructive. All other calls fail closed.
-        safe_read = _annotation(tool, "readOnlyHint") and not _annotation(tool, "destructiveHint")
+        safe_read = (\n            _annotation(tool, "readOnlyHint")\n            and not _annotation(tool, "destructiveHint")\n            and tool.get("connection_metadata", {}).get("auto_approve_read_only") is True\n        )
         if read_only and safe_read and not destructive:
             return self._service.call_tool(connection_id, tool_name, args)
         from core import confirm
