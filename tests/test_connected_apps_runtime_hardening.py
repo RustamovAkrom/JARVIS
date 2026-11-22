@@ -270,3 +270,27 @@ def test_mcp_catalog_contains_database_and_developer_integrations():
     assert github is not None
     assert "GITHUB_PERSONAL_ACCESS_TOKEN" in github.env_keys
     assert get_template("brave-search").env_keys == ("BRAVE_API_KEY",)
+
+def test_health_check_does_not_change_disconnected_connection(monkeypatch):
+    import importlib
+    module = importlib.import_module("core.connected_apps.service")
+    from core.connected_apps.service import ConnectedAppsService
+
+    class Store:
+        def __init__(self):
+            self.rows = {"c1": {"id": "c1", "status": "disconnected", "enabled": True,
+                "metadata": {}, "last_error": "", "updated_at": 0}}
+        def get_connection(self, cid):
+            return dict(self.rows[cid])
+        def upsert_connection(self, row):
+            self.rows[row["id"]] = dict(row)
+        def list_connections(self):
+            return list(self.rows.values())
+
+    store = Store()
+    svc = ConnectedAppsService(store=store)
+    monkeypatch.setattr(module.runtime, "health", lambda cid: pytest.fail("Disconnected session pinged"))
+    result = svc.health_check("c1")
+    assert result["healthy"] is False
+    assert result["status"] == "disconnected"
+    assert store.get_connection("c1")["status"] == "disconnected"
