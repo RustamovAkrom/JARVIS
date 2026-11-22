@@ -141,32 +141,28 @@ def _validate_value(schema: dict[str, Any], value: Any, path: str) -> None:
         if "maxProperties" in schema and len(value) > schema["maxProperties"]:
             raise ValueError(f"{path} has too many properties")
         additional = schema.get("additionalProperties", True)
+        pattern_properties = schema.get("patternProperties", {})
+        if not isinstance(pattern_properties, dict):
+            raise ValueError(f"{path} has an invalid patternProperties schema")
         for key, item in value.items():
             child = properties.get(key)
-            if child is None:
-                if additional is False:
-                    raise ValueError(f"{path} contains unknown arguments: {key}")
-                if isinstance(additional, dict):
-                    _validate_value(additional, item, f"{path}.{key}")
+            if child is not None:
+                _validate_value(child, item, f"{path}.{key}")
                 continue
-            _validate_value(child, item, f"{path}.{key}")
-        pattern_properties = schema.get("patternProperties", {})
-        if pattern_properties:
-            if not isinstance(pattern_properties, dict):
-                raise ValueError(f"{path} has an invalid patternProperties schema")
-            for key, item in value.items():
-                if key in properties:
-                    continue
-                matched = False
-                for pattern, child in pattern_properties.items():
-                    try:
-                        if re.search(pattern, key):
-                            matched = True
-                            _validate_value(child, item, f"{path}.{key}")
-                    except re.error:
-                        raise ValueError(f"{path} has an invalid validation pattern") from None
-                if not matched and additional is False:
-                    raise ValueError(f"{path} contains unknown arguments: {key}")
+            matched = False
+            for pattern, pattern_schema in pattern_properties.items():
+                try:
+                    if re.search(pattern, key):
+                        matched = True
+                        _validate_value(pattern_schema, item, f"{path}.{key}")
+                except re.error:
+                    raise ValueError(f"{path} has an invalid validation pattern") from None
+            if matched:
+                continue
+            if additional is False:
+                raise ValueError(f"{path} contains unknown arguments: {key}")
+            if isinstance(additional, dict):
+                _validate_value(additional, item, f"{path}.{key}")
     elif isinstance(value, list):
         if "minItems" in schema and len(value) < schema["minItems"]:
             raise ValueError(f"{path} has too few items")
