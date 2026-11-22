@@ -3926,6 +3926,11 @@ class JarvisLive:
             await engine.close()
 
     def shutdown_tasks(self) -> None:
+        try:
+            from core.connected_apps.runtime import runtime as connected_apps_runtime
+            connected_apps_runtime.shutdown()
+        except Exception as exc:
+            self.ui.write_log(f"[Connected Apps] Shutdown failed: {type(exc).__name__}: {exc}")
         runtime = getattr(self, "_task_runtime", None)
         if runtime is not None:
             try:
