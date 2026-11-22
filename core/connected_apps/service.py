@@ -22,7 +22,7 @@ def _serialize(row):
 
 def _safe_error(exc: Exception) -> str:
     # Do not persist arbitrary exception text that may include headers/tokens.
-    text = str(exc).replace("\\r", " ").replace("\\n", " ")
+    text = str(exc).replace("\r", " ").replace("\n", " ")
     for marker in ("Bearer ", "bearer ", "token=", "access_token="):
         if marker in text:
             text = text.split(marker, 1)[0] + marker + "[redacted]"
