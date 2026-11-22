@@ -336,3 +336,19 @@ def test_oauth_refresh_error_does_not_leak_provider_response(monkeypatch):
         refresh_tokens(config, "refresh-token")
     assert "refresh-secret" not in str(exc.value)
     assert "OAuth token refresh failed" in str(exc.value)
+
+
+def test_oauth_revoke_local_removes_all_credentials_and_refresh_lock():
+    class Store:
+        def __init__(self):
+            self.values = {"access_token": "a", "refresh_token": "r", "id_token": "i"}
+        def delete_credentials(self, cid):
+            self.values.clear()
+
+    store = Store()
+    service = OAuthService(store)
+    service._get_refresh_lock("c1")
+    assert "c1" in service._refresh_locks
+    service.revoke_local("c1")
+    assert store.values == {}
+    assert "c1" not in service._refresh_locks
