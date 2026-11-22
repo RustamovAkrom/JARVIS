@@ -209,7 +209,9 @@ class ConnectedAppsService:
                 self.store.upsert_connection(row)
                 return row
             try:
-                adapter.health_check(cid)
+                healthy = bool(adapter.health_check(cid))
+                if not healthy:
+                    raise RuntimeError("Native adapter health check returned unhealthy")
                 row["status"] = ConnectionStatus.CONNECTED.value
                 row["last_error"] = ""
                 meta["health"] = "healthy"
