@@ -88,3 +88,27 @@ def test_oauth_callback_missing_code_returns_http_error_and_completes(monkeypatc
         assert result.error == "OAuth callback did not contain a code"
     finally:
         server.close()
+
+def test_oauth_reauthorization_clears_stale_refresh_token_and_client_secret():
+    from core.connected_apps.auth_service import OAuthService
+
+    class Store:
+        def __init__(self):
+            self.values = {}
+        def set_credential(self, cid, key, value):
+            self.values[(cid, key)] = value
+        def get_credential(self, cid, key):
+            return self.values.get((cid, key), "")
+        def delete_credential(self, cid, key):
+            self.values.pop((cid, key), None)
+
+    store = Store()
+    service = OAuthService(store)
+    store.set_credential("c1", "refresh_token", "old-refresh")
+    store.set_credential("c1", "oauth_client_secret", "old-secret")
+    service._save("c1", {"access_token": "new-access"})
+    store.delete_credential("c1", "refresh_token")
+    store.delete_credential("c1", "oauth_client_secret")
+    assert store.get_credential("c1", "access_token") == "new-access"
+    assert store.get_credential("c1", "refresh_token") == ""
+    assert store.get_credential("c1", "oauth_client_secret") == ""
