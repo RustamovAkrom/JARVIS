@@ -212,8 +212,8 @@ def discover_mcp_oauth(resource_url: str) -> dict[str, Any]:
         if advertised_resource and advertised_resource.rstrip("/") != resource_url.rstrip("/"):
             raise RuntimeError("OAuth protected-resource metadata does not match the requested MCP endpoint")
         servers = resource_metadata.get("authorization_servers") or []
-        if not servers:
-            raise RuntimeError("OAuth resource metadata did not advertise an authorization server")
+        if not isinstance(servers, list) or not servers or not all(isinstance(item, str) for item in servers):
+            raise RuntimeError("OAuth resource metadata did not advertise valid authorization servers")
         issuer = _validate_metadata_url(servers[0])
         issuer_parsed = urllib.parse.urlparse(issuer)
         issuer_origin = f"{issuer_parsed.scheme}://{issuer_parsed.netloc}"
@@ -238,10 +238,20 @@ def discover_mcp_oauth(resource_url: str) -> dict[str, Any]:
         if not isinstance(authorization_metadata, dict):
             raise RuntimeError("Could not discover OAuth authorization-server metadata")
         metadata_issuer = str(authorization_metadata.get("issuer") or "").rstrip("/")
-        if metadata_issuer and metadata_issuer != issuer.rstrip("/"):
+        if not metadata_issuer or metadata_issuer != issuer.rstrip("/"):
             raise RuntimeError("OAuth authorization-server issuer does not match discovered issuer")
-        _validate_metadata_url(authorization_metadata.get("authorization_endpoint", ""))
-        _validate_metadata_url(authorization_metadata.get("token_endpoint", ""))
+        authorization_endpoint = _validate_metadata_url(
+            authorization_metadata.get("authorization_endpoint", "")
+        )
+        token_endpoint = _validate_metadata_url(
+            authorization_metadata.get("token_endpoint", "")
+        )
+        scopes_supported = authorization_metadata.get("scopes_supported")
+        if scopes_supported is not None and (
+            not isinstance(scopes_supported, list)
+            or not all(isinstance(scope, str) for scope in scopes_supported)
+        ):
+            raise RuntimeError("OAuth authorization-server metadata contains invalid scopes")
     return {
         "resource": resource_metadata,
         "issuer": issuer,
