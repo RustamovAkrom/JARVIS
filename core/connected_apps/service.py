@@ -318,8 +318,7 @@ class ConnectedAppsService:
             raise RuntimeError("Connected App is not enabled")
         if row.get("status") != ConnectionStatus.CONNECTED:
             raise RuntimeError("Connected App is not connected")
-        from core.connected_apps.native import native_registry
-        adapter = native_registry.get(row.get("app_id"))
+        adapter = self._native_adapters.get(str(row.get("app_id") or "").casefold())
         if not adapter:
             raise RuntimeError("Native adapter is unavailable")
         tool = next((item for item in adapter.tools if item.name == tool_name), None)
