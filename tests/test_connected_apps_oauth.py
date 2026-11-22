@@ -155,3 +155,40 @@ def test_oauth_token_endpoint_rejects_unsafe_url(url):
     )
     with pytest.raises(ValueError):
         refresh_tokens(config, "refresh-token")
+
+
+def test_oauth_refresh_rotation_is_persisted_and_reuses_refreshed_token(monkeypatch):
+    import core.connected_apps.auth_service as auth_module
+
+    class Store:
+        def __init__(self):
+            self.values = {}
+        def set_credential(self, cid, key, value):
+            self.values[(cid, key)] = value
+        def get_credential(self, cid, key):
+            return self.values.get((cid, key), "")
+        def delete_credential(self, cid, key):
+            self.values.pop((cid, key), None)
+
+    class Provider:
+        id = "test"
+        def config(self, client_id, redirect_uri, scopes, client_secret):
+            return object()
+
+    store = Store()
+    store.set_credential("c1", "access_token", "expired-access")
+    store.set_credential("c1", "refresh_token", "old-refresh")
+    store.set_credential("c1", "expires_at", "1")
+    store.set_credential("c1", "oauth_provider", "test")
+    store.set_credential("c1", "oauth_client_id", "client")
+    monkeypatch.setattr(auth_module, "get_provider", lambda provider_id: Provider())
+    calls = []
+    monkeypatch.setattr(auth_module, "refresh_tokens", lambda config, token: calls.append(token) or {
+        "access_token": "fresh-access", "refresh_token": "rotated-refresh", "expires_in": 3600
+    })
+
+    service = OAuthService(store)
+    assert service.get_access_token("c1") == "fresh-access"
+    assert store.get_credential("c1", "refresh_token") == "rotated-refresh"
+    assert service.get_access_token("c1") == "fresh-access"
+    assert calls == ["old-refresh"]
