@@ -52,6 +52,8 @@ Finish the Connected Apps subsystem without scope drift: stabilize existing MCP 
 - [x] Serialize connect/reconnect/call/disconnect runtime operations per connection ID.
 - [x] Ensure shutdown continues when an individual disconnect cannot be confirmed.
 - [x] Fix test_connected_apps_tool_calls_record_activity_and_errors to mock runtime tool discovery.
+- [x] Prevent native GitHub/Google Calendar duplicate connect actions while already connected.
+- [x] Use schema-valid arguments in runtime-error activity regression test.
 - [ ] Connect/reconnect/disconnect/remove race audit at service/store level.
 - [ ] Timeout and cancellation audit.
 - [ ] Event-loop shutdown and pending-task cleanup.
