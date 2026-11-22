@@ -2,6 +2,7 @@
 from __future__ import annotations
 import json
 from PyQt6.QtCore import Qt, QObject, QRunnable, QThreadPool, pyqtSignal, QSize
+from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QTextEdit, QListWidget, QListWidgetItem, QMessageBox, QInputDialog, QGroupBox, QCheckBox, QApplication, QFrame, QMenu, QTabWidget, QDialog, QDialogButtonBox
 from core.connected_apps.models import AppDescriptor, TransportType
 from gui.themes.tokens import C
@@ -47,42 +48,80 @@ class ConnectedAppsPanel(QWidget):
         native_description.setWordWrap(True)
         native_layout.addWidget(native_description)
 
+        native_cards=QHBoxLayout()
+        native_cards.setSpacing(8)
+
         github_card=QFrame()
         github_card.setObjectName("nativeAppCard")
-        github_layout=QHBoxLayout(github_card)
-        github_layout.setContentsMargins(14,12,14,12)
-        github_info=QVBoxLayout()
+        github_layout=QVBoxLayout(github_card)
+        github_layout.setContentsMargins(10,8,10,8)
+        github_layout.setSpacing(5)
+        github_header=QHBoxLayout()
         github_name=QLabel("GitHub")
         github_name.setObjectName("nativeAppName")
-        github_summary=QLabel("Repositories, issues, pull requests, code search and commits.")
+        github_header.addWidget(github_name)
+        github_header.addStretch(1)
+        github_status=QLabel("Native integration")
+        github_status.setObjectName("nativeAppStatus")
+        github_header.addWidget(github_status)
+        github_layout.addLayout(github_header)
+        github_summary=QLabel("Repositories, issues, pull requests and code.")
         github_summary.setObjectName("nativeAppDescription")
         github_summary.setWordWrap(True)
-        github_info.addWidget(github_name)
-        github_info.addWidget(github_summary)
-        github_layout.addLayout(github_info,1)
-        native_actions=QVBoxLayout()
-        native_actions.setSpacing(6)
-        self.add_github_btn=QPushButton("Connect GitHub")
+        github_layout.addWidget(github_summary)
+        github_actions=QHBoxLayout()
+        self.add_github_btn=QPushButton("Connect")
         self.add_github_btn.setObjectName("primaryAction")
+        self.add_github_btn.setProperty("compact", True)
         self.add_github_btn.clicked.connect(self.connect_github_oauth)
         self.native_disconnect_btn=QPushButton("Disconnect")
+        self.native_disconnect_btn.setProperty("compact", True)
         self.native_disconnect_btn.clicked.connect(self.disconnect_native_selected)
         self.native_disconnect_btn.setEnabled(False)
-        native_actions.addWidget(self.add_github_btn)
-        native_actions.addWidget(self.native_disconnect_btn)
-        github_layout.addLayout(native_actions,0)
-        native_layout.addWidget(github_card)
+        github_actions.addWidget(self.add_github_btn)
+        github_actions.addWidget(self.native_disconnect_btn)
+        github_actions.addStretch(1)
+        github_layout.addLayout(github_actions)
+        native_cards.addWidget(github_card,1)
+
+        calendar_card=QFrame()
+        calendar_card.setObjectName("nativeAppCard")
+        calendar_layout=QVBoxLayout(calendar_card)
+        calendar_layout.setContentsMargins(10,8,10,8)
+        calendar_layout.setSpacing(5)
+        calendar_header=QHBoxLayout()
+        calendar_name=QLabel("Google Calendar")
+        calendar_name.setObjectName("nativeAppName")
+        calendar_header.addWidget(calendar_name)
+        calendar_header.addStretch(1)
+        calendar_status=QLabel("Native integration")
+        calendar_status.setObjectName("nativeAppStatus")
+        calendar_header.addWidget(calendar_status)
+        calendar_layout.addLayout(calendar_header)
+        calendar_summary=QLabel("View events and create events with confirmation.")
+        calendar_summary.setObjectName("nativeAppDescription")
+        calendar_summary.setWordWrap(True)
+        calendar_layout.addWidget(calendar_summary)
+        calendar_actions=QHBoxLayout()
+        self.add_calendar_btn=QPushButton("Connect")
+        self.add_calendar_btn.setObjectName("primaryAction")
+        self.add_calendar_btn.setProperty("compact", True)
+        self.add_calendar_btn.clicked.connect(self.connect_google_calendar)
+        calendar_actions.addWidget(self.add_calendar_btn)
+        calendar_actions.addStretch(1)
+        calendar_layout.addLayout(calendar_actions)
+        native_cards.addWidget(calendar_card,1)
+        native_layout.addLayout(native_cards)
 
         self.native_list=QListWidget()
         self.native_list.setObjectName("nativeAppsList")
-        self.native_list.setViewMode(QListWidget.ViewMode.IconMode)
+        self.native_list.setViewMode(QListWidget.ViewMode.ListMode)
         self.native_list.setResizeMode(QListWidget.ResizeMode.Adjust)
         self.native_list.setMovement(QListWidget.Movement.Static)
-        self.native_list.setWrapping(True)
-        self.native_list.setGridSize(QSize(190,112))
-        self.native_list.setSpacing(10)
-        self.native_list.setMinimumHeight(130)
-        self.native_list.setMaximumHeight(250)
+        self.native_list.setSpacing(3)
+        self.native_list.setMinimumHeight(0)
+        self.native_list.setMaximumHeight(132)
+        self.native_list.setIconSize(QSize(24,24)
         self.native_list.itemSelectionChanged.connect(self._native_selection_changed)
         self.native_list.itemDoubleClicked.connect(lambda *_: self.open_connection_details(native=True))
         native_layout.addWidget(self.native_list)
@@ -239,6 +278,14 @@ class ConnectedAppsPanel(QWidget):
         self._apply_theme_styles()
         self._check_runtime()
         self.refresh()
+    @staticmethod
+    def _native_icon_path(app_id):
+        from pathlib import Path
+        root = Path(__file__).resolve().parents[2]
+        icon_name = {"github": "github.svg", "google_calendar": "google-calendar.svg"}.get(app_id)
+        path = root / "assets" / "icons" / icon_name if icon_name else None
+        return path if path and path.is_file() else None
+
     def refresh_state(self):
         """Refresh Connected Apps styles when JARVIS theme/accent tokens change."""
         self._apply_theme_styles()
@@ -263,15 +310,18 @@ class ConnectedAppsPanel(QWidget):
         #appsTabSurface QLabel, #mcpTabSurface QLabel {{ color: {C.TEXT}; background: transparent; }}
         #appsTitle {{ color: {C.PRI}; font-size: 22px; font-weight: 700; }}
         #appsSubtitle, #nativeAppDescription {{ color: {C.TEXT_MED}; }}
-        #nativeAppCard {{ background: {C.PANEL2}; color: {C.TEXT}; border: 1px solid {C.BORDER}; border-radius: 10px; }}
-        #nativeAppName {{ color: {C.PRI}; font-size: 15px; font-weight: 700; }}
+        #nativeAppCard {{ background: {C.PANEL2}; color: {C.TEXT}; border: 1px solid {C.BORDER}; border-radius: 8px; }}
+        #nativeAppName {{ color: {C.TEXT}; font-size: 14px; font-weight: 700; }}
+        #nativeAppStatus {{ color: {C.TEXT_MED}; font-size: 10px; }}
+        QPushButton[compact="true"] {{ padding: 4px 9px; min-height: 22px; max-height: 28px; }}
         #nativeAppsList, #appsList {{ background: {C.PANEL2}; color: {C.TEXT}; border: 1px solid {C.BORDER}; border-radius: 8px; outline: 0; }}
-        #nativeAppsList::item, #appsList::item {{ background: {C.PANEL}; color: {C.TEXT}; border: 1px solid {C.BORDER}; border-radius: 8px; padding: 12px; margin: 4px; }}
+        #nativeAppsList::item {{ background: {C.PANEL}; color: {C.TEXT}; border: 1px solid {C.BORDER}; border-radius: 6px; padding: 5px 8px; margin: 1px; }}
+        #appsList::item {{ background: {C.PANEL}; color: {C.TEXT}; border: 1px solid {C.BORDER}; border-radius: 8px; padding: 12px; margin: 4px; }}
         #nativeAppsList::item:hover, #appsList::item:hover {{ background: {C.PRI_GHO}; border: 1px solid {C.BORDER_B}; }}
         #nativeAppsList::item:selected, #appsList::item:selected {{ background: {C.PRI_GHO}; color: {C.PRI}; border: 2px solid {C.PRI}; }}
         QLineEdit, QTextEdit {{ background: {C.PANEL2}; color: {C.TEXT}; border: 1px solid {C.BORDER}; border-radius: 7px; padding: 8px; selection-background-color: {C.PRI_GHO}; }}
         QLineEdit:focus, QTextEdit:focus {{ border-color: {C.PRI}; }}
-        QPushButton {{ background: {C.PANEL2}; color: {C.TEXT}; border: 1px solid {C.BORDER}; border-radius: 7px; padding: 8px 12px; min-height: 28px; }}
+        QPushButton {{ background: {C.PANEL2}; color: {C.TEXT}; border: 1px solid {C.BORDER}; border-radius: 7px; padding: 6px 10px; min-height: 24px; }}
         QPushButton:hover {{ background: {C.PRI_GHO}; color: {C.PRI}; border-color: {C.PRI_DIM}; }}
         QPushButton:pressed {{ background: {C.PRI_GHO}; }}
         QPushButton:disabled {{ background: {C.PANEL}; color: {C.TEXT_DIM}; border-color: {C.BORDER}; }}
@@ -323,8 +373,13 @@ class ConnectedAppsPanel(QWidget):
                 self.list.setCurrentItem(item)
         self.native_list.clear()
         for row in native_rows:
-            item=QListWidgetItem(f"◈\n{row.get('display_name','GitHub')}\n{row.get('status','unknown')}")
+            app_id = str(row.get("app_id") or "").casefold()
+            status = str(row.get("status") or "unknown").replace("_", " ").title()
+            item=QListWidgetItem(f"{row.get('display_name', app_id)}  ·  {status}")
             item.setData(Qt.ItemDataRole.UserRole,row.get("id"))
+            icon_path = self._native_icon_path(app_id)
+            if icon_path:
+                item.setIcon(QIcon(str(icon_path)))
             self.native_list.addItem(item)
             if native_selected and item.data(Qt.ItemDataRole.UserRole)==native_selected:
                 self.native_list.setCurrentItem(item)
@@ -333,7 +388,7 @@ class ConnectedAppsPanel(QWidget):
             item.setFlags(Qt.ItemFlag.NoItemFlags)
             self.list.addItem(item)
         if not native_rows:
-            item=QListWidgetItem("GitHub is not connected yet.")
+            item=QListWidgetItem("No native apps connected yet.")
             item.setFlags(Qt.ItemFlag.NoItemFlags)
             self.native_list.addItem(item)
         self.show_selected()
@@ -395,16 +450,19 @@ class ConnectedAppsPanel(QWidget):
         tools=service.tools(cid)
         dialog=QDialog(self)
         dialog.setWindowTitle(f"{row.get('display_name','Connected App')} · Settings")
-        dialog.setMinimumSize(560,480)
+        dialog.setMinimumSize(500,420)
+        dialog.setPalette(self.palette())
         layout=QVBoxLayout(dialog)
+        layout.setContentsMargins(12,12,12,12)
+        layout.setSpacing(8)
         heading=QLabel(f"{row.get('display_name','Connected App')}  ·  {row.get('status','unknown')}")
         heading.setStyleSheet("font-size: 18px; font-weight: 700;")
         layout.addWidget(heading)
         summary=QFrame()
         summary.setObjectName("connectionSummary")
         summary_layout=QVBoxLayout(summary)
-        summary_layout.setContentsMargins(12,10,12,10)
-        summary_layout.setSpacing(6)
+        summary_layout.setContentsMargins(10,8,10,8)
+        summary_layout.setSpacing(4)
         summary_rows=[
             ("Status",row.get("status","unknown")),
             ("Type","Native App" if native else "MCP Server"),
@@ -442,7 +500,8 @@ class ConnectedAppsPanel(QWidget):
             item=QListWidgetItem(f"{'Blocked' if blocked else 'Allowed'}  ·  {name}")
             item.setData(Qt.ItemDataRole.UserRole,name)
             tool_list.addItem(item)
-        tool_list.setMinimumHeight(130)
+        tool_list.setMinimumHeight(100)
+        tool_list.setMaximumHeight(180)
         tool_list.setAlternatingRowColors(False)
         tool_list.setObjectName("permissionTools")
         permission_layout.addWidget(tool_list)
@@ -476,17 +535,22 @@ class ConnectedAppsPanel(QWidget):
         close_btn.setObjectName("dialogClose")
         close_btn.clicked.connect(dialog.reject)
         layout.addWidget(buttons)
-        dialog.setStyleSheet("""
-            QDialog { background: palette(window); }
-            #connectionSummary { border: 1px solid palette(mid); border-radius: 10px; background: palette(base); }
-            #summaryLabel { color: palette(mid); min-width: 90px; font-weight: 600; }
-            QGroupBox { border: 1px solid palette(mid); border-radius: 10px; margin-top: 8px; padding: 10px; }
-            QListWidget { background: palette(base); border: 1px solid palette(mid); border-radius: 8px; }
-            QListWidget::item { padding: 8px; margin: 2px; border-radius: 5px; }
-            QListWidget::item:selected { background: palette(highlight); color: palette(highlighted-text); }
-            QPushButton { border: 1px solid palette(mid); border-radius: 7px; padding: 8px 12px; min-height: 28px; }
-            QPushButton:hover { border-color: palette(highlight); }
-            QPushButton#dangerAction { color: palette(bright-text); }
+        dialog.setStyleSheet(f"""
+            QDialog {{ background: {C.BG}; color: {C.TEXT}; }}
+            QLabel {{ color: {C.TEXT}; background: transparent; }}
+            #connectionSummary {{ border: 1px solid {C.BORDER}; border-radius: 8px; background: {C.PANEL2}; }}
+            #summaryLabel {{ color: {C.TEXT_MED}; min-width: 90px; font-weight: 600; }}
+            QGroupBox {{ color: {C.TEXT}; background: {C.PANEL}; border: 1px solid {C.BORDER}; border-radius: 8px; margin-top: 8px; padding: 8px; }}
+            QGroupBox::title {{ color: {C.PRI}; subcontrol-origin: margin; left: 10px; padding: 0 4px; }}
+            QListWidget {{ background: {C.PANEL2}; color: {C.TEXT}; border: 1px solid {C.BORDER}; border-radius: 6px; }}
+            QListWidget::item {{ color: {C.TEXT}; padding: 6px; margin: 1px; border-radius: 4px; }}
+            QListWidget::item:selected {{ background: {C.PRI_GHO}; color: {C.PRI}; }}
+            QCheckBox {{ color: {C.TEXT}; spacing: 7px; }}
+            QCheckBox::indicator {{ width: 15px; height: 15px; border: 1px solid {C.BORDER_B}; border-radius: 3px; background: {C.PANEL2}; }}
+            QCheckBox::indicator:checked {{ background: {C.PRI}; border-color: {C.PRI}; }}
+            QPushButton {{ background: {C.PANEL2}; color: {C.TEXT}; border: 1px solid {C.BORDER}; border-radius: 6px; padding: 5px 10px; min-height: 24px; }}
+            QPushButton:hover {{ background: {C.PRI_GHO}; border-color: {C.PRI_DIM}; }}
+            QPushButton#dangerAction {{ color: {C.ERROR}; border-color: {C.ERROR}; }}
         """)
         def save_enabled(value):
             service.set_enabled(cid,value,reconnect=value)
@@ -564,6 +628,31 @@ class ConnectedAppsPanel(QWidget):
         return error
     @staticmethod
     def _slug(value):return "-".join(value.strip().lower().split()) or "app"
+    def connect_google_calendar(self):
+        client_id,ok=QInputDialog.getText(
+            self,"Connect Google Calendar","Google OAuth Client ID:"
+        )
+        if not ok or not client_id.strip():
+            return
+        client_secret,ok=QInputDialog.getText(
+            self,"Connect Google Calendar","OAuth Client Secret (optional for installed apps):",
+            QLineEdit.EchoMode.Password,
+        )
+        if not ok:
+            return
+        self._busy(True,"Opening Google authorization in browser…")
+        def authorize():
+            from core.connected_apps.auth_service import OAuthService
+            auth=OAuthService(service.store)
+            connection_id="google-calendar-native"
+            scopes=["https://www.googleapis.com/auth/calendar.events"]
+            auth.authorize_connection(connection_id,"google",client_id.strip(),scopes=scopes,client_secret=client_secret)
+            token=auth.get_access_token(connection_id)
+            return service.connect_native("google_calendar",access_token=token,connection_id=connection_id)
+        worker=_Worker(authorize)
+        worker.signals.finished.connect(self._connected)
+        self.pool.start(worker)
+
     def connect_github_oauth(self):
         client_id,ok=QInputDialog.getText(
             self,"Connect GitHub","GitHub OAuth App Client ID:"
