@@ -122,12 +122,16 @@ def test_github_create_issue_builds_payload(monkeypatch):
 def test_github_api_error_does_not_expose_response_secrets(monkeypatch):
     adapter = GitHubAdapter(Store())
 
-    class Error:
-        code = 401
-        def read(self, limit): return b'{"message":"Bad credentials"}'
+    error = urllib.error.HTTPError(
+        url="https://api.github.com/user",
+        code=401,
+        msg="Unauthorized",
+        hdrs=None,
+        fp=io.BytesIO(b'{"message":"Bad credentials"}'),
+    )
 
     def fake_urlopen(request, timeout):
-        raise Error()
+        raise error
 
     monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
     with pytest.raises(PermissionError, match="authorization failed"):
