@@ -238,6 +238,9 @@ class ConnectedAppsService:
         row = self.store.get_connection(cid)
         if not row:
             return {"id": cid, "status": "missing", "healthy": False}
+        if row.get("status") != ConnectionStatus.CONNECTED.value:
+            return {"id": cid, "status": row.get("status", "disconnected"),
+                    "healthy": False, "error": "Connection is not currently connected"}
         checked_at = time.time()
         metadata = dict(row.get("metadata") or {})
         try:
@@ -270,7 +273,7 @@ class ConnectedAppsService:
     def health_check_all(self):
         results = []
         for row in self.connections():
-            if not row.get("enabled", True):
+            if not row.get("enabled", True) or row.get("status") != ConnectionStatus.CONNECTED.value:
                 continue
             results.append(self.health_check(row.get("id", "")))
         return results
