@@ -330,22 +330,25 @@ class ConnectedAppsService:
         if row.get("status") != ConnectionStatus.CONNECTED:
             raise RuntimeError("Connected App is not connected")
         adapter = self._native_adapters.get(str(row.get("app_id") or "").casefold())
+        if adapter is None:
+            raise RuntimeError("Native Connected App adapter is unavailable")
         tool = next((item for item in adapter.tools if item.name == tool_name), None)
         if not tool:
             raise ValueError("Native tool is not available")
         if tool_name in set((row.get("metadata") or {}).get("blocked_tools") or []):
             raise PermissionError("This tool is blocked by Connected Apps permissions")
         from core.connected_apps.agent import _validate_arguments
-        _validate_arguments(tool.input_schema, arguments or {})
+        args = {} if arguments is None else arguments
+        _validate_arguments(tool.input_schema, args)
         if not tool.read_only or tool.requires_confirmation:
             from core import confirm
             return confirm.request(
                 key=f"connected_apps:{cid}:{tool_name}",
                 title=f"Connected App — {tool_name}",
-                detail=f"Execute {tool_name} with arguments:\n\n{arguments!r}",
-                run=lambda: adapter.execute(cid, tool_name, arguments or {}),
+                detail=f"Execute {tool_name} with arguments:\n\n{args!r}",
+                run=lambda: adapter.execute(cid, tool_name, args),
             )
-        return adapter.execute(cid, tool_name, arguments or {})
+        return adapter.execute(cid, tool_name, args)
 
     def rename(self, cid, display_name):
         name = " ".join(str(display_name or "").split())
@@ -509,10 +512,11 @@ class ConnectedAppsService:
         if tool_descriptor is None:
             raise ValueError("Tool is not available on this connection")
         from core.connected_apps.agent import _validate_arguments
-        _validate_arguments(tool_descriptor.get("input_schema") or {}, arguments or {})
+        args = {} if arguments is None else arguments
+        _validate_arguments(tool_descriptor.get("input_schema") or {}, args)
 
         try:
-            result = runtime.call(cid, tool, arguments or {})
+            result = runtime.call(cid, tool, args)
         except Exception as exc:
             metadata = dict(row.get("metadata") or {})
             metadata["last_tool_activity"] = started
