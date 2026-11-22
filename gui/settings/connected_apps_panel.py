@@ -31,8 +31,8 @@ class ConnectedAppsPanel(QWidget):
         toolbar.addWidget(self.add_stdio_btn);toolbar.addWidget(self.add_http_btn);toolbar.addWidget(self.add_sse_btn);toolbar.addWidget(self.add_oauth_btn);toolbar.addWidget(self.reconnect_all_btn);layout.addLayout(toolbar)
         self.list=QListWidget();self.list.setObjectName("appsList");self.list.setMinimumHeight(100);self.list.setMaximumHeight(190);self.list.itemSelectionChanged.connect(self.show_selected);layout.addWidget(self.list)
         self.details=QTextEdit();self.details.setObjectName("appsDetails");self.details.setReadOnly(True);self.details.setMinimumHeight(100);self.details.setMaximumHeight(170);layout.addWidget(self.details)
-        actions=QHBoxLayout();self.connect_btn=QPushButton("Connect / Reconnect");self.connect_btn.clicked.connect(self.connect_selected);self.disconnect_btn=QPushButton("Disconnect");self.disconnect_btn.clicked.connect(self.disconnect_selected);self.remove_btn=QPushButton("Remove");self.remove_btn.clicked.connect(self.remove_selected)
-        actions.addWidget(self.connect_btn);actions.addWidget(self.disconnect_btn);actions.addWidget(self.remove_btn);actions.addStretch(1);layout.addLayout(actions);self.auto_read_checkbox=QCheckBox("Auto-run read-only MCP tools from this server");self.auto_read_checkbox.setToolTip("Only tools marked read-only and non-destructive by the MCP server can run without confirmation. Enable only for servers you trust.");self.auto_read_checkbox.toggled.connect(self._set_auto_read);layout.addWidget(self.auto_read_checkbox);root.addWidget(group)
+        actions=QHBoxLayout();self.connect_btn=QPushButton("Connect / Reconnect");self.connect_btn.clicked.connect(self.connect_selected);self.disconnect_btn=QPushButton("Disconnect");self.disconnect_btn.clicked.connect(self.disconnect_selected);self.remove_btn=QPushButton("Remove");self.remove_btn.clicked.connect(self.remove_selected);self.block_tool_btn=QPushButton("Block tool");self.block_tool_btn.clicked.connect(lambda:self.set_tool_permission(True));self.allow_tool_btn=QPushButton("Unblock tool");self.allow_tool_btn.clicked.connect(lambda:self.set_tool_permission(False))
+        actions.addWidget(self.connect_btn);actions.addWidget(self.disconnect_btn);actions.addWidget(self.remove_btn);actions.addWidget(self.block_tool_btn);actions.addWidget(self.allow_tool_btn);actions.addStretch(1);layout.addLayout(actions);self.auto_read_checkbox=QCheckBox("Auto-run read-only MCP tools from this server");self.auto_read_checkbox.setToolTip("Only tools marked read-only and non-destructive by the MCP server can run without confirmation. Enable only for servers you trust.");self.auto_read_checkbox.toggled.connect(self._set_auto_read);layout.addWidget(self.auto_read_checkbox);root.addWidget(group)
         runtime=QGroupBox("MCP runtime");rrow=QVBoxLayout(runtime);rrow.setSpacing(6);self.runtime_status=QLabel();self.runtime_status.setWordWrap(True);rrow.addWidget(self.runtime_status);self.runtime_help=QLabel();self.runtime_help.setWordWrap(True);rrow.addWidget(self.runtime_help);root.addWidget(runtime)
         self.status=QLabel("Ready");self.status.setObjectName("appsStatus");self.status.setWordWrap(True);root.addWidget(self.status);root.addStretch(1)
         self.setStyleSheet("""
@@ -59,7 +59,7 @@ class ConnectedAppsPanel(QWidget):
             self.runtime_help.setText("Connected Apps runtime is available.")
 
     def _busy(self,busy,message=""):
-        for w in (self.add_stdio_btn,self.add_http_btn,self.add_sse_btn,self.add_oauth_btn,self.reconnect_all_btn,self.connect_btn,self.disconnect_btn,self.remove_btn):w.setEnabled(not busy)
+        for w in (self.add_stdio_btn,self.add_http_btn,self.add_sse_btn,self.add_oauth_btn,self.reconnect_all_btn,self.connect_btn,self.disconnect_btn,self.remove_btn,self.block_tool_btn,self.allow_tool_btn):w.setEnabled(not busy)
         if message:self.status.setText(message)
     def refresh(self,*_):
         query=self.search.text().casefold().strip();selected=self.selected_id();self.list.clear();visible=[]
@@ -203,6 +203,27 @@ class ConnectedAppsPanel(QWidget):
             count=len(row.get("metadata",{}).get("tools",[]));self.status.setText(f"{row.get('display_name')}: {row.get('status')} · {count} tools discovered")
             if row.get("last_error"):QMessageBox.warning(self,"Connection failed",self._friendly_error(row["last_error"]))
         self.refresh()
+    def set_tool_permission(self, blocked):
+        cid=self.selected_id()
+        if not cid:
+            QMessageBox.information(self,"Tool permissions","Select a connected app first.")
+            return
+        row=service.store.get_connection(cid)
+        tools=service.tools(cid)
+        names=[item.get("name","") for item in tools if item.get("name")]
+        if not names:
+            QMessageBox.information(self,"Tool permissions","Connect the server and discover its tools first.")
+            return
+        name,ok=QInputDialog.getItem(self,"Tool permissions","Tool:",names,0,False)
+        if not ok or not name:
+            return
+        try:
+            service.set_tool_blocked(cid,name,blocked)
+            self.status.setText(f"{'Blocked' if blocked else 'Unblocked'} MCP tool: {name}")
+            self.refresh()
+        except Exception as exc:
+            QMessageBox.warning(self,"Tool permissions",self._friendly_error(str(exc)))
+
     def disconnect_selected(self):
         cid=self.selected_id()
         if not cid:return
