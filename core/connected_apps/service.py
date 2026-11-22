@@ -180,7 +180,8 @@ class ConnectedAppsService:
 
     def _saved_http_headers(self, cid):
         provider = self.store.get_credential(cid, "oauth_provider")
-        if provider:
+        mcp_metadata = self.store.get_credential(cid, "oauth_metadata")
+        if provider or mcp_metadata:
             from core.connected_apps.auth_service import OAuthService
             token = OAuthService(self.store).get_access_token(cid)
             token_type = self.store.get_credential(cid, "token_type") or "Bearer"
