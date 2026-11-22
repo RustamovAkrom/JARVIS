@@ -18,3 +18,14 @@ def test_connected_app_selection_does_not_reveal_connect_action():
 
     assert "setVisible(" not in handler
     assert "self.native_disconnect_btn.setEnabled(connected)" in handler
+
+
+def test_connected_apps_panel_does_not_duplicate_settings_category_header():
+    from pathlib import Path
+
+    source = Path("gui/settings/connected_apps_panel.py").read_text(encoding="utf-8")
+    assert 'title=QLabel("Connected Apps")' not in source
+    assert 'subtitle=QLabel("Connect trusted services and manage integrations, authorization and tool permissions.")' not in source
+    assert 'native_group=QGroupBox()' in source
+    assert 'mcp_group=QGroupBox()' in source
+    assert 'root.setContentsMargins(0,0,0,0)' in source
