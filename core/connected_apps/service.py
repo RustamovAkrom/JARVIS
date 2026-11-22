@@ -458,6 +458,9 @@ class ConnectedAppsService:
         return results
 
     def tools(self, cid):
+        row = self.store.get_connection(cid)
+        if row and (row.get("metadata") or {}).get("native"):
+            return self.native_tools(cid)
         return runtime.tools(cid)
 
     def set_tool_blocked(self, cid, tool_name, blocked=True):
