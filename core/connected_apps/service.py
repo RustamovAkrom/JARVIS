@@ -136,6 +136,13 @@ class ConnectedAppsService:
     def connections(self):
         return self.store.list_connections()
 
+    def _cleanup_failed_runtime_connection(self, cid):
+        """Best-effort cleanup that must never replace the original connect error."""
+        try:
+            runtime.disconnect(cid)
+        except Exception:
+            logger.warning("Failed to clean up runtime after connection failure for %s", cid, exc_info=True)
+
     def _begin_connection(self, cid, descriptor, display_name, transport, metadata):
         previous = self.store.get_connection(cid)
         row = AppConnection(
@@ -168,7 +175,7 @@ class ConnectedAppsService:
         except Exception as exc:
             # Fail closed: a failed reconnect must not leave an older runtime
             # session active under the same connection ID.
-            runtime.disconnect(cid)
+            self._cleanup_failed_runtime_connection(cid)
             row.status = ConnectionStatus.ERROR
             row.last_error = _safe_error(exc)
         data = _serialize(row)
