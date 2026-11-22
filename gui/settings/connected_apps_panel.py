@@ -557,7 +557,7 @@ class ConnectedAppsPanel(QWidget):
             QCheckBox::indicator:checked {{ background: {C.PRI}; border-color: {C.PRI}; }}
             QPushButton {{ background: {C.PANEL2}; color: {C.TEXT}; border: 1px solid {C.BORDER}; border-radius: 6px; padding: 5px 10px; min-height: 24px; }}
             QPushButton:hover {{ background: {C.PRI_GHO}; border-color: {C.PRI_DIM}; }}
-            QPushButton#dangerAction {{ color: {C.ERROR}; border-color: {C.ERROR}; }}
+            QPushButton#dangerAction {{ color: {C.RED}; border-color: {C.RED}; }}
         """)
         def save_enabled(value):
             service.set_enabled(cid,value,reconnect=value)
