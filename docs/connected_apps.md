@@ -57,3 +57,16 @@ Native adapter tests are in `tests/test_connected_apps_native_github.py`. Run:
 python -m pytest -v tests/test_connected_apps_native_github.py
 python -m pytest -v
 ```
+
+
+## Google Calendar
+
+Google Calendar is a native integration using the Google OAuth provider. JARVIS requests the `calendar.events` scope and stores OAuth credentials in the Connected Apps credential store.
+
+| Tool | Access |
+|---|---|
+| `google_calendar_list_events` | Read |
+| `google_calendar_get_event` | Read |
+| `google_calendar_create_event` | Write; confirmation |
+
+The adapter uses the Google Calendar API v3, bounded requests, and refresh-token support through the shared OAuth service. Event creation is always confirmation-gated. Configure a Google OAuth Client ID in Connected Apps; client secrets are optional for supported desktop OAuth configurations.
