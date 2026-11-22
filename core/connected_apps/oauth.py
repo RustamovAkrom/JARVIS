@@ -43,6 +43,12 @@ def create_pkce() -> tuple[str, str]:
 
 
 def build_authorization_url(config: OAuthConfig, state: OAuthState, challenge: str) -> str:
+    _validate_metadata_url(config.authorization_url)
+    _validate_metadata_url(config.redirect_uri)
+    if not config.client_id or len(config.client_id) > 1024:
+        raise ValueError("OAuth client ID is invalid")
+    if not state.state or not challenge or not state.verifier:
+        raise ValueError("OAuth state and PKCE values are required")
     # Provider-specific extras must never override PKCE/state/redirect fields.
     params = dict(config.extra_authorize_params or {})
     params.update({
@@ -228,6 +234,10 @@ def discover_mcp_oauth(resource_url: str) -> dict[str, Any]:
 
 def exchange_code(config: OAuthConfig, code: str, verifier: str, redirect_uri: str) -> dict[str, Any]:
     """Exchange code for tokens using a lazily imported HTTP client."""
+    _validate_metadata_url(config.token_url)
+    _validate_metadata_url(redirect_uri)
+    if not code or len(code) > 8192 or not verifier:
+        raise ValueError("OAuth authorization code or PKCE verifier is invalid")
     import httpx
 
     payload = {
@@ -256,6 +266,9 @@ def exchange_code(config: OAuthConfig, code: str, verifier: str, redirect_uri: s
 
 def refresh_tokens(config: OAuthConfig, refresh_token: str) -> dict[str, Any]:
     """Refresh OAuth tokens when the provider supports refresh_token grants."""
+    _validate_metadata_url(config.token_url)
+    if not refresh_token or len(refresh_token) > 16384:
+        raise ValueError("OAuth refresh token is invalid")
     import httpx
 
     payload = {
@@ -282,6 +295,8 @@ def refresh_tokens(config: OAuthConfig, refresh_token: str) -> dict[str, Any]:
 
 def authorize(config: OAuthConfig, *, timeout: float = 180, open_browser: bool = True) -> dict[str, Any]:
     """Run PKCE authorization in the user's browser and return token response."""
+    _validate_metadata_url(config.authorization_url)
+    _validate_metadata_url(config.token_url)
     import webbrowser
 
     callback = OAuthCallbackServer()
