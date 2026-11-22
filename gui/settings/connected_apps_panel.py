@@ -1,8 +1,8 @@
 """Connected Apps settings UI for optional MCP integrations."""
 from __future__ import annotations
 import json
-from PyQt6.QtCore import Qt, QObject, QRunnable, QThreadPool, pyqtSignal
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QTextEdit, QListWidget, QListWidgetItem, QMessageBox, QInputDialog, QGroupBox, QCheckBox, QApplication, QFrame, QMenu, QTabWidget, QDialog, QDialogButtonBox, QSize
+from PyQt6.QtCore import Qt, QObject, QRunnable, QThreadPool, pyqtSignal, QSize
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QTextEdit, QListWidget, QListWidgetItem, QMessageBox, QInputDialog, QGroupBox, QCheckBox, QApplication, QFrame, QMenu, QTabWidget, QDialog, QDialogButtonBox
 from core.connected_apps.models import AppDescriptor, TransportType
 from core.connected_apps.service import service
 
@@ -365,7 +365,14 @@ class ConnectedAppsPanel(QWidget):
         layout.addWidget(heading)
         info=QTextEdit()
         info.setReadOnly(True)
-        info.setPlainText(self.details.toPlainText())
+        info.setPlainText(
+            f"App: {row.get('display_name')}\\n"
+            f"Status: {row.get('status')}\\n"
+            f"Transport: {metadata.get('transport','native' if native else 'unknown')}\\n"
+            f"Endpoint: {metadata.get('endpoint') or metadata.get('command','')}\\n"
+            f"Tools: {len(tools)}\\n"
+            f"Last error: {row.get('last_error') or 'None'}"
+        )
         info.setMinimumHeight(170)
         layout.addWidget(info)
         permissions=QGroupBox("Permissions and automation")
@@ -411,7 +418,6 @@ class ConnectedAppsPanel(QWidget):
         unblock.clicked.connect(do_unblock)
         tool_actions.addWidget(block);tool_actions.addWidget(unblock)
         permission_layout.addLayout(tool_actions)
-        layout.addWidget(permissions)
         buttons=QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         buttons.rejected.connect(dialog.reject)
         buttons.accepted.connect(dialog.accept)
