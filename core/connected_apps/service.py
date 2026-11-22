@@ -420,7 +420,8 @@ class ConnectedAppsService:
         row["enabled"] = enabled
         row["updated_at"] = time.time()
         if not enabled:
-            runtime.disconnect(cid)
+            if not (row.get("metadata") or {}).get("native"):
+                runtime.disconnect(cid)
             row["status"] = ConnectionStatus.DISCONNECTED.value
             row["last_error"] = ""
             metadata = dict(row.get("metadata") or {})
@@ -441,7 +442,8 @@ class ConnectedAppsService:
         if not row:
             return False
         try:
-            runtime.disconnect(cid)
+            if not (row.get("metadata") or {}).get("native"):
+                runtime.disconnect(cid)
         except Exception as exc:
             row["status"] = ConnectionStatus.ERROR.value
             row["last_error"] = _safe_error(exc)
@@ -456,7 +458,9 @@ class ConnectedAppsService:
 
     @_serialized_connection_operation
     def remove(self, cid):
-        runtime.disconnect(cid)
+        row = self.store.get_connection(cid)
+        if row and not (row.get("metadata") or {}).get("native"):
+            runtime.disconnect(cid)
         return self.store.remove_connection(cid)
 
     @_serialized_connection_operation
