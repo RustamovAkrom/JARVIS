@@ -536,3 +536,45 @@ def test_failed_connect_cleanup_error_does_not_replace_original_error(monkeypatc
     assert result["status"] == "error"
     assert "original connect failure" in result["last_error"]
     assert "cleanup failure" not in result["last_error"]
+
+
+@pytest.mark.parametrize("transport", ["http", "sse"])
+def test_failed_http_transport_connect_cleanup_error_is_best_effort(monkeypatch, transport):
+    import importlib
+    from core.connected_apps.models import AppDescriptor, TransportType
+    from core.connected_apps.service import ConnectedAppsService
+
+    module = importlib.import_module("core.connected_apps.service")
+
+    class Store:
+        def __init__(self):
+            self.rows = {}
+        def get_connection(self, cid):
+            row = self.rows.get(cid)
+            return dict(row) if row else None
+        def upsert_connection(self, row):
+            self.rows[row["id"]] = dict(row)
+        def list_connections(self):
+            return list(self.rows.values())
+        def set_credential(self, cid, key, value):
+            pass
+        def delete_credential(self, cid, key):
+            pass
+
+    svc = ConnectedAppsService(store=Store())
+    monkeypatch.setattr(module.runtime, "disconnect", lambda cid: (_ for _ in ()).throw(RuntimeError("cleanup failure")))
+    def fail(*args, **kwargs):
+        raise RuntimeError("original transport failure")
+
+    if transport == "http":
+        monkeypatch.setattr(module.runtime, "connect_http", fail)
+        descriptor = AppDescriptor(id="demo", name="Demo", transport=TransportType.HTTP, endpoint="https://example.com/mcp")
+        result = svc.connect_http(descriptor, connection_id="c1")
+    else:
+        monkeypatch.setattr(module.runtime, "connect_sse", fail)
+        descriptor = AppDescriptor(id="demo", name="Demo", transport=TransportType.SSE, endpoint="https://example.com/mcp")
+        result = svc.connect_sse(descriptor, connection_id="c1")
+
+    assert result["status"] == "error"
+    assert "original transport failure" in result["last_error"]
+    assert "cleanup failure" not in result["last_error"]
