@@ -126,3 +126,34 @@ def test_service_call_tool_rejects_non_object_arguments(monkeypatch):
     with pytest.raises(ValueError, match="object"):
         svc.call_tool("c1", "read", [])
     assert calls == []
+
+
+def test_native_reconnect_marks_false_health_as_error():
+    from core.connected_apps.service import ConnectedAppsService
+
+    class Store:
+        def __init__(self):
+            self.row = {
+                "id": "native-1", "app_id": "demo", "display_name": "Demo",
+                "status": "disconnected", "enabled": True,
+                "metadata": {"native": True}, "last_error": "", "updated_at": 0,
+            }
+        def get_connection(self, cid):
+            return dict(self.row) if cid == "native-1" else None
+        def upsert_connection(self, row):
+            self.row = dict(row)
+        def list_connections(self):
+            return [dict(self.row)]
+
+    class Adapter:
+        descriptor = type("Descriptor", (), {"id": "demo"})()
+        def health_check(self, cid):
+            return False
+
+    store = Store()
+    service = ConnectedAppsService(store=store)
+    service._native_adapters["demo"] = Adapter()
+    result = service.reconnect("native-1")
+    assert result["status"] == "error"
+    assert result["metadata"]["health"] == "unhealthy"
+    assert "unhealthy" in result["last_error"].lower()
