@@ -97,8 +97,12 @@ class ConnectedAppsService:
         cid = connection_id or secrets.token_urlsafe(16)
         row = self._begin_connection(cid, descriptor, display_name, "stdio",
                                      {"command": descriptor.command, "args": list(descriptor.args)})
+        env = dict(descriptor.env or {})
+        for key, value in env.items():
+            self.store.set_credential(cid, f"stdio_env:{key}", value)
+        row.metadata["env_keys"] = list(env)
         try:
-            tools = runtime.connect_stdio(cid, descriptor.command, descriptor.args, descriptor.env)
+            tools = runtime.connect_stdio(cid, descriptor.command, descriptor.args, env)
             row.status = ConnectionStatus.CONNECTED
             row.metadata["tools"] = tools
         except Exception as exc:
@@ -138,6 +142,7 @@ class ConnectedAppsService:
             transport=TransportType.HTTP if meta.get("transport") == "http" else TransportType.STDIO,
             endpoint=meta.get("endpoint", ""), command=meta.get("command", ""),
             args=meta.get("args", []),
+            env={key: self.store.get_credential(cid, f"stdio_env:{key}") for key in meta.get("env_keys", [])},
         )
         if descriptor.transport == TransportType.HTTP:
             return self.connect_http(descriptor, connection_id=cid, headers=self._saved_http_headers(cid))
