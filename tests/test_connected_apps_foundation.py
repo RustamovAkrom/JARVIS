@@ -64,3 +64,9 @@ def test_oauth_extra_parameters_cannot_override_pkce_security_fields():
     assert params["redirect_uri"] == [config.redirect_uri]
     assert params["code_challenge"] == ["expected-challenge"]
     assert params["code_challenge_method"] == ["S256"]
+
+def test_mcp_catalog_search_and_templates_are_reviewable():
+    from core.connected_apps.catalog import list_templates, get_template
+    assert get_template("filesystem") is not None
+    assert list_templates("browser")[0].id == "playwright"
+    assert list_templates("not-a-template") == []
