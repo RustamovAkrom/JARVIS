@@ -1578,7 +1578,8 @@ class JarvisLive:
             for _row in _connected_agent.describe_tools():
                 _conn = str(_row.get("connection_id", ""))
                 _tool = str(_row.get("name", ""))
-                _safe = _re.sub(r"[^a-zA-Z0-9_]", "_", f"mcp_{_conn}_{_tool}")
+                _digest = __import__("hashlib").sha256(f"{_conn}:{_tool}".encode("utf-8")).hexdigest()[:8]
+                _safe = _re.sub(r"[^a-zA-Z0-9_]", "_", f"mcp_{_conn[:8]}_{_tool[:40]}_{_digest}")
                 if not _safe or _safe in {d.get("name") for d in _all_decls if isinstance(d, dict)}:
                     continue
                 _schema = _row.get("input_schema") or {"type": "object", "properties": {}}
