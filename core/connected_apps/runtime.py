@@ -219,10 +219,12 @@ class MCPRuntime:
         if not entry:
             return False
         ping = getattr(entry[1], "ping", None)
-        if not callable(ping):
-            # Some MCP SDK/provider implementations do not expose ping.
+        if callable(ping):
+            await ping()
             return True
-        await ping()
+        # MCP SDK versions/providers without a ping method can still be
+        # checked by performing a lightweight tool-list request.
+        await entry[1].list_tools()
         return True
 
     def health(self, cid, timeout=10):
