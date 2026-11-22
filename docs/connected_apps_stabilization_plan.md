@@ -56,6 +56,8 @@ Finish the Connected Apps subsystem without scope drift: stabilize existing MCP 
 - [x] Use schema-valid arguments in runtime-error activity regression test.
 - [ ] Connect/reconnect/disconnect/remove race audit at service/store level.
 - [ ] Timeout and cancellation audit.
+- [x] Fix runtime event-loop startup deadlock caused by ready-thread lock acquisition.
+- [x] Add regression test for runtime loop startup and shutdown.
 - [ ] Event-loop shutdown and pending-task cleanup.
 - [ ] Reconnect-all behavior and backoff.
 - [ ] Health check state transitions.
