@@ -246,3 +246,37 @@ def test_oauth_callback_server_rejects_non_loopback_bind(host):
 
     with pytest.raises(ValueError, match="loopback"):
         OAuthCallbackServer(host=host)
+
+
+@pytest.mark.parametrize("metadata", [
+    {"issuer": "https://other.example", "authorization_endpoint": "https://auth.example/authorize", "token_endpoint": "https://auth.example/token"},
+    {"issuer": "https://auth.example", "authorization_endpoint": "http://evil.example/authorize", "token_endpoint": "https://auth.example/token"},
+    {"issuer": "https://auth.example", "authorization_endpoint": "https://auth.example/authorize", "token_endpoint": "https://auth.example/token", "scopes_supported": "read"},
+])
+def test_mcp_oauth_discovery_rejects_invalid_authorization_server_metadata(monkeypatch, metadata):
+    import core.connected_apps.oauth as oauth
+
+    class Response:
+        status_code = 200
+        def __init__(self, payload):
+            self.payload = payload
+        def json(self):
+            return self.payload
+
+    class Client:
+        def __init__(self, **kwargs):
+            pass
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            pass
+        def get(self, url):
+            if "oauth-protected-resource" in url:
+                return Response({"resource": "https://mcp.example/api", "authorization_servers": ["https://auth.example"]})
+            if "oauth-authorization-server" in url:
+                return Response(metadata)
+            return Response({})
+
+    monkeypatch.setattr("httpx.Client", Client)
+    with pytest.raises(RuntimeError):
+        oauth.discover_mcp_oauth("https://mcp.example/api")
