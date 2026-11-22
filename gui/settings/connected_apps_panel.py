@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from PyQt6.QtCore import Qt, QObject, QRunnable, QThreadPool, pyqtSignal, QSize
 from PyQt6.QtGui import QIcon
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QTextEdit, QListWidget, QListWidgetItem, QMessageBox, QInputDialog, QGroupBox, QCheckBox, QApplication, QFrame, QMenu, QTabWidget, QDialog, QDialogButtonBox
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QTextEdit, QListWidget, QListWidgetItem, QMessageBox, QInputDialog, QGroupBox, QCheckBox, QApplication, QFrame, QMenu, QTabWidget, QDialog, QDialogButtonBox, QFileDialog
 from core.connected_apps.models import AppDescriptor, TransportType
 from gui.themes.tokens import C
 from core.connected_apps.service import service
@@ -711,8 +711,34 @@ class ConnectedAppsPanel(QWidget):
         label,ok=QInputDialog.getItem(self,"MCP catalog","Choose a server template:",labels,0,False)
         if not ok:return
         template=templates[labels.index(label)]
-        args,ok=QInputDialog.getText(self,"MCP catalog",f"Arguments for {template.command} (JSON array):",text=json.dumps(list(template.args),ensure_ascii=False))
-        if not ok:return
+        # Use guided input for templates that require filesystem paths. Asking users
+        # to type a Windows path inside JSON causes invalid escape sequences
+        # (for example, \\J in E:\\JARVIS).
+        if template.id == "filesystem":
+            allowed_path = QFileDialog.getExistingDirectory(
+                self,
+                "Choose allowed directory for Filesystem MCP",
+                "",
+                QFileDialog.Option.ShowDirsOnly,
+            )
+            if not allowed_path:
+                return
+            parsed = ["-y", "@modelcontextprotocol/server-filesystem", allowed_path.replace("\\\\", "/")]
+        else:
+            args,ok=QInputDialog.getText(
+                self,
+                "MCP catalog",
+                f"Arguments for {template.command} (JSON array):",
+                text=json.dumps(list(template.args),ensure_ascii=False),
+            )
+            if not ok:return
+            try:
+                parsed=json.loads(args)
+                if not isinstance(parsed,list) or not all(isinstance(x,str) for x in parsed):
+                    raise ValueError("Arguments must be a JSON array of strings.")
+            except Exception as exc:
+                QMessageBox.warning(self,"Invalid configuration",f"{exc}\\n\\nExample: [\\"-y\\", \\"package-name\\"]")
+                return
         env={}
         for key in template.env_keys:
             value,accepted=QInputDialog.getText(self,"MCP catalog",f"{key}:",QLineEdit.EchoMode.Password)
@@ -721,12 +747,6 @@ class ConnectedAppsPanel(QWidget):
                 QMessageBox.warning(self,"Invalid configuration",f"Required environment variable {key} is empty.")
                 return
             env[key]=value.strip()
-        try:
-            parsed=json.loads(args)
-            if not isinstance(parsed,list) or not all(isinstance(x,str) for x in parsed):raise ValueError("Arguments must be a JSON array of strings.")
-        except Exception as exc:
-            QMessageBox.warning(self,"Invalid configuration",str(exc))
-            return
         descriptor=AppDescriptor(
             id="catalog-"+template.id,
             name=template.name,
