@@ -25,7 +25,6 @@ def _normalize_annotations(value):
 
 
 def _validate_http_endpoint(url: str) -> str:
-    """Validate an MCP endpoint before passing it to the HTTP transport."""
     value = str(url or "").strip()
     parsed = urlsplit(value)
     if parsed.scheme not in {"http", "https"} or not parsed.hostname:
@@ -50,7 +49,6 @@ class MCPRuntime:
             if self._loop and self._loop.is_running():
                 return
             ready = threading.Event()
-            startup_error = []
 
             def run():
                 loop = asyncio.new_event_loop()
@@ -147,7 +145,7 @@ class MCPRuntime:
         headers = dict(headers or {})
         if not all(isinstance(k, str) and isinstance(v, str) for k, v in headers.items()):
             raise ValueError("MCP HTTP headers must be string values")
-        if any("\r" in v or "\n" in v for v in headers.values()):
+        if any("\\r" in v or "\\n" in v for v in headers.values()):
             raise ValueError("MCP HTTP headers cannot contain newline characters")
 
         async def factory():
@@ -168,8 +166,6 @@ class MCPRuntime:
             raise ValueError("Tool arguments must be a JSON object")
         result = await entry[1].call_tool(tool, arguments=args)
         if getattr(result, "isError", False):
-            # MCP error content is useful to the caller, but don't expose it as
-            # a successful tool result.
             detail = "; ".join(
                 str(getattr(item, "text", "")).strip()
                 for item in getattr(result, "content", [])
@@ -182,8 +178,6 @@ class MCPRuntime:
             text = getattr(item, "text", None)
             if text is not None:
                 row["text"] = text
-            # Preserve image/audio/resource metadata when available without
-            # serializing arbitrary SDK objects.
             mime = getattr(item, "mimeType", None)
             if mime:
                 row["mime_type"] = mime
@@ -192,3 +186,37 @@ class MCPRuntime:
         if structured is not None:
             content.append({"type": "structured", "data": structured})
         return content
+
+    async def _close(self, cid):
+        with self._lock:
+            entry = self._sessions.pop(cid, None)
+            self._tools.pop(cid, None)
+        if entry:
+            await entry[0].aclose()
+
+    def tools(self, cid):
+        with self._lock:
+            return [dict(row) for row in self._tools.get(cid, [])]
+
+    def call(self, cid, tool, args=None):
+        return self._submit(self._call(cid, tool, args or {}), 120)
+
+    def disconnect(self, cid):
+        try:
+            self._submit(self._close(cid), 15)
+        except Exception:
+            pass
+
+    def shutdown(self):
+        with self._lock:
+            connection_ids = list(self._sessions)
+            loop = self._loop
+        for cid in connection_ids:
+            self.disconnect(cid)
+        if loop and loop.is_running():
+            loop.call_soon_threadsafe(loop.stop)
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=3)
+
+
+runtime = MCPRuntime()
