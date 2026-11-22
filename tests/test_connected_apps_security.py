@@ -57,3 +57,70 @@ def test_blocked_connected_app_tool_is_rejected_before_confirmation():
             raise AssertionError("Blocked tool was executed")
     confirm.assert_not_called()
     service.call_tool.assert_not_called()
+
+
+def test_schema_union_types_and_combinators_are_validated():
+    from core.connected_apps.agent import _validate_arguments
+    schema = {"type": "object", "properties": {
+        "value": {"anyOf": [{"type": "string", "minLength": 2},
+                            {"type": "integer", "minimum": 3}]}
+    }, "required": ["value"], "additionalProperties": False}
+    _validate_arguments(schema, {"value": "ok"})
+    _validate_arguments(schema, {"value": 4})
+    for value in ("x", 2, True):
+        try:
+            _validate_arguments(schema, {"value": value})
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"Invalid union value accepted: {value!r}")
+
+
+def test_schema_one_of_requires_exactly_one_matching_branch():
+    from core.connected_apps.agent import _validate_arguments
+    schema = {"type": "object", "properties": {
+        "value": {"oneOf": [{"type": "integer"}, {"type": "number"}]}
+    }, "required": ["value"]}
+    for value in (1, 1.5):
+        try:
+            _validate_arguments(schema, {"value": value})
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("Overlapping oneOf branches must reject")
+    _validate_arguments({"type": "object", "properties": {
+        "value": {"oneOf": [{"type": "string"}, {"type": "integer"}]}
+    }}, {"value": "ok"})
+
+
+def test_schema_rejects_unsupported_reference_features_fail_closed():
+    from core.connected_apps.agent import _validate_arguments
+    for keyword in ("$ref", "$dynamicRef", "if", "then", "dependencies"):
+        try:
+            _validate_arguments({"type": "object", "properties": {
+                "value": {keyword: "external-or-conditional"}
+            }}, {"value": "anything"})
+        except ValueError as exc:
+            assert "unsupported schema" in str(exc)
+        else:
+            raise AssertionError(f"Unsupported schema keyword {keyword} was ignored")
+
+
+def test_schema_supports_schema_based_additional_properties():
+    from core.connected_apps.agent import _validate_arguments
+    schema = {"type": "object", "properties": {"fixed": {"type": "string"}},
+              "additionalProperties": {"type": "integer"}}
+    _validate_arguments(schema, {"fixed": "yes", "extra": 2})
+    try:
+        _validate_arguments(schema, {"fixed": "yes", "extra": "bad"})
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("additionalProperties schema was ignored")
+
+
+def test_annotation_truthiness_is_not_trusted():
+    from core.connected_apps.agent import _annotation
+    assert not _annotation({"annotations": {"readOnlyHint": 1}}, "readOnlyHint")
+    assert not _annotation({"annotations": {"readOnlyHint": "true"}}, "readOnlyHint")
+    assert not _annotation({"annotations": {"readOnlyHint": True}}, "destructiveHint")
