@@ -172,11 +172,7 @@ class MCPRuntime:
 
     def connect_sse(self, cid, url, headers=None):
         url = _validate_http_endpoint(url)
-        headers = dict(headers or {})
-        if not all(isinstance(k, str) and isinstance(v, str) for k, v in headers.items()):
-            raise ValueError("MCP HTTP headers must be string values")
-        if any("\r" in v or "\n" in v for v in headers.values()):
-            raise ValueError("MCP HTTP headers cannot contain newline characters")
+        headers = _validate_headers(headers or {})
 
         async def factory():
             from mcp.client.sse import sse_client
