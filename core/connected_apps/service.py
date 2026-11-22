@@ -157,15 +157,15 @@ class ConnectedAppsService:
         meta = row.get("metadata", {})
         descriptor = AppDescriptor(
             id=row["app_id"], name=row["display_name"], source="stored",
-            transport=TransportType.HTTP if meta.get("transport") in {"http", "sse"} else TransportType.STDIO,
+            transport=(TransportType.SSE if meta.get("transport") == "sse" else TransportType.HTTP if meta.get("transport") == "http" else TransportType.STDIO),
             endpoint=meta.get("endpoint", ""), command=meta.get("command", ""),
             args=meta.get("args", []),
             env={key: self.store.get_credential(cid, f"stdio_env:{key}") for key in meta.get("env_keys", [])},
         )
+        if descriptor.transport == TransportType.SSE:
+            return self.connect_sse(descriptor, connection_id=cid, headers=self._saved_http_headers(cid))
         if descriptor.transport == TransportType.HTTP:
             return self.connect_http(descriptor, connection_id=cid, headers=self._saved_http_headers(cid))
-        if meta.get("transport") == "sse":
-            return self.connect_sse(descriptor, connection_id=cid, headers=self._saved_http_headers(cid))
         return self.connect_stdio(descriptor, connection_id=cid)
 
     def _saved_http_headers(self, cid):
