@@ -144,15 +144,17 @@ class ConnectedAppsPanel(QWidget):
         template=templates[labels.index(label)]
         args,ok=QInputDialog.getText(self,"MCP catalog",f"Arguments for {template.command} (JSON array):",text=json.dumps(list(template.args),ensure_ascii=False))
         if not ok:return
-        env_text,ok=QInputDialog.getText(self,"MCP catalog","Environment variables (JSON object):",text="{}")
-        if not ok:return
+        env={}
+        for key in template.env_keys:
+            value,accepted=QInputDialog.getText(self,"MCP catalog",f"{key}:",QLineEdit.EchoMode.Password)
+            if not accepted:return
+            if not value.strip():
+                QMessageBox.warning(self,"Invalid configuration",f"Required environment variable {key} is empty.")
+                return
+            env[key]=value.strip()
         try:
             parsed=json.loads(args)
-            env=json.loads(env_text)
             if not isinstance(parsed,list) or not all(isinstance(x,str) for x in parsed):raise ValueError("Arguments must be a JSON array of strings.")
-            if not isinstance(env,dict) or not all(isinstance(k,str) and isinstance(v,str) for k,v in env.items()):raise ValueError("Environment must be a JSON object of string values.")
-            missing=[key for key in template.env_keys if key not in env]
-            if missing:raise ValueError("Missing required environment variables: "+", ".join(missing))
         except Exception as exc:
             QMessageBox.warning(self,"Invalid configuration",str(exc))
             return
@@ -337,7 +339,20 @@ class ConnectedAppsPanel(QWidget):
             QMessageBox.information(self,"Diagnostics","Select a connection first.")
             return
         metadata=dict(row.get("metadata") or {})
-        safe_metadata={key:value for key,value in metadata.items() if key not in {"authorization","token","secret"}}
+        import re
+        def redact(value,key=""):
+            if re.search(r"(secret|token|password|credential|api[_-]?key|authorization)",key,re.I):
+                return "[redacted]"
+            if isinstance(value,dict):
+                return {str(k):redact(v,str(k)) for k,v in value.items()}
+            if isinstance(value,(list,tuple)):
+                return [redact(item) for item in value]
+            if isinstance(value,str):
+                value=re.sub(r"(?i)(bearer\\s+)[^\\s]+",r"\\1[redacted]",value)
+                value=re.sub(r"(?i)(password|token|secret|api[_-]?key)=([^&\\s]+)",r"\\1=[redacted]",value)
+                value=re.sub(r"(?i)(://[^:/@]+:)[^@]+@",r"\\1[redacted]@",value)
+            return value
+        safe_metadata=redact(metadata)
         diagnostics={
             "app_id":row.get("app_id"),
             "display_name":row.get("display_name"),
