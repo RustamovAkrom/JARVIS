@@ -145,7 +145,7 @@ class MCPRuntime:
         headers = dict(headers or {})
         if not all(isinstance(k, str) and isinstance(v, str) for k, v in headers.items()):
             raise ValueError("MCP HTTP headers must be string values")
-        if any("\\r" in v or "\\n" in v for v in headers.values()):
+        if any("\r" in v or "\n" in v for v in headers.values()):
             raise ValueError("MCP HTTP headers cannot contain newline characters")
 
         async def factory():
