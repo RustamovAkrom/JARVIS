@@ -151,6 +151,8 @@ def _validate_metadata_url(value: str) -> str:
     parsed = urllib.parse.urlparse(str(value or ""))
     if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username or parsed.password:
         raise ValueError("OAuth metadata contains an invalid URL")
+    if parsed.scheme != "https" and parsed.hostname not in {"localhost", "127.0.0.1", "::1"}:
+        raise ValueError("OAuth metadata endpoints must use HTTPS")
     return str(value)
 
 
@@ -179,6 +181,9 @@ def discover_mcp_oauth(resource_url: str) -> dict[str, Any]:
                 continue
         if not isinstance(resource_metadata, dict):
             raise RuntimeError("MCP server does not expose OAuth protected-resource metadata")
+        advertised_resource = resource_metadata.get("resource")
+        if advertised_resource and advertised_resource.rstrip("/") != resource_url.rstrip("/"):
+            raise RuntimeError("OAuth protected-resource metadata does not match the requested MCP endpoint")
         servers = resource_metadata.get("authorization_servers") or []
         if not servers:
             raise RuntimeError("OAuth resource metadata did not advertise an authorization server")
@@ -205,6 +210,9 @@ def discover_mcp_oauth(resource_url: str) -> dict[str, Any]:
                 continue
         if not isinstance(authorization_metadata, dict):
             raise RuntimeError("Could not discover OAuth authorization-server metadata")
+        metadata_issuer = str(authorization_metadata.get("issuer") or "").rstrip("/")
+        if metadata_issuer and metadata_issuer != issuer.rstrip("/"):
+            raise RuntimeError("OAuth authorization-server issuer does not match discovered issuer")
         _validate_metadata_url(authorization_metadata.get("authorization_endpoint", ""))
         _validate_metadata_url(authorization_metadata.get("token_endpoint", ""))
     return {
