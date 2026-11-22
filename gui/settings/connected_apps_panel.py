@@ -729,7 +729,17 @@ class ConnectedAppsPanel(QWidget):
             )
             if not allowed_path:
                 return
-            parsed = ["-y", "@modelcontextprotocol/server-filesystem", allowed_path.replace("\\\\", "/")]
+            parsed = ["-y", "@modelcontextprotocol/server-filesystem", allowed_path]
+        elif template.id == "sqlite":
+            database_path, _ = QFileDialog.getOpenFileName(
+                self,
+                "Choose SQLite database",
+                "",
+                "SQLite databases (*.db *.sqlite *.sqlite3);;All files (*)",
+            )
+            if not database_path:
+                return
+            parsed = ["mcp-server-sqlite", "--db-path", database_path]
         else:
             args,ok=QInputDialog.getText(
                 self,
