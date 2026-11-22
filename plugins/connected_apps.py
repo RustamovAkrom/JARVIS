@@ -8,9 +8,9 @@ PLUGIN = {
     "tier": "core",
     "description": "Manage and use connected MCP applications. Discover apps and tools before execution. Read-only tools may run automatically only when the MCP server marks them read-only. All other actions require confirmation.",
     "parameters": {"type":"OBJECT","properties":{
-        "action":{"type":"STRING","enum":["connect","list_apps","list_tools","execute","smart_execute","disconnect","remove"]},
+        "action":{"type":"STRING","enum":["connect","list_apps","list_tools","execute","smart_execute","disconnect","remove","set_tool_permission"]},
         "app":{"type":"STRING"},"connection_id":{"type":"STRING"},
-        "tool":{"type":"STRING"},"arguments":{"type":"OBJECT"},"query":{"type":"STRING"}},
+        "tool":{"type":"STRING"},"arguments":{"type":"OBJECT"},"query":{"type":"STRING"},"blocked":{"type":"BOOLEAN"}},
         "required":["action"]}
 }
 
@@ -52,6 +52,15 @@ def run(parameters, player=None, session_memory=None):
             matches=[x for x in agent.describe_tools() if x["connection_id"]==connection_id and x["name"]==tool]
             if not matches: return outcome.failed("connected_apps.execute","Tool not found in connected app.")
             return agent.execute(connection_id,tool,p.get("arguments",{}),read_only=True)
+        if action=="set_tool_permission":
+            connection_id=str(p.get("connection_id","")); tool=str(p.get("tool",""))
+            if not connection_id or not tool:
+                return outcome.failed("connected_apps.permission","connection_id and tool are required.")
+            try:
+                success=service.set_tool_blocked(connection_id,tool,bool(p.get("blocked",True)))
+                return outcome.done("connected_apps.permission",success=success,tool=tool,blocked=bool(p.get("blocked",True)))
+            except Exception as exc:
+                return outcome.failed("connected_apps.permission",f"{type(exc).__name__}: {exc}")
         if action=="disconnect":
             return outcome.done("connected_apps.disconnect",success=service.disconnect(str(p.get("connection_id",""))))
         if action=="remove":
