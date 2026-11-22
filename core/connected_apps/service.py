@@ -182,6 +182,27 @@ class ConnectedAppsService:
             return {**row, "status": ConnectionStatus.DISCONNECTED.value,
                     "last_error": "Connection is disabled"}
         meta = row.get("metadata", {})
+        if meta.get("native"):
+            from core.connected_apps.native import native_registry
+            adapter = native_registry.get(row.get("app_id"))
+            if not adapter:
+                row["status"] = ConnectionStatus.ERROR.value
+                row["last_error"] = "Native adapter is unavailable"
+                self.store.upsert_connection(row)
+                return row
+            try:
+                adapter.health_check(cid)
+                row["status"] = ConnectionStatus.CONNECTED.value
+                row["last_error"] = ""
+                meta["health"] = "healthy"
+            except Exception as exc:
+                row["status"] = ConnectionStatus.ERROR.value
+                row["last_error"] = _safe_error(exc)
+                meta["health"] = "unhealthy"
+            row["metadata"] = meta
+            row["updated_at"] = time.time()
+            self.store.upsert_connection(row)
+            return row
         descriptor = AppDescriptor(
             id=row["app_id"], name=row["display_name"], source="stored",
             transport=(TransportType.SSE if meta.get("transport") == "sse" else TransportType.HTTP if meta.get("transport") == "http" else TransportType.STDIO),
@@ -377,6 +398,30 @@ class ConnectedAppsService:
                     "healthy": False, "error": "Connection is not currently connected"}
         checked_at = time.time()
         metadata = dict(row.get("metadata") or {})
+        if metadata.get("native"):
+            from core.connected_apps.native import native_registry
+            adapter = native_registry.get(row.get("app_id"))
+            try:
+                healthy = bool(adapter and adapter.health_check(cid))
+                metadata["health"] = "healthy" if healthy else "unavailable"
+                metadata["last_health_check"] = checked_at
+                row["metadata"] = metadata
+                row["status"] = ConnectionStatus.CONNECTED.value if healthy else ConnectionStatus.ERROR.value
+                row["last_error"] = "" if healthy else "Native adapter health check failed"
+                row["updated_at"] = checked_at
+                self.store.upsert_connection(row)
+                return {"id": cid, "status": row["status"], "healthy": healthy,
+                        "checked_at": checked_at, "error": row["last_error"]}
+            except Exception as exc:
+                metadata["health"] = "unhealthy"
+                metadata["last_health_check"] = checked_at
+                row["metadata"] = metadata
+                row["status"] = ConnectionStatus.ERROR.value
+                row["last_error"] = _safe_error(exc)
+                row["updated_at"] = checked_at
+                self.store.upsert_connection(row)
+                return {"id": cid, "status": row["status"], "healthy": False,
+                        "checked_at": checked_at, "error": row["last_error"]}
         try:
             healthy = bool(runtime.health(cid))
             metadata["health"] = "healthy" if healthy else "unavailable"
