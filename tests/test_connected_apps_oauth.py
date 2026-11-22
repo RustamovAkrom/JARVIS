@@ -120,3 +120,38 @@ def test_oauth_reauthorization_clears_stale_refresh_token_and_client_secret(monk
     assert store.get_credential("c1", "access_token") == "new-access"
     assert store.get_credential("c1", "refresh_token") == ""
     assert store.get_credential("c1", "oauth_client_secret") == ""
+
+
+def test_oauth_authorization_url_rejects_unsafe_endpoint_and_missing_pkce():
+    from core.connected_apps.oauth import OAuthConfig, OAuthState, build_authorization_url
+
+    config = OAuthConfig(
+        authorization_url="http://attacker.example/authorize",
+        token_url="https://auth.example/token",
+        client_id="client",
+        redirect_uri="http://127.0.0.1:1234/callback",
+        scopes=["read"],
+    )
+    state = OAuthState(state="state", verifier="verifier", redirect_uri=config.redirect_uri)
+    with pytest.raises(ValueError, match="HTTPS"):
+        build_authorization_url(config, state, "challenge")
+
+    config.authorization_url = "https://auth.example/authorize"
+    state.verifier = ""
+    with pytest.raises(ValueError, match="PKCE"):
+        build_authorization_url(config, state, "challenge")
+
+
+@pytest.mark.parametrize("url", ["http://evil.example/token", "file:///tmp/token", "https://user:pass@auth.example/token"])
+def test_oauth_token_endpoint_rejects_unsafe_url(url):
+    from core.connected_apps.oauth import OAuthConfig, refresh_tokens
+
+    config = OAuthConfig(
+        authorization_url="https://auth.example/authorize",
+        token_url=url,
+        client_id="client",
+        redirect_uri="http://127.0.0.1:1234/callback",
+        scopes=[],
+    )
+    with pytest.raises(ValueError):
+        refresh_tokens(config, "refresh-token")
