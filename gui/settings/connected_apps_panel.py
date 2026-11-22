@@ -26,24 +26,17 @@ class ConnectedAppsPanel(QWidget):
         self.setObjectName("ConnectedAppsPanel")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         root=QVBoxLayout(self)
-        root.setContentsMargins(8,8,8,8)
-        root.setSpacing(16)
+        root.setContentsMargins(0,0,0,0)
+        root.setSpacing(10)
 
-        header=QVBoxLayout()
-        title=QLabel("Connected Apps")
-        title.setObjectName("appsTitle")
-        subtitle=QLabel("Connect trusted services and manage integrations, authorization and tool permissions.")
-        subtitle.setObjectName("appsSubtitle")
-        subtitle.setWordWrap(True)
-        header.addWidget(title)
-        header.addWidget(subtitle)
-        root.addLayout(header)
-
-        native_group=QGroupBox("Apps")
+        # SettingsCenter already provides the category title and description.
+        # Keep this panel focused on the actual integration controls.
+        native_group=QGroupBox()
         native_group.setObjectName("appsTabSurface")
         native_group.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         native_layout=QVBoxLayout(native_group)
-        native_layout.setSpacing(12)
+        native_layout.setSpacing(10)
+        native_layout.setContentsMargins(10,10,10,10)
         native_description=QLabel("Ready-to-use integrations with guided authorization and native AI tools.")
         native_description.setWordWrap(True)
         native_layout.addWidget(native_description)
@@ -127,11 +120,12 @@ class ConnectedAppsPanel(QWidget):
         native_layout.addWidget(self.native_list)
         # Apps and MCP are placed into peer tabs below.
 
-        mcp_group=QGroupBox("MCP Servers")
+        mcp_group=QGroupBox()
         mcp_group.setObjectName("mcpTabSurface")
         mcp_group.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         mcp_layout=QVBoxLayout(mcp_group)
         mcp_layout.setSpacing(10)
+        mcp_layout.setContentsMargins(10,10,10,10)
         mcp_description=QLabel("Developer integrations for local processes and remote MCP endpoints.")
         mcp_description.setWordWrap(True)
         mcp_layout.addWidget(mcp_description)
@@ -302,6 +296,9 @@ class ConnectedAppsPanel(QWidget):
         QTabWidget#connectedAppsSections::pane {{ border: 1px solid {C.BORDER}; background: {C.PANEL}; border-radius: 8px; }}
         QWidget#appsTabPage, QWidget#mcpTabPage {{ background: {C.PANEL}; color: {C.TEXT}; }}
         QGroupBox#appsTabSurface, QGroupBox#mcpTabSurface {{ background: {C.PANEL}; color: {C.TEXT}; border: 1px solid {C.BORDER}; border-radius: 8px; }}
+        QGroupBox#appsTabSurface::title, QGroupBox#mcpTabSurface::title {{ subcontrol-origin: margin; left: 0px; padding: 0px; }}
+        QGroupBox#appsTabSurface QWidget, QGroupBox#mcpTabSurface QWidget {{ background: transparent; color: {C.TEXT}; }}
+        QGroupBox#appsTabSurface QListWidget, QGroupBox#mcpTabSurface QListWidget {{ background: {C.PANEL2}; color: {C.TEXT}; border: 1px solid {C.BORDER}; }}
         QGroupBox#appsTabSurface QWidget, QGroupBox#mcpTabSurface QWidget {{ background: transparent; color: {C.TEXT}; }}
         QGroupBox#appsTabSurface QListWidget, QGroupBox#mcpTabSurface QListWidget {{ background: {C.PANEL2}; color: {C.TEXT}; border: 1px solid {C.BORDER}; }}
         #connectedAppsSections QTabBar::tab {{ background: {C.PANEL2}; color: {C.TEXT_MED}; border: 1px solid {C.BORDER}; border-radius: 7px; padding: 9px 16px; margin-right: 4px; }}
