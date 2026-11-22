@@ -1,7 +1,7 @@
 """Connected Apps settings UI for optional MCP integrations."""
 from __future__ import annotations
 import json
-from PyQt6.QtCore import Qt, QObject, QRunnable, QThreadPool, pyqtSignal, QSize
+from PyQt6.QtCore import Qt, QObject, QRunnable, QThreadPool, pyqtSignal, QSize, QTimer
 from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QTextEdit, QListWidget, QListWidgetItem, QMessageBox, QInputDialog, QGroupBox, QCheckBox, QApplication, QFrame, QMenu, QTabWidget, QDialog, QDialogButtonBox, QFileDialog
 from core.connected_apps.models import AppDescriptor, TransportType
@@ -283,6 +283,34 @@ class ConnectedAppsPanel(QWidget):
     def refresh_state(self):
         """Refresh Connected Apps styles when JARVIS theme/accent tokens change."""
         self._apply_theme_styles()
+        self._polish_surfaces()
+
+    def showEvent(self, event):
+        """Re-apply themed surfaces after the lazy Settings page is first shown.
+
+        Qt can initially paint nested tab pages using the native palette before
+        the page has completed its first layout/show cycle. Re-polishing after
+        show prevents the transient/default grey surface on first navigation.
+        """
+        super().showEvent(event)
+        self._apply_theme_styles()
+        self._polish_surfaces()
+        QTimer.singleShot(0, self._polish_surfaces)
+
+    def _polish_surfaces(self):
+        surfaces = [
+            self,
+            self.sections,
+            self.sections.widget(0),
+            self.sections.widget(1),
+        ]
+        for widget in surfaces:
+            widget.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+            widget.style().unpolish(widget)
+            widget.style().polish(widget)
+            widget.update()
+        self.sections.update()
+        self.sections.repaint()
 
     def _apply_theme_styles(self):
         self.setStyleSheet(f"""
