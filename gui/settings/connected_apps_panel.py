@@ -87,7 +87,7 @@ class ConnectedAppsPanel(QWidget):
             self.auto_read_checkbox.blockSignals(False)
             return
         meta=row.get("metadata",{});tools=meta.get("tools",[]) or service.tools(cid);self.auto_read_checkbox.setEnabled(row.get("status")=="connected");self.auto_read_checkbox.blockSignals(True);self.auto_read_checkbox.setChecked(meta.get("auto_approve_read_only") is True);self.auto_read_checkbox.blockSignals(False)
-        lines=[f"App: {row.get('display_name')}",f"Status: {row.get('status')}",f"Transport: {meta.get('transport','unknown')}",f"Endpoint: {meta.get('endpoint') or meta.get('command','')}",f"Last error: {row.get('last_error') or 'None'}","",f"Tools ({len(tools)}):"]
+        lines=[f"App: {row.get('display_name')}",f"Status: {row.get('status')}",f"Transport: {meta.get('transport','unknown')}",f"Endpoint: {meta.get('endpoint') or meta.get('command','')}",f"Health: {meta.get('health','unknown')}",f"Last health check: {meta.get('last_health_check') or 'Never'}",f"Tool calls: {meta.get('tool_call_count',0)}",f"Last tool: {meta.get('last_tool_name') or 'None'}",f"Last tool activity: {meta.get('last_tool_activity') or 'Never'}",f"Last error: {row.get('last_error') or 'None'}","",f"Tools ({len(tools)}):"]
         lines.extend(f"• {t.get('name')} [{'BLOCKED' if t.get('name') in set(meta.get('blocked_tools',[])) else 'AVAILABLE'}]: {t.get('description','')}\n  Schema: {json.dumps(t.get('input_schema',{}),ensure_ascii=False)}" for t in tools)
         if row.get("last_error"):lines.extend(["","Troubleshooting:",self._friendly_error(row["last_error"])])
         self.details.setPlainText("\n".join(lines))
