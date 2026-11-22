@@ -291,14 +291,19 @@ def exchange_code(config: OAuthConfig, code: str, verifier: str, redirect_uri: s
         payload["resource"] = config.extra_authorize_params["resource"]
     if config.client_secret:
         payload["client_secret"] = config.client_secret
-    response = httpx.post(
-        config.token_url,
-        data=payload,
-        headers={"Accept": "application/json"},
-        timeout=30,
-    )
-    response.raise_for_status()
-    data = response.json()
+    try:
+        response = httpx.post(
+            config.token_url,
+            data=payload,
+            headers={"Accept": "application/json"},
+            timeout=30,
+        )
+        response.raise_for_status()
+        data = response.json()
+    except Exception as exc:
+        # Do not surface provider response bodies or request details that may
+        # contain credentials, authorization codes, or token material.
+        raise RuntimeError("OAuth token exchange failed; check provider configuration and retry") from None
     if not isinstance(data, dict) or not data.get("access_token"):
         raise RuntimeError("OAuth token response did not contain an access_token")
     return data
@@ -320,14 +325,17 @@ def refresh_tokens(config: OAuthConfig, refresh_token: str) -> dict[str, Any]:
         payload["resource"] = config.extra_authorize_params["resource"]
     if config.client_secret:
         payload["client_secret"] = config.client_secret
-    response = httpx.post(
-        config.token_url,
-        data=payload,
-        headers={"Accept": "application/json"},
-        timeout=30,
-    )
-    response.raise_for_status()
-    data = response.json()
+    try:
+        response = httpx.post(
+            config.token_url,
+            data=payload,
+            headers={"Accept": "application/json"},
+            timeout=30,
+        )
+        response.raise_for_status()
+        data = response.json()
+    except Exception:
+        raise RuntimeError("OAuth token refresh failed; reauthorize if the problem persists") from None
     if not isinstance(data, dict) or not data.get("access_token"):
         raise RuntimeError("OAuth refresh response did not contain an access_token")
     return data
