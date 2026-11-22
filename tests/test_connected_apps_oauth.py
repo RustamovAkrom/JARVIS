@@ -71,3 +71,20 @@ def test_mcp_oauth_discovery_reads_protected_resource_and_server_metadata(monkey
     assert discovery["issuer"]=="https://auth.example"
     assert discovery["authorization_server"]["token_endpoint"]=="https://auth.example/token"
     assert discovery["resource"]["scopes_supported"]==["read"]
+
+def test_oauth_callback_missing_code_returns_http_error_and_completes(monkeypatch):
+    from urllib.error import HTTPError
+    from urllib.request import urlopen
+    from core.connected_apps.oauth import OAuthCallbackServer
+
+    server = OAuthCallbackServer()
+    state = server.start()
+    try:
+        url = state.redirect_uri + "?state=" + state.state
+        with pytest.raises(HTTPError) as exc:
+            urlopen(url, timeout=2)
+        assert exc.value.code == 400
+        result = server.wait(timeout=0.1)
+        assert result.error == "OAuth callback did not contain a code"
+    finally:
+        server.close()
