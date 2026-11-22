@@ -34,6 +34,10 @@ class GitHubAdapter(NativeAppAdapter):
         NativeTool("github_list_pull_requests", "List pull requests for a repository.", _schema({"repository":{"type":"string","minLength":3,"maxLength":200},"state":{"type":"string","enum":["open","closed","all"]},"limit":{"type":"integer","minimum":1,"maximum":100}}, ("repository",))),
         NativeTool("github_get_file", "Read a file from a repository at a ref.", _schema({"repository":{"type":"string","minLength":3,"maxLength":200},"path":{"type":"string","minLength":1,"maxLength":500},"ref":{"type":"string","maxLength":200}}, ("repository","path"))),
         NativeTool("github_create_issue", "Create an issue. Requires user confirmation.", _schema({"repository":{"type":"string","minLength":3,"maxLength":200},"title":{"type":"string","minLength":1,"maxLength":256},"body":{"type":"string","maxLength":65536},"labels":{"type":"array","items":{"type":"string"},"maxItems":20}}, ("repository","title")), read_only=False, requires_confirmation=True),
+        NativeTool("github_search_code", "Search code in GitHub repositories. Requires repository-qualified query for reliable results.", _schema({"query":{"type":"string","minLength":1,"maxLength":256},"limit":{"type":"integer","minimum":1,"maximum":30}}, ("query",))),
+        NativeTool("github_get_pull_request", "Get pull request details by repository and number.", _schema({"repository":{"type":"string","minLength":3,"maxLength":200},"number":{"type":"integer","minimum":1}}, ("repository","number"))),
+        NativeTool("github_list_commits", "List recent commits for a repository or branch.", _schema({"repository":{"type":"string","minLength":3,"maxLength":200},"branch":{"type":"string","maxLength":200},"limit":{"type":"integer","minimum":1,"maximum":100}}, ("repository",))),
+        NativeTool("github_create_issue_comment", "Create a comment on an issue or pull request. Requires user confirmation.", _schema({"repository":{"type":"string","minLength":3,"maxLength":200},"number":{"type":"integer","minimum":1},"body":{"type":"string","minLength":1,"maxLength":65536}}, ("repository","number","body")), read_only=False, requires_confirmation=True),
     )
 
     def _token(self, connection_id):
@@ -110,6 +114,17 @@ class GitHubAdapter(NativeAppAdapter):
             return result
         if tool_name=="github_create_issue":
             return self._request(connection_id,"POST",f"/repos/{repo}/issues",payload={"title":args["title"],"body":args.get("body",""),"labels":args.get("labels",[])})
+        if tool_name=="github_search_code":
+            limit=max(1,min(int(args.get("limit",10)),30))
+            return self._request(connection_id,"GET","/search/code",{"q":args["query"],"per_page":limit})
+        if tool_name=="github_get_pull_request":
+            return self._request(connection_id,"GET",f"/repos/{repo}/pulls/{int(args['number'])}")
+        if tool_name=="github_list_commits":
+            query={"per_page":max(1,min(int(args.get("limit",30)),100))}
+            if args.get("branch"):query["sha"]=args["branch"]
+            return self._request(connection_id,"GET",f"/repos/{repo}/commits",query)
+        if tool_name=="github_create_issue_comment":
+            return self._request(connection_id,"POST",f"/repos/{repo}/issues/{int(args['number'])}/comments",payload={"body":args["body"]})
         raise ValueError(f"Unknown GitHub tool: {tool_name}")
 
     def health_check(self, connection_id):
