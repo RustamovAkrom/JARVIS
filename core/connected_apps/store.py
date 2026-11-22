@@ -109,6 +109,18 @@ class ConnectedAppsStore:
             data["credentials"].setdefault(cid, {})[name] = protected
             self._write(data)
 
+    def set_credentials(self, cid, values):
+        """Persist a credential batch in one atomic store write."""
+        protected = {
+            name: secretstore.protect(str(value), f"connected_apps:{cid}:{name}")
+            for name, value in values.items()
+        }
+        with self._lock:
+            data = self._read()
+            credentials = data["credentials"].setdefault(cid, {})
+            credentials.update(protected)
+            self._write(data)
+
     def get_credential(self, cid, name):
         with self._lock:
             stored = self._read()["credentials"].get(cid, {}).get(name, "")
