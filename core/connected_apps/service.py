@@ -165,6 +165,9 @@ class ConnectedAppsService:
         row = self.store.get_connection(cid)
         if not row:
             return None
+        if not row.get("enabled", True):
+            return {**row, "status": ConnectionStatus.DISCONNECTED.value,
+                    "last_error": "Connection is disabled"}
         meta = row.get("metadata", {})
         descriptor = AppDescriptor(
             id=row["app_id"], name=row["display_name"], source="stored",
