@@ -253,12 +253,19 @@ def discover_mcp_oauth(resource_url: str) -> dict[str, Any]:
         metadata_issuer = str(authorization_metadata.get("issuer") or "").rstrip("/")
         if not metadata_issuer or metadata_issuer != issuer.rstrip("/"):
             raise RuntimeError("OAuth authorization-server issuer does not match discovered issuer")
-        authorization_endpoint = _validate_metadata_url(
-            authorization_metadata.get("authorization_endpoint", "")
-        )
-        token_endpoint = _validate_metadata_url(
-            authorization_metadata.get("token_endpoint", "")
-        )
+        try:
+            authorization_endpoint = _validate_metadata_url(
+                authorization_metadata.get("authorization_endpoint", "")
+            )
+            token_endpoint = _validate_metadata_url(
+                authorization_metadata.get("token_endpoint", "")
+            )
+        except ValueError as exc:
+            # Discovery metadata is untrusted input; expose a stable discovery
+            # error instead of leaking validation implementation details.
+            raise RuntimeError(
+                "OAuth authorization-server metadata contains unsafe endpoints"
+            ) from exc
         scopes_supported = authorization_metadata.get("scopes_supported")
         if scopes_supported is not None and (
             not isinstance(scopes_supported, list)
