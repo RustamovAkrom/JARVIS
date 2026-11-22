@@ -246,14 +246,6 @@ class ConnectedAppsPanel(QWidget):
         #appsSubtitle { color: palette(mid); }
         QGroupBox { background-color: palette(window); color: palette(windowText); border: 1px solid palette(mid); border-radius: 10px; margin-top: 10px; padding: 12px; }
         QGroupBox::title { subcontrol-origin: margin; left: 12px; padding: 0 6px; font-weight: 600; }
-        #nativeAppCard { border: 1px solid palette(mid); border-radius: 9px; background: palette(alternate-base); padding: 4px; }
-        #nativeAppsList, #appsList { background-color: palette(window); color: palette(windowText); border: 1px solid palette(mid); border-radius: 8px; outline: 0; }
-        #nativeAppsList::item, #appsList::item { border: 1px solid palette(mid); border-radius: 10px; padding: 12px; margin: 4px; background-color: palette(window); color: palette(windowText); }
-        #nativeAppsList::item:hover, #appsList::item:hover { border: 1px solid palette(highlight); background: palette(alternate-base); }
-        #nativeAppsList::item:selected, #appsList::item:selected { border: 2px solid palette(highlight); background-color: palette(highlight); color: palette(highlighted-text); }
-        #connectedAppsSections QTabBar::tab { background: palette(base); color: palette(text); border: 1px solid palette(mid); border-radius: 8px; padding: 10px 18px; }
-        #connectedAppsSections QTabBar::tab:selected { background: palette(alternate-base); border-color: palette(highlight); }
-        #nativeAppsList::item:selected, #appsList::item:selected { border: 2px solid palette(highlight); background: palette(alternate-base); }
         #nativeAppName { font-size: 15px; font-weight: 700; }
         #nativeAppDescription { color: palette(mid); }
         QLineEdit, QTextEdit, QListWidget { background: palette(base); color: palette(text); border: 1px solid palette(mid); border-radius: 7px; padding: 8px; }
