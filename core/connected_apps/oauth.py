@@ -147,6 +147,71 @@ class OAuthCallbackServer:
             thread.join(timeout=2)
 
 
+def _validate_metadata_url(value: str) -> str:
+    parsed = urllib.parse.urlparse(str(value or ""))
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username or parsed.password:
+        raise ValueError("OAuth metadata contains an invalid URL")
+    return str(value)
+
+
+def discover_mcp_oauth(resource_url: str) -> dict[str, Any]:
+    """Discover OAuth metadata for an MCP protected resource."""
+    import httpx
+
+    resource_url = _validate_metadata_url(resource_url)
+    parsed = urllib.parse.urlparse(resource_url)
+    origin = f"{parsed.scheme}://{parsed.netloc}"
+    resource_path = parsed.path.rstrip("/")
+    candidates = [
+        origin + "/.well-known/oauth-protected-resource" + resource_path,
+        origin + "/.well-known/oauth-protected-resource",
+    ]
+    resource_metadata = None
+    with httpx.Client(timeout=10, follow_redirects=False) as client:
+        for url in dict.fromkeys(candidates):
+            try:
+                response = client.get(url)
+                if response.status_code == 200:
+                    resource_metadata = response.json()
+                    if isinstance(resource_metadata, dict):
+                        break
+            except (httpx.HTTPError, ValueError):
+                continue
+        if not isinstance(resource_metadata, dict):
+            raise RuntimeError("MCP server does not expose OAuth protected-resource metadata")
+        servers = resource_metadata.get("authorization_servers") or []
+        if not servers:
+            raise RuntimeError("OAuth resource metadata did not advertise an authorization server")
+        issuer = _validate_metadata_url(servers[0])
+        issuer_parsed = urllib.parse.urlparse(issuer)
+        issuer_origin = f"{issuer_parsed.scheme}://{issuer_parsed.netloc}"
+        issuer_path = issuer_parsed.path.rstrip("/")
+        metadata_urls = [
+            issuer_origin + "/.well-known/oauth-authorization-server" + issuer_path,
+            issuer_origin + "/.well-known/openid-configuration" + issuer_path,
+            issuer.rstrip("/") + "/.well-known/oauth-authorization-server",
+            issuer.rstrip("/") + "/.well-known/openid-configuration",
+        ]
+        authorization_metadata = None
+        for url in dict.fromkeys(metadata_urls):
+            try:
+                response = client.get(url)
+                if response.status_code == 200:
+                    payload = response.json()
+                    if isinstance(payload, dict) and payload.get("authorization_endpoint") and payload.get("token_endpoint"):
+                        authorization_metadata = payload
+                        break
+            except (httpx.HTTPError, ValueError):
+                continue
+        if not isinstance(authorization_metadata, dict):
+            raise RuntimeError("Could not discover OAuth authorization-server metadata")
+    return {
+        "resource": resource_metadata,
+        "issuer": issuer,
+        "authorization_server": authorization_metadata,
+    }
+
+
 def exchange_code(config: OAuthConfig, code: str, verifier: str, redirect_uri: str) -> dict[str, Any]:
     """Exchange code for tokens using a lazily imported HTTP client."""
     import httpx
