@@ -23,6 +23,7 @@ class ConnectedAppsPanel(QWidget):
         super().__init__(parent)
         self.pool=QThreadPool.globalInstance()
         self.setObjectName("ConnectedAppsPanel")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         root=QVBoxLayout(self)
         root.setContentsMargins(8,8,8,8)
         root.setSpacing(16)
@@ -39,6 +40,7 @@ class ConnectedAppsPanel(QWidget):
 
         native_group=QGroupBox("Apps")
         native_group.setObjectName("appsTabSurface")
+        native_group.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         native_layout=QVBoxLayout(native_group)
         native_layout.setSpacing(12)
         native_description=QLabel("Ready-to-use integrations with guided authorization and native AI tools.")
@@ -88,6 +90,7 @@ class ConnectedAppsPanel(QWidget):
 
         mcp_group=QGroupBox("MCP Servers")
         mcp_group.setObjectName("mcpTabSurface")
+        mcp_group.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         mcp_layout=QVBoxLayout(mcp_group)
         mcp_layout.setSpacing(10)
         mcp_description=QLabel("Developer integrations for local processes and remote MCP endpoints.")
@@ -157,6 +160,10 @@ class ConnectedAppsPanel(QWidget):
         self.sections.setObjectName("connectedAppsSections")
         self.sections.addTab(native_group,"Apps")
         self.sections.addTab(mcp_group,"MCP Servers")
+        self.sections.widget(0).setObjectName("appsTabPage")
+        self.sections.widget(1).setObjectName("mcpTabPage")
+        for page in (self.sections.widget(0), self.sections.widget(1)):
+            page.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         root.addWidget(self.sections,1)
 
         details_group=QGroupBox("Connection details")
@@ -244,7 +251,12 @@ class ConnectedAppsPanel(QWidget):
             border: 1px solid {C.BORDER}; border-radius: 10px; margin-top: 10px; padding: 12px;
         }}
         QGroupBox::title {{ subcontrol-origin: margin; left: 12px; padding: 0 6px; color: {C.PRI}; font-weight: 600; }}
-        #connectedAppsSections::pane {{ border: 1px solid {C.BORDER}; background: {C.PANEL}; border-radius: 8px; }}
+        QTabWidget#connectedAppsSections {{ background: {C.PANEL}; color: {C.TEXT}; }}
+        QTabWidget#connectedAppsSections::pane {{ border: 1px solid {C.BORDER}; background: {C.PANEL}; border-radius: 8px; }}
+        QWidget#appsTabPage, QWidget#mcpTabPage {{ background: {C.PANEL}; color: {C.TEXT}; }}
+        QGroupBox#appsTabSurface, QGroupBox#mcpTabSurface {{ background: {C.PANEL}; color: {C.TEXT}; border: 1px solid {C.BORDER}; border-radius: 8px; }}
+        QGroupBox#appsTabSurface QWidget, QGroupBox#mcpTabSurface QWidget {{ background: transparent; color: {C.TEXT}; }}
+        QGroupBox#appsTabSurface QListWidget, QGroupBox#mcpTabSurface QListWidget {{ background: {C.PANEL2}; color: {C.TEXT}; border: 1px solid {C.BORDER}; }}
         #connectedAppsSections QTabBar::tab {{ background: {C.PANEL2}; color: {C.TEXT_MED}; border: 1px solid {C.BORDER}; border-radius: 7px; padding: 9px 16px; margin-right: 4px; }}
         #connectedAppsSections QTabBar::tab:hover {{ color: {C.TEXT}; border-color: {C.BORDER_B}; }}
         #connectedAppsSections QTabBar::tab:selected {{ background: {C.PRI_GHO}; color: {C.PRI}; border-color: {C.PRI_DIM}; }}
