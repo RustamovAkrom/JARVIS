@@ -173,8 +173,6 @@ class MCPRuntime:
             return stdio_client(params)
 
         with self._connection_lock(cid):
-            with self._connection_lock(cid):
-            with self._connection_lock(cid):
             return self._submit(self._connect(cid, factory), 90)
 
     def connect_http(self, cid, url, headers=None):
@@ -185,7 +183,8 @@ class MCPRuntime:
             from mcp.client.streamable_http import streamablehttp_client
             return streamablehttp_client(url, headers=headers)
 
-        return self._submit(self._connect(cid, factory), 90)
+        with self._connection_lock(cid):
+            return self._submit(self._connect(cid, factory), 90)
 
     def connect_sse(self, cid, url, headers=None):
         url = _validate_http_endpoint(url)
@@ -195,7 +194,8 @@ class MCPRuntime:
             from mcp.client.sse import sse_client
             return sse_client(url, headers=headers)
 
-        return self._submit(self._connect(cid, factory), 90)
+        with self._connection_lock(cid):
+            return self._submit(self._connect(cid, factory), 90)
 
     async def _call(self, cid, tool, args):
         with self._lock:
