@@ -55,20 +55,33 @@ def _validate_redirect_uri(value: str) -> str:
     return value
 
 
+def _validate_scopes(scopes: list[str]) -> list[str]:
+    if not isinstance(scopes, list) or not all(
+        isinstance(scope, str) and scope and not any(ch.isspace() for ch in scope)
+        and not any(ord(ch) < 0x20 for ch in scope)
+        for scope in scopes
+    ):
+        raise ValueError("OAuth scopes must be non-empty tokens without whitespace")
+    if len(scopes) > 100 or any(len(scope) > 256 for scope in scopes):
+        raise ValueError("OAuth scopes are invalid")
+    return scopes
+
+
 def build_authorization_url(config: OAuthConfig, state: OAuthState, challenge: str) -> str:
     _validate_metadata_url(config.authorization_url)
     _validate_redirect_uri(config.redirect_uri)
     if not config.client_id or len(config.client_id) > 1024:
         raise ValueError("OAuth client ID is invalid")
-    if not state.state or not challenge or not state.verifier:
+    if not state.state or len(state.state) > 1024 or not challenge or not state.verifier:
         raise ValueError("OAuth state and PKCE values are required")
+    scopes = _validate_scopes(config.scopes)
     # Provider-specific extras must never override PKCE/state/redirect fields.
     params = dict(config.extra_authorize_params or {})
     params.update({
         "response_type": "code",
         "client_id": config.client_id,
         "redirect_uri": config.redirect_uri,
-        "scope": " ".join(config.scopes),
+        "scope": " ".join(scopes),
         "state": state.state,
         "code_challenge": challenge,
         "code_challenge_method": "S256",
