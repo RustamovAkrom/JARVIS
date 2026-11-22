@@ -192,3 +192,27 @@ def test_oauth_refresh_rotation_is_persisted_and_reuses_refreshed_token(monkeypa
     assert store.get_credential("c1", "refresh_token") == "rotated-refresh"
     assert service.get_access_token("c1") == "fresh-access"
     assert calls == ["old-refresh"]
+
+
+def test_oauth_save_atomically_clears_stale_optional_tokens():
+    class Store:
+        def __init__(self):
+            self.values = {"refresh_token": "old-refresh", "id_token": "old-id"}
+            self.batch_calls = []
+        def set_credentials(self, cid, values, *, delete=()):
+            self.batch_calls.append((cid, dict(values), tuple(delete)))
+            for key in delete:
+                self.values.pop(key, None)
+            self.values.update(values)
+        def get_credential(self, cid, key):
+            return self.values.get(key, "")
+
+    store = Store()
+    service = OAuthService(store)
+    service._save("c1", {"access_token": "new-access", "expires_in": 3600})
+
+    assert store.values["access_token"] == "new-access"
+    assert "refresh_token" not in store.values
+    assert "id_token" not in store.values
+    assert len(store.batch_calls) == 1
+    assert set(store.batch_calls[0][2]) == {"refresh_token", "id_token"}
