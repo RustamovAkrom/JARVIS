@@ -2,7 +2,7 @@
 from __future__ import annotations
 import json
 from PyQt6.QtCore import Qt, QObject, QRunnable, QThreadPool, pyqtSignal
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QTextEdit, QListWidget, QListWidgetItem, QMessageBox, QInputDialog, QGroupBox, QCheckBox, QApplication
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QTextEdit, QListWidget, QListWidgetItem, QMessageBox, QInputDialog, QGroupBox, QCheckBox, QApplication, QFrame, QMenu
 from core.connected_apps.models import AppDescriptor, TransportType
 from core.connected_apps.service import service
 
@@ -210,19 +210,94 @@ class ConnectedAppsPanel(QWidget):
             self.runtime_help.setText("Connected Apps runtime is available.")
 
     def _busy(self,busy,message=""):
-        for w in (self.add_github_btn,self.add_catalog_btn,self.add_stdio_btn,self.add_http_btn,self.add_sse_btn,self.add_oauth_btn,self.add_mcp_oauth_btn,self.reconnect_all_btn,self.health_all_btn,self.connect_btn,self.rename_btn,self.disconnect_btn,self.remove_btn,self.block_tool_btn,self.allow_tool_btn,self.copy_diagnostics_btn,self.health_btn,self.enabled_checkbox,self.auto_read_checkbox):w.setEnabled(not busy)
+        for w in (self.add_github_btn,self.native_disconnect_btn,self.add_catalog_btn,self.add_server_btn,self.reconnect_all_btn,self.health_all_btn,self.connect_btn,self.rename_btn,self.disconnect_btn,self.remove_btn,self.block_tool_btn,self.allow_tool_btn,self.copy_diagnostics_btn,self.health_btn,self.enabled_checkbox,self.auto_read_checkbox):w.setEnabled(not busy)
         if message:self.status.setText(message)
     def refresh(self,*_):
-        query=self.search.text().casefold().strip();selected=self.selected_id();self.list.clear();visible=[]
+        query=self.search.text().casefold().strip()
+        selected=self.selected_id()
+        native_selected=self.native_selected_id()
+        self.list.clear()
+        visible=[]
+        native_rows=[]
         for row in service.connections():
-            if query and query not in (row.get("display_name","")+" "+row.get("app_id","")).casefold():continue
-            visible.append(row);item=QListWidgetItem(f"{row.get('display_name','Unnamed')}  ·  {row.get('status','unknown')}");item.setData(Qt.ItemDataRole.UserRole,row.get("id"));self.list.addItem(item)
-            if selected and item.data(Qt.ItemDataRole.UserRole)==selected:self.list.setCurrentItem(item)
+            metadata=row.get("metadata") or {}
+            is_native=metadata.get("native") is True
+            if is_native:
+                if not query or query in (row.get("display_name","")+" "+row.get("app_id","")).casefold():
+                    native_rows.append(row)
+                continue
+            if query and query not in (row.get("display_name","")+" "+row.get("app_id","")).casefold():
+                continue
+            visible.append(row)
+            item=QListWidgetItem(f"{row.get('display_name','Unnamed')}  ·  {row.get('status','unknown')}")
+            item.setData(Qt.ItemDataRole.UserRole,row.get("id"))
+            self.list.addItem(item)
+            if selected and item.data(Qt.ItemDataRole.UserRole)==selected:
+                self.list.setCurrentItem(item)
+        self.native_list.clear()
+        for row in native_rows:
+            item=QListWidgetItem(f"{row.get('display_name','GitHub')}  ·  {row.get('status','unknown')}")
+            item.setData(Qt.ItemDataRole.UserRole,row.get("id"))
+            self.native_list.addItem(item)
+            if native_selected and item.data(Qt.ItemDataRole.UserRole)==native_selected:
+                self.native_list.setCurrentItem(item)
         if not visible:
-            item=QListWidgetItem("No connected apps yet. Add an MCP server above." if not query else "No apps match your search.");item.setFlags(Qt.ItemFlag.NoItemFlags);self.list.addItem(item)
+            item=QListWidgetItem("No MCP servers configured." if not query else "No MCP servers match your search.")
+            item.setFlags(Qt.ItemFlag.NoItemFlags)
+            self.list.addItem(item)
+        if not native_rows:
+            item=QListWidgetItem("GitHub is not connected yet.")
+            item.setFlags(Qt.ItemFlag.NoItemFlags)
+            self.native_list.addItem(item)
         self.show_selected()
+        self._native_selection_changed()
+
     def selected_id(self):
-        item=self.list.currentItem();return item.data(Qt.ItemDataRole.UserRole) if item else None
+        item=self.list.currentItem()
+        return item.data(Qt.ItemDataRole.UserRole) if item else None
+
+    def native_selected_id(self):
+        item=self.native_list.currentItem()
+        return item.data(Qt.ItemDataRole.UserRole) if item else None
+
+    def _native_selection_changed(self):
+        cid=self.native_selected_id()
+        row=service.store.get_connection(cid) if cid else None
+        connected=bool(row and row.get("status")=="connected")
+        self.add_github_btn.setText("Reconnect GitHub" if row else "Connect GitHub")
+        self.native_disconnect_btn.setEnabled(connected)
+        if not row:
+            return
+        metadata=row.get("metadata") or {}
+        tools=service.tools(cid)
+        lines=[
+            f"GitHub account connection",
+            f"Status: {row.get('status','unknown')}",
+            f"Tools: {len(tools)}",
+            f"Last error: {row.get('last_error') or 'None'}",
+        ]
+        self.details.setPlainText("\n".join(lines))
+        self.status.setText(f"GitHub: {row.get('status','unknown')} · {len(tools)} tools")
+
+    def disconnect_native_selected(self):
+        cid=self.native_selected_id()
+        if not cid:
+            return
+        self._busy(True,"Disconnecting GitHub…")
+        worker=_Worker(lambda:service.disconnect(cid))
+        worker.signals.finished.connect(self._native_disconnected)
+        self.pool.start(worker)
+
+    def _native_disconnected(self,result,error):
+        self._busy(False)
+        if error:
+            message=self._friendly_error(str(error))
+            self.status.setText(f"GitHub disconnect failed: {message}")
+            QMessageBox.warning(self,"GitHub",message)
+        else:
+            self.status.setText("GitHub disconnected.")
+            self.connections_changed.emit()
+        self.refresh()
     def show_selected(self):
         cid=self.selected_id();row=service.store.get_connection(cid) if cid else None
         if not row:
