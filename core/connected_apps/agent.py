@@ -175,6 +175,19 @@ class ConnectedAppsAgent:
         for connection in self._service.connections():
             if connection.get("status") != "connected" or not connection.get("enabled", True):
                 continue
+            if (connection.get("metadata") or {}).get("native"):
+                for tool in self._service.native_tools(connection["id"]):
+                    out.append({
+                        "app": connection["display_name"], "app_id": connection["app_id"],
+                        "connection_id": connection["id"], "name": tool["name"],
+                        "description": tool["description"], "input_schema": tool["input_schema"],
+                        "annotations": tool.get("annotations"),
+                        "connection_metadata": dict(connection.get("metadata") or {}),
+                        "native": True,
+                    })
+                continue
+            if connection.get("status") != "connected" or not connection.get("enabled", True):
+                continue
             for tool in self._service.tools(connection["id"]):
                 out.append({
                     "app": connection["display_name"], "app_id": connection["app_id"],
@@ -235,6 +248,8 @@ class ConnectedAppsAgent:
                      if t["connection_id"] == connection_id and t["name"] == tool_name), None)
         if tool is None:
             raise ValueError("Tool is not available on an enabled connected app")
+        if tool.get("native"):
+            return self._service.call_native_tool(connection_id, tool_name, args)
         blocked = set(tool.get("connection_metadata", {}).get("blocked_tools") or [])
         if tool_name in blocked:
             raise PermissionError("This MCP tool is blocked by Connected Apps permissions")
