@@ -432,7 +432,7 @@ class ConnectedAppsPanel(QWidget):
         cid=self.native_selected_id()
         if not cid:
             return
-        self._busy(True,"Disconnecting GitHub…")
+        self._busy(True,"Disconnecting selected app…")
         worker=_Worker(lambda:service.disconnect(cid))
         worker.signals.finished.connect(self._native_disconnected)
         self.pool.start(worker)
