@@ -89,7 +89,9 @@ def test_oauth_callback_missing_code_returns_http_error_and_completes(monkeypatc
     finally:
         server.close()
 
-def test_oauth_reauthorization_clears_stale_refresh_token_and_client_secret():
+
+def test_oauth_reauthorization_clears_stale_refresh_token_and_client_secret(monkeypatch):
+    import core.connected_apps.auth_service as auth_module
     from core.connected_apps.auth_service import OAuthService
 
     class Store:
@@ -102,13 +104,19 @@ def test_oauth_reauthorization_clears_stale_refresh_token_and_client_secret():
         def delete_credential(self, cid, key):
             self.values.pop((cid, key), None)
 
+    class Provider:
+        id = "test"
+        default_scopes = ("read",)
+        def config(self, client_id, redirect_uri, scopes, client_secret):
+            return object()
+
     store = Store()
-    service = OAuthService(store)
     store.set_credential("c1", "refresh_token", "old-refresh")
     store.set_credential("c1", "oauth_client_secret", "old-secret")
-    service._save("c1", {"access_token": "new-access"})
-    store.delete_credential("c1", "refresh_token")
-    store.delete_credential("c1", "oauth_client_secret")
+    monkeypatch.setattr(auth_module, "get_provider", lambda provider_id: Provider())
+    monkeypatch.setattr(auth_module, "authorize", lambda config: {"access_token": "new-access"})
+    service = OAuthService(store)
+    service.authorize_connection("c1", "test", "client-id", client_secret="")
     assert store.get_credential("c1", "access_token") == "new-access"
     assert store.get_credential("c1", "refresh_token") == ""
     assert store.get_credential("c1", "oauth_client_secret") == ""
