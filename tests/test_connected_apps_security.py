@@ -14,3 +14,26 @@ def test_readonly_annotation_fails_closed():
     assert _annotation({"annotations":{"readOnlyHint":True}},"readOnlyHint")
     assert not _annotation({"annotations":{"readOnlyHint":"true"}},"readOnlyHint")
     assert not _annotation({"annotations":None},"readOnlyHint")
+
+def test_schema_validation_enforces_numeric_string_and_array_constraints():
+    from core.connected_apps.agent import _validate_arguments
+    schema={"type":"object","properties":{
+        "limit":{"type":"integer","minimum":1,"maximum":10},
+        "name":{"type":"string","minLength":2,"maxLength":5,"pattern":"^[a-z]+$"},
+        "tags":{"type":"array","items":{"type":"string"},"maxItems":2,"uniqueItems":True},
+    },"additionalProperties":False}
+    _validate_arguments(schema,{"limit":5,"name":"jarvis","tags":["a","b"]})
+    for args in (
+        {"limit":0,"name":"ok","tags":[]},
+        {"limit":11,"name":"ok","tags":[]},
+        {"limit":1,"name":"x","tags":[]},
+        {"limit":1,"name":"123","tags":[]},
+        {"limit":1,"name":"ok","tags":["a","a"]},
+        {"limit":1,"name":"ok","tags":["a","b","c"]},
+    ):
+        try:
+            _validate_arguments(schema,args)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"Invalid arguments accepted: {args}")
