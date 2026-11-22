@@ -117,7 +117,12 @@ class MCPRuntime:
                 self._sessions[cid] = (stack, session)
                 self._tools[cid] = tools
             if old:
-                await old[0].aclose()
+                # A failed cleanup of the previous session must not tear down
+                # the newly established connection.
+                try:
+                    await old[0].aclose()
+                except Exception:
+                    pass
             return tools
         except BaseException:
             await stack.aclose()
