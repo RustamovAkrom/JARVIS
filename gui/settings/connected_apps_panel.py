@@ -244,3 +244,4 @@ class ConnectedAppsPanel(QWidget):
         self._busy(False);self.status.setText(message if not error else f"Error: {error}")
         if error:QMessageBox.warning(self,"Connected Apps",self._friendly_error(str(error)))
         self.refresh()
+        if not error:self.connections_changed.emit()
