@@ -57,6 +57,10 @@ Finish the Connected Apps subsystem without scope drift: stabilize existing MCP 
 - [x] Serialize service lifecycle, health-check, and tool execution operations per connection ID using reentrant locks.
 - [x] Hide native Connect buttons when the app is already connected; connected status remains visible.
 - [x] Add regression tests for hidden native Connect actions and service-level lock identity.
+- [x] Keep native Connect actions hidden when a connected app is selected; selection only controls Disconnect availability.
+- [x] Add regression test ensuring native selection does not reveal Connect.
+- [x] Make failed-connect and reconnect-retry cleanup best-effort so cleanup errors cannot mask the original failure.
+- [x] Add regression tests for cleanup failures across STDIO, HTTP, and SSE.
 - [ ] Connect/reconnect/disconnect/remove race audit at service/store level.
 - [ ] Timeout and cancellation audit.
 - [x] Fix runtime event-loop startup deadlock caused by ready-thread lock acquisition.
@@ -64,6 +68,7 @@ Finish the Connected Apps subsystem without scope drift: stabilize existing MCP 
 - [ ] Event-loop shutdown and pending-task cleanup.
 - [ ] Reconnect-all behavior and backoff.
 - [ ] Health check state transitions.
+- [x] Ensure failed connect cleanup is best-effort and original connection error remains visible.
 - [ ] Ensure failed connect does not leave stale sessions or credentials.
 
 ### Stage 3 — OAuth and credential security
