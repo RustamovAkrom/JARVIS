@@ -45,7 +45,7 @@ Finish the Connected Apps subsystem without scope drift: stabilize existing MCP 
 - [x] Persist read-only automation and enabled/reconnect state together.
 - [x] Fix tool activity regression test to mock discovered runtime tools.
 - [x] Add regression test for runtime disconnect when event loop is stopped.
-- [ ] Continue audit for lifecycle, OAuth, permissions, and UI regressions.
+- [x] Continue audit for lifecycle, OAuth, permissions, and UI regressions.
 - [ ] Run focused Connected Apps suite locally.
 
 ### Stage 2 — Runtime lifecycle and concurrency
@@ -68,10 +68,9 @@ Finish the Connected Apps subsystem without scope drift: stabilize existing MCP 
 - [x] Preserve original MCP connection errors when transport cleanup also fails.
 - [x] Audit timeout cancellation and event-loop pending-task cleanup paths; cancellation is propagated and loop shutdown drains pending tasks.
 - [ ] Final focused test run and review remaining timeout/cancellation behavior.
-- [ ] Timeout and cancellation audit.
 - [x] Fix runtime event-loop startup deadlock caused by ready-thread lock acquisition.
 - [x] Add regression test for runtime loop startup and shutdown.
-- [ ] Event-loop shutdown and pending-task cleanup.
+- [x] Event-loop shutdown cancels and drains pending tasks.
 - [x] Reconnect-all behavior and exponential retry backoff implemented.
 - [ ] Audit reconnect-all cancellation and shutdown interaction.
 - [ ] Health check state transitions.
@@ -100,7 +99,7 @@ Finish the Connected Apps subsystem without scope drift: stabilize existing MCP 
 - [x] Atomic token-set persistence and stale optional-token cleanup.
 - [x] Local credential revocation removes the complete credential set and refresh-lock state.
 - [x] OAuth token storage fallback supports credential stores without an optional delete method.
-- [ ] Credential deletion/revocation behavior.
+- [x] Credential deletion/revocation behavior: local revoke clears all credentials and refresh locks; connection removal clears persisted credentials.
 - [x] Redact OAuth token exchange and refresh request exceptions from user-facing errors.
 - [ ] Audit secret redaction in logs, diagnostics, and UI.
 - [x] Validate OAuth scope tokens and state length at authorization URL construction.
