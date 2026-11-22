@@ -5,6 +5,8 @@ import secrets
 import time
 import threading
 import logging
+import inspect
+from functools import wraps
 from core.connected_apps.models import AppConnection, AppDescriptor, AuthType, ConnectionStatus, TransportType
 from core.connected_apps.registry import registry
 from core.connected_apps.store import ConnectedAppsStore
@@ -36,11 +38,30 @@ def _safe_error(exc: Exception) -> str:
     text = re.sub(r"(?i)(https?://)[^/@\s]+@", r"\1[redacted]@", text)
     return f"{type(exc).__name__}: {text[:500]}"
 
+
+
+def _serialized_connection_operation(method):
+    """Serialize lifecycle and execution operations for an existing connection."""
+    signature = inspect.signature(method)
+
+    @wraps(method)
+    def wrapped(self, *args, **kwargs):
+        bound = signature.bind_partial(self, *args, **kwargs)
+        cid = bound.arguments.get("cid") or bound.arguments.get("connection_id")
+        if not cid:
+            return method(self, *args, **kwargs)
+        with self._connection_lock(cid):
+            return method(self, *args, **kwargs)
+
+    return wrapped
+
 class ConnectedAppsService:
     def __init__(self, app_registry=None, store=None):
         self.registry = app_registry or registry
         self.store = store or ConnectedAppsStore()
         self._adapter_lock = threading.RLock()
+        self._connection_lock_guard = threading.RLock()
+        self._connection_locks = {}
         self._adapters = {}
         self._native_adapters = {}
         # Native adapters are optional and must fail independently. A broken
@@ -50,6 +71,10 @@ class ConnectedAppsService:
         self._register_native_adapter(
             "google_calendar", "core.connected_apps.adapters.google_calendar", "GoogleCalendarAdapter"
         )
+
+    def _connection_lock(self, cid):
+        with self._connection_lock_guard:
+            return self._connection_locks.setdefault(str(cid), threading.RLock())
 
     def _register_native_adapter(self, app_id, module_name, class_name):
         try:
@@ -122,6 +147,7 @@ class ConnectedAppsService:
         self.store.upsert_connection(_serialize(row))
         return row
 
+    @_serialized_connection_operation
     def connect_stdio(self, descriptor, display_name=None, connection_id=None):
         cid = connection_id or secrets.token_urlsafe(16)
         row = self._begin_connection(cid, descriptor, display_name, "stdio",
@@ -149,6 +175,7 @@ class ConnectedAppsService:
         self.store.upsert_connection(data)
         return data
 
+    @_serialized_connection_operation
     def connect_http(self, descriptor, display_name=None, connection_id=None, headers=None):
         cid = connection_id or secrets.token_urlsafe(16)
         headers = dict(headers or {})
@@ -173,6 +200,7 @@ class ConnectedAppsService:
         self.store.upsert_connection(data)
         return data
 
+    @_serialized_connection_operation
     def connect_sse(self, descriptor, display_name=None, connection_id=None, headers=None):
         cid = connection_id or secrets.token_urlsafe(16)
         headers = dict(headers or {})
@@ -197,6 +225,7 @@ class ConnectedAppsService:
         self.store.upsert_connection(data)
         return data
 
+    @_serialized_connection_operation
     def reconnect(self, cid, *, attempts=3, backoff=0.5):
         row = self.store.get_connection(cid)
         if not row:
@@ -284,6 +313,7 @@ class ConnectedAppsService:
         from core.connected_apps.native import native_registry
         return [adapter.descriptor for adapter in native_registry.adapters()]
 
+    @_serialized_connection_operation
     def connect_native(self, app_id, *, display_name=None, access_token="", connection_id=None):
         adapter = self._native_adapters.get(str(app_id or "").casefold())
         if adapter is None:
@@ -332,6 +362,7 @@ class ConnectedAppsService:
             "native": True,
         } for tool in adapter.tools]
 
+    @_serialized_connection_operation
     def call_native_tool(self, cid, tool_name, arguments=None):
         row = self.store.get_connection(cid)
         if not row or not row.get("enabled", True):
@@ -373,6 +404,7 @@ class ConnectedAppsService:
         self.store.upsert_connection(row)
         return row
 
+    @_serialized_connection_operation
     def set_enabled(self, cid, enabled, *, reconnect=True):
         row = self.store.get_connection(cid)
         if not row:
@@ -396,6 +428,7 @@ class ConnectedAppsService:
         self.store.upsert_connection(row)
         return self.reconnect(cid) if reconnect else row
 
+    @_serialized_connection_operation
     def disconnect(self, cid):
         row = self.store.get_connection(cid)
         if not row:
@@ -414,10 +447,12 @@ class ConnectedAppsService:
         self.store.upsert_connection(row)
         return True
 
+    @_serialized_connection_operation
     def remove(self, cid):
         runtime.disconnect(cid)
         return self.store.remove_connection(cid)
 
+    @_serialized_connection_operation
     def health_check(self, cid):
         row = self.store.get_connection(cid)
         if not row:
@@ -509,6 +544,7 @@ class ConnectedAppsService:
         self.store.upsert_connection(row)
         return True
 
+    @_serialized_connection_operation
     def call_tool(self, cid, tool, arguments=None):
         started = time.time()
         row = self.store.get_connection(cid)
