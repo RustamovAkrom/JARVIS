@@ -37,3 +37,23 @@ def test_schema_validation_enforces_numeric_string_and_array_constraints():
             pass
         else:
             raise AssertionError(f"Invalid arguments accepted: {args}")
+
+def test_blocked_connected_app_tool_is_rejected_before_confirmation():
+    from unittest.mock import Mock, patch
+    from core.connected_apps.agent import ConnectedAppsAgent
+    service=Mock()
+    service.connections.return_value=[{
+        "id":"c1","app_id":"demo","display_name":"Demo","status":"connected",
+        "enabled":True,"metadata":{"blocked_tools":["delete_file"]},
+    }]
+    service.tools.return_value=[{"name":"delete_file","input_schema":{"type":"object"}}]
+    agent=ConnectedAppsAgent(service)
+    with patch("core.confirm.request") as confirm:
+        try:
+            agent.execute("c1","delete_file",{})
+        except PermissionError as exc:
+            assert "blocked" in str(exc).lower()
+        else:
+            raise AssertionError("Blocked tool was executed")
+    confirm.assert_not_called()
+    service.call_tool.assert_not_called()
