@@ -137,8 +137,13 @@ class ConnectedAppsPanel(QWidget):
     def _slug(value):return "-".join(value.strip().lower().split()) or "app"
     def add_from_catalog(self):
         from core.connected_apps.catalog import list_templates
-        templates=list_templates()
-        labels=[f"{item.name} — {item.description}" for item in templates]
+        query,ok=QInputDialog.getText(self,"MCP catalog","Search integrations by name, category or description:")
+        if not ok:return
+        templates=list_templates(query.strip())
+        if not templates:
+            QMessageBox.information(self,"MCP catalog","No integrations matched your search.")
+            return
+        labels=[f"{item.name} [{item.category}] — {item.description}" for item in templates]
         label,ok=QInputDialog.getItem(self,"MCP catalog","Choose a server template:",labels,0,False)
         if not ok:return
         template=templates[labels.index(label)]
