@@ -25,8 +25,8 @@ def _safe_error(exc: Exception) -> str:
     text = str(exc).replace("\r", " ").replace("\n", " ")
     text = re.sub(r"(?i)\bBearer\s+[^\s,;]+", "Bearer [redacted]", text)
     text = re.sub(
-        r"(?i)(access_token|refresh_token|token|secret|password|api[_-]?key|authorization)(\s*[=:]\s*)[^\s,;]+",
-        r"\1\2[redacted]",
+        r"(?i)(?:access_token|refresh_token|token|secret|password|api[_-]?key|authorization)\s*[=:]\s*[^\s,;]+",
+        "[redacted]",
         text,
     )
     text = re.sub(r"(?i)(://[^:/@]+:)[^@]+@", r"\1[redacted]@", text)
