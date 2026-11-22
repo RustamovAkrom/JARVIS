@@ -128,3 +128,75 @@ def test_github_api_error_does_not_expose_response_secrets(monkeypatch):
     monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
     with pytest.raises(PermissionError, match="authorization failed"):
         adapter.execute("c1", "github_get_profile", {})
+
+def test_native_github_connection_persists_token_and_discovers_tools(monkeypatch):
+    import importlib
+    service_module = importlib.import_module("core.connected_apps.service")
+    from core.connected_apps.service import ConnectedAppsService
+    from core.connected_apps.agent import ConnectedAppsAgent
+
+    class MemoryStore:
+        def __init__(self):
+            self.rows = {}
+            self.credentials = {}
+        def get_connection(self, cid):
+            row=self.rows.get(cid)
+            return dict(row) if row else None
+        def upsert_connection(self, row):
+            self.rows[row["id"]]=dict(row)
+        def list_connections(self):
+            return list(self.rows.values())
+        def set_credential(self, cid, key, value):
+            self.credentials[(cid,key)]=value
+        def get_credential(self, cid, key):
+            return self.credentials.get((cid,key),"")
+        def delete_credential(self, cid, key):
+            self.credentials.pop((cid,key),None)
+
+    store=MemoryStore()
+    svc=ConnectedAppsService(store=store)
+    monkeypatch.setattr(svc._native_adapters["github"],"health_check",lambda cid: True)
+    row=svc.connect_native("github",access_token="secret-token",connection_id="github-1")
+    assert row["status"]=="connected"
+    assert row["metadata"]["native"] is True
+    assert store.get_credential("github-1","access_token")=="secret-token"
+    agent=ConnectedAppsAgent(svc)
+    tools=agent.describe_tools()
+    assert any(tool["name"]=="github_list_repositories" for tool in tools)
+    assert all(tool["native"] for tool in tools)
+
+
+def test_native_github_tools_use_confirmation_for_write(monkeypatch):
+    from core.connected_apps.service import ConnectedAppsService
+    from core.connected_apps.agent import ConnectedAppsAgent
+    from unittest.mock import patch
+
+    class Store:
+        def __init__(self):
+            self.rows={}
+            self.credentials={}
+        def get_connection(self,cid):
+            return dict(self.rows[cid]) if cid in self.rows else None
+        def upsert_connection(self,row):
+            self.rows[row["id"]]=dict(row)
+        def list_connections(self):
+            return list(self.rows.values())
+        def set_credential(self,cid,key,value):
+            self.credentials[(cid,key)]=value
+        def get_credential(self,cid,key):
+            return self.credentials.get((cid,key),"")
+        def delete_credential(self,cid,key):
+            self.credentials.pop((cid,key),None)
+
+    store=Store()
+    svc=ConnectedAppsService(store=store)
+    monkeypatch.setattr(svc._native_adapters["github"],"health_check",lambda cid: True)
+    monkeypatch.setattr(svc._native_adapters["github"],"execute",lambda cid,name,args: {"ok":name})
+    svc.connect_native("github",access_token="token",connection_id="c1")
+    agent=ConnectedAppsAgent(svc)
+    assert agent.execute("c1","github_get_profile",{},read_only=True)=={"ok":"github_get_profile"}
+    captured={}
+    with patch("core.confirm.request",side_effect=lambda **kw: captured.update(kw) or "pending"):
+        result=agent.execute("c1","github_create_issue",{"repository":"owner/repo","title":"Test"})
+    assert result=="pending"
+    assert captured["key"]=="connected_apps:c1:github_create_issue"
