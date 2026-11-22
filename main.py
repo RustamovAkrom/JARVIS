@@ -679,6 +679,7 @@ class JarvisLive:
         self._inputlock = inputlock
         self._inputlock.register_interface(self.ui)
         self.ui.on_plan_mode_change = self._set_plan_mode
+        self.ui.on_connected_apps_changed = self._on_connected_apps_changed
         self._asst_name = "JARVI    S"  # updated each session from config
         self.session = None
         self._connected_app_tool_map = {}
@@ -884,6 +885,14 @@ class JarvisLive:
         self.ui.on_wake_install = self._ui_wake_install  # () -> (ok, msg)
 
     # ── Wake word: state machine ─────────────────────────────────────────────
+
+    def _on_connected_apps_changed(self):
+        """Rebuild Live tool declarations after Connected Apps lifecycle changes."""
+        if self._engine_caps is not None:
+            # Pipeline engines discover tools per request; they do not need a
+            # Live-session rebuild.
+            return
+        self.request_reconnect(keep_context=True, reason="connected apps changed")
 
     def _set_plan_mode(self, enabled: bool) -> None:
         """Keep the backend tool guard in sync with the chat's plan toggle."""
