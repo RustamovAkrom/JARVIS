@@ -33,7 +33,7 @@ class ConnectedAppsPanel(QWidget):
         self.list=QListWidget();self.list.setObjectName("appsList");self.list.setMinimumHeight(100);self.list.setMaximumHeight(190);self.list.itemSelectionChanged.connect(self.show_selected);layout.addWidget(self.list)
         self.details=QTextEdit();self.details.setObjectName("appsDetails");self.details.setReadOnly(True);self.details.setMinimumHeight(100);self.details.setMaximumHeight(170);layout.addWidget(self.details)
         actions=QHBoxLayout();self.connect_btn=QPushButton("Connect / Reconnect");self.connect_btn.clicked.connect(self.connect_selected);self.disconnect_btn=QPushButton("Disconnect");self.disconnect_btn.clicked.connect(self.disconnect_selected);self.remove_btn=QPushButton("Remove");self.remove_btn.clicked.connect(self.remove_selected);self.block_tool_btn=QPushButton("Block tool");self.block_tool_btn.clicked.connect(lambda:self.set_tool_permission(True));self.allow_tool_btn=QPushButton("Unblock tool");self.allow_tool_btn.clicked.connect(lambda:self.set_tool_permission(False));self.copy_diagnostics_btn=QPushButton("Copy diagnostics");self.copy_diagnostics_btn.clicked.connect(self.copy_diagnostics);self.health_btn=QPushButton("Check health");self.health_btn.clicked.connect(self.check_selected_health)
-        actions.addWidget(self.connect_btn);actions.addWidget(self.disconnect_btn);actions.addWidget(self.remove_btn);actions.addWidget(self.block_tool_btn);actions.addWidget(self.allow_tool_btn);actions.addWidget(self.copy_diagnostics_btn);actions.addWidget(self.health_btn);actions.addStretch(1);layout.addLayout(actions);self.auto_read_checkbox=QCheckBox("Auto-run read-only MCP tools from this server");self.auto_read_checkbox.setToolTip("Only tools marked read-only and non-destructive by the MCP server can run without confirmation. Enable only for servers you trust.");self.auto_read_checkbox.toggled.connect(self._set_auto_read);layout.addWidget(self.auto_read_checkbox);root.addWidget(group)
+        actions.addWidget(self.connect_btn);actions.addWidget(self.disconnect_btn);actions.addWidget(self.remove_btn);actions.addWidget(self.block_tool_btn);actions.addWidget(self.allow_tool_btn);actions.addWidget(self.copy_diagnostics_btn);actions.addWidget(self.health_btn);actions.addStretch(1);layout.addLayout(actions);self.enabled_checkbox=QCheckBox("Enable this connection and reconnect on startup");self.enabled_checkbox.toggled.connect(self._set_enabled);layout.addWidget(self.enabled_checkbox);self.auto_read_checkbox=QCheckBox("Auto-run read-only MCP tools from this server");self.auto_read_checkbox.setToolTip("Only tools marked read-only and non-destructive by the MCP server can run without confirmation. Enable only for servers you trust.");self.auto_read_checkbox.toggled.connect(self._set_auto_read);layout.addWidget(self.auto_read_checkbox);root.addWidget(group)
         runtime=QGroupBox("MCP runtime");rrow=QVBoxLayout(runtime);rrow.setSpacing(6);self.runtime_status=QLabel();self.runtime_status.setWordWrap(True);rrow.addWidget(self.runtime_status);self.runtime_help=QLabel();self.runtime_help.setWordWrap(True);rrow.addWidget(self.runtime_help);root.addWidget(runtime)
         self.status=QLabel("Ready");self.status.setObjectName("appsStatus");self.status.setWordWrap(True);root.addWidget(self.status);root.addStretch(1)
         self.setStyleSheet("""
@@ -60,7 +60,7 @@ class ConnectedAppsPanel(QWidget):
             self.runtime_help.setText("Connected Apps runtime is available.")
 
     def _busy(self,busy,message=""):
-        for w in (self.add_catalog_btn,self.add_stdio_btn,self.add_http_btn,self.add_sse_btn,self.add_oauth_btn,self.add_mcp_oauth_btn,self.reconnect_all_btn,self.health_all_btn,self.connect_btn,self.disconnect_btn,self.remove_btn,self.block_tool_btn,self.allow_tool_btn,self.copy_diagnostics_btn,self.health_btn):w.setEnabled(not busy)
+        for w in (self.add_catalog_btn,self.add_stdio_btn,self.add_http_btn,self.add_sse_btn,self.add_oauth_btn,self.add_mcp_oauth_btn,self.reconnect_all_btn,self.health_all_btn,self.connect_btn,self.disconnect_btn,self.remove_btn,self.block_tool_btn,self.allow_tool_btn,self.copy_diagnostics_btn,self.health_btn,self.enabled_checkbox,self.auto_read_checkbox):w.setEnabled(not busy)
         if message:self.status.setText(message)
     def refresh(self,*_):
         query=self.search.text().casefold().strip();selected=self.selected_id();self.list.clear();visible=[]
@@ -81,16 +81,40 @@ class ConnectedAppsPanel(QWidget):
                 "STDIO launches a local MCP process. HTTP connects to a remote endpoint. "
                 "OAuth opens your browser for authorization."
             )
+            self.enabled_checkbox.setEnabled(False)
+            self.enabled_checkbox.blockSignals(True)
+            self.enabled_checkbox.setChecked(False)
+            self.enabled_checkbox.blockSignals(False)
             self.auto_read_checkbox.setEnabled(False)
             self.auto_read_checkbox.blockSignals(True)
             self.auto_read_checkbox.setChecked(False)
             self.auto_read_checkbox.blockSignals(False)
             return
-        meta=row.get("metadata",{});tools=meta.get("tools",[]) or service.tools(cid);self.auto_read_checkbox.setEnabled(row.get("status")=="connected");self.auto_read_checkbox.blockSignals(True);self.auto_read_checkbox.setChecked(meta.get("auto_approve_read_only") is True);self.auto_read_checkbox.blockSignals(False)
+        meta=row.get("metadata",{});tools=meta.get("tools",[]) or service.tools(cid);self.enabled_checkbox.setEnabled(True);self.enabled_checkbox.blockSignals(True);self.enabled_checkbox.setChecked(row.get("enabled",True));self.enabled_checkbox.blockSignals(False);self.auto_read_checkbox.setEnabled(row.get("status")=="connected" and row.get("enabled",True));self.auto_read_checkbox.blockSignals(True);self.auto_read_checkbox.setChecked(meta.get("auto_approve_read_only") is True);self.auto_read_checkbox.blockSignals(False)
         lines=[f"App: {row.get('display_name')}",f"Status: {row.get('status')}",f"Transport: {meta.get('transport','unknown')}",f"Endpoint: {meta.get('endpoint') or meta.get('command','')}",f"Health: {meta.get('health','unknown')}",f"Last health check: {meta.get('last_health_check') or 'Never'}",f"Tool calls: {meta.get('tool_call_count',0)}",f"Last tool: {meta.get('last_tool_name') or 'None'}",f"Last tool activity: {meta.get('last_tool_activity') or 'Never'}",f"Last error: {row.get('last_error') or 'None'}","",f"Tools ({len(tools)}):"]
         lines.extend(f"• {t.get('name')} [{'BLOCKED' if t.get('name') in set(meta.get('blocked_tools',[])) else 'AVAILABLE'}]: {t.get('description','')}\n  Schema: {json.dumps(t.get('input_schema',{}),ensure_ascii=False)}" for t in tools)
         if row.get("last_error"):lines.extend(["","Troubleshooting:",self._friendly_error(row["last_error"])])
         self.details.setPlainText("\n".join(lines))
+    def _set_enabled(self, enabled):
+        cid=self.selected_id()
+        if not cid:
+            return
+        self._busy(True,"Enabling and reconnecting…" if enabled else "Disabling connection…")
+        worker=_Worker(lambda:service.set_enabled(cid,enabled,reconnect=bool(enabled)))
+        worker.signals.finished.connect(self._enabled_changed)
+        self.pool.start(worker)
+
+    def _enabled_changed(self,row,error):
+        self._busy(False)
+        if error:
+            message=self._friendly_error(str(error))
+            self.status.setText(f"Connection state change failed: {message}")
+            QMessageBox.warning(self,"Connected Apps",message)
+        elif row:
+            self.status.setText(f"{row.get('display_name')}: {row.get('status')} · {'enabled' if row.get('enabled') else 'disabled'}")
+            self.connections_changed.emit()
+        self.refresh()
+
     def _set_auto_read(self, enabled):
         cid=self.selected_id()
         if not cid:return
