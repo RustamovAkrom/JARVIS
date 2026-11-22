@@ -83,11 +83,15 @@ Finish the Connected Apps subsystem without scope drift: stabilize existing MCP 
 - [x] Validate client ID, authorization code, verifier, state, and PKCE inputs.
 - [x] Add regression tests for unsafe endpoints and missing PKCE verifier.
 - [x] Add regression test for refresh-token rotation persistence.
-- [ ] PKCE/state/callback validation audit and additional edge-case tests.
+- [x] PKCE/state/callback validation audit and additional edge-case tests.
+- [x] Restrict OAuth callback binding to loopback addresses.
+- [x] Require redirect URI to be loopback `/callback` with no query/fragment/userinfo.
 - [ ] OAuth metadata and endpoint validation.
 - [x] Per-connection token refresh locking with post-lock token recheck.
 - [x] Persist refresh-token rotation when provider returns a replacement.
-- [ ] Audit token persistence atomicity and refresh failure state.
+- [x] Persist token sets and stale-token removals in one atomic store write when supported.
+- [x] Clear stale refresh/id tokens when the new token response omits them.
+- [ ] Audit refresh failure state and authorization metadata persistence.
 - [ ] Credential deletion/revocation behavior.
 - [ ] Secret redaction in logs, diagnostics, and UI.
 - [ ] Validate scope and provider configuration behavior.
