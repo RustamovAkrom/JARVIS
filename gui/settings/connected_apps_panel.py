@@ -87,7 +87,7 @@ class ConnectedAppsPanel(QWidget):
             return
         meta=row.get("metadata",{});tools=meta.get("tools",[]) or service.tools(cid);self.auto_read_checkbox.setEnabled(row.get("status")=="connected");self.auto_read_checkbox.blockSignals(True);self.auto_read_checkbox.setChecked(meta.get("auto_approve_read_only") is True);self.auto_read_checkbox.blockSignals(False)
         lines=[f"App: {row.get('display_name')}",f"Status: {row.get('status')}",f"Transport: {meta.get('transport','unknown')}",f"Endpoint: {meta.get('endpoint') or meta.get('command','')}",f"Last error: {row.get('last_error') or 'None'}","",f"Tools ({len(tools)}):"]
-        lines.extend(f"• {t.get('name')}: {t.get('description','')}" for t in tools)
+        lines.extend(f"• {t.get('name')} [{'BLOCKED' if t.get('name') in set(meta.get('blocked_tools',[])) else 'AVAILABLE'}]: {t.get('description','')}\n  Schema: {json.dumps(t.get('input_schema',{}),ensure_ascii=False)}" for t in tools)
         if row.get("last_error"):lines.extend(["","Troubleshooting:",self._friendly_error(row["last_error"])])
         self.details.setPlainText("\n".join(lines))
     def _set_auto_read(self, enabled):
@@ -117,11 +117,15 @@ class ConnectedAppsPanel(QWidget):
         if not ok or not command.strip():return
         args,ok=QInputDialog.getText(self,"STDIO MCP server","Arguments (JSON string array):",text="[]")
         if not ok:return
+        env_text,ok=QInputDialog.getText(self,"STDIO MCP server","Environment variables (JSON object):",text="{}")
+        if not ok:return
         try:
             parsed=json.loads(args)
+            env=json.loads(env_text)
             if not isinstance(parsed,list) or not all(isinstance(x,str) for x in parsed):raise ValueError("Arguments must be a JSON array of strings.")
-        except Exception as exc:QMessageBox.warning(self,"Invalid arguments",str(exc));return
-        d=AppDescriptor(id="custom-"+self._slug(name),name=name.strip(),description="Custom MCP server",source="user",transport=TransportType.STDIO,command=command.strip(),args=parsed);self._connect_descriptor(d)
+            if not isinstance(env,dict) or not all(isinstance(k,str) and isinstance(v,str) for k,v in env.items()):raise ValueError("Environment must be a JSON object of string values.")
+        except Exception as exc:QMessageBox.warning(self,"Invalid configuration",str(exc));return
+        d=AppDescriptor(id="custom-"+self._slug(name),name=name.strip(),description="Custom MCP server",source="user",transport=TransportType.STDIO,command=command.strip(),args=parsed,env=env);self._connect_descriptor(d)
     def add_http(self):
         name,ok=QInputDialog.getText(self,"Add MCP HTTP server","Display name:")
         if not ok or not name.strip():return
