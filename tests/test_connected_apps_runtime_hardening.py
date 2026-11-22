@@ -56,3 +56,61 @@ def test_store_does_not_silently_reset_corrupt_data(tmp_path):
     path.write_text("{broken", encoding="utf-8")
     with pytest.raises(RuntimeError, match="unreadable"):
         ConnectedAppsStore(path).list_connections()
+
+def test_stdio_environment_is_persisted_as_credentials_and_restored(monkeypatch, tmp_path):
+    from core.connected_apps.models import AppDescriptor, TransportType
+    from core.connected_apps.service import ConnectedAppsService
+    from core.connected_apps import service as service_module
+
+    class Store:
+        def __init__(self):
+            self.rows = {}
+            self.credentials = {}
+
+        def get_connection(self, cid):
+            row = self.rows.get(cid)
+            return dict(row) if row else None
+
+        def upsert_connection(self, row):
+            self.rows[row["id"]] = dict(row)
+
+        def list_connections(self):
+            return list(self.rows.values())
+
+        def set_credential(self, cid, key, value):
+            self.credentials[(cid, key)] = value
+
+        def get_credential(self, cid, key):
+            return self.credentials.get((cid, key), "")
+
+        def remove_connection(self, cid):
+            return self.rows.pop(cid, None) is not None
+
+    store = Store()
+    svc = ConnectedAppsService(store=store)
+    calls = []
+
+    def connect_stdio(cid, command, args, env):
+        calls.append(dict(env))
+        return [{"name": "test", "input_schema": {"type": "object"}}]
+
+    monkeypatch.setattr(service_module.runtime, "connect_stdio", connect_stdio)
+    descriptor = AppDescriptor(
+        id="test-server",
+        name="Test Server",
+        transport=TransportType.STDIO,
+        command="python",
+        args=["server.py"],
+        env={"API_TOKEN": "secret-value"},
+    )
+    result = svc.connect_stdio(descriptor, connection_id="c1")
+    assert result["status"] == "connected"
+    assert store.get_credential("c1", "stdio_env:API_TOKEN") == "secret-value"
+
+    # Trust metadata should survive reconnects, while credentials are restored.
+    row = store.get_connection("c1")
+    row["metadata"]["auto_approve_read_only"] = True
+    store.upsert_connection(row)
+    svc.reconnect("c1")
+    assert calls[-1] == {"API_TOKEN": "secret-value"}
+    assert store.get_connection("c1")["metadata"]["auto_approve_read_only"] is True
