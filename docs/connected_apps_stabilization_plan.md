@@ -79,9 +79,15 @@ Finish the Connected Apps subsystem without scope drift: stabilize existing MCP 
 ### Stage 3 — OAuth and credential security
 - [x] Validate authorization/token endpoint URL schemes and hosts.
 - [x] Validate client ID, authorization code, verifier, state, and PKCE inputs.
+- [x] Validate authorization/token endpoint URL schemes and hosts.
+- [x] Validate client ID, authorization code, verifier, state, and PKCE inputs.
+- [x] Add regression tests for unsafe endpoints and missing PKCE verifier.
+- [x] Add regression test for refresh-token rotation persistence.
 - [ ] PKCE/state/callback validation audit and additional edge-case tests.
 - [ ] OAuth metadata and endpoint validation.
-- [ ] Token refresh locking and rotation.
+- [x] Per-connection token refresh locking with post-lock token recheck.
+- [x] Persist refresh-token rotation when provider returns a replacement.
+- [ ] Audit token persistence atomicity and refresh failure state.
 - [ ] Credential deletion/revocation behavior.
 - [ ] Secret redaction in logs, diagnostics, and UI.
 - [ ] Validate scope and provider configuration behavior.
