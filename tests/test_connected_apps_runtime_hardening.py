@@ -162,3 +162,13 @@ def test_sse_connection_persists_transport_and_reconnects(monkeypatch):
     second=svc.reconnect("sse-1",attempts=1)
     assert second["status"]=="connected"
     assert calls[-1][2]=={"Authorization":"Bearer secret"}
+
+def test_mcp_headers_reject_invalid_names_and_transport_owned_headers():
+    from core.connected_apps.runtime import _validate_headers
+    assert _validate_headers({"Authorization":"Bearer token","X-Trace":"abc"})=={"Authorization":"Bearer token","X-Trace":"abc"}
+    with pytest.raises(ValueError):
+        _validate_headers({"Bad Header":"value"})
+    with pytest.raises(ValueError):
+        _validate_headers({"Host":"example.com"})
+    with pytest.raises(ValueError):
+        _validate_headers({"X-Trace":"bad\\r\\nInjected: true"})
