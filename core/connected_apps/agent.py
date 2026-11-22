@@ -193,6 +193,9 @@ class ConnectedAppsAgent:
                      if t["connection_id"] == connection_id and t["name"] == tool_name), None)
         if tool is None:
             raise ValueError("Tool is not available on an enabled connected app")
+        blocked = set(tool.get("connection_metadata", {}).get("blocked_tools") or [])
+        if tool_name in blocked:
+            raise PermissionError("This MCP tool is blocked by Connected Apps permissions")
         _validate_arguments(tool.get("input_schema") or {}, args)
         # Automatic execution is permitted only when the MCP server explicitly
         # marks the operation read-only and non-destructive. All other calls fail closed.
