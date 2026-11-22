@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import base64
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -100,7 +101,13 @@ class GitHubAdapter(NativeAppAdapter):
         if tool_name=="github_get_file":
             path="/".join(urllib.parse.quote(part,safe="") for part in str(args["path"]).split("/") if part)
             query={"ref":args["ref"]} if args.get("ref") else None
-            return self._request(connection_id,"GET",f"/repos/{repo}/contents/{path}",query)
+            result = self._request(connection_id,"GET",f"/repos/{repo}/contents/{path}",query)
+            if isinstance(result, dict) and result.get("encoding") == "base64" and isinstance(result.get("content"), str):
+                try:
+                    result["decoded_content"] = base64.b64decode(result["content"], validate=False).decode("utf-8", errors="replace")
+                except Exception:
+                    result["decoded_content"] = ""
+            return result
         if tool_name=="github_create_issue":
             return self._request(connection_id,"POST",f"/repos/{repo}/issues",payload={"title":args["title"],"body":args.get("body",""),"labels":args.get("labels",[])})
         raise ValueError(f"Unknown GitHub tool: {tool_name}")
