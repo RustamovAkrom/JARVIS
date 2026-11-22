@@ -171,4 +171,4 @@ def test_mcp_headers_reject_invalid_names_and_transport_owned_headers():
     with pytest.raises(ValueError):
         _validate_headers({"Host":"example.com"})
     with pytest.raises(ValueError):
-        _validate_headers({"X-Trace":"bad\\r\\nInjected: true"})
+        _validate_headers({"X-Trace":"bad\r\nInjected: true"})
