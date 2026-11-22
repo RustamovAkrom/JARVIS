@@ -117,12 +117,30 @@ class ConnectedAppsService:
         headers = dict(headers or {})
         row = self._begin_connection(cid, descriptor, display_name, "http",
                                      {"endpoint": descriptor.endpoint})
-        # Credentials are persisted only in the protected credential store.
         authorization = headers.get("Authorization")
         if authorization:
             self.store.set_credential(cid, "authorization_header", authorization)
         try:
             tools = runtime.connect_http(cid, descriptor.endpoint, headers=headers)
+            row.status = ConnectionStatus.CONNECTED
+            row.metadata["tools"] = tools
+        except Exception as exc:
+            row.status = ConnectionStatus.ERROR
+            row.last_error = _safe_error(exc)
+        data = _serialize(row)
+        self.store.upsert_connection(data)
+        return data
+
+    def connect_sse(self, descriptor, display_name=None, connection_id=None, headers=None):
+        cid = connection_id or secrets.token_urlsafe(16)
+        headers = dict(headers or {})
+        row = self._begin_connection(cid, descriptor, display_name, "sse",
+                                     {"endpoint": descriptor.endpoint})
+        authorization = headers.get("Authorization")
+        if authorization:
+            self.store.set_credential(cid, "authorization_header", authorization)
+        try:
+            tools = runtime.connect_sse(cid, descriptor.endpoint, headers=headers)
             row.status = ConnectionStatus.CONNECTED
             row.metadata["tools"] = tools
         except Exception as exc:
@@ -139,13 +157,15 @@ class ConnectedAppsService:
         meta = row.get("metadata", {})
         descriptor = AppDescriptor(
             id=row["app_id"], name=row["display_name"], source="stored",
-            transport=TransportType.HTTP if meta.get("transport") == "http" else TransportType.STDIO,
+            transport=TransportType.HTTP if meta.get("transport") in {"http", "sse"} else TransportType.STDIO,
             endpoint=meta.get("endpoint", ""), command=meta.get("command", ""),
             args=meta.get("args", []),
             env={key: self.store.get_credential(cid, f"stdio_env:{key}") for key in meta.get("env_keys", [])},
         )
         if descriptor.transport == TransportType.HTTP:
             return self.connect_http(descriptor, connection_id=cid, headers=self._saved_http_headers(cid))
+        if meta.get("transport") == "sse":
+            return self.connect_sse(descriptor, connection_id=cid, headers=self._saved_http_headers(cid))
         return self.connect_stdio(descriptor, connection_id=cid)
 
     def _saved_http_headers(self, cid):
