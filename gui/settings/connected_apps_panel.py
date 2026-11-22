@@ -28,8 +28,8 @@ class ConnectedAppsPanel(QWidget):
         toolbar=QHBoxLayout();self.search=QLineEdit();self.search.setObjectName("appsSearch");self.search.setPlaceholderText("Search connected apps…");self.search.textChanged.connect(self.refresh);toolbar.addWidget(self.search,1)
         self.add_stdio_btn=QPushButton("+ Add STDIO");self.add_stdio_btn.clicked.connect(self.add_custom)
         self.add_http_btn=QPushButton("+ Add HTTP");self.add_http_btn.clicked.connect(self.add_http);self.add_sse_btn=QPushButton("+ Add SSE");self.add_sse_btn.clicked.connect(self.add_sse)
-        self.add_oauth_btn=QPushButton("+ Add OAuth");self.add_oauth_btn.clicked.connect(self.add_oauth_http);self.reconnect_all_btn=QPushButton("Reconnect all");self.reconnect_all_btn.clicked.connect(self.reconnect_all)
-        toolbar.addWidget(self.add_stdio_btn);toolbar.addWidget(self.add_http_btn);toolbar.addWidget(self.add_sse_btn);toolbar.addWidget(self.add_oauth_btn);toolbar.addWidget(self.reconnect_all_btn);layout.addLayout(toolbar)
+        self.add_oauth_btn=QPushButton("+ Provider OAuth");self.add_oauth_btn.clicked.connect(self.add_oauth_http);self.add_mcp_oauth_btn=QPushButton("+ MCP OAuth");self.add_mcp_oauth_btn.clicked.connect(self.add_mcp_oauth);self.reconnect_all_btn=QPushButton("Reconnect all");self.reconnect_all_btn.clicked.connect(self.reconnect_all)
+        toolbar.addWidget(self.add_stdio_btn);toolbar.addWidget(self.add_http_btn);toolbar.addWidget(self.add_sse_btn);toolbar.addWidget(self.add_oauth_btn);toolbar.addWidget(self.add_mcp_oauth_btn);toolbar.addWidget(self.reconnect_all_btn);layout.addLayout(toolbar)
         self.list=QListWidget();self.list.setObjectName("appsList");self.list.setMinimumHeight(100);self.list.setMaximumHeight(190);self.list.itemSelectionChanged.connect(self.show_selected);layout.addWidget(self.list)
         self.details=QTextEdit();self.details.setObjectName("appsDetails");self.details.setReadOnly(True);self.details.setMinimumHeight(100);self.details.setMaximumHeight(170);layout.addWidget(self.details)
         actions=QHBoxLayout();self.connect_btn=QPushButton("Connect / Reconnect");self.connect_btn.clicked.connect(self.connect_selected);self.disconnect_btn=QPushButton("Disconnect");self.disconnect_btn.clicked.connect(self.disconnect_selected);self.remove_btn=QPushButton("Remove");self.remove_btn.clicked.connect(self.remove_selected);self.block_tool_btn=QPushButton("Block tool");self.block_tool_btn.clicked.connect(lambda:self.set_tool_permission(True));self.allow_tool_btn=QPushButton("Unblock tool");self.allow_tool_btn.clicked.connect(lambda:self.set_tool_permission(False))
@@ -60,7 +60,7 @@ class ConnectedAppsPanel(QWidget):
             self.runtime_help.setText("Connected Apps runtime is available.")
 
     def _busy(self,busy,message=""):
-        for w in (self.add_stdio_btn,self.add_http_btn,self.add_sse_btn,self.add_oauth_btn,self.reconnect_all_btn,self.connect_btn,self.disconnect_btn,self.remove_btn,self.block_tool_btn,self.allow_tool_btn):w.setEnabled(not busy)
+        for w in (self.add_stdio_btn,self.add_http_btn,self.add_sse_btn,self.add_oauth_btn,self.add_mcp_oauth_btn,self.reconnect_all_btn,self.connect_btn,self.disconnect_btn,self.remove_btn,self.block_tool_btn,self.allow_tool_btn):w.setEnabled(not busy)
         if message:self.status.setText(message)
     def refresh(self,*_):
         query=self.search.text().casefold().strip();selected=self.selected_id();self.list.clear();visible=[]
@@ -146,6 +146,28 @@ class ConnectedAppsPanel(QWidget):
         headers={"Authorization":f"Bearer {token}"} if token.strip() else {}
         self._busy(True,f"Connecting to {d.name}…")
         w=_Worker(lambda:service.connect_sse(d,headers=headers))
+        w.signals.finished.connect(self._connected)
+        self.pool.start(w)
+    def add_mcp_oauth(self):
+        name,ok=QInputDialog.getText(self,"MCP OAuth","Display name:")
+        if not ok or not name.strip():return
+        endpoint,ok=QInputDialog.getText(self,"MCP OAuth","Protected MCP resource URL:")
+        if not ok or not endpoint.strip():return
+        client_id,ok=QInputDialog.getText(self,"MCP OAuth","OAuth Client ID:")
+        if not ok or not client_id.strip():return
+        secret,ok=QInputDialog.getText(self,"MCP OAuth","Client Secret (optional):",QLineEdit.EchoMode.Password)
+        if not ok:return
+        scopes,ok=QInputDialog.getText(self,"MCP OAuth","Scopes (space-separated):")
+        if not ok:return
+        d=AppDescriptor(id="mcp-oauth-"+self._slug(name),name=name.strip(),description="MCP OAuth protected resource",source="user",transport=TransportType.HTTP,endpoint=endpoint.strip())
+        self._busy(True,"Discovering OAuth metadata and opening browser…")
+        def authorize():
+            from core.connected_apps.auth_service import OAuthService
+            auth=OAuthService(service.store).authorize_mcp_connection(d.id,endpoint.strip(),client_id.strip(),scopes=scopes.split(),client_secret=secret)
+            token=OAuthService(service.store).get_access_token(d.id)
+            typ=service.store.get_credential(d.id,"token_type") or "Bearer"
+            return service.connect_http(d,connection_id=d.id,headers={"Authorization":f"{typ} {token}"})
+        w=_Worker(authorize)
         w.signals.finished.connect(self._connected)
         self.pool.start(w)
     def add_oauth_http(self):
