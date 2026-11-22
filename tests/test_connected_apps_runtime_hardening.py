@@ -442,3 +442,11 @@ def test_failed_mcp_connect_closes_stale_runtime_session(monkeypatch, transport)
         result = svc.connect_sse(descriptor, connection_id="c1")
     assert result["status"] == "error"
     assert disconnected == ["c1"]
+
+
+def test_runtime_disconnect_reports_stopped_loop_without_unawaited_coroutine():
+    from core.connected_apps.runtime import MCPRuntime, RuntimeUnavailable
+
+    runtime = MCPRuntime()
+    with pytest.raises(RuntimeUnavailable, match="not running"):
+        runtime.disconnect("c1")
