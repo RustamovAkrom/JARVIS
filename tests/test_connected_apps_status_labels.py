@@ -18,3 +18,12 @@ def test_connected_native_app_connect_buttons_are_hidden():
     assert 'self.add_calendar_btn.setVisible(not connected)' in source
     assert 'if self.github_status_label.text().casefold() == "connected":' in source
     assert 'if self.calendar_status_label.text().casefold() == "connected":' in source
+
+
+def test_native_selection_does_not_reveal_connect_button_for_connected_app():
+    source = Path("gui/settings/connected_apps_panel.py").read_text(encoding="utf-8")
+    start = source.index("    def _native_selection_changed(self):")
+    end = source.index("    def ", start + 5)
+    handler = source[start:end]
+    assert "setVisible(" not in handler
+    assert "self.native_disconnect_btn.setEnabled(connected)" in handler
