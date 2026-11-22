@@ -86,15 +86,18 @@ Finish the Connected Apps subsystem without scope drift: stabilize existing MCP 
 - [x] PKCE/state/callback validation audit and additional edge-case tests.
 - [x] Restrict OAuth callback binding to loopback addresses.
 - [x] Require redirect URI to be loopback `/callback` with no query/fragment/userinfo.
-- [ ] OAuth metadata and endpoint validation.
+- [x] Validate discovered authorization-server issuer and endpoint URLs.
+- [x] Validate protected-resource authorization-server metadata types and scope metadata.
 - [x] Per-connection token refresh locking with post-lock token recheck.
 - [x] Persist refresh-token rotation when provider returns a replacement.
 - [x] Persist token sets and stale-token removals in one atomic store write when supported.
 - [x] Clear stale refresh/id tokens when the new token response omits them.
 - [ ] Audit refresh failure state and authorization metadata persistence.
+- [x] Atomic token-set persistence and stale optional-token cleanup.
 - [ ] Credential deletion/revocation behavior.
 - [ ] Secret redaction in logs, diagnostics, and UI.
-- [ ] Validate scope and provider configuration behavior.
+- [x] Validate OAuth scope tokens and state length at authorization URL construction.
+- [ ] Validate provider configuration behavior and scope persistence.
 
 ### Stage 4 — Tool execution and permissions
 - [ ] MCP schema validation edge cases.
