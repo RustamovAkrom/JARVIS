@@ -563,34 +563,52 @@ class ConnectedAppsPanel(QWidget):
             QPushButton:hover {{ background: {C.PRI_GHO}; border-color: {C.PRI_DIM}; }}
             QPushButton#dangerAction {{ color: {C.RED}; border-color: {C.RED}; }}
         """)
-        def save_enabled(value):
-            self._busy(True, "Enabling and reconnecting…" if value else "Disabling connection…")
-            worker = _Worker(lambda: service.set_enabled(cid, value, reconnect=value))
-            worker.signals.finished.connect(self._enabled_changed)
-            self.pool.start(worker)
+        apply_permissions = QPushButton("Apply permissions")
+        apply_permissions.setObjectName("primaryAction")
+        layout.addWidget(apply_permissions)
 
-        def save_auto(value):
+        def apply_permission_changes():
+            new_enabled = enabled.isChecked()
+            new_auto_read = auto_read.isChecked()
+            current = service.store.get_connection(cid)
+            if not current:
+                QMessageBox.warning(dialog, "Connected Apps permissions", "Connection no longer exists.")
+                return
+
             try:
-                current = service.store.get_connection(cid)
-                if not current:
-                    raise RuntimeError("Connection no longer exists")
                 meta = dict(current.get("metadata") or {})
-                meta["auto_approve_read_only"] = bool(value)
+                meta["auto_approve_read_only"] = bool(new_auto_read)
                 current["metadata"] = meta
                 service.store.upsert_connection(current)
-                self.status.setText(
-                    "Read-only auto-run enabled for trusted MCP tools."
-                    if value else "Read-only auto-run disabled."
-                )
-                self.refresh()
             except Exception as exc:
-                QMessageBox.warning(self, "Connected Apps permissions", self._friendly_error(str(exc)))
-                auto_read.blockSignals(True)
-                auto_read.setChecked(metadata.get("auto_approve_read_only") is True)
-                auto_read.blockSignals(False)
+                QMessageBox.warning(dialog, "Connected Apps permissions", self._friendly_error(str(exc)))
+                return
 
-        enabled.toggled.connect(save_enabled)
-        auto_read.toggled.connect(save_auto)
+            apply_permissions.setEnabled(False)
+            apply_permissions.setText("Applying…")
+            if bool(current.get("enabled", True)) != new_enabled:
+                worker = _Worker(lambda: service.set_enabled(cid, new_enabled, reconnect=new_enabled))
+                worker.signals.finished.connect(
+                    lambda result, error: permission_apply_finished(dialog, apply_permissions, result, error)
+                )
+                self.pool.start(worker)
+            else:
+                self.status.setText("Connected Apps permissions saved.")
+                self.refresh()
+                dialog.accept()
+
+        def permission_apply_finished(dialog, button, result, error):
+            button.setEnabled(True)
+            button.setText("Apply permissions")
+            if error:
+                QMessageBox.warning(dialog, "Connected Apps permissions", self._friendly_error(str(error)))
+                return
+            self.status.setText("Connected Apps permissions saved.")
+            self.connections_changed.emit()
+            self.refresh()
+            dialog.accept()
+
+        apply_permissions.clicked.connect(apply_permission_changes)
         dialog.exec()
 
     def show_selected(self):
