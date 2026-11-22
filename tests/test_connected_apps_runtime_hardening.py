@@ -265,7 +265,7 @@ def test_connected_apps_tool_calls_record_activity_and_errors(monkeypatch):
 
     monkeypatch.setattr(module.runtime, "call", lambda cid, tool, args: (_ for _ in ()).throw(RuntimeError("failed")))
     with pytest.raises(RuntimeError):
-        svc.call_tool("c1", "search", {})
+        svc.call_tool("c1", "search", {"query": "test"})
     metadata = store.get_connection("c1")["metadata"]
     assert metadata["tool_call_count"] == 2
     assert metadata["last_tool_error"].startswith("RuntimeError:")
