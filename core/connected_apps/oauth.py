@@ -42,9 +42,22 @@ def create_pkce() -> tuple[str, str]:
     return verifier, challenge
 
 
+def _validate_redirect_uri(value: str) -> str:
+    parsed = urllib.parse.urlparse(str(value or ""))
+    if (
+        parsed.scheme != "http"
+        or parsed.hostname not in {"127.0.0.1", "localhost", "::1"}
+        or parsed.username or parsed.password
+        or parsed.path != "/callback"
+        or parsed.query or parsed.fragment
+    ):
+        raise ValueError("OAuth redirect URI must be a valid loopback callback")
+    return value
+
+
 def build_authorization_url(config: OAuthConfig, state: OAuthState, challenge: str) -> str:
     _validate_metadata_url(config.authorization_url)
-    _validate_metadata_url(config.redirect_uri)
+    _validate_redirect_uri(config.redirect_uri)
     if not config.client_id or len(config.client_id) > 1024:
         raise ValueError("OAuth client ID is invalid")
     if not state.state or not challenge or not state.verifier:
@@ -68,6 +81,10 @@ class OAuthCallbackServer:
     """One-shot loopback callback with strict state validation."""
 
     def __init__(self, host: str = "127.0.0.1", port: int = 0):
+        if host not in {"127.0.0.1", "localhost", "::1"}:
+            raise ValueError("OAuth callback server must bind to loopback")
+        if not isinstance(port, int) or not 0 <= port <= 65535:
+            raise ValueError("OAuth callback port is invalid")
         self.host, self.port = host, port
         self.state = OAuthState(
             state=secrets.token_urlsafe(32),
@@ -235,7 +252,7 @@ def discover_mcp_oauth(resource_url: str) -> dict[str, Any]:
 def exchange_code(config: OAuthConfig, code: str, verifier: str, redirect_uri: str) -> dict[str, Any]:
     """Exchange code for tokens using a lazily imported HTTP client."""
     _validate_metadata_url(config.token_url)
-    _validate_metadata_url(redirect_uri)
+    _validate_redirect_uri(redirect_uri)
     if not code or len(code) > 8192 or not verifier:
         raise ValueError("OAuth authorization code or PKCE verifier is invalid")
     import httpx
