@@ -4,10 +4,13 @@ from __future__ import annotations
 import secrets
 import time
 import threading
+import logging
 from core.connected_apps.models import AppConnection, AppDescriptor, AuthType, ConnectionStatus, TransportType
 from core.connected_apps.registry import registry
 from core.connected_apps.store import ConnectedAppsStore
 from core.connected_apps.runtime import runtime
+
+logger = logging.getLogger(__name__)
 
 
 def _serialize(row):
@@ -40,19 +43,27 @@ class ConnectedAppsService:
         self._adapter_lock = threading.RLock()
         self._adapters = {}
         self._native_adapters = {}
+        # Native adapters are optional and must fail independently. A broken
+        # provider must not prevent other native apps or the MCP subsystem from
+        # being initialized.
+        self._register_native_adapter("github", "core.connected_apps.adapters.github", "GitHubAdapter")
+        self._register_native_adapter(
+            "google_calendar", "core.connected_apps.adapters.google_calendar", "GoogleCalendarAdapter"
+        )
+
+    def _register_native_adapter(self, app_id, module_name, class_name):
         try:
-            from core.connected_apps.adapters.github import GitHubAdapter
-            from core.connected_apps.adapters.google_calendar import GoogleCalendarAdapter
+            import importlib
             from core.connected_apps.native import native_registry
 
-            for adapter in (GitHubAdapter(self.store), GoogleCalendarAdapter(self.store)):
-                app_id = adapter.descriptor.id
-                self._native_adapters[app_id] = adapter
-                if native_registry.get(app_id) is None:
-                    native_registry.register(adapter)
+            module = importlib.import_module(module_name)
+            adapter_class = getattr(module, class_name)
+            adapter = adapter_class(self.store)
+            self._native_adapters[app_id] = adapter
+            if native_registry.get(app_id) is None:
+                native_registry.register(adapter)
         except Exception:
-            # Native integrations are optional; MCP/core remain available.
-            pass
+            logger.exception("Failed to initialize optional native Connected App: %s", app_id)
 
     @staticmethod
     def normalize(name):
@@ -398,8 +409,7 @@ class ConnectedAppsService:
         checked_at = time.time()
         metadata = dict(row.get("metadata") or {})
         if metadata.get("native"):
-            from core.connected_apps.native import native_registry
-            adapter = native_registry.get(row.get("app_id"))
+            adapter = self._native_adapters.get(str(row.get("app_id") or "").casefold())
             try:
                 healthy = bool(adapter and adapter.health_check(cid))
                 metadata["health"] = "healthy" if healthy else "unavailable"
