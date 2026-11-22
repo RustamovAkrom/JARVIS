@@ -11826,6 +11826,9 @@ class MainWindow(QMainWindow):
         try:
             from gui.settings.connected_apps_panel import ConnectedAppsPanel
             panel = ConnectedAppsPanel()
+            panel.connections_changed.connect(
+                lambda: getattr(self, "on_connected_apps_changed", lambda: None)()
+            )
         except Exception as exc:
             panel = QLabel(
                 self._tr("Connected Apps is unavailable. JARVIS core and other settings remain operational.")
