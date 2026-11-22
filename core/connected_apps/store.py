@@ -119,6 +119,18 @@ class ConnectedAppsStore:
             raise RuntimeError("Stored credential cannot be decrypted on this system")
         return value
 
+    def delete_credential(self, cid, name):
+        with self._lock:
+            data = self._read()
+            credentials = data["credentials"].get(cid, {})
+            if name not in credentials:
+                return False
+            credentials.pop(name, None)
+            if not credentials:
+                data["credentials"].pop(cid, None)
+            self._write(data)
+            return True
+
     def delete_credentials(self, cid):
         with self._lock:
             data = self._read()
