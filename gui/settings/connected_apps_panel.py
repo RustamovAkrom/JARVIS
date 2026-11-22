@@ -4,6 +4,7 @@ import json
 from PyQt6.QtCore import Qt, QObject, QRunnable, QThreadPool, pyqtSignal, QSize
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QTextEdit, QListWidget, QListWidgetItem, QMessageBox, QInputDialog, QGroupBox, QCheckBox, QApplication, QFrame, QMenu, QTabWidget, QDialog, QDialogButtonBox
 from core.connected_apps.models import AppDescriptor, TransportType
+from gui.themes.tokens import C
 from core.connected_apps.service import service
 
 class _Signals(QObject):
@@ -228,36 +229,52 @@ class ConnectedAppsPanel(QWidget):
         root.addWidget(self.status)
         root.addStretch(1)
 
-        self.setStyleSheet("""
-        #connectedAppsSections::pane { border: 0; background: palette(window); }
-        #appsTabSurface, #mcpTabSurface { background-color: palette(window); color: palette(windowText); border: 1px solid palette(mid); border-radius: 10px; }
-        #appsTabSurface QLabel, #mcpTabSurface QLabel { color: palette(windowText); background: transparent; }
-        #appsTabSurface QListWidget, #mcpTabSurface QListWidget { background-color: palette(window); color: palette(windowText); border: 1px solid palette(mid); border-radius: 8px; }
-        #appsTabSurface QListWidget::item, #mcpTabSurface QListWidget::item { background-color: palette(window); color: palette(windowText); border: 1px solid palette(mid); border-radius: 8px; margin: 5px; padding: 12px; }
-        #appsTabSurface QListWidget::item:hover, #mcpTabSurface QListWidget::item:hover { background-color: palette(alternate-base); border-color: palette(highlight); }
-        #appsTabSurface QListWidget::item:selected, #mcpTabSurface QListWidget::item:selected { background-color: palette(highlight); color: palette(highlighted-text); border: 2px solid palette(highlight); }
-        #nativeAppCard { background-color: palette(window); color: palette(windowText); border: 1px solid palette(mid); border-radius: 10px; }
-        #connectedAppsSections QTabBar::tab { background-color: palette(window); color: palette(windowText); border: 1px solid palette(mid); border-radius: 8px; padding: 10px 18px; }
-        #connectedAppsSections QTabBar::tab:selected { background-color: palette(alternate-base); border-color: palette(highlight); }
-        QTabBar::tab { padding: 10px 18px; margin-right: 5px; border: 1px solid palette(mid); border-radius: 8px; }
-        QTabBar::tab:selected { background: palette(alternate-base); font-weight: 600; }
-        #detailsToggle { text-align: left; font-weight: 600; }
-        #appsTitle { font-size: 22px; font-weight: 700; }
-        #appsSubtitle { color: palette(mid); }
-        QGroupBox { background-color: palette(window); color: palette(windowText); border: 1px solid palette(mid); border-radius: 10px; margin-top: 10px; padding: 12px; }
-        QGroupBox::title { subcontrol-origin: margin; left: 12px; padding: 0 6px; font-weight: 600; }
-        #nativeAppName { font-size: 15px; font-weight: 700; }
-        #nativeAppDescription { color: palette(mid); }
-        QLineEdit, QTextEdit, QListWidget { background: palette(base); color: palette(text); border: 1px solid palette(mid); border-radius: 7px; padding: 8px; }
-        QListWidget::item { padding: 9px; border-radius: 5px; margin: 2px; }
-        QListWidget::item:selected { background: palette(highlight); color: palette(highlighted-text); }
-        QPushButton { border: 1px solid palette(mid); border-radius: 7px; padding: 8px 12px; min-height: 28px; }
-        QPushButton:hover { border-color: palette(highlight); }
-        QPushButton#primaryAction { font-weight: 600; }
-        #appsStatus { padding: 5px; }
-        """)
+        self._apply_theme_styles()
+)
         self._check_runtime()
         self.refresh()
+    def refresh_state(self):
+        """Refresh Connected Apps styles when JARVIS theme/accent tokens change."""
+        self._apply_theme_styles()
+
+    def _apply_theme_styles(self):
+        self.setStyleSheet(f"""
+        QWidget#ConnectedAppsPanel {{ background: {C.BG}; color: {C.TEXT}; }}
+        QGroupBox#appsTabSurface, QGroupBox#mcpTabSurface, QGroupBox {{
+            background: {C.PANEL}; color: {C.TEXT};
+            border: 1px solid {C.BORDER}; border-radius: 10px; margin-top: 10px; padding: 12px;
+        }}
+        QGroupBox::title {{ subcontrol-origin: margin; left: 12px; padding: 0 6px; color: {C.PRI}; font-weight: 600; }}
+        #connectedAppsSections::pane {{ border: 1px solid {C.BORDER}; background: {C.PANEL}; border-radius: 8px; }}
+        #connectedAppsSections QTabBar::tab {{ background: {C.PANEL2}; color: {C.TEXT_MED}; border: 1px solid {C.BORDER}; border-radius: 7px; padding: 9px 16px; margin-right: 4px; }}
+        #connectedAppsSections QTabBar::tab:hover {{ color: {C.TEXT}; border-color: {C.BORDER_B}; }}
+        #connectedAppsSections QTabBar::tab:selected {{ background: {C.PRI_GHO}; color: {C.PRI}; border-color: {C.PRI_DIM}; }}
+        #appsTabSurface QLabel, #mcpTabSurface QLabel {{ color: {C.TEXT}; background: transparent; }}
+        #appsTitle {{ color: {C.PRI}; font-size: 22px; font-weight: 700; }}
+        #appsSubtitle, #nativeAppDescription {{ color: {C.TEXT_MED}; }}
+        #nativeAppCard {{ background: {C.PANEL2}; color: {C.TEXT}; border: 1px solid {C.BORDER}; border-radius: 10px; }}
+        #nativeAppName {{ color: {C.PRI}; font-size: 15px; font-weight: 700; }}
+        #nativeAppsList, #appsList {{ background: {C.PANEL2}; color: {C.TEXT}; border: 1px solid {C.BORDER}; border-radius: 8px; outline: 0; }}
+        #nativeAppsList::item, #appsList::item {{ background: {C.PANEL}; color: {C.TEXT}; border: 1px solid {C.BORDER}; border-radius: 8px; padding: 12px; margin: 4px; }}
+        #nativeAppsList::item:hover, #appsList::item:hover {{ background: {C.PRI_GHO}; border: 1px solid {C.BORDER_B}; }}
+        #nativeAppsList::item:selected, #appsList::item:selected {{ background: {C.PRI_GHO}; color: {C.PRI}; border: 2px solid {C.PRI}; }}
+        QLineEdit, QTextEdit {{ background: {C.PANEL2}; color: {C.TEXT}; border: 1px solid {C.BORDER}; border-radius: 7px; padding: 8px; selection-background-color: {C.PRI_GHO}; }}
+        QLineEdit:focus, QTextEdit:focus {{ border-color: {C.PRI}; }}
+        QPushButton {{ background: {C.PANEL2}; color: {C.TEXT}; border: 1px solid {C.BORDER}; border-radius: 7px; padding: 8px 12px; min-height: 28px; }}
+        QPushButton:hover {{ background: {C.PRI_GHO}; color: {C.PRI}; border-color: {C.PRI_DIM}; }}
+        QPushButton:pressed {{ background: {C.PRI_GHO}; }}
+        QPushButton:disabled {{ background: {C.PANEL}; color: {C.TEXT_DIM}; border-color: {C.BORDER}; }}
+        QPushButton#primaryAction {{ background: {C.PRI_GHO}; color: {C.PRI}; border-color: {C.PRI_DIM}; font-weight: 600; }}
+        QPushButton#primaryAction:hover {{ background: {C.PRI_DIM}; color: {C.WHITE}; border-color: {C.PRI}; }}
+        #detailsToggle {{ text-align: left; font-weight: 600; }}
+        #appsStatus {{ color: {C.TEXT_MED}; padding: 5px; }}
+        QCheckBox {{ color: {C.TEXT}; spacing: 8px; }}
+        QScrollBar:vertical {{ background: transparent; width: 8px; margin: 2px; }}
+        QScrollBar::handle:vertical {{ background: {C.BORDER_B}; border-radius: 4px; min-height: 28px; }}
+        QScrollBar::handle:vertical:hover {{ background: {C.PRI_DIM}; }}
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
+        QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; }}
+        """)
     def _check_runtime(self):
         try:
             import mcp  # noqa: F401
