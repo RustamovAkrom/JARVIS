@@ -31,6 +31,13 @@ Finish the Connected Apps subsystem without scope drift: stabilize existing MCP 
 - [x] Run reconnect from Details dialog in a worker instead of blocking Qt UI.
 - [x] Audit Connected Apps theme-token references; no undefined tokens remain.
 - [x] Add regression tests for service guards, adapter isolation, and failed-connect cleanup.
+- [x] Fix HTTP/SSE failed-connect stale-session cleanup.
+- [x] Fix runtime disconnect shutdown handling and avoid unawaited coroutine warnings.
+- [x] Surface disconnect failures through Service/UI instead of silently marking disconnected.
+- [x] Replace implicit permission checkbox persistence with explicit Apply permissions action.
+- [x] Make permission apply persist read-only automation and enabled/reconnect state together.
+- [x] Fix tool activity regression test to mock discovered runtime tools.
+- [x] Add regression test for runtime disconnect when event loop is stopped.
 - [ ] Continue audit for lifecycle, OAuth, permissions, and UI regressions.
 - [ ] Run focused Connected Apps suite locally.
 
