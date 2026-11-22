@@ -348,9 +348,9 @@ class ConnectedAppsPanel(QWidget):
             if isinstance(value,(list,tuple)):
                 return [redact(item) for item in value]
             if isinstance(value,str):
-                value=re.sub(r"(?i)(bearer\\s+)[^\\s]+",r"\\1[redacted]",value)
-                value=re.sub(r"(?i)(password|token|secret|api[_-]?key)=([^&\\s]+)",r"\\1=[redacted]",value)
-                value=re.sub(r"(?i)(://[^:/@]+:)[^@]+@",r"\\1[redacted]@",value)
+                value=re.sub(r"(?i)(bearer\s+)[^\s]+",r"\1[redacted]",value)
+                value=re.sub(r"(?i)(password|token|secret|api[_-]?key)=([^&\s]+)",r"\1=[redacted]",value)
+                value=re.sub(r"(?i)(://[^:/@]+:)[^@]+@",r"\1[redacted]@",value)
             return value
         safe_metadata=redact(metadata)
         diagnostics={
