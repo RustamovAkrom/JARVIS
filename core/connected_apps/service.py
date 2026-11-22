@@ -42,11 +42,14 @@ class ConnectedAppsService:
         self._native_adapters = {}
         try:
             from core.connected_apps.adapters.github import GitHubAdapter
+            from core.connected_apps.adapters.google_calendar import GoogleCalendarAdapter
             from core.connected_apps.native import native_registry
-            adapter = GitHubAdapter(self.store)
-            self._native_adapters["github"] = adapter
-            if native_registry.get("github") is None:
-                native_registry.register(adapter)
+
+            for adapter in (GitHubAdapter(self.store), GoogleCalendarAdapter(self.store)):
+                app_id = adapter.descriptor.id
+                self._native_adapters[app_id] = adapter
+                if native_registry.get(app_id) is None:
+                    native_registry.register(adapter)
         except Exception:
             # Native integrations are optional; MCP/core remain available.
             pass
