@@ -72,17 +72,28 @@ class OAuthService:
         }
 
     def _save(self, cid, tokens):
-        for key in ("access_token", "refresh_token", "id_token"):
-            value = tokens.get(key)
-            if value:
-                self.store.set_credential(cid, key, str(value))
-        self.store.set_credential(cid, "token_type", str(tokens.get("token_type", "Bearer")))
+        values = {
+            "access_token": str(tokens["access_token"]),
+            "token_type": str(tokens.get("token_type", "Bearer")),
+        }
+        for key in ("refresh_token", "id_token"):
+            if tokens.get(key):
+                values[key] = str(tokens[key])
         expires = tokens.get("expires_in")
         try:
             expires_at = time.time() + max(0, int(expires)) if expires is not None else 0
         except (TypeError, ValueError):
             expires_at = 0
-        self.store.set_credential(cid, "expires_at", str(expires_at))
+        values["expires_at"] = str(expires_at)
+        delete = [key for key in ("refresh_token", "id_token") if key not in values]
+        batch_writer = getattr(self.store, "set_credentials", None)
+        if callable(batch_writer):
+            batch_writer(cid, values, delete=delete)
+            return
+        for key, value in values.items():
+            self.store.set_credential(cid, key, value)
+        for key in delete:
+            self.store.delete_credential(cid, key)
 
     def _get_refresh_lock(self, cid):
         with self._lock:
