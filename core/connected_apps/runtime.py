@@ -213,6 +213,21 @@ class MCPRuntime:
             content.append({"type": "structured", "data": structured})
         return content
 
+    async def _ping(self, cid):
+        with self._lock:
+            entry = self._sessions.get(cid)
+        if not entry:
+            return False
+        ping = getattr(entry[1], "ping", None)
+        if not callable(ping):
+            # Some MCP SDK/provider implementations do not expose ping.
+            return True
+        await ping()
+        return True
+
+    def health(self, cid, timeout=10):
+        return self._submit(self._ping(cid), timeout=timeout)
+
     async def _close(self, cid):
         with self._lock:
             entry = self._sessions.pop(cid, None)
