@@ -9,43 +9,112 @@ from core.connected_apps.service import service
 
 
 def _annotation(tool: dict[str, Any], name: str) -> bool:
+    """Treat MCP annotations as trusted only when explicitly boolean true."""
     annotations = tool.get("annotations")
     if isinstance(annotations, dict):
         return annotations.get(name) is True
-    return getattr(annotations, name, False) is True
+    try:
+        return getattr(annotations, name, False) is True
+    except Exception:
+        return False
 
 
 def _validate_value(schema: dict[str, Any], value: Any, path: str) -> None:
     if not isinstance(schema, dict):
-        return
+        raise ValueError(f"{path} has an invalid schema")
+    # Unsupported schema features must not silently weaken argument validation.
+    unsupported = {"$ref", "$dynamicRef", "dependencies", "dependentSchemas",
+                   "if", "then", "else", "propertyNames"}
+    present = unsupported.intersection(schema)
+    if present:
+        raise ValueError(f"{path} uses unsupported schema validation: {sorted(present)[0]}")
+
+    if "allOf" in schema:
+        branches = schema["allOf"]
+        if not isinstance(branches, list):
+            raise ValueError(f"{path} has an invalid allOf schema")
+        for branch in branches:
+            _validate_value(branch, value, path)
+    if "anyOf" in schema:
+        branches = schema["anyOf"]
+        if not isinstance(branches, list) or not branches:
+            raise ValueError(f"{path} has an invalid anyOf schema")
+        errors = []
+        for branch in branches:
+            try:
+                _validate_value(branch, value, path)
+                break
+            except ValueError as exc:
+                errors.append(str(exc))
+        else:
+            raise ValueError(f"{path} does not match any allowed schema")
+    if "oneOf" in schema:
+        branches = schema["oneOf"]
+        if not isinstance(branches, list) or not branches:
+            raise ValueError(f"{path} has an invalid oneOf schema")
+        matches = 0
+        for branch in branches:
+            try:
+                _validate_value(branch, value, path)
+                matches += 1
+            except ValueError:
+                pass
+        if matches != 1:
+            raise ValueError(f"{path} must match exactly one allowed schema")
+    if "not" in schema:
+        try:
+            _validate_value(schema["not"], value, path)
+        except ValueError:
+            pass
+        else:
+            raise ValueError(f"{path} matches a forbidden schema")
+
     expected = schema.get("type")
     types = {
         "object": dict, "array": list, "string": str,
-        "integer": int, "number": (int, float), "boolean": bool,
+        "integer": int, "number": (int, float), "boolean": bool, "null": type(None),
     }
-    if expected in types:
-        target = types[expected]
-        if expected in {"integer", "number"} and isinstance(value, bool):
-            raise ValueError(f"{path} must be {expected}")
-        if not isinstance(value, target):
-            raise ValueError(f"{path} must be {expected}")
-    if "enum" in schema and value not in schema["enum"]:
-        raise ValueError(f"{path} must be one of the allowed values")
+    if expected is not None:
+        expected_types = expected if isinstance(expected, list) else [expected]
+        if not expected_types or any(item not in types for item in expected_types):
+            raise ValueError(f"{path} has an invalid schema type")
+        valid = any(
+            isinstance(value, types[item]) and not (
+                item in {"integer", "number"} and isinstance(value, bool)
+            ) and not (item == "integer" and isinstance(value, float))
+            for item in expected_types
+        )
+        if not valid:
+            raise ValueError(f"{path} has an invalid type")
+
+    if "enum" in schema:
+        enum = schema["enum"]
+        if not isinstance(enum, list) or value not in enum:
+            raise ValueError(f"{path} must be one of the allowed values")
     if "const" in schema and value != schema["const"]:
         raise ValueError(f"{path} must match the required value")
+
     if isinstance(value, (int, float)) and not isinstance(value, bool):
-        if "minimum" in schema and value < schema["minimum"]:
-            raise ValueError(f"{path} must be >= {schema['minimum']}")
-        if "maximum" in schema and value > schema["maximum"]:
-            raise ValueError(f"{path} must be <= {schema['maximum']}")
-        if "exclusiveMinimum" in schema and value <= schema["exclusiveMinimum"]:
-            raise ValueError(f"{path} must be > {schema['exclusiveMinimum']}")
-        if "exclusiveMaximum" in schema and value >= schema["exclusiveMaximum"]:
-            raise ValueError(f"{path} must be < {schema['exclusiveMaximum']}")
-        if "multipleOf" in schema and schema["multipleOf"]:
-            quotient = value / schema["multipleOf"]
+        for keyword, predicate, message in (
+            ("minimum", lambda x: value >= x, "must be >="),
+            ("maximum", lambda x: value <= x, "must be <="),
+            ("exclusiveMinimum", lambda x: value > x, "must be >"),
+            ("exclusiveMaximum", lambda x: value < x, "must be <"),
+        ):
+            if keyword in schema:
+                bound = schema[keyword]
+                if not isinstance(bound, (int, float)) or isinstance(bound, bool):
+                    raise ValueError(f"{path} has an invalid {keyword}")
+                if not predicate(bound):
+                    raise ValueError(f"{path} {message} {bound}")
+        multiple = schema.get("multipleOf")
+        if multiple is not None:
+            if not isinstance(multiple, (int, float)) or isinstance(multiple, bool) or multiple <= 0:
+                raise ValueError(f"{path} has an invalid multipleOf")
+            quotient = value / multiple
             if abs(quotient - round(quotient)) > 1e-9:
-                raise ValueError(f"{path} must be a multiple of {schema['multipleOf']}")
+                raise ValueError(f"{path} must be a multiple of {multiple}")
+
     if isinstance(value, str):
         if "minLength" in schema and len(value) < schema["minLength"]:
             raise ValueError(f"{path} is too short")
@@ -58,45 +127,63 @@ def _validate_value(schema: dict[str, Any], value: Any, path: str) -> None:
                     raise ValueError(f"{path} does not match the required pattern")
             except re.error:
                 raise ValueError(f"{path} has an invalid validation pattern") from None
+
     if isinstance(value, dict):
         properties = schema.get("properties", {})
         required = schema.get("required", [])
-        if isinstance(required, list):
-            missing = [key for key in required if key not in value]
-            if missing:
-                raise ValueError(f"{path} missing required arguments: {', '.join(missing)}")
+        if not isinstance(properties, dict) or not isinstance(required, list):
+            raise ValueError(f"{path} has an invalid object schema")
+        missing = [key for key in required if key not in value]
+        if missing:
+            raise ValueError(f"{path} missing required arguments: {', '.join(missing)}")
         if "minProperties" in schema and len(value) < schema["minProperties"]:
             raise ValueError(f"{path} has too few properties")
         if "maxProperties" in schema and len(value) > schema["maxProperties"]:
             raise ValueError(f"{path} has too many properties")
-        if schema.get("additionalProperties") is False:
-            unknown = [key for key in value if key not in properties]
-            if unknown:
-                raise ValueError(f"{path} contains unknown arguments: {', '.join(unknown)}")
+        additional = schema.get("additionalProperties", True)
         for key, item in value.items():
-            child = properties.get(key) if isinstance(properties, dict) else None
-            if child is not None:
-                _validate_value(child, item, f"{path}.{key}")
+            child = properties.get(key)
+            if child is None:
+                if additional is False:
+                    raise ValueError(f"{path} contains unknown arguments: {key}")
+                if isinstance(additional, dict):
+                    _validate_value(additional, item, f"{path}.{key}")
+                continue
+            _validate_value(child, item, f"{path}.{key}")
+        pattern_properties = schema.get("patternProperties", {})
+        if pattern_properties:
+            if not isinstance(pattern_properties, dict):
+                raise ValueError(f"{path} has an invalid patternProperties schema")
+            for key, item in value.items():
+                if key in properties:
+                    continue
+                matched = False
+                for pattern, child in pattern_properties.items():
+                    try:
+                        if re.search(pattern, key):
+                            matched = True
+                            _validate_value(child, item, f"{path}.{key}")
+                    except re.error:
+                        raise ValueError(f"{path} has an invalid validation pattern") from None
+                if not matched and additional is False:
+                    raise ValueError(f"{path} contains unknown arguments: {key}")
     elif isinstance(value, list):
         if "minItems" in schema and len(value) < schema["minItems"]:
             raise ValueError(f"{path} has too few items")
         if "maxItems" in schema and len(value) > schema["maxItems"]:
             raise ValueError(f"{path} has too many items")
-        if schema.get("uniqueItems") is True:
-            try:
-                if len({repr(item) for item in value}) != len(value):
-                    raise ValueError(f"{path} items must be unique")
-            except TypeError:
-                pass
-        if isinstance(schema.get("items"), dict):
+        if schema.get("uniqueItems") is True and len({repr(item) for item in value}) != len(value):
+            raise ValueError(f"{path} items must be unique")
+        items = schema.get("items")
+        if isinstance(items, dict):
             for index, item in enumerate(value):
-                _validate_value(schema["items"], item, f"{path}[{index}]")
-
-
-def _validate_arguments(schema: dict[str, Any], args: dict[str, Any]) -> None:
-    if not isinstance(args, dict):
-        raise ValueError("Tool arguments must be an object")
-    _validate_value(schema or {"type": "object"}, args, "arguments")
+                _validate_value(items, item, f"{path}[{index}]")
+        elif isinstance(items, list):
+            for index, item_schema in enumerate(items):
+                if index < len(value):
+                    _validate_value(item_schema, value[index], f"{path}[{index}]")
+            if len(value) > len(items) and schema.get("additionalItems") is False:
+                raise ValueError(f"{path} contains too many items")
 
 
 class ConnectedAppsAgent:
