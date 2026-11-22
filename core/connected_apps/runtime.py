@@ -61,6 +61,11 @@ class MCPRuntime:
         self._thread = None
         self._sessions = {}
         self._tools = {}
+        self._connection_locks = {}
+
+    def _connection_lock(self, cid):
+        with self._lock:
+            return self._connection_locks.setdefault(str(cid), threading.RLock())
 
     def _ensure_loop(self):
         with self._lock:
@@ -167,7 +172,10 @@ class MCPRuntime:
             params = StdioServerParameters(command=str(command).strip(), args=list(args or []), env=dict(env or {}) or None)
             return stdio_client(params)
 
-        return self._submit(self._connect(cid, factory), 90)
+        with self._connection_lock(cid):
+            with self._connection_lock(cid):
+            with self._connection_lock(cid):
+            return self._submit(self._connect(cid, factory), 90)
 
     def connect_http(self, cid, url, headers=None):
         url = _validate_http_endpoint(url)
@@ -251,7 +259,8 @@ class MCPRuntime:
             return [dict(row) for row in self._tools.get(cid, [])]
 
     def call(self, cid, tool, args=None):
-        return self._submit(self._call(cid, tool, args or {}), 120)
+        with self._connection_lock(cid):
+            return self._submit(self._call(cid, tool, args or {}), 120)
 
     def disconnect(self, cid):
         # Avoid creating a coroutine when the runtime is already stopped.
@@ -260,7 +269,8 @@ class MCPRuntime:
         if not loop or not loop.is_running():
             raise RuntimeUnavailable("MCP runtime is not running; disconnect could not be confirmed")
         try:
-            self._submit(self._close(cid), 15)
+            with self._connection_lock(cid):
+                self._submit(self._close(cid), 15)
             return True
         except Exception as exc:
             logger.exception("Failed to disconnect MCP connection %s", cid)
@@ -271,7 +281,10 @@ class MCPRuntime:
             connection_ids = list(self._sessions)
             loop = self._loop
         for cid in connection_ids:
-            self.disconnect(cid)
+            try:
+                self.disconnect(cid)
+            except RuntimeUnavailable:
+                logger.warning("Could not cleanly disconnect MCP connection %s during shutdown", cid)
         if loop and loop.is_running():
             loop.call_soon_threadsafe(loop.stop)
         if self._thread and self._thread.is_alive():
