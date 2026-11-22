@@ -299,8 +299,9 @@ class ConnectedAppsPanel(QWidget):
         QGroupBox#appsTabSurface::title, QGroupBox#mcpTabSurface::title {{ subcontrol-origin: margin; left: 0px; padding: 0px; }}
         QGroupBox#appsTabSurface QWidget, QGroupBox#mcpTabSurface QWidget {{ background: transparent; color: {C.TEXT}; }}
         QGroupBox#appsTabSurface QListWidget, QGroupBox#mcpTabSurface QListWidget {{ background: {C.PANEL2}; color: {C.TEXT}; border: 1px solid {C.BORDER}; }}
-        QGroupBox#appsTabSurface QWidget, QGroupBox#mcpTabSurface QWidget {{ background: transparent; color: {C.TEXT}; }}
-        QGroupBox#appsTabSurface QListWidget, QGroupBox#mcpTabSurface QListWidget {{ background: {C.PANEL2}; color: {C.TEXT}; border: 1px solid {C.BORDER}; }}
+        QFrame#nativeAppCard {{ background: {C.PANEL2}; color: {C.TEXT}; border: 1px solid {C.BORDER}; border-radius: 8px; }}
+        QWidget#ConnectedAppsPanel, QWidget#appsTabPage, QWidget#mcpTabPage {{ background: {C.BG}; color: {C.TEXT}; }}
+        QGroupBox#appsTabSurface, QGroupBox#mcpTabSurface {{ background: {C.PANEL}; color: {C.TEXT}; }}
         #connectedAppsSections QTabBar::tab {{ background: {C.PANEL2}; color: {C.TEXT_MED}; border: 1px solid {C.BORDER}; border-radius: 7px; padding: 9px 16px; margin-right: 4px; }}
         #connectedAppsSections QTabBar::tab:hover {{ color: {C.TEXT}; border-color: {C.BORDER_B}; }}
         #connectedAppsSections QTabBar::tab:selected {{ background: {C.PRI_GHO}; color: {C.PRI}; border-color: {C.PRI_DIM}; }}
