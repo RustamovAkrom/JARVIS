@@ -37,6 +37,7 @@ class ConnectedAppsPanel(QWidget):
         root.addLayout(header)
 
         native_group=QGroupBox("Apps")
+        native_group.setObjectName("appsTabSurface")
         native_layout=QVBoxLayout(native_group)
         native_layout.setSpacing(12)
         native_description=QLabel("Ready-to-use integrations with guided authorization and native AI tools.")
@@ -85,6 +86,7 @@ class ConnectedAppsPanel(QWidget):
         # Apps and MCP are placed into peer tabs below.
 
         mcp_group=QGroupBox("MCP Servers")
+        mcp_group.setObjectName("mcpTabSurface")
         mcp_layout=QVBoxLayout(mcp_group)
         mcp_layout.setSpacing(10)
         mcp_description=QLabel("Developer integrations for local processes and remote MCP endpoints.")
@@ -227,19 +229,28 @@ class ConnectedAppsPanel(QWidget):
         root.addStretch(1)
 
         self.setStyleSheet("""
-        #connectedAppsSections::pane { border: 0; }
+        #connectedAppsSections::pane { border: 0; background: palette(window); }
+        #appsTabSurface, #mcpTabSurface { background-color: palette(window); color: palette(windowText); border: 1px solid palette(mid); border-radius: 10px; }
+        #appsTabSurface QLabel, #mcpTabSurface QLabel { color: palette(windowText); background: transparent; }
+        #appsTabSurface QListWidget, #mcpTabSurface QListWidget { background-color: palette(window); color: palette(windowText); border: 1px solid palette(mid); border-radius: 8px; }
+        #appsTabSurface QListWidget::item, #mcpTabSurface QListWidget::item { background-color: palette(window); color: palette(windowText); border: 1px solid palette(mid); border-radius: 8px; margin: 5px; padding: 12px; }
+        #appsTabSurface QListWidget::item:hover, #mcpTabSurface QListWidget::item:hover { background-color: palette(alternate-base); border-color: palette(highlight); }
+        #appsTabSurface QListWidget::item:selected, #mcpTabSurface QListWidget::item:selected { background-color: palette(highlight); color: palette(highlighted-text); border: 2px solid palette(highlight); }
+        #nativeAppCard { background-color: palette(window); color: palette(windowText); border: 1px solid palette(mid); border-radius: 10px; }
+        #connectedAppsSections QTabBar::tab { background-color: palette(window); color: palette(windowText); border: 1px solid palette(mid); border-radius: 8px; padding: 10px 18px; }
+        #connectedAppsSections QTabBar::tab:selected { background-color: palette(alternate-base); border-color: palette(highlight); }
         QTabBar::tab { padding: 10px 18px; margin-right: 5px; border: 1px solid palette(mid); border-radius: 8px; }
         QTabBar::tab:selected { background: palette(alternate-base); font-weight: 600; }
         #detailsToggle { text-align: left; font-weight: 600; }
         #appsTitle { font-size: 22px; font-weight: 700; }
         #appsSubtitle { color: palette(mid); }
-        QGroupBox { border: 1px solid palette(mid); border-radius: 10px; margin-top: 10px; padding: 12px; }
+        QGroupBox { background-color: palette(window); color: palette(windowText); border: 1px solid palette(mid); border-radius: 10px; margin-top: 10px; padding: 12px; }
         QGroupBox::title { subcontrol-origin: margin; left: 12px; padding: 0 6px; font-weight: 600; }
         #nativeAppCard { border: 1px solid palette(mid); border-radius: 9px; background: palette(alternate-base); padding: 4px; }
-        #nativeAppsList, #appsList { background: transparent; border: 0; outline: 0; }
-        #nativeAppsList::item, #appsList::item { border: 1px solid palette(mid); border-radius: 10px; padding: 12px; margin: 4px; background: palette(base); color: palette(text); }
+        #nativeAppsList, #appsList { background-color: palette(window); color: palette(windowText); border: 1px solid palette(mid); border-radius: 8px; outline: 0; }
+        #nativeAppsList::item, #appsList::item { border: 1px solid palette(mid); border-radius: 10px; padding: 12px; margin: 4px; background-color: palette(window); color: palette(windowText); }
         #nativeAppsList::item:hover, #appsList::item:hover { border: 1px solid palette(highlight); background: palette(alternate-base); }
-        #nativeAppsList::item:selected, #appsList::item:selected { border: 2px solid palette(highlight); background: palette(alternate-base); color: palette(text); }
+        #nativeAppsList::item:selected, #appsList::item:selected { border: 2px solid palette(highlight); background-color: palette(highlight); color: palette(highlighted-text); }
         #connectedAppsSections QTabBar::tab { background: palette(base); color: palette(text); border: 1px solid palette(mid); border-radius: 8px; padding: 10px 18px; }
         #connectedAppsSections QTabBar::tab:selected { background: palette(alternate-base); border-color: palette(highlight); }
         #nativeAppsList::item:selected, #appsList::item:selected { border: 2px solid palette(highlight); background: palette(alternate-base); }
