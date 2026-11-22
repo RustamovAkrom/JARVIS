@@ -95,7 +95,8 @@ Finish the Connected Apps subsystem without scope drift: stabilize existing MCP 
 - [ ] Audit refresh failure state and authorization metadata persistence.
 - [x] Atomic token-set persistence and stale optional-token cleanup.
 - [ ] Credential deletion/revocation behavior.
-- [ ] Secret redaction in logs, diagnostics, and UI.
+- [x] Redact OAuth token exchange and refresh request exceptions from user-facing errors.
+- [ ] Audit secret redaction in logs, diagnostics, and UI.
 - [x] Validate OAuth scope tokens and state length at authorization URL construction.
 - [ ] Validate provider configuration behavior and scope persistence.
 
