@@ -258,13 +258,13 @@ class MCPRuntime:
         with self._lock:
             loop = self._loop
         if not loop or not loop.is_running():
-            return False
+            raise RuntimeUnavailable("MCP runtime is not running; disconnect could not be confirmed")
         try:
             self._submit(self._close(cid), 15)
             return True
-        except Exception:
+        except Exception as exc:
             logger.exception("Failed to disconnect MCP connection %s", cid)
-            return False
+            raise RuntimeUnavailable(f"Failed to disconnect MCP connection: {exc}") from exc
 
     def shutdown(self):
         with self._lock:
