@@ -347,7 +347,7 @@ class ConnectedAppsPanel(QWidget):
             self.runtime_help.setText("Connected Apps runtime is available.")
 
     def _busy(self,busy,message=""):
-        for w in (self.add_github_btn,self.native_disconnect_btn,self.add_catalog_btn,self.add_server_btn,self.reconnect_all_btn,self.health_all_btn,self.connect_btn,self.rename_btn,self.disconnect_btn,self.remove_btn,self.block_tool_btn,self.allow_tool_btn,self.copy_diagnostics_btn,self.health_btn,self.enabled_checkbox,self.auto_read_checkbox):w.setEnabled(not busy)
+        for w in (self.add_github_btn,self.add_calendar_btn,self.native_disconnect_btn,self.add_catalog_btn,self.add_server_btn,self.reconnect_all_btn,self.health_all_btn,self.connect_btn,self.rename_btn,self.disconnect_btn,self.remove_btn,self.block_tool_btn,self.allow_tool_btn,self.copy_diagnostics_btn,self.health_btn,self.enabled_checkbox,self.auto_read_checkbox):w.setEnabled(not busy)
         if message:self.status.setText(message)
     def refresh(self,*_):
         query=self.search.text().casefold().strip()
