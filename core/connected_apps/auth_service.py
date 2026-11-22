@@ -92,8 +92,10 @@ class OAuthService:
             return
         for key, value in values.items():
             self.store.set_credential(cid, key, value)
-        for key in delete:
-            self.store.delete_credential(cid, key)
+        delete_credential = getattr(self.store, "delete_credential", None)
+        if callable(delete_credential):
+            for key in delete:
+                delete_credential(cid, key)
 
     def _get_refresh_lock(self, cid):
         with self._lock:
