@@ -2,7 +2,7 @@
 from __future__ import annotations
 import json
 from PyQt6.QtCore import Qt, QObject, QRunnable, QThreadPool, pyqtSignal
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QTextEdit, QListWidget, QListWidgetItem, QMessageBox, QInputDialog, QGroupBox, QCheckBox, QApplication, QFrame, QMenu, QTabWidget, QDialog, QDialogButtonBox
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QTextEdit, QListWidget, QListWidgetItem, QMessageBox, QInputDialog, QGroupBox, QCheckBox, QApplication, QFrame, QMenu, QTabWidget, QDialog, QDialogButtonBox, QSize
 from core.connected_apps.models import AppDescriptor, TransportType
 from core.connected_apps.service import service
 
@@ -71,9 +71,15 @@ class ConnectedAppsPanel(QWidget):
 
         self.native_list=QListWidget()
         self.native_list.setObjectName("nativeAppsList")
-        self.native_list.setMinimumHeight(58)
-        self.native_list.setMaximumHeight(120)
+        self.native_list.setViewMode(QListWidget.ViewMode.IconMode)
+        self.native_list.setResizeMode(QListWidget.ResizeMode.Adjust)
+        self.native_list.setMovement(QListWidget.Movement.Static)
+        self.native_list.setWrapping(True)
+        self.native_list.setGridSize(QSize(190,112))
+        self.native_list.setMinimumHeight(130)
+        self.native_list.setMaximumHeight(250)
         self.native_list.itemSelectionChanged.connect(self._native_selection_changed)
+        self.native_list.itemDoubleClicked.connect(lambda *_: self.open_connection_details(native=True))
         native_layout.addWidget(self.native_list)
         # Apps and MCP are placed into peer tabs below.
 
@@ -131,9 +137,15 @@ class ConnectedAppsPanel(QWidget):
 
         self.list=QListWidget()
         self.list.setObjectName("appsList")
-        self.list.setMinimumHeight(110)
-        self.list.setMaximumHeight(170)
+        self.list.setViewMode(QListWidget.ViewMode.IconMode)
+        self.list.setResizeMode(QListWidget.ResizeMode.Adjust)
+        self.list.setMovement(QListWidget.Movement.Static)
+        self.list.setWrapping(True)
+        self.list.setGridSize(QSize(190,112))
+        self.list.setMinimumHeight(130)
+        self.list.setMaximumHeight(250)
         self.list.itemSelectionChanged.connect(self.show_selected)
+        self.list.itemDoubleClicked.connect(lambda *_: self.open_connection_details(native=False))
         mcp_layout.addWidget(self.list)
         # Keep Apps and MCP Servers at the same navigation level.
         self.sections=QTabWidget()
@@ -190,10 +202,9 @@ class ConnectedAppsPanel(QWidget):
         details_layout.addWidget(self.auto_read_checkbox)
         self.details_group=details_group
         self.details_group.setVisible(False)
-        self.details_toggle=QPushButton("Show connection details and permissions")
-        self.details_toggle.setCheckable(True)
+        self.details_toggle=QPushButton("Manage selected connection")
         self.details_toggle.setObjectName("detailsToggle")
-        self.details_toggle.toggled.connect(self.details_group.setVisible)
+        self.details_toggle.clicked.connect(lambda: self.open_connection_details(native=self.sections.currentIndex()==0))
         root.addWidget(self.details_toggle)
         root.addWidget(details_group)
 
@@ -223,9 +234,9 @@ class ConnectedAppsPanel(QWidget):
         QGroupBox { border: 1px solid palette(mid); border-radius: 10px; margin-top: 10px; padding: 12px; }
         QGroupBox::title { subcontrol-origin: margin; left: 12px; padding: 0 6px; font-weight: 600; }
         #nativeAppCard { border: 1px solid palette(mid); border-radius: 9px; background: palette(alternate-base); padding: 4px; }
-        #nativeAppsList { min-height: 100px; }
-        #nativeAppsList::item { border: 1px solid palette(mid); border-radius: 10px; padding: 14px; margin: 5px; }
-        #nativeAppsList::item:selected { border: 2px solid palette(highlight); background: palette(alternate-base); }
+        #nativeAppsList, #appsList { background: transparent; border: 0; }
+        #nativeAppsList::item, #appsList::item { border: 1px solid palette(mid); border-radius: 10px; padding: 12px; margin: 5px; background: palette(alternate-base); }
+        #nativeAppsList::item:selected, #appsList::item:selected { border: 2px solid palette(highlight); background: palette(alternate-base); }
         #nativeAppName { font-size: 15px; font-weight: 700; }
         #nativeAppDescription { color: palette(mid); }
         QLineEdit, QTextEdit, QListWidget { background: palette(base); color: palette(text); border: 1px solid palette(mid); border-radius: 7px; padding: 8px; }
@@ -268,14 +279,14 @@ class ConnectedAppsPanel(QWidget):
             if query and query not in (row.get("display_name","")+" "+row.get("app_id","")).casefold():
                 continue
             visible.append(row)
-            item=QListWidgetItem(f"{row.get('display_name','Unnamed')}  ·  {row.get('status','unknown')}")
+            item=QListWidgetItem(f"◆\n{row.get('display_name','Unnamed')}\n{row.get('status','unknown')}")
             item.setData(Qt.ItemDataRole.UserRole,row.get("id"))
             self.list.addItem(item)
             if selected and item.data(Qt.ItemDataRole.UserRole)==selected:
                 self.list.setCurrentItem(item)
         self.native_list.clear()
         for row in native_rows:
-            item=QListWidgetItem(f"{row.get('display_name','GitHub')}  ·  {row.get('status','unknown')}")
+            item=QListWidgetItem(f"◈\n{row.get('display_name','GitHub')}\n{row.get('status','unknown')}")
             item.setData(Qt.ItemDataRole.UserRole,row.get("id"))
             self.native_list.addItem(item)
             if native_selected and item.data(Qt.ItemDataRole.UserRole)==native_selected:
@@ -337,6 +348,88 @@ class ConnectedAppsPanel(QWidget):
             self.status.setText("GitHub disconnected.")
             self.connections_changed.emit()
         self.refresh()
+    def open_connection_details(self,native=False):
+        cid=self.native_selected_id() if native else self.selected_id()
+        row=service.store.get_connection(cid) if cid else None
+        if not row:
+            QMessageBox.information(self,"Connection details","Select an app or MCP server first.")
+            return
+        metadata=dict(row.get("metadata") or {})
+        tools=service.tools(cid)
+        dialog=QDialog(self)
+        dialog.setWindowTitle(f"{row.get('display_name','Connected App')} · Settings")
+        dialog.setMinimumSize(560,480)
+        layout=QVBoxLayout(dialog)
+        heading=QLabel(f"{row.get('display_name','Connected App')}  ·  {row.get('status','unknown')}")
+        heading.setStyleSheet("font-size: 18px; font-weight: 700;")
+        layout.addWidget(heading)
+        info=QTextEdit()
+        info.setReadOnly(True)
+        info.setPlainText(self.details.toPlainText())
+        info.setMinimumHeight(170)
+        layout.addWidget(info)
+        permissions=QGroupBox("Permissions and automation")
+        permission_layout=QVBoxLayout(permissions)
+        enabled=QCheckBox("Enable this connection and reconnect on startup")
+        enabled.setChecked(bool(row.get("enabled",True)))
+        enabled.setEnabled(not native)
+        permission_layout.addWidget(enabled)
+        auto_read=QCheckBox("Automatically run trusted read-only MCP tools")
+        auto_read.setChecked(metadata.get("auto_approve_read_only") is True)
+        auto_read.setEnabled(not native and row.get("status")=="connected" and row.get("enabled",True))
+        auto_read.setToolTip("Only server-declared read-only, non-destructive tools. Enable only for trusted servers.")
+        permission_layout.addWidget(auto_read)
+        permission_layout.addWidget(QLabel("Tool permissions"))
+        tool_list=QListWidget()
+        for tool in tools:
+            name=tool.get("name","")
+            blocked=name in set(metadata.get("blocked_tools",[]))
+            item=QListWidgetItem(f"{'Blocked' if blocked else 'Allowed'}  ·  {name}")
+            item.setData(Qt.ItemDataRole.UserRole,name)
+            tool_list.addItem(item)
+        tool_list.setMinimumHeight(110)
+        permission_layout.addWidget(tool_list)
+        layout.addWidget(permissions)
+        def toggle_tool():
+            item=tool_list.currentItem()
+            if not item:return
+            name=item.data(Qt.ItemDataRole.UserRole)
+            blocked=name in set((service.store.get_connection(cid).get("metadata") or {}).get("blocked_tools",[]))
+            service.set_tool_blocked(cid,name,not blocked)
+            self.refresh()
+            dialog.accept()
+            self.open_connection_details(native)
+        tool_actions=QHBoxLayout()
+        block=QPushButton("Block selected tool")
+        block.clicked.connect(toggle_tool)
+        unblock=QPushButton("Unblock selected tool")
+        def do_unblock():
+            item=tool_list.currentItem()
+            if not item:return
+            service.set_tool_blocked(cid,item.data(Qt.ItemDataRole.UserRole),False)
+            self.refresh();dialog.accept();self.open_connection_details(native)
+        unblock.clicked.connect(do_unblock)
+        tool_actions.addWidget(block);tool_actions.addWidget(unblock)
+        permission_layout.addLayout(tool_actions)
+        layout.addWidget(permissions)
+        buttons=QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        buttons.rejected.connect(dialog.reject)
+        buttons.accepted.connect(dialog.accept)
+        layout.addWidget(buttons)
+        def save_enabled(value):
+            service.set_enabled(cid,value,reconnect=value)
+            self.refresh()
+        def save_auto(value):
+            current=service.store.get_connection(cid)
+            meta=dict(current.get("metadata") or {})
+            meta["auto_approve_read_only"]=bool(value)
+            current["metadata"]=meta
+            service.store.upsert_connection(current)
+            self.refresh()
+        enabled.toggled.connect(save_enabled)
+        auto_read.toggled.connect(save_auto)
+        dialog.exec()
+
     def show_selected(self):
         cid=self.selected_id();row=service.store.get_connection(cid) if cid else None
         if not row:
