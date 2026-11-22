@@ -388,3 +388,16 @@ def test_connected_apps_rename_validates_and_persists_name():
         svc.rename("c1", "  ")
     with pytest.raises(ValueError):
         svc.rename("c1", "x" * 121)
+
+def test_connected_apps_error_redaction_masks_common_credentials():
+    from core.connected_apps.service import _safe_error
+
+    message = _safe_error(RuntimeError(
+        "Bearer abc123 access_token=secret refresh_token=refresh "
+        "https://user:password@example.com/mcp"
+    ))
+    assert "abc123" not in message
+    assert "secret" not in message
+    assert "refresh" not in message
+    assert "password" not in message
+    assert "[redacted]" in message
