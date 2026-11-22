@@ -81,13 +81,13 @@ def test_schema_one_of_requires_exactly_one_matching_branch():
     schema = {"type": "object", "properties": {
         "value": {"oneOf": [{"type": "integer"}, {"type": "number"}]}
     }, "required": ["value"]}
-    for value in (1, 1.5):
-        try:
-            _validate_arguments(schema, {"value": value})
-        except ValueError:
-            pass
-        else:
-            raise AssertionError("Overlapping oneOf branches must reject")
+    try:
+        _validate_arguments(schema, {"value": 1})
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("Overlapping oneOf branches must reject integer")
+    _validate_arguments(schema, {"value": 1.5})
     _validate_arguments({"type": "object", "properties": {
         "value": {"oneOf": [{"type": "string"}, {"type": "integer"}]}
     }}, {"value": "ok"})
@@ -124,3 +124,22 @@ def test_annotation_truthiness_is_not_trusted():
     assert not _annotation({"annotations": {"readOnlyHint": 1}}, "readOnlyHint")
     assert not _annotation({"annotations": {"readOnlyHint": "true"}}, "readOnlyHint")
     assert not _annotation({"annotations": {"readOnlyHint": True}}, "destructiveHint")
+
+def test_schema_pattern_properties_are_checked_before_additional_properties():
+    from core.connected_apps.agent import _validate_arguments
+    schema = {"type": "object", "patternProperties": {
+        "^x_": {"type": "integer"}
+    }, "additionalProperties": False}
+    _validate_arguments(schema, {"x_count": 2})
+    try:
+        _validate_arguments(schema, {"x_count": "bad"})
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("patternProperties schema was ignored")
+    try:
+        _validate_arguments(schema, {"other": 2})
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("Unknown property was accepted")
