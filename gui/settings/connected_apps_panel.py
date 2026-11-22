@@ -2,7 +2,7 @@
 from __future__ import annotations
 import json
 from PyQt6.QtCore import Qt, QObject, QRunnable, QThreadPool, pyqtSignal
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QTextEdit, QListWidget, QListWidgetItem, QMessageBox, QInputDialog, QGroupBox
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QTextEdit, QListWidget, QListWidgetItem, QMessageBox, QInputDialog, QGroupBox, QCheckBox
 from core.connected_apps.models import AppDescriptor, TransportType
 from core.connected_apps.service import service
 
@@ -75,11 +75,23 @@ class ConnectedAppsPanel(QWidget):
     def show_selected(self):
         cid=self.selected_id();row=service.store.get_connection(cid) if cid else None
         if not row:self.details.setPlainText("Select a connection to inspect status and discovered tools.\n\nSTDIO launches a local MCP process. HTTP connects to a remote endpoint. OAuth opens your browser for authorization.");return
-        meta=row.get("metadata",{});tools=meta.get("tools",[]) or service.tools(cid)
+        meta=row.get("metadata",{});tools=meta.get("tools",[]) or service.tools(cid);self.auto_read_checkbox.setEnabled(row.get("status")=="connected");self.auto_read_checkbox.blockSignals(True);self.auto_read_checkbox.setChecked(meta.get("auto_approve_read_only") is True);self.auto_read_checkbox.blockSignals(False)
         lines=[f"App: {row.get('display_name')}",f"Status: {row.get('status')}",f"Transport: {meta.get('transport','unknown')}",f"Endpoint: {meta.get('endpoint') or meta.get('command','')}",f"Last error: {row.get('last_error') or 'None'}","",f"Tools ({len(tools)}):"]
         lines.extend(f"• {t.get('name')}: {t.get('description','')}" for t in tools)
         if row.get("last_error"):lines.extend(["","Troubleshooting:",self._friendly_error(row["last_error"])])
         self.details.setPlainText("\n".join(lines))
+    def _set_auto_read(self, enabled):
+        cid=self.selected_id()
+        if not cid:return
+        row=service.store.get_connection(cid)
+        if not row:return
+        metadata=dict(row.get("metadata") or {})
+        metadata["auto_approve_read_only"]=bool(enabled)
+        row["metadata"]=metadata
+        service.store.upsert_connection(row)
+        self.status.setText("Read-only auto-run enabled. Use only with trusted MCP servers." if enabled else "Read-only auto-run disabled; all MCP tools require confirmation.")
+        self.refresh()
+
     @staticmethod
     def _friendly_error(error):
         if "MCP SDK is missing" in error or "No module named 'mcp'" in error:return "Install the optional Connected Apps dependency with: uv sync --extra connected-apps"
