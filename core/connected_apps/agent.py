@@ -182,6 +182,15 @@ def _validate_value(schema: dict[str, Any], value: Any, path: str) -> None:
                 raise ValueError(f"{path} contains too many items")
 
 
+def _validate_arguments(schema: dict[str, Any], arguments: Any) -> None:
+    """Validate tool arguments against a JSON Schema object, failing closed."""
+    if not isinstance(arguments, dict):
+        raise ValueError("Tool arguments must be a JSON object")
+    if not isinstance(schema, dict):
+        raise ValueError("Tool input schema must be an object")
+    _validate_value(schema, arguments, "arguments")
+
+
 class ConnectedAppsAgent:
     def __init__(self, app_service=None):
         self._service = app_service or service
