@@ -189,38 +189,6 @@ class MCPRuntime:
                 row["mime_type"] = mime
             content.append(row)
         structured = getattr(result, "structuredContent", None)
-        return {"content": content, "structured_content": structured}
-
-    async def _close(self, cid):
-        with self._lock:
-            entry = self._sessions.pop(cid, None)
-            self._tools.pop(cid, None)
-        if entry:
-            await entry[0].aclose()
-
-    def tools(self, cid):
-        with self._lock:
-            return [dict(row) for row in self._tools.get(cid, [])]
-
-    def call(self, cid, tool, args=None):
-        return self._submit(self._call(cid, tool, args or {}), 120)
-
-    def disconnect(self, cid):
-        try:
-            self._submit(self._close(cid), 15)
-        except Exception:
-            pass
-
-    def shutdown(self):
-        with self._lock:
-            connection_ids = list(self._sessions)
-            loop = self._loop
-        for cid in connection_ids:
-            self.disconnect(cid)
-        if loop and loop.is_running():
-            loop.call_soon_threadsafe(loop.stop)
-        if self._thread and self._thread.is_alive():
-            self._thread.join(timeout=3)
-
-
-runtime = MCPRuntime()
+        if structured is not None:
+            content.append({"type": "structured", "data": structured})
+        return content
