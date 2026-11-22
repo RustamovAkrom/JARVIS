@@ -296,3 +296,43 @@ def test_oauth_authorization_url_rejects_invalid_scope_tokens(scopes):
     state = OAuthState(state="state", verifier="verifier", redirect_uri=config.redirect_uri)
     with pytest.raises(ValueError, match="scopes"):
         build_authorization_url(config, state, "challenge")
+
+
+def test_oauth_exchange_error_does_not_leak_provider_response(monkeypatch):
+    from core.connected_apps.oauth import OAuthConfig, exchange_code
+
+    class Response:
+        def raise_for_status(self):
+            raise RuntimeError("response contains secret-token")
+    monkeypatch.setattr("httpx.post", lambda *args, **kwargs: Response())
+    config = OAuthConfig(
+        authorization_url="https://auth.example/authorize",
+        token_url="https://auth.example/token",
+        client_id="client",
+        redirect_uri="http://127.0.0.1:1234/callback",
+        scopes=[],
+    )
+    with pytest.raises(RuntimeError) as exc:
+        exchange_code(config, "code", "verifier", config.redirect_uri)
+    assert "secret-token" not in str(exc.value)
+    assert "OAuth token exchange failed" in str(exc.value)
+
+
+def test_oauth_refresh_error_does_not_leak_provider_response(monkeypatch):
+    from core.connected_apps.oauth import OAuthConfig, refresh_tokens
+
+    class Response:
+        def raise_for_status(self):
+            raise RuntimeError("response contains refresh-secret")
+    monkeypatch.setattr("httpx.post", lambda *args, **kwargs: Response())
+    config = OAuthConfig(
+        authorization_url="https://auth.example/authorize",
+        token_url="https://auth.example/token",
+        client_id="client",
+        redirect_uri="",
+        scopes=[],
+    )
+    with pytest.raises(RuntimeError) as exc:
+        refresh_tokens(config, "refresh-token")
+    assert "refresh-secret" not in str(exc.value)
+    assert "OAuth token refresh failed" in str(exc.value)
