@@ -26,10 +26,10 @@ class ConnectedAppsPanel(QWidget):
         subtitle.setObjectName("appsSubtitle");subtitle.setWordWrap(True);root.addWidget(title);root.addWidget(subtitle)
         group=QGroupBox("Connection setup");layout=QVBoxLayout(group);layout.setSpacing(10)
         toolbar=QHBoxLayout();self.search=QLineEdit();self.search.setObjectName("appsSearch");self.search.setPlaceholderText("Search connected apps…");self.search.textChanged.connect(self.refresh);toolbar.addWidget(self.search,1)
-        self.add_stdio_btn=QPushButton("+ Add STDIO");self.add_stdio_btn.clicked.connect(self.add_custom)
+        self.add_catalog_btn=QPushButton("Catalog");self.add_catalog_btn.clicked.connect(self.add_from_catalog);self.add_stdio_btn=QPushButton("+ Add STDIO");self.add_stdio_btn.clicked.connect(self.add_custom)
         self.add_http_btn=QPushButton("+ Add HTTP");self.add_http_btn.clicked.connect(self.add_http);self.add_sse_btn=QPushButton("+ Add SSE");self.add_sse_btn.clicked.connect(self.add_sse)
         self.add_oauth_btn=QPushButton("+ Provider OAuth");self.add_oauth_btn.clicked.connect(self.add_oauth_http);self.add_mcp_oauth_btn=QPushButton("+ MCP OAuth");self.add_mcp_oauth_btn.clicked.connect(self.add_mcp_oauth);self.reconnect_all_btn=QPushButton("Reconnect all");self.reconnect_all_btn.clicked.connect(self.reconnect_all)
-        toolbar.addWidget(self.add_stdio_btn);toolbar.addWidget(self.add_http_btn);toolbar.addWidget(self.add_sse_btn);toolbar.addWidget(self.add_oauth_btn);toolbar.addWidget(self.add_mcp_oauth_btn);toolbar.addWidget(self.reconnect_all_btn);layout.addLayout(toolbar)
+        toolbar.addWidget(self.add_catalog_btn);toolbar.addWidget(self.add_stdio_btn);toolbar.addWidget(self.add_http_btn);toolbar.addWidget(self.add_sse_btn);toolbar.addWidget(self.add_oauth_btn);toolbar.addWidget(self.add_mcp_oauth_btn);toolbar.addWidget(self.reconnect_all_btn);layout.addLayout(toolbar)
         self.list=QListWidget();self.list.setObjectName("appsList");self.list.setMinimumHeight(100);self.list.setMaximumHeight(190);self.list.itemSelectionChanged.connect(self.show_selected);layout.addWidget(self.list)
         self.details=QTextEdit();self.details.setObjectName("appsDetails");self.details.setReadOnly(True);self.details.setMinimumHeight(100);self.details.setMaximumHeight(170);layout.addWidget(self.details)
         actions=QHBoxLayout();self.connect_btn=QPushButton("Connect / Reconnect");self.connect_btn.clicked.connect(self.connect_selected);self.disconnect_btn=QPushButton("Disconnect");self.disconnect_btn.clicked.connect(self.disconnect_selected);self.remove_btn=QPushButton("Remove");self.remove_btn.clicked.connect(self.remove_selected);self.block_tool_btn=QPushButton("Block tool");self.block_tool_btn.clicked.connect(lambda:self.set_tool_permission(True));self.allow_tool_btn=QPushButton("Unblock tool");self.allow_tool_btn.clicked.connect(lambda:self.set_tool_permission(False));self.copy_diagnostics_btn=QPushButton("Copy diagnostics");self.copy_diagnostics_btn.clicked.connect(self.copy_diagnostics)
@@ -60,7 +60,7 @@ class ConnectedAppsPanel(QWidget):
             self.runtime_help.setText("Connected Apps runtime is available.")
 
     def _busy(self,busy,message=""):
-        for w in (self.add_stdio_btn,self.add_http_btn,self.add_sse_btn,self.add_oauth_btn,self.add_mcp_oauth_btn,self.reconnect_all_btn,self.connect_btn,self.disconnect_btn,self.remove_btn,self.block_tool_btn,self.allow_tool_btn,self.copy_diagnostics_btn):w.setEnabled(not busy)
+        for w in (self.add_catalog_btn,self.add_stdio_btn,self.add_http_btn,self.add_sse_btn,self.add_oauth_btn,self.add_mcp_oauth_btn,self.reconnect_all_btn,self.connect_btn,self.disconnect_btn,self.remove_btn,self.block_tool_btn,self.allow_tool_btn,self.copy_diagnostics_btn):w.setEnabled(not busy)
         if message:self.status.setText(message)
     def refresh(self,*_):
         query=self.search.text().casefold().strip();selected=self.selected_id();self.list.clear();visible=[]
@@ -111,6 +111,39 @@ class ConnectedAppsPanel(QWidget):
         return error
     @staticmethod
     def _slug(value):return "-".join(value.strip().lower().split()) or "app"
+    def add_from_catalog(self):
+        from core.connected_apps.catalog import list_templates
+        templates=list_templates()
+        labels=[f"{item.name} — {item.description}" for item in templates]
+        label,ok=QInputDialog.getItem(self,"MCP catalog","Choose a server template:",labels,0,False)
+        if not ok:return
+        template=templates[labels.index(label)]
+        args,ok=QInputDialog.getText(self,"MCP catalog",f"Arguments for {template.command} (JSON array):",text=json.dumps(list(template.args),ensure_ascii=False))
+        if not ok:return
+        env_text,ok=QInputDialog.getText(self,"MCP catalog","Environment variables (JSON object):",text="{}")
+        if not ok:return
+        try:
+            parsed=json.loads(args)
+            env=json.loads(env_text)
+            if not isinstance(parsed,list) or not all(isinstance(x,str) for x in parsed):raise ValueError("Arguments must be a JSON array of strings.")
+            if not isinstance(env,dict) or not all(isinstance(k,str) and isinstance(v,str) for k,v in env.items()):raise ValueError("Environment must be a JSON object of string values.")
+            missing=[key for key in template.env_keys if key not in env]
+            if missing:raise ValueError("Missing required environment variables: "+", ".join(missing))
+        except Exception as exc:
+            QMessageBox.warning(self,"Invalid configuration",str(exc))
+            return
+        descriptor=AppDescriptor(
+            id="catalog-"+template.id,
+            name=template.name,
+            description=template.description,
+            source="catalog",
+            transport=TransportType.STDIO,
+            command=template.command,
+            args=parsed,
+            env=env,
+        )
+        self._connect_descriptor(descriptor)
+
     def add_custom(self):
         name,ok=QInputDialog.getText(self,"Add STDIO MCP server","Display name:")
         if not ok or not name.strip():return
