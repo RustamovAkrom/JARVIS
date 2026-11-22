@@ -215,6 +215,24 @@ class ConnectedAppsService:
     def tools(self, cid):
         return runtime.tools(cid)
 
+    def set_tool_blocked(self, cid, tool_name, blocked=True):
+        row = self.store.get_connection(cid)
+        if not row:
+            return False
+        tools = self.tools(cid)
+        if not any(item.get("name") == tool_name for item in tools):
+            raise ValueError("Tool is not available on this connection")
+        metadata = dict(row.get("metadata") or {})
+        blocked_tools = set(metadata.get("blocked_tools") or [])
+        if blocked:
+            blocked_tools.add(tool_name)
+        else:
+            blocked_tools.discard(tool_name)
+        metadata["blocked_tools"] = sorted(blocked_tools)
+        row["metadata"] = metadata
+        self.store.upsert_connection(row)
+        return True
+
     def call_tool(self, cid, tool, arguments=None):
         return runtime.call(cid, tool, arguments or {})
 
