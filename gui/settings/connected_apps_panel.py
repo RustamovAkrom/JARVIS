@@ -32,8 +32,8 @@ class ConnectedAppsPanel(QWidget):
         toolbar.addWidget(self.add_catalog_btn);toolbar.addWidget(self.add_stdio_btn);toolbar.addWidget(self.add_http_btn);toolbar.addWidget(self.add_sse_btn);toolbar.addWidget(self.add_oauth_btn);toolbar.addWidget(self.add_mcp_oauth_btn);toolbar.addWidget(self.reconnect_all_btn);toolbar.addWidget(self.health_all_btn);layout.addLayout(toolbar)
         self.list=QListWidget();self.list.setObjectName("appsList");self.list.setMinimumHeight(100);self.list.setMaximumHeight(190);self.list.itemSelectionChanged.connect(self.show_selected);layout.addWidget(self.list)
         self.details=QTextEdit();self.details.setObjectName("appsDetails");self.details.setReadOnly(True);self.details.setMinimumHeight(100);self.details.setMaximumHeight(170);layout.addWidget(self.details)
-        actions=QHBoxLayout();self.connect_btn=QPushButton("Connect / Reconnect");self.connect_btn.clicked.connect(self.connect_selected);self.disconnect_btn=QPushButton("Disconnect");self.disconnect_btn.clicked.connect(self.disconnect_selected);self.remove_btn=QPushButton("Remove");self.remove_btn.clicked.connect(self.remove_selected);self.block_tool_btn=QPushButton("Block tool");self.block_tool_btn.clicked.connect(lambda:self.set_tool_permission(True));self.allow_tool_btn=QPushButton("Unblock tool");self.allow_tool_btn.clicked.connect(lambda:self.set_tool_permission(False));self.copy_diagnostics_btn=QPushButton("Copy diagnostics");self.copy_diagnostics_btn.clicked.connect(self.copy_diagnostics);self.health_btn=QPushButton("Check health");self.health_btn.clicked.connect(self.check_selected_health)
-        actions.addWidget(self.connect_btn);actions.addWidget(self.disconnect_btn);actions.addWidget(self.remove_btn);actions.addWidget(self.block_tool_btn);actions.addWidget(self.allow_tool_btn);actions.addWidget(self.copy_diagnostics_btn);actions.addWidget(self.health_btn);actions.addStretch(1);layout.addLayout(actions);self.enabled_checkbox=QCheckBox("Enable this connection and reconnect on startup");self.enabled_checkbox.toggled.connect(self._set_enabled);layout.addWidget(self.enabled_checkbox);self.auto_read_checkbox=QCheckBox("Auto-run read-only MCP tools from this server");self.auto_read_checkbox.setToolTip("Only tools marked read-only and non-destructive by the MCP server can run without confirmation. Enable only for servers you trust.");self.auto_read_checkbox.toggled.connect(self._set_auto_read);layout.addWidget(self.auto_read_checkbox);root.addWidget(group)
+        actions=QHBoxLayout();self.connect_btn=QPushButton("Connect / Reconnect");self.connect_btn.clicked.connect(self.connect_selected);self.rename_btn=QPushButton("Rename");self.rename_btn.clicked.connect(self.rename_selected);self.disconnect_btn=QPushButton("Disconnect");self.disconnect_btn.clicked.connect(self.disconnect_selected);self.remove_btn=QPushButton("Remove");self.remove_btn.clicked.connect(self.remove_selected);self.block_tool_btn=QPushButton("Block tool");self.block_tool_btn.clicked.connect(lambda:self.set_tool_permission(True));self.allow_tool_btn=QPushButton("Unblock tool");self.allow_tool_btn.clicked.connect(lambda:self.set_tool_permission(False));self.copy_diagnostics_btn=QPushButton("Copy diagnostics");self.copy_diagnostics_btn.clicked.connect(self.copy_diagnostics);self.health_btn=QPushButton("Check health");self.health_btn.clicked.connect(self.check_selected_health)
+        actions.addWidget(self.connect_btn);actions.addWidget(self.rename_btn);actions.addWidget(self.disconnect_btn);actions.addWidget(self.remove_btn);actions.addWidget(self.block_tool_btn);actions.addWidget(self.allow_tool_btn);actions.addWidget(self.copy_diagnostics_btn);actions.addWidget(self.health_btn);actions.addStretch(1);layout.addLayout(actions);self.enabled_checkbox=QCheckBox("Enable this connection and reconnect on startup");self.enabled_checkbox.toggled.connect(self._set_enabled);layout.addWidget(self.enabled_checkbox);self.auto_read_checkbox=QCheckBox("Auto-run read-only MCP tools from this server");self.auto_read_checkbox.setToolTip("Only tools marked read-only and non-destructive by the MCP server can run without confirmation. Enable only for servers you trust.");self.auto_read_checkbox.toggled.connect(self._set_auto_read);layout.addWidget(self.auto_read_checkbox);root.addWidget(group)
         runtime=QGroupBox("MCP runtime");rrow=QVBoxLayout(runtime);rrow.setSpacing(6);self.runtime_status=QLabel();self.runtime_status.setWordWrap(True);rrow.addWidget(self.runtime_status);self.runtime_help=QLabel();self.runtime_help.setWordWrap(True);rrow.addWidget(self.runtime_help);root.addWidget(runtime)
         self.status=QLabel("Ready");self.status.setObjectName("appsStatus");self.status.setWordWrap(True);root.addWidget(self.status);root.addStretch(1)
         self.setStyleSheet("""
@@ -60,7 +60,7 @@ class ConnectedAppsPanel(QWidget):
             self.runtime_help.setText("Connected Apps runtime is available.")
 
     def _busy(self,busy,message=""):
-        for w in (self.add_catalog_btn,self.add_stdio_btn,self.add_http_btn,self.add_sse_btn,self.add_oauth_btn,self.add_mcp_oauth_btn,self.reconnect_all_btn,self.health_all_btn,self.connect_btn,self.disconnect_btn,self.remove_btn,self.block_tool_btn,self.allow_tool_btn,self.copy_diagnostics_btn,self.health_btn,self.enabled_checkbox,self.auto_read_checkbox):w.setEnabled(not busy)
+        for w in (self.add_catalog_btn,self.add_stdio_btn,self.add_http_btn,self.add_sse_btn,self.add_oauth_btn,self.add_mcp_oauth_btn,self.reconnect_all_btn,self.health_all_btn,self.connect_btn,self.rename_btn,self.disconnect_btn,self.remove_btn,self.block_tool_btn,self.allow_tool_btn,self.copy_diagnostics_btn,self.health_btn,self.enabled_checkbox,self.auto_read_checkbox):w.setEnabled(not busy)
         if message:self.status.setText(message)
     def refresh(self,*_):
         query=self.search.text().casefold().strip();selected=self.selected_id();self.list.clear();visible=[]
@@ -324,6 +324,23 @@ class ConnectedAppsPanel(QWidget):
             status="healthy" if result.get("healthy") else "unhealthy"
             self.status.setText(f"Connection health: {status}")
         self.refresh()
+
+    def rename_selected(self):
+        cid=self.selected_id()
+        row=service.store.get_connection(cid) if cid else None
+        if not row:
+            QMessageBox.information(self,"Rename connection","Select a connection first.")
+            return
+        name,ok=QInputDialog.getText(self,"Rename Connected App","Display name:",text=row.get("display_name",""))
+        if not ok:
+            return
+        try:
+            updated=service.rename(cid,name)
+            if updated:
+                self.status.setText(f"Connection renamed to {updated['display_name']}")
+                self.refresh()
+        except Exception as exc:
+            QMessageBox.warning(self,"Rename connection",self._friendly_error(str(exc)))
 
     def connect_selected(self):
         cid=self.selected_id()
