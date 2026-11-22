@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 
 def test_native_health_check_uses_service_local_adapter(monkeypatch):
     from core.connected_apps.service import ConnectedAppsService
@@ -95,3 +97,32 @@ def test_service_call_tool_enforces_connection_and_permissions(monkeypatch):
     with pytest.raises(ValueError, match="unknown"):
         svc.call_tool("c1", "read", {"limit": 1, "unexpected": True})
     assert len(calls) == 1
+
+
+def test_service_call_tool_rejects_non_object_arguments(monkeypatch):
+    import importlib
+    from core.connected_apps.service import ConnectedAppsService
+
+    service_module = importlib.import_module("core.connected_apps.service")
+
+    class Store:
+        row = {
+            "id": "c1", "app_id": "demo", "status": "connected", "enabled": True,
+            "metadata": {}, "last_error": "", "updated_at": 0,
+        }
+        def get_connection(self, cid):
+            return dict(self.row) if cid == "c1" else None
+        def upsert_connection(self, row):
+            self.row = dict(row)
+        def list_connections(self):
+            return [dict(self.row)]
+
+    svc = ConnectedAppsService(store=Store())
+    monkeypatch.setattr(service_module.runtime, "tools", lambda cid: [
+        {"name": "read", "input_schema": {"type": "object"}}
+    ])
+    calls = []
+    monkeypatch.setattr(service_module.runtime, "call", lambda *args: calls.append(args))
+    with pytest.raises(ValueError, match="object"):
+        svc.call_tool("c1", "read", [])
+    assert calls == []
