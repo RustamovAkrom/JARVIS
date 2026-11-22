@@ -17,6 +17,7 @@ class _Worker(QRunnable):
         self.signals.finished.emit(result,error)
 
 class ConnectedAppsPanel(QWidget):
+    connections_changed=pyqtSignal()
     def __init__(self,parent=None):
         super().__init__(parent);self.pool=QThreadPool.globalInstance();self.setObjectName("ConnectedAppsPanel")
         root=QVBoxLayout(self);root.setContentsMargins(4,4,4,4);root.setSpacing(14)
@@ -195,6 +196,7 @@ class ConnectedAppsPanel(QWidget):
             details="\n".join(f"{row.get('name')}: {row.get('error') or row.get('status')}" for row in results if row.get("status")!="connected")
             QMessageBox.warning(self,"Reconnect results",details)
         self.refresh()
+        self.connections_changed.emit()
 
     def connect_selected(self):
         cid=self.selected_id()
@@ -205,8 +207,10 @@ class ConnectedAppsPanel(QWidget):
             msg=self._friendly_error(str(error));self.status.setText(f"Connection failed: {msg}");QMessageBox.warning(self,"Connection failed",msg)
         elif row:
             count=len(row.get("metadata",{}).get("tools",[]));self.status.setText(f"{row.get('display_name')}: {row.get('status')} · {count} tools discovered")
+            if row.get("status")=="connected":self.connections_changed.emit()
             if row.get("last_error"):QMessageBox.warning(self,"Connection failed",self._friendly_error(row["last_error"]))
         self.refresh()
+        if not error:self.connections_changed.emit()
     def set_tool_permission(self, blocked):
         cid=self.selected_id()
         if not cid:
