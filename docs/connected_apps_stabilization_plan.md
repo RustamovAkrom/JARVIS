@@ -49,7 +49,10 @@ Finish the Connected Apps subsystem without scope drift: stabilize existing MCP 
 - [ ] Run focused Connected Apps suite locally.
 
 ### Stage 2 — Runtime lifecycle and concurrency
-- [ ] Connect/reconnect/disconnect/remove race audit.
+- [x] Serialize connect/reconnect/call/disconnect runtime operations per connection ID.
+- [x] Ensure shutdown continues when an individual disconnect cannot be confirmed.
+- [x] Fix test_connected_apps_tool_calls_record_activity_and_errors to mock runtime tool discovery.
+- [ ] Connect/reconnect/disconnect/remove race audit at service/store level.
 - [ ] Timeout and cancellation audit.
 - [ ] Event-loop shutdown and pending-task cleanup.
 - [ ] Reconnect-all behavior and backoff.
