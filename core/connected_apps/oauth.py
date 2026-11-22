@@ -100,6 +100,8 @@ class OAuthCallbackServer:
                             body = b"Authorization was not completed. You can close this window."
                         elif not query.get("code") or not query["code"][0]:
                             owner.state.error = "OAuth callback did not contain a code"
+                        elif len(query["code"][0]) > 8192:
+                            owner.state.error = "OAuth authorization code was too large"
                             self.send_response(400)
                             body = b"Missing authorization code."
                         else:
