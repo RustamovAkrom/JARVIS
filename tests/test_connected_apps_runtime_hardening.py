@@ -244,6 +244,16 @@ def test_connected_apps_tool_calls_record_activity_and_errors(monkeypatch):
 
     store = Store()
     svc = ConnectedAppsService(store=store)
+    monkeypatch.setattr(module.runtime, "tools", lambda cid: [
+        {
+            "name": "search",
+            "input_schema": {
+                "type": "object",
+                "properties": {"query": {"type": "string"}},
+                "required": ["query"],
+            },
+        }
+    ])
     monkeypatch.setattr(module.runtime, "call", lambda cid, tool, args: [{"type": "text", "text": "ok"}])
     result = svc.call_tool("c1", "search", {"query": "test"})
     metadata = store.get_connection("c1")["metadata"]
