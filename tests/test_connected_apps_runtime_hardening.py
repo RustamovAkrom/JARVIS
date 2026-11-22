@@ -481,3 +481,14 @@ def test_runtime_loop_starts_without_lock_deadlock():
     assert runtime._loop is not None
     assert runtime._loop.is_running()
     runtime.shutdown()
+
+
+def test_service_uses_stable_per_connection_operation_locks():
+    from core.connected_apps.service import ConnectedAppsService
+
+    service = ConnectedAppsService()
+    first = service._connection_lock("connection-1")
+    second = service._connection_lock("connection-1")
+    other = service._connection_lock("connection-2")
+    assert first is second
+    assert first is not other
