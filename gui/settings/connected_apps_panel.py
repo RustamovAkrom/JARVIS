@@ -210,7 +210,6 @@ class ConnectedAppsPanel(QWidget):
             if row.get("status")=="connected":self.connections_changed.emit()
             if row.get("last_error"):QMessageBox.warning(self,"Connection failed",self._friendly_error(row["last_error"]))
         self.refresh()
-        if not error:self.connections_changed.emit()
     def set_tool_permission(self, blocked):
         cid=self.selected_id()
         if not cid:
