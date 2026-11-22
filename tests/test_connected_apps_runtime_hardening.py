@@ -60,7 +60,8 @@ def test_store_does_not_silently_reset_corrupt_data(tmp_path):
 def test_stdio_environment_is_persisted_as_credentials_and_restored(monkeypatch, tmp_path):
     from core.connected_apps.models import AppDescriptor, TransportType
     from core.connected_apps.service import ConnectedAppsService
-    import importlib\n    service_module = importlib.import_module("core.connected_apps.service")
+    import importlib
+    service_module = importlib.import_module("core.connected_apps.service")
 
     class Store:
         def __init__(self):
