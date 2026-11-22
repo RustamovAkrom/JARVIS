@@ -193,6 +193,7 @@ class ConnectedAppsPanel(QWidget):
         self.sections.setObjectName("connectedAppsSections")
         self.sections.addTab(native_group,"Apps")
         self.sections.addTab(mcp_group,"MCP Servers")
+        self.sections.currentChanged.connect(self._schedule_surface_polish)
         self.sections.widget(0).setObjectName("appsTabPage")
         self.sections.widget(1).setObjectName("mcpTabPage")
         for page in (self.sections.widget(0), self.sections.widget(1)):
@@ -294,8 +295,12 @@ class ConnectedAppsPanel(QWidget):
         """
         super().showEvent(event)
         self._apply_theme_styles()
-        self._polish_surfaces()
-        QTimer.singleShot(0, self._polish_surfaces)
+        self._schedule_surface_polish()
+
+    def _schedule_surface_polish(self):
+        """Polish lazy Qt surfaces after the tab/layout paint settles."""
+        for delay in (0, 40, 120, 250):
+            QTimer.singleShot(delay, self._polish_surfaces)
 
     def _polish_surfaces(self):
         surfaces = [
