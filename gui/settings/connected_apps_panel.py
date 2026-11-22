@@ -235,7 +235,10 @@ class ConnectedAppsPanel(QWidget):
         QGroupBox::title { subcontrol-origin: margin; left: 12px; padding: 0 6px; font-weight: 600; }
         #nativeAppCard { border: 1px solid palette(mid); border-radius: 9px; background: palette(alternate-base); padding: 4px; }
         #nativeAppsList, #appsList { background: transparent; border: 0; }
-        #nativeAppsList::item, #appsList::item { border: 1px solid palette(mid); border-radius: 10px; padding: 12px; margin: 5px; background: palette(alternate-base); }
+        #nativeAppsList::item, #appsList::item { border: 1px solid palette(mid); border-radius: 10px; padding: 12px; margin: 5px; background: palette(base); color: palette(text); }
+        #nativeAppsList::item:selected, #appsList::item:selected { border: 2px solid palette(highlight); background: palette(alternate-base); }
+        #connectedAppsSections QTabBar::tab { background: palette(base); color: palette(text); border: 1px solid palette(mid); border-radius: 8px; padding: 10px 18px; }
+        #connectedAppsSections QTabBar::tab:selected { background: palette(alternate-base); border-color: palette(highlight); }
         #nativeAppsList::item:selected, #appsList::item:selected { border: 2px solid palette(highlight); background: palette(alternate-base); }
         #nativeAppName { font-size: 15px; font-weight: 700; }
         #nativeAppDescription { color: palette(mid); }
@@ -363,18 +366,29 @@ class ConnectedAppsPanel(QWidget):
         heading=QLabel(f"{row.get('display_name','Connected App')}  ·  {row.get('status','unknown')}")
         heading.setStyleSheet("font-size: 18px; font-weight: 700;")
         layout.addWidget(heading)
-        info=QTextEdit()
-        info.setReadOnly(True)
-        info.setPlainText(
-            f"App: {row.get('display_name')}\\n"
-            f"Status: {row.get('status')}\\n"
-            f"Transport: {metadata.get('transport','native' if native else 'unknown')}\\n"
-            f"Endpoint: {metadata.get('endpoint') or metadata.get('command','')}\\n"
-            f"Tools: {len(tools)}\\n"
-            f"Last error: {row.get('last_error') or 'None'}"
-        )
-        info.setMinimumHeight(170)
-        layout.addWidget(info)
+        summary=QFrame()
+        summary.setObjectName("connectionSummary")
+        summary_layout=QVBoxLayout(summary)
+        summary_layout.setContentsMargins(12,10,12,10)
+        summary_layout.setSpacing(6)
+        summary_rows=[
+            ("Status",row.get("status","unknown")),
+            ("Type","Native App" if native else "MCP Server"),
+            ("Transport",metadata.get("transport","native" if native else "unknown")),
+            ("Endpoint",metadata.get("endpoint") or metadata.get("command") or "—"),
+            ("Tools",str(len(tools))),
+            ("Last error",row.get("last_error") or "None"),
+        ]
+        for key,value in summary_rows:
+            line=QHBoxLayout()
+            label=QLabel(key)
+            label.setObjectName("summaryLabel")
+            val=QLabel(str(value))
+            val.setWordWrap(True)
+            line.addWidget(label,0)
+            line.addWidget(val,1)
+            summary_layout.addLayout(line)
+        layout.addWidget(summary)
         permissions=QGroupBox("Permissions and automation")
         permission_layout=QVBoxLayout(permissions)
         enabled=QCheckBox("Enable this connection and reconnect on startup")
@@ -394,7 +408,9 @@ class ConnectedAppsPanel(QWidget):
             item=QListWidgetItem(f"{'Blocked' if blocked else 'Allowed'}  ·  {name}")
             item.setData(Qt.ItemDataRole.UserRole,name)
             tool_list.addItem(item)
-        tool_list.setMinimumHeight(110)
+        tool_list.setMinimumHeight(130)
+        tool_list.setAlternatingRowColors(False)
+        tool_list.setObjectName("permissionTools")
         permission_layout.addWidget(tool_list)
         layout.addWidget(permissions)
         def toggle_tool():
@@ -407,9 +423,11 @@ class ConnectedAppsPanel(QWidget):
             dialog.accept()
             self.open_connection_details(native)
         tool_actions=QHBoxLayout()
-        block=QPushButton("Block selected tool")
+        tool_actions.setSpacing(8)
+        block=QPushButton("Block")
+        block.setObjectName("dangerAction")
         block.clicked.connect(toggle_tool)
-        unblock=QPushButton("Unblock selected tool")
+        unblock=QPushButton("Allow")
         def do_unblock():
             item=tool_list.currentItem()
             if not item:return
@@ -417,11 +435,25 @@ class ConnectedAppsPanel(QWidget):
             self.refresh();dialog.accept();self.open_connection_details(native)
         unblock.clicked.connect(do_unblock)
         tool_actions.addWidget(block);tool_actions.addWidget(unblock)
+        tool_actions.addStretch(1)
         permission_layout.addLayout(tool_actions)
-        buttons=QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
-        buttons.rejected.connect(dialog.reject)
-        buttons.accepted.connect(dialog.accept)
+        buttons=QDialogButtonBox()
+        close_btn=buttons.addButton("Close",QDialogButtonBox.ButtonRole.RejectRole)
+        close_btn.setObjectName("dialogClose")
+        close_btn.clicked.connect(dialog.reject)
         layout.addWidget(buttons)
+        dialog.setStyleSheet("""
+            QDialog { background: palette(window); }
+            #connectionSummary { border: 1px solid palette(mid); border-radius: 10px; background: palette(base); }
+            #summaryLabel { color: palette(mid); min-width: 90px; font-weight: 600; }
+            QGroupBox { border: 1px solid palette(mid); border-radius: 10px; margin-top: 8px; padding: 10px; }
+            QListWidget { background: palette(base); border: 1px solid palette(mid); border-radius: 8px; }
+            QListWidget::item { padding: 8px; margin: 2px; border-radius: 5px; }
+            QListWidget::item:selected { background: palette(highlight); color: palette(highlighted-text); }
+            QPushButton { border: 1px solid palette(mid); border-radius: 7px; padding: 8px 12px; min-height: 28px; }
+            QPushButton:hover { border-color: palette(highlight); }
+            QPushButton#dangerAction { color: palette(bright-text); }
+        """)
         def save_enabled(value):
             service.set_enabled(cid,value,reconnect=value)
             self.refresh()
