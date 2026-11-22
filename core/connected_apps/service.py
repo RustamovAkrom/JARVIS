@@ -227,6 +227,87 @@ class ConnectedAppsService:
                                "status": "error", "error": _safe_error(exc)})
         return results
 
+    def native_catalog(self):
+        from core.connected_apps.native import native_registry
+        return [adapter.descriptor for adapter in native_registry.adapters()]
+
+    def connect_native(self, app_id, *, display_name=None, access_token="", connection_id=None):
+        from core.connected_apps.native import native_registry
+        adapter = native_registry.get(app_id)
+        if adapter is None:
+            raise ValueError(f"Unknown native Connected App: {app_id}")
+        if not access_token:
+            raise ValueError("An authorization token is required")
+        cid = connection_id or secrets.token_urlsafe(16)
+        previous = self.store.get_connection(cid)
+        row = AppConnection(
+            id=cid, app_id=adapter.descriptor.id,
+            display_name=display_name or adapter.descriptor.name,
+            status=ConnectionStatus.CONNECTING,
+            auth_type=adapter.descriptor.auth_provider and AppConnection.__dataclass_fields__["auth_type"].default or AppConnection.__dataclass_fields__["auth_type"].default,
+            scopes=list(adapter.descriptor.scopes),
+            created_at=(previous or {}).get("created_at", time.time()),
+            metadata={**dict((previous or {}).get("metadata") or {}),
+                      "native": True, "native_adapter": adapter.descriptor.id,
+                      "health": "pending"},
+        )
+        data = _serialize(row)
+        self.store.upsert_connection(data)
+        self.store.set_credential(cid, "access_token", access_token)
+        try:
+            adapter.health_check(cid)
+            row.status = ConnectionStatus.CONNECTED
+            row.metadata["health"] = "healthy"
+        except Exception as exc:
+            row.status = ConnectionStatus.ERROR
+            row.last_error = _safe_error(exc)
+            row.metadata["health"] = "unhealthy"
+        result = _serialize(row)
+        self.store.upsert_connection(result)
+        return result
+
+    def native_tools(self, cid):
+        row = self.store.get_connection(cid)
+        if not row or not row.get("enabled", True) or not row.get("metadata", {}).get("native"):
+            return []
+        from core.connected_apps.native import native_registry
+        adapter = native_registry.get(row.get("app_id"))
+        if not adapter:
+            return []
+        return [{
+            "name": tool.name, "description": tool.description,
+            "input_schema": tool.input_schema,
+            "annotations": {"readOnlyHint": tool.read_only, "destructiveHint": tool.destructive},
+            "native": True,
+        } for tool in adapter.tools]
+
+    def call_native_tool(self, cid, tool_name, arguments=None):
+        row = self.store.get_connection(cid)
+        if not row or not row.get("enabled", True):
+            raise RuntimeError("Connected App is not enabled")
+        if row.get("status") != ConnectionStatus.CONNECTED:
+            raise RuntimeError("Connected App is not connected")
+        from core.connected_apps.native import native_registry
+        adapter = native_registry.get(row.get("app_id"))
+        if not adapter:
+            raise RuntimeError("Native adapter is unavailable")
+        tool = next((item for item in adapter.tools if item.name == tool_name), None)
+        if not tool:
+            raise ValueError("Native tool is not available")
+        if tool_name in set((row.get("metadata") or {}).get("blocked_tools") or []):
+            raise PermissionError("This tool is blocked by Connected Apps permissions")
+        from core.connected_apps.agent import _validate_arguments
+        _validate_arguments(tool.input_schema, arguments or {})
+        if not tool.read_only or tool.requires_confirmation:
+            from core import confirm
+            return confirm.request(
+                key=f"connected_apps:{cid}:{tool_name}",
+                title=f"Connected App — {tool_name}",
+                detail=f"Execute {tool_name} with arguments:\n\n{arguments!r}",
+                run=lambda: adapter.execute(cid, tool_name, arguments or {}),
+            )
+        return adapter.execute(cid, tool_name, arguments or {})
+
     def rename(self, cid, display_name):
         name = " ".join(str(display_name or "").split())
         if not name:
