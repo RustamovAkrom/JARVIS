@@ -26,7 +26,7 @@ class ConnectedAppsPanel(QWidget):
         subtitle.setObjectName("appsSubtitle");subtitle.setWordWrap(True);root.addWidget(title);root.addWidget(subtitle)
         group=QGroupBox("Connection setup");layout=QVBoxLayout(group);layout.setSpacing(10)
         toolbar=QHBoxLayout();self.search=QLineEdit();self.search.setObjectName("appsSearch");self.search.setPlaceholderText("Search connected apps…");self.search.textChanged.connect(self.refresh);toolbar.addWidget(self.search,1)
-        self.add_catalog_btn=QPushButton("MCP Catalog");self.add_catalog_btn.clicked.connect(self.add_from_catalog);self.add_github_btn=QPushButton("+ GitHub");self.add_github_btn.clicked.connect(self.connect_github_native);self.add_stdio_btn=QPushButton("+ Add STDIO");self.add_stdio_btn.clicked.connect(self.add_custom)
+        self.add_catalog_btn=QPushButton("MCP Catalog");self.add_catalog_btn.clicked.connect(self.add_from_catalog);self.add_github_btn=QPushButton("+ GitHub OAuth");self.add_github_btn.clicked.connect(self.connect_github_oauth);self.add_stdio_btn=QPushButton("+ Add STDIO");self.add_stdio_btn.clicked.connect(self.add_custom)
         self.add_http_btn=QPushButton("+ Add HTTP");self.add_http_btn.clicked.connect(self.add_http);self.add_sse_btn=QPushButton("+ Add SSE");self.add_sse_btn.clicked.connect(self.add_sse)
         self.add_oauth_btn=QPushButton("+ Provider OAuth");self.add_oauth_btn.clicked.connect(self.add_oauth_http);self.add_mcp_oauth_btn=QPushButton("+ MCP OAuth");self.add_mcp_oauth_btn.clicked.connect(self.add_mcp_oauth);self.reconnect_all_btn=QPushButton("Reconnect all");self.reconnect_all_btn.clicked.connect(self.reconnect_all);self.health_all_btn=QPushButton("Check all health");self.health_all_btn.clicked.connect(self.check_all_health)
         toolbar.addWidget(self.add_catalog_btn);toolbar.addWidget(self.add_github_btn);toolbar.addWidget(self.add_stdio_btn);toolbar.addWidget(self.add_http_btn);toolbar.addWidget(self.add_sse_btn);toolbar.addWidget(self.add_oauth_btn);toolbar.addWidget(self.add_mcp_oauth_btn);toolbar.addWidget(self.reconnect_all_btn);toolbar.addWidget(self.health_all_btn);layout.addLayout(toolbar)
@@ -135,6 +135,32 @@ class ConnectedAppsPanel(QWidget):
         return error
     @staticmethod
     def _slug(value):return "-".join(value.strip().lower().split()) or "app"
+    def connect_github_oauth(self):
+        client_id,ok=QInputDialog.getText(
+            self,"Connect GitHub","GitHub OAuth App Client ID:"
+        )
+        if not ok or not client_id.strip():
+            return
+        client_secret,ok=QInputDialog.getText(
+            self,"Connect GitHub","OAuth App Client Secret (required by GitHub OAuth Apps):",
+            QLineEdit.EchoMode.Password,
+        )
+        if not ok:
+            return
+        self._busy(True,"Opening GitHub authorization in browser…")
+        def authorize():
+            from core.connected_apps.auth_service import OAuthService
+            auth=OAuthService(service.store)
+            connection_id="github-native"
+            auth.authorize_connection(connection_id,"github",client_id.strip(),client_secret=client_secret)
+            token=auth.get_access_token(connection_id)
+            result=service.connect_native("github",access_token=token,connection_id=connection_id)
+            # Keep the native connection ID stable and avoid exposing OAuth metadata.
+            return result
+        worker=_Worker(authorize)
+        worker.signals.finished.connect(self._connected)
+        self.pool.start(worker)
+
     def connect_github_native(self):
         token,ok=QInputDialog.getText(
             self,"Connect GitHub",
