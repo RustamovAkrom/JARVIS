@@ -10,7 +10,7 @@ import hashlib
 import secrets
 import threading
 import urllib.parse
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from dataclasses import dataclass
 from typing import Any
 
@@ -86,10 +86,10 @@ class OAuthCallbackServer:
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
                 self.wfile.write(body)
-                owner.state.event.set()
+                if owner.state.code or owner.state.error:\n                owner.state.event.set()
             def log_message(self, *_):
                 return
-        self._server = HTTPServer((self.host, self.port), Handler)
+        self._server = ThreadingHTTPServer((self.host, self.port), Handler)\n        self._server.daemon_threads = True
         self.port = self._server.server_address[1]
         self.state.redirect_uri = f"http://{self.host}:{self.port}/callback"
         self._thread = threading.Thread(target=self._server.serve_forever, daemon=True, name="oauth-callback")
