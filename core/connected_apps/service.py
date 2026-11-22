@@ -165,6 +165,8 @@ class ConnectedAppsService:
             row.status = ConnectionStatus.CONNECTED
             row.metadata["tools"] = tools
         except Exception as exc:
+            # Ensure reconnect failures do not leave an older session active.
+            runtime.disconnect(cid)
             row.status = ConnectionStatus.ERROR
             row.last_error = _safe_error(exc)
         data = _serialize(row)
@@ -187,6 +189,8 @@ class ConnectedAppsService:
             row.status = ConnectionStatus.CONNECTED
             row.metadata["tools"] = tools
         except Exception as exc:
+            # Ensure reconnect failures do not leave an older session active.
+            runtime.disconnect(cid)
             row.status = ConnectionStatus.ERROR
             row.last_error = _safe_error(exc)
         data = _serialize(row)
