@@ -150,7 +150,7 @@ class ConnectedAppsService:
         self.store.upsert_connection(data)
         return data
 
-    def reconnect(self, cid):
+    def reconnect(self, cid, *, attempts=3, backoff=0.5):
         row = self.store.get_connection(cid)
         if not row:
             return None
@@ -162,11 +162,21 @@ class ConnectedAppsService:
             args=meta.get("args", []),
             env={key: self.store.get_credential(cid, f"stdio_env:{key}") for key in meta.get("env_keys", [])},
         )
-        if descriptor.transport == TransportType.SSE:
-            return self.connect_sse(descriptor, connection_id=cid, headers=self._saved_http_headers(cid))
-        if descriptor.transport == TransportType.HTTP:
-            return self.connect_http(descriptor, connection_id=cid, headers=self._saved_http_headers(cid))
-        return self.connect_stdio(descriptor, connection_id=cid)
+        attempts = max(1, min(int(attempts), 5))
+        last_result = None
+        for attempt in range(attempts):
+            if descriptor.transport == TransportType.SSE:
+                last_result = self.connect_sse(descriptor, connection_id=cid, headers=self._saved_http_headers(cid))
+            elif descriptor.transport == TransportType.HTTP:
+                last_result = self.connect_http(descriptor, connection_id=cid, headers=self._saved_http_headers(cid))
+            else:
+                last_result = self.connect_stdio(descriptor, connection_id=cid)
+            if last_result and last_result.get("status") == ConnectionStatus.CONNECTED.value:
+                return last_result
+            if attempt + 1 < attempts:
+                runtime.disconnect(cid)
+                time.sleep(max(0.0, float(backoff)) * (2 ** attempt))
+        return last_result
 
     def _saved_http_headers(self, cid):
         provider = self.store.get_credential(cid, "oauth_provider")
