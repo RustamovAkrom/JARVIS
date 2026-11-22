@@ -578,3 +578,33 @@ def test_failed_http_transport_connect_cleanup_error_is_best_effort(monkeypatch,
     assert result["status"] == "error"
     assert "original transport failure" in result["last_error"]
     assert "cleanup failure" not in result["last_error"]
+
+
+def test_native_disconnect_disable_and_remove_do_not_require_mcp_runtime(monkeypatch):
+    import importlib
+    from core.connected_apps.service import ConnectedAppsService
+
+    module = importlib.import_module("core.connected_apps.service")
+
+    class Store:
+        def __init__(self):
+            self.rows = {"native-1": {"id": "native-1", "app_id": "github", "status": "connected",
+                "enabled": True, "metadata": {"native": True}, "last_error": "", "updated_at": 0}}
+        def get_connection(self, cid):
+            row = self.rows.get(cid)
+            return dict(row) if row else None
+        def upsert_connection(self, row):
+            self.rows[row["id"]] = dict(row)
+        def list_connections(self):
+            return list(self.rows.values())
+        def remove_connection(self, cid):
+            return self.rows.pop(cid, None) is not None
+
+    store = Store()
+    service = ConnectedAppsService(store=store)
+    monkeypatch.setattr(module.runtime, "disconnect", lambda cid: pytest.fail("Native app must not use MCP runtime"))
+    assert service.disconnect("native-1") is True
+    assert store.get_connection("native-1")["status"] == "disconnected"
+    service.set_enabled("native-1", False)
+    assert store.get_connection("native-1")["enabled"] is False
+    assert service.remove("native-1") is True
