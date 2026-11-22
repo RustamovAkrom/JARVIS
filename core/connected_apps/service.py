@@ -222,6 +222,20 @@ class ConnectedAppsService:
                                "status": "error", "error": _safe_error(exc)})
         return results
 
+    def rename(self, cid, display_name):
+        name = " ".join(str(display_name or "").split())
+        if not name:
+            raise ValueError("Connection name cannot be empty")
+        if len(name) > 120:
+            raise ValueError("Connection name cannot exceed 120 characters")
+        row = self.store.get_connection(cid)
+        if not row:
+            return None
+        row["display_name"] = name
+        row["updated_at"] = time.time()
+        self.store.upsert_connection(row)
+        return row
+
     def set_enabled(self, cid, enabled, *, reconnect=True):
         row = self.store.get_connection(cid)
         if not row:
