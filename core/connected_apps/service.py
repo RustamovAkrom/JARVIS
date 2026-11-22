@@ -219,6 +219,29 @@ class ConnectedAppsService:
                                "status": "error", "error": _safe_error(exc)})
         return results
 
+    def set_enabled(self, cid, enabled, *, reconnect=True):
+        row = self.store.get_connection(cid)
+        if not row:
+            return None
+        enabled = bool(enabled)
+        row["enabled"] = enabled
+        row["updated_at"] = time.time()
+        if not enabled:
+            runtime.disconnect(cid)
+            row["status"] = ConnectionStatus.DISCONNECTED.value
+            row["last_error"] = ""
+            metadata = dict(row.get("metadata") or {})
+            metadata["health"] = "disabled"
+            row["metadata"] = metadata
+            self.store.upsert_connection(row)
+            return row
+        row["status"] = ConnectionStatus.DISCONNECTED.value
+        metadata = dict(row.get("metadata") or {})
+        metadata["health"] = "pending"
+        row["metadata"] = metadata
+        self.store.upsert_connection(row)
+        return self.reconnect(cid) if reconnect else row
+
     def disconnect(self, cid):
         runtime.disconnect(cid)
         row = self.store.get_connection(cid)
