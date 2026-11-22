@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import threading
+import re
 from contextlib import AsyncExitStack
 from urllib.parse import urlsplit
 
@@ -34,6 +35,20 @@ def _validate_http_endpoint(url: str) -> str:
     if parsed.fragment:
         raise ValueError("MCP endpoint URL must not contain a fragment")
     return value
+
+
+def _validate_headers(headers):
+    if not isinstance(headers, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in headers.items()):
+        raise ValueError("MCP HTTP headers must be a string mapping")
+    forbidden = {"host", "content-length", "transfer-encoding", "connection"}
+    for key, value in headers.items():
+        if not re.fullmatch(r"[!#$%&'*+.^_`|~0-9A-Za-z-]+", key):
+            raise ValueError("MCP HTTP header name is invalid")
+        if key.casefold() in forbidden:
+            raise ValueError(f"MCP HTTP header '{key}' is managed by the transport")
+        if "\r" in value or "\n" in value:
+            raise ValueError("MCP HTTP header values cannot contain newline characters")
+    return dict(headers)
 
 
 class MCPRuntime:
@@ -147,11 +162,7 @@ class MCPRuntime:
 
     def connect_http(self, cid, url, headers=None):
         url = _validate_http_endpoint(url)
-        headers = dict(headers or {})
-        if not all(isinstance(k, str) and isinstance(v, str) for k, v in headers.items()):
-            raise ValueError("MCP HTTP headers must be string values")
-        if any("\r" in v or "\n" in v for v in headers.values()):
-            raise ValueError("MCP HTTP headers cannot contain newline characters")
+        headers = _validate_headers(headers or {})
 
         async def factory():
             from mcp.client.streamable_http import streamablehttp_client
