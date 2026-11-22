@@ -346,6 +346,24 @@ class ConnectedAppsPanel(QWidget):
             if isinstance(value,dict):
                 return {str(k):redact(v,str(k)) for k,v in value.items()}
             if isinstance(value,(list,tuple)):
+                if key.casefold() in {"args","command_args"}:
+                    output=[]
+                    mask_next=False
+                    for item in value:
+                        text=str(item)
+                        if mask_next:
+                            output.append("[redacted]")
+                            mask_next=False
+                            continue
+                        if re.search(r"(?i)(token|password|secret|api[_-]?key|credential)",text):
+                            if "=" in text:
+                                output.append(text.split("=",1)[0]+"=[redacted]")
+                            else:
+                                output.append(text)
+                                mask_next=True
+                            continue
+                        output.append(redact(item))
+                    return output
                 return [redact(item) for item in value]
             if isinstance(value,str):
                 value=re.sub(r"(?i)(bearer\s+)[^\s]+",r"\1[redacted]",value)
