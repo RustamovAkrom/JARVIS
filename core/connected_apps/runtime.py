@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import threading
 from contextlib import AsyncExitStack
+from urllib.parse import urlsplit
 
 
 class RuntimeUnavailable(RuntimeError):
@@ -23,6 +24,19 @@ def _normalize_annotations(value):
     }
 
 
+def _validate_http_endpoint(url: str) -> str:
+    """Validate an MCP endpoint before passing it to the HTTP transport."""
+    value = str(url or "").strip()
+    parsed = urlsplit(value)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise ValueError("MCP endpoint must be a valid HTTP(S) URL")
+    if parsed.username or parsed.password:
+        raise ValueError("Credentials must not be embedded in the MCP URL")
+    if parsed.fragment:
+        raise ValueError("MCP endpoint URL must not contain a fragment")
+    return value
+
+
 class MCPRuntime:
     def __init__(self):
         self._lock = threading.RLock()
@@ -36,11 +50,13 @@ class MCPRuntime:
             if self._loop and self._loop.is_running():
                 return
             ready = threading.Event()
+            startup_error = []
 
             def run():
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
-                self._loop = loop
+                with self._lock:
+                    self._loop = loop
                 ready.set()
                 loop.run_forever()
                 pending = asyncio.all_tasks(loop)
@@ -49,20 +65,28 @@ class MCPRuntime:
                 if pending:
                     loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
                 loop.close()
+                with self._lock:
+                    if self._loop is loop:
+                        self._loop = None
 
             self._thread = threading.Thread(target=run, name="connected-apps-mcp", daemon=True)
             self._thread.start()
-            if not ready.wait(5) or not self._loop:
+            if not ready.wait(5):
                 raise RuntimeUnavailable("Could not start MCP runtime")
 
     def _submit(self, coro, timeout=60):
         self._ensure_loop()
-        future = asyncio.run_coroutine_threadsafe(coro, self._loop)
+        with self._lock:
+            loop = self._loop
+        if not loop or not loop.is_running():
+            coro.close()
+            raise RuntimeUnavailable("MCP runtime event loop is not running")
+        future = asyncio.run_coroutine_threadsafe(coro, loop)
         try:
             return future.result(timeout=timeout)
         except TimeoutError:
             future.cancel()
-            raise RuntimeUnavailable(f"MCP operation timed out after {timeout}s")
+            raise RuntimeUnavailable(f"MCP operation timed out after {timeout}s") from None
 
     async def _connect(self, cid, factory):
         try:
@@ -89,61 +113,92 @@ class MCPRuntime:
                 }
                 for tool in result.tools
             ]
-            old = self._sessions.pop(cid, None)
-            if old:
-                await old[0].aclose()
             with self._lock:
+                old = self._sessions.pop(cid, None)
+                self._tools.pop(cid, None)
                 self._sessions[cid] = (stack, session)
                 self._tools[cid] = tools
+            if old:
+                await old[0].aclose()
             return tools
         except BaseException:
             await stack.aclose()
             raise
 
     def connect_stdio(self, cid, command, args=None, env=None):
-        if not command or not command.strip():
+        if not command or not str(command).strip():
             raise ValueError("MCP command cannot be empty")
+        if not isinstance(args, (list, tuple)) or not all(isinstance(x, str) for x in (args or [])):
+            raise ValueError("MCP arguments must be a list of strings")
+        if env is not None and (not isinstance(env, dict) or not all(
+            isinstance(k, str) and isinstance(v, str) for k, v in env.items()
+        )):
+            raise ValueError("MCP environment must be a string mapping")
 
         async def factory():
             from mcp.client.stdio import stdio_client, StdioServerParameters
-            params = StdioServerParameters(command=command, args=list(args or []), env=dict(env or {}) or None)
+            params = StdioServerParameters(command=str(command).strip(), args=list(args or []), env=dict(env or {}) or None)
             return stdio_client(params)
 
         return self._submit(self._connect(cid, factory), 90)
 
     def connect_http(self, cid, url, headers=None):
-        if not url.lower().startswith(("https://", "http://")):
-            raise ValueError("MCP URL must be HTTP(S)")
+        url = _validate_http_endpoint(url)
+        headers = dict(headers or {})
+        if not all(isinstance(k, str) and isinstance(v, str) for k, v in headers.items()):
+            raise ValueError("MCP HTTP headers must be string values")
+        if any("\r" in v or "\n" in v for v in headers.values()):
+            raise ValueError("MCP HTTP headers cannot contain newline characters")
 
         async def factory():
             from mcp.client.streamable_http import streamablehttp_client
-            return streamablehttp_client(url, headers=dict(headers or {}))
+            return streamablehttp_client(url, headers=headers)
 
         return self._submit(self._connect(cid, factory), 90)
 
     async def _call(self, cid, tool, args):
-        entry = self._sessions.get(cid)
+        with self._lock:
+            entry = self._sessions.get(cid)
+            allowed = {row["name"] for row in self._tools.get(cid, [])}
         if not entry:
             raise RuntimeUnavailable("MCP connection is not active")
-        if tool not in {row["name"] for row in self._tools.get(cid, [])}:
+        if tool not in allowed:
             raise ValueError("Tool is not registered")
+        if not isinstance(args, dict):
+            raise ValueError("Tool arguments must be a JSON object")
         result = await entry[1].call_tool(tool, arguments=args)
         if getattr(result, "isError", False):
-            raise RuntimeError("MCP tool returned an error")
-        return [
-            {"type": getattr(item, "type", "unknown"), "text": getattr(item, "text", "")}
-            for item in getattr(result, "content", [])
-        ]
+            # MCP error content is useful to the caller, but don't expose it as
+            # a successful tool result.
+            detail = "; ".join(
+                str(getattr(item, "text", "")).strip()
+                for item in getattr(result, "content", [])
+                if getattr(item, "text", None)
+            )
+            raise RuntimeError(detail or "MCP tool returned an error")
+        content = []
+        for item in getattr(result, "content", []):
+            row = {"type": getattr(item, "type", "unknown")}
+            text = getattr(item, "text", None)
+            if text is not None:
+                row["text"] = text
+            # Preserve image/audio/resource metadata when available without
+            # serializing arbitrary SDK objects.
+            mime = getattr(item, "mimeType", None)
+            if mime:
+                row["mime_type"] = mime
+            content.append(row)
+        structured = getattr(result, "structuredContent", None)
+        return {"content": content, "structured_content": structured}
 
     async def _close(self, cid):
-        entry = self._sessions.pop(cid, None)
         with self._lock:
+            entry = self._sessions.pop(cid, None)
             self._tools.pop(cid, None)
         if entry:
             await entry[0].aclose()
 
     def tools(self, cid):
-        # Return a detached snapshot; callers may serialize it on other threads.
         with self._lock:
             return [dict(row) for row in self._tools.get(cid, [])]
 
@@ -159,10 +214,11 @@ class MCPRuntime:
     def shutdown(self):
         with self._lock:
             connection_ids = list(self._sessions)
+            loop = self._loop
         for cid in connection_ids:
             self.disconnect(cid)
-        if self._loop and self._loop.is_running():
-            self._loop.call_soon_threadsafe(self._loop.stop)
+        if loop and loop.is_running():
+            loop.call_soon_threadsafe(loop.stop)
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=3)
 
