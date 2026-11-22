@@ -234,6 +234,47 @@ class ConnectedAppsService:
         runtime.disconnect(cid)
         return self.store.remove_connection(cid)
 
+    def health_check(self, cid):
+        row = self.store.get_connection(cid)
+        if not row:
+            return {"id": cid, "status": "missing", "healthy": False}
+        checked_at = time.time()
+        metadata = dict(row.get("metadata") or {})
+        try:
+            healthy = bool(runtime.health(cid))
+            metadata["health"] = "healthy" if healthy else "unavailable"
+            metadata["last_health_check"] = checked_at
+            row["metadata"] = metadata
+            if healthy:
+                row["status"] = ConnectionStatus.CONNECTED.value
+                row["last_error"] = ""
+            else:
+                row["status"] = ConnectionStatus.ERROR.value
+                row["last_error"] = "MCP session is not active"
+            row["updated_at"] = checked_at
+            self.store.upsert_connection(row)
+            return {"id": cid, "status": row["status"], "healthy": healthy,
+                    "checked_at": checked_at, "error": row["last_error"]}
+        except Exception as exc:
+            metadata["health"] = "unhealthy"
+            metadata["last_health_check"] = checked_at
+            row["metadata"] = metadata
+            row["status"] = ConnectionStatus.ERROR.value
+            row["last_error"] = _safe_error(exc)
+            row["updated_at"] = checked_at
+            self.store.upsert_connection(row)
+            runtime.disconnect(cid)
+            return {"id": cid, "status": row["status"], "healthy": False,
+                    "checked_at": checked_at, "error": row["last_error"]}
+
+    def health_check_all(self):
+        results = []
+        for row in self.connections():
+            if not row.get("enabled", True):
+                continue
+            results.append(self.health_check(row.get("id", "")))
+        return results
+
     def tools(self, cid):
         return runtime.tools(cid)
 
@@ -256,7 +297,32 @@ class ConnectedAppsService:
         return True
 
     def call_tool(self, cid, tool, arguments=None):
-        return runtime.call(cid, tool, arguments or {})
+        started = time.time()
+        row = self.store.get_connection(cid)
+        if not row:
+            raise RuntimeError("Connected app does not exist")
+        try:
+            result = runtime.call(cid, tool, arguments or {})
+        except Exception as exc:
+            metadata = dict(row.get("metadata") or {})
+            metadata["last_tool_activity"] = started
+            metadata["last_tool_name"] = str(tool)[:200]
+            metadata["last_tool_error"] = _safe_error(exc)
+            metadata["tool_call_count"] = int(metadata.get("tool_call_count", 0)) + 1
+            row["metadata"] = metadata
+            row["updated_at"] = time.time()
+            self.store.upsert_connection(row)
+            raise
+        metadata = dict(row.get("metadata") or {})
+        metadata["last_tool_activity"] = started
+        metadata["last_tool_name"] = str(tool)[:200]
+        metadata["last_tool_error"] = ""
+        metadata["tool_call_count"] = int(metadata.get("tool_call_count", 0)) + 1
+        metadata["last_tool_duration_ms"] = round((time.time() - started) * 1000, 2)
+        row["metadata"] = metadata
+        row["updated_at"] = time.time()
+        self.store.upsert_connection(row)
+        return result
 
 
 service = ConnectedAppsService()
