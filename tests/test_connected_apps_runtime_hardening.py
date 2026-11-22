@@ -172,3 +172,90 @@ def test_mcp_headers_reject_invalid_names_and_transport_owned_headers():
         _validate_headers({"Host":"example.com"})
     with pytest.raises(ValueError):
         _validate_headers({"X-Trace":"bad\r\nInjected: true"})
+
+def test_connected_apps_health_check_updates_connection_metadata(monkeypatch):
+    import importlib
+    module = importlib.import_module("core.connected_apps.service")
+    from core.connected_apps.service import ConnectedAppsService
+
+    class Store:
+        def __init__(self):
+            self.rows = {"c1": {"id": "c1", "status": "connected", "enabled": True,
+                "metadata": {}, "last_error": "", "updated_at": 0}}
+        def get_connection(self, cid):
+            return dict(self.rows[cid]) if cid in self.rows else None
+        def upsert_connection(self, row):
+            self.rows[row["id"]] = dict(row)
+        def list_connections(self):
+            return list(self.rows.values())
+
+    store = Store()
+    svc = ConnectedAppsService(store=store)
+    monkeypatch.setattr(module.runtime, "health", lambda cid: True)
+    result = svc.health_check("c1")
+    assert result["healthy"] is True
+    row = store.get_connection("c1")
+    assert row["status"] == "connected"
+    assert row["metadata"]["health"] == "healthy"
+    assert row["metadata"]["last_health_check"] > 0
+
+def test_connected_apps_health_failure_marks_error_and_disconnects(monkeypatch):
+    import importlib
+    module = importlib.import_module("core.connected_apps.service")
+    from core.connected_apps.service import ConnectedAppsService
+
+    class Store:
+        def __init__(self):
+            self.rows = {"c1": {"id": "c1", "status": "connected", "enabled": True,
+                "metadata": {}, "last_error": "", "updated_at": 0}}
+        def get_connection(self, cid):
+            return dict(self.rows[cid]) if cid in self.rows else None
+        def upsert_connection(self, row):
+            self.rows[row["id"]] = dict(row)
+        def list_connections(self):
+            return list(self.rows.values())
+
+    store = Store()
+    svc = ConnectedAppsService(store=store)
+    monkeypatch.setattr(module.runtime, "health", lambda cid: (_ for _ in ()).throw(RuntimeError("server unavailable")))
+    disconnected = []
+    monkeypatch.setattr(module.runtime, "disconnect", lambda cid: disconnected.append(cid))
+    result = svc.health_check("c1")
+    assert result["healthy"] is False
+    assert store.get_connection("c1")["status"] == "error"
+    assert store.get_connection("c1")["metadata"]["health"] == "unhealthy"
+    assert disconnected == ["c1"]
+
+def test_connected_apps_tool_calls_record_activity_and_errors(monkeypatch):
+    import importlib
+    module = importlib.import_module("core.connected_apps.service")
+    from core.connected_apps.service import ConnectedAppsService
+
+    class Store:
+        def __init__(self):
+            self.rows = {"c1": {"id": "c1", "status": "connected", "enabled": True,
+                "metadata": {}, "last_error": "", "updated_at": 0}}
+        def get_connection(self, cid):
+            return dict(self.rows[cid]) if cid in self.rows else None
+        def upsert_connection(self, row):
+            self.rows[row["id"]] = dict(row)
+        def list_connections(self):
+            return list(self.rows.values())
+
+    store = Store()
+    svc = ConnectedAppsService(store=store)
+    monkeypatch.setattr(module.runtime, "call", lambda cid, tool, args: [{"type": "text", "text": "ok"}])
+    result = svc.call_tool("c1", "search", {"query": "test"})
+    metadata = store.get_connection("c1")["metadata"]
+    assert result[0]["text"] == "ok"
+    assert metadata["last_tool_name"] == "search"
+    assert metadata["tool_call_count"] == 1
+    assert metadata["last_tool_activity"] > 0
+    assert metadata["last_tool_duration_ms"] >= 0
+
+    monkeypatch.setattr(module.runtime, "call", lambda cid, tool, args: (_ for _ in ()).throw(RuntimeError("failed")))
+    with pytest.raises(RuntimeError):
+        svc.call_tool("c1", "search", {})
+    metadata = store.get_connection("c1")["metadata"]
+    assert metadata["tool_call_count"] == 2
+    assert metadata["last_tool_error"].startswith("RuntimeError:")
