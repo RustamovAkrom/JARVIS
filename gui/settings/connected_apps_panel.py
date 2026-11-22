@@ -743,7 +743,7 @@ class ConnectedAppsPanel(QWidget):
                 if not isinstance(parsed,list) or not all(isinstance(x,str) for x in parsed):
                     raise ValueError("Arguments must be a JSON array of strings.")
             except Exception as exc:
-                QMessageBox.warning(self,"Invalid configuration",f"{exc}\\n\\nExample: [\\"-y\\", \\"package-name\\"]")
+                QMessageBox.warning(self, "Invalid configuration", f"{exc}\\n\\nExample: [\\"-y\\", \\"package-name\\"]")
                 return
         env={}
         for key in template.env_keys:
