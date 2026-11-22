@@ -568,13 +568,27 @@ class ConnectedAppsPanel(QWidget):
             worker = _Worker(lambda: service.set_enabled(cid, value, reconnect=value))
             worker.signals.finished.connect(self._enabled_changed)
             self.pool.start(worker)
+
         def save_auto(value):
-            current=service.store.get_connection(cid)
-            meta=dict(current.get("metadata") or {})
-            meta["auto_approve_read_only"]=bool(value)
-            current["metadata"]=meta
-            service.store.upsert_connection(current)
-            self.refresh()
+            try:
+                current = service.store.get_connection(cid)
+                if not current:
+                    raise RuntimeError("Connection no longer exists")
+                meta = dict(current.get("metadata") or {})
+                meta["auto_approve_read_only"] = bool(value)
+                current["metadata"] = meta
+                service.store.upsert_connection(current)
+                self.status.setText(
+                    "Read-only auto-run enabled for trusted MCP tools."
+                    if value else "Read-only auto-run disabled."
+                )
+                self.refresh()
+            except Exception as exc:
+                QMessageBox.warning(self, "Connected Apps permissions", self._friendly_error(str(exc)))
+                auto_read.blockSignals(True)
+                auto_read.setChecked(metadata.get("auto_approve_read_only") is True)
+                auto_read.blockSignals(False)
+
         enabled.toggled.connect(save_enabled)
         auto_read.toggled.connect(save_auto)
         dialog.exec()
