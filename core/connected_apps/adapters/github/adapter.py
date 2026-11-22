@@ -95,6 +95,9 @@ class GitHubAdapter(NativeAppAdapter):
         if tool_name=="github_search_repositories":
             limit=max(1,min(int(args.get("limit",10)),30))
             return self._request(connection_id,"GET","/search/repositories",{"q":args["query"],"per_page":limit})
+        if tool_name=="github_search_code":
+            limit=max(1,min(int(args.get("limit",10)),30))
+            return self._request(connection_id,"GET","/search/code",{"q":args["query"],"per_page":limit})
         repo=self._repo(args.get("repository"))
         if tool_name=="github_list_issues":
             return self._request(connection_id,"GET",f"/repos/{repo}/issues",{"state":args.get("state","open"),"per_page":max(1,min(int(args.get("limit",30)),100))})
@@ -114,9 +117,6 @@ class GitHubAdapter(NativeAppAdapter):
             return result
         if tool_name=="github_create_issue":
             return self._request(connection_id,"POST",f"/repos/{repo}/issues",payload={"title":args["title"],"body":args.get("body",""),"labels":args.get("labels",[])})
-        if tool_name=="github_search_code":
-            limit=max(1,min(int(args.get("limit",10)),30))
-            return self._request(connection_id,"GET","/search/code",{"q":args["query"],"per_page":limit})
         if tool_name=="github_get_pull_request":
             return self._request(connection_id,"GET",f"/repos/{repo}/pulls/{int(args['number'])}")
         if tool_name=="github_list_commits":
