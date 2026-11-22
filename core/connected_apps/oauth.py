@@ -235,6 +235,8 @@ def exchange_code(config: OAuthConfig, code: str, verifier: str, redirect_uri: s
         "client_id": config.client_id,
         "code_verifier": verifier,
     }
+    if config.extra_authorize_params and config.extra_authorize_params.get("resource"):
+        payload["resource"] = config.extra_authorize_params["resource"]
     if config.client_secret:
         payload["client_secret"] = config.client_secret
     response = httpx.post(
