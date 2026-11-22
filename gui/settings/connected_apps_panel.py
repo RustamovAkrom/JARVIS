@@ -61,8 +61,8 @@ class ConnectedAppsPanel(QWidget):
         github_name.setObjectName("nativeAppName")
         github_header.addWidget(github_name)
         github_header.addStretch(1)
-        github_status=QLabel("Native integration")
-        github_status.setObjectName("nativeAppStatus")
+        self.github_status_label=QLabel("Not connected")
+        self.github_status_label.setObjectName("nativeAppStatus")
         github_header.addWidget(github_status)
         github_layout.addLayout(github_header)
         github_summary=QLabel("Repositories, issues, pull requests and code.")
@@ -94,8 +94,8 @@ class ConnectedAppsPanel(QWidget):
         calendar_name.setObjectName("nativeAppName")
         calendar_header.addWidget(calendar_name)
         calendar_header.addStretch(1)
-        calendar_status=QLabel("Native integration")
-        calendar_status.setObjectName("nativeAppStatus")
+        self.calendar_status_label=QLabel("Not connected")
+        self.calendar_status_label.setObjectName("nativeAppStatus")
         calendar_header.addWidget(calendar_status)
         calendar_layout.addLayout(calendar_header)
         calendar_summary=QLabel("View events and create events with confirmation.")
@@ -371,6 +371,11 @@ class ConnectedAppsPanel(QWidget):
             self.list.addItem(item)
             if selected and item.data(Qt.ItemDataRole.UserRole)==selected:
                 self.list.setCurrentItem(item)
+        native_status={str(row.get("app_id") or "").casefold(): str(row.get("status") or "unknown") for row in native_rows}
+        self.github_status_label.setText(native_status.get("github","not connected").replace("_"," ").title())
+        self.calendar_status_label.setText(native_status.get("google_calendar","not connected").replace("_"," ").title())
+        self.add_github_btn.setText("Reconnect" if native_status.get("github") else "Connect")
+        self.add_calendar_btn.setText("Reconnect" if native_status.get("google_calendar") else "Connect")
         self.native_list.clear()
         for row in native_rows:
             app_id = str(row.get("app_id") or "").casefold()
