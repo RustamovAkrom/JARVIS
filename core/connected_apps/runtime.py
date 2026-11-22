@@ -76,8 +76,9 @@ class MCPRuntime:
             def run():
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
-                with self._lock:
-                    self._loop = loop
+                # Publish the loop before signaling readiness. Do not acquire
+                # self._lock here: _ensure_loop holds it while waiting.
+                self._loop = loop
                 ready.set()
                 loop.run_forever()
                 pending = asyncio.all_tasks(loop)
