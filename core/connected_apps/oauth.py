@@ -91,7 +91,6 @@ class OAuthCallbackServer:
                             self.send_response(409)
                             body = b"Authorization callback already received."
                         elif not secrets.compare_digest(supplied, owner.state.state):
-                            owner.state.error = "OAuth state validation failed"
                             self.send_response(400)
                             body = b"Invalid OAuth state. You can close this window."
                         elif query.get("error"):
