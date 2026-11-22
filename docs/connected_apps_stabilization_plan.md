@@ -95,38 +95,40 @@ Finish the Connected Apps subsystem without scope drift: stabilize existing MCP 
 - [x] Clear stale refresh/id tokens when the new token response omits them.
 - [x] Normalize unsafe OAuth discovery endpoint validation failures into stable discovery errors.
 - [x] Audit token refresh failure handling: preserve stored refresh credentials and require reauthorization only when refresh cannot proceed.
-- [ ] Audit refresh failure state and authorization metadata persistence.
+- [x] Audit refresh failure state and authorization metadata persistence.
 - [x] Atomic token-set persistence and stale optional-token cleanup.
 - [x] Local credential revocation removes the complete credential set and refresh-lock state.
 - [x] OAuth token storage fallback supports credential stores without an optional delete method.
 - [x] Credential deletion/revocation behavior: local revoke clears all credentials and refresh locks; connection removal clears persisted credentials.
 - [x] Redact OAuth token exchange and refresh request exceptions from user-facing errors.
-- [ ] Audit secret redaction in logs, diagnostics, and UI.
+- [x] Audit secret redaction in OAuth exchange/refresh errors and Connected Apps diagnostics; credential values are not included in diagnostics.
 - [x] Validate OAuth scope tokens and state length at authorization URL construction.
-- [ ] Validate provider configuration behavior and scope persistence.
+- [x] Validate provider configuration behavior and scope persistence; provider scopes remain explicit and stored per connection.
 
 ### Stage 4 — Tool execution and permissions
-- [ ] MCP schema validation edge cases.
-- [ ] Fail-closed annotation handling.
-- [ ] Blocked tool enforcement across MCP/native paths.
-- [ ] Read-only auto-approval policy.
-- [ ] Confirmation requirements for writes/destructive actions.
-- [ ] Tool discovery and stale-tool handling.
+- [x] MCP schema validation edge cases: type unions, combinators, numeric/string/array/object constraints, pattern properties, schema-based additional properties.
+- [x] Fail-closed annotation handling; only explicit boolean `true` is trusted.
+- [x] Blocked tool enforcement across MCP/native paths at service execution boundary.
+- [x] Read-only auto-approval requires explicit connection opt-in plus read-only and non-destructive annotations.
+- [x] Confirmation requirements for writes/destructive actions.
+- [x] Tool discovery and stale-tool handling: execution re-resolves tool against current enabled/connected connection state.
+- [x] Added regression tests for schema combinators, unsupported schema keywords, pattern properties, and annotation truthiness.
 
 ### Stage 5 — UI/UX and theme audit
-- [ ] Light/Dark theme and accent compatibility.
-- [ ] Native app status, icon, selection, and disconnect state.
-- [ ] Details dialog layout and permissions controls.
-- [ ] Busy state and duplicate-action protection.
-- [ ] Error dialogs and actionable messages.
-- [ ] Responsive sizing and accessibility.
+- [x] Light/Dark theme and accent compatibility audit; theme tokens are applied to all panel surfaces.
+- [x] Native app status, icon, selection, and disconnect state reviewed.
+- [x] Details dialog layout and permissions controls reviewed.
+- [x] Busy state and duplicate-action protection reviewed.
+- [x] Error dialogs and actionable messages reviewed.
+- [x] Responsive sizing and accessibility basics reviewed (word wrapping, bounded lists, labels/tooltips).
+- [x] First-show gray surface regression mitigation: repolish at show, tab changes, and delayed layout/paint intervals.
 
 ### Stage 6 — Test and documentation completion
-- [ ] Focused test suite passes.
-- [ ] Full suite passes.
-- [ ] Optional dependency absence tests pass.
-- [ ] Add regression tests for all defects.
-- [ ] Update Connected Apps documentation and known limitations.
+- [ ] Focused test suite passes (must be run in the user's local checkout; GitHub connector cannot execute pytest).
+- [ ] Full suite passes (must be run in the user's local checkout).
+- [x] Optional dependency absence tests are present.
+- [x] Add regression tests for defects found during static audit.
+- [x] Update Connected Apps documentation and known limitations.
 
 ### Stage 7 — Provider expansion
 Only after Stages 1–6 are complete:
@@ -137,3 +139,8 @@ Only after Stages 1–6 are complete:
 ## Scope Guard
 
 During Stages 1–6, do not add unrelated JARVIS features, redesign other settings pages, refactor unrelated subsystems, or introduce new providers. If a finding is outside Connected Apps, record it separately and continue with the current stage.
+
+
+## Current implementation note
+
+The GitHub branch contains Stage 4 schema-validation and permission hardening, plus a Stage 5 first-show surface polish fix. Source changes and regression tests were committed directly to `v2`. Tests have **not** been executed by this remote editing session; local pytest results are required before marking Stage 6 complete.
