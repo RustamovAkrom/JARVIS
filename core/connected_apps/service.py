@@ -282,7 +282,7 @@ class ConnectedAppsService:
             if last_result and last_result.get("status") == ConnectionStatus.CONNECTED.value:
                 return last_result
             if attempt + 1 < attempts:
-                runtime.disconnect(cid)
+                self._cleanup_failed_runtime_connection(cid)
                 time.sleep(max(0.0, float(backoff)) * (2 ** attempt))
         return last_result
 
