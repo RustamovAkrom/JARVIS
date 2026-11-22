@@ -84,6 +84,9 @@ def test_stdio_environment_is_persisted_as_credentials_and_restored(monkeypatch,
         def get_credential(self, cid, key):
             return self.credentials.get((cid, key), "")
 
+        def delete_credential(self, cid, key):
+            self.credentials.pop((cid, key), None)
+
         def remove_connection(self, cid):
             return self.rows.pop(cid, None) is not None
 
@@ -153,3 +156,9 @@ def test_sse_connection_persists_transport_and_reconnects(monkeypatch):
     second=svc.reconnect("sse-1",attempts=1)
     assert second["status"]=="connected"
     assert calls[-1][2]=={"Authorization":"Bearer secret"}
+    svc.connect_stdio(descriptor, connection_id="c1")
+    assert store.get_credential("c1", "stdio_env:API_TOKEN") == "secret-value"
+    descriptor.env={}
+    svc.connect_stdio(descriptor, connection_id="c1")
+    assert store.get_credential("c1", "stdio_env:API_TOKEN") == ""
+    assert store.get_connection("c1")["metadata"]["env_keys"] == []
