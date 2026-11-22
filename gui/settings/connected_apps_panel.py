@@ -26,7 +26,7 @@ class ConnectedAppsPanel(QWidget):
         subtitle.setObjectName("appsSubtitle");subtitle.setWordWrap(True);root.addWidget(title);root.addWidget(subtitle)
         native_group=QGroupBox("Apps")
         native_layout=QVBoxLayout(native_group);native_layout.setSpacing(8)
-        native_description=QLabel("Connect ready-to-use integrations. Authorization opens in your browser when supported.")
+        native_description=QLabel("Ready-to-use integrations. GitHub OAuth requires a registered OAuth App Client ID and Client Secret; authorization opens in your browser.")
         native_description.setWordWrap(True);native_layout.addWidget(native_description)
         native_toolbar=QHBoxLayout()
         self.add_github_btn=QPushButton("Connect GitHub")
@@ -71,7 +71,7 @@ class ConnectedAppsPanel(QWidget):
             self.runtime_help.setText("Connected Apps runtime is available.")
 
     def _busy(self,busy,message=""):
-        for w in (self.add_catalog_btn,self.add_stdio_btn,self.add_http_btn,self.add_sse_btn,self.add_oauth_btn,self.add_mcp_oauth_btn,self.reconnect_all_btn,self.health_all_btn,self.connect_btn,self.rename_btn,self.disconnect_btn,self.remove_btn,self.block_tool_btn,self.allow_tool_btn,self.copy_diagnostics_btn,self.health_btn,self.enabled_checkbox,self.auto_read_checkbox):w.setEnabled(not busy)
+        for w in (self.add_github_btn,self.add_catalog_btn,self.add_stdio_btn,self.add_http_btn,self.add_sse_btn,self.add_oauth_btn,self.add_mcp_oauth_btn,self.reconnect_all_btn,self.health_all_btn,self.connect_btn,self.rename_btn,self.disconnect_btn,self.remove_btn,self.block_tool_btn,self.allow_tool_btn,self.copy_diagnostics_btn,self.health_btn,self.enabled_checkbox,self.auto_read_checkbox):w.setEnabled(not busy)
         if message:self.status.setText(message)
     def refresh(self,*_):
         query=self.search.text().casefold().strip();selected=self.selected_id();self.list.clear();visible=[]
