@@ -43,7 +43,9 @@ def create_pkce() -> tuple[str, str]:
 
 
 def build_authorization_url(config: OAuthConfig, state: OAuthState, challenge: str) -> str:
-    params = {
+    # Provider-specific extras must never override PKCE/state/redirect fields.
+    params = dict(config.extra_authorize_params or {})
+    params.update({
         "response_type": "code",
         "client_id": config.client_id,
         "redirect_uri": config.redirect_uri,
@@ -51,8 +53,7 @@ def build_authorization_url(config: OAuthConfig, state: OAuthState, challenge: s
         "state": state.state,
         "code_challenge": challenge,
         "code_challenge_method": "S256",
-    }
-    params.update(config.extra_authorize_params or {})
+    })
     separator = "&" if "?" in config.authorization_url else "?"
     return config.authorization_url + separator + urllib.parse.urlencode(params)
 
