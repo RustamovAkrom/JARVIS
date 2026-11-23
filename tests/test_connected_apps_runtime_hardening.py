@@ -698,7 +698,7 @@ def test_mcp_transport_factory_returns_async_context_manager_not_coroutine(
 
 def test_mcp_transport_contexts_are_closed_by_their_owner_task(monkeypatch):
     import asyncio
-    import mcp
+    mcp = pytest.importorskip("mcp")
     from types import SimpleNamespace
     from core.connected_apps.runtime import MCPRuntime
 
@@ -770,7 +770,7 @@ def test_mcp_transport_contexts_are_closed_by_their_owner_task(monkeypatch):
 
 def test_mcp_shutdown_closes_all_sessions_from_owner_tasks(monkeypatch):
     import asyncio
-    import mcp
+    mcp = pytest.importorskip("mcp")
     from types import SimpleNamespace
     from core.connected_apps.runtime import MCPRuntime
 
