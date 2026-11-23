@@ -192,8 +192,8 @@ def _validate_arguments(schema: dict[str, Any], arguments: Any) -> None:
     # servers. JSON serialization also rejects non-JSON Python objects.
     import json
     try:
-        schema_bytes = len(json.dumps(schema, ensure_ascii=False).encode("utf-8"))
-        argument_bytes = len(json.dumps(arguments, ensure_ascii=False).encode("utf-8"))
+        schema_bytes = len(json.dumps(schema, ensure_ascii=False, allow_nan=False).encode("utf-8"))
+        argument_bytes = len(json.dumps(arguments, ensure_ascii=False, allow_nan=False).encode("utf-8"))
     except (TypeError, ValueError, RecursionError):
         raise ValueError("Tool schema or arguments are not valid JSON data") from None
     if schema_bytes > 256 * 1024:
