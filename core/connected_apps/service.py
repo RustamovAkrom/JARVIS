@@ -357,52 +357,54 @@ class ConnectedAppsService:
         data = _serialize(row)
         self.store.upsert_connection(data)
         self.store.set_credential(cid, "access_token", access_token)
-        # GitHub authentication must be verified before the UI marks the
-        # connection usable. A 401 means the OAuth token is invalid and must
-        # not be presented as Connected. Keep the existing behavior for other
-        # native providers to avoid changing their lifecycle here.
+        # Never mark an OAuth native app connected until its bearer token
+        # has passed the provider health check. This applies to GitHub and
+        # Google Calendar equally; Telegram has its own MTProto login path.
         try:
             healthy = bool(adapter.health_check(cid))
-            if adapter.descriptor.id == "github" and not healthy:
-                raise RuntimeError("GitHub authorization health check failed")
-            row.metadata["health"] = "healthy" if healthy else "unavailable"
-            row.last_error = "" if healthy else "Native adapter health check failed"
+            if not healthy:
+                raise RuntimeError(f"{adapter.descriptor.name} authorization health check failed")
+            row.metadata["health"] = "healthy"
+            row.last_error = ""
             row.status = ConnectionStatus.CONNECTED
         except Exception as exc:
             row.metadata["health"] = "unhealthy"
             row.last_error = _safe_error(exc)
-            row.status = (
-                ConnectionStatus.ERROR
-                if adapter.descriptor.id == "github"
-                else ConnectionStatus.CONNECTED
-            )
+            row.status = ConnectionStatus.ERROR
         result = _serialize(row)
         self.store.upsert_connection(result)
         return result
 
     @_serialized_connection_operation
-    def reauthorize_github(self, *, client_id, client_secret="", connection_id="github-native"):
-        """Run a fresh GitHub OAuth flow; never retry an existing bearer token."""
-        adapter = self._native_adapters.get("github")
+    def reauthorize_native_oauth(
+        self, app_id, provider_id, *, client_id, client_secret="",
+        connection_id=None, scopes=None,
+    ):
+        """Run a fresh provider OAuth flow without reusing an existing bearer token."""
+        normalized_app = str(app_id or "").casefold()
+        normalized_provider = str(provider_id or "").casefold()
+        adapter = self._native_adapters.get(normalized_app)
         if adapter is None:
-            raise RuntimeError("GitHub native adapter is unavailable")
+            raise RuntimeError(f"{app_id} native adapter is unavailable")
+        if str(adapter.descriptor.auth_provider or "").casefold() != normalized_provider:
+            raise ValueError("OAuth provider does not match the native Connected App")
         if not str(client_id or "").strip():
-            raise ValueError("GitHub OAuth Client ID is required")
+            raise ValueError("OAuth Client ID is required")
 
-        cid = str(connection_id or "github-native")
+        cid = str(connection_id or f"{normalized_app}-native")
         row = self.store.get_connection(cid)
-        if row and str(row.get("app_id") or "").casefold() != "github":
+        if row and str(row.get("app_id") or "").casefold() != normalized_app:
             raise ValueError("Connection ID belongs to a different Connected App")
 
-        # Remove only bearer-token material before opening OAuth. Preserve the
-        # OAuth app configuration so the user does not have to re-enter it.
+        # Remove bearer tokens only. Keep the OAuth client configuration and
+        # scopes so users can reconnect without re-entering their app settings.
         delete_credential = getattr(self.store, "delete_credential", None)
-        token_keys = ("access_token", "refresh_token", "id_token", "expires_at", "token_type")
-        for key in token_keys:
+        set_credential = getattr(self.store, "set_credential", None)
+        for key in ("access_token", "refresh_token", "id_token", "expires_at", "token_type"):
             if callable(delete_credential):
                 delete_credential(cid, key)
-            else:
-                self.store.set_credential(cid, key, "")
+            elif callable(set_credential):
+                set_credential(cid, key, "")
 
         if row:
             row["status"] = ConnectionStatus.CONNECTING.value
@@ -416,16 +418,17 @@ class ConnectedAppsService:
         try:
             from core.connected_apps.auth_service import OAuthService
 
-            auth = OAuthService(self.store)
-            auth.authorize_connection(
-                cid, "github", str(client_id).strip(),
+            selected_scopes = list(scopes or adapter.descriptor.scopes)
+            OAuthService(self.store).authorize_connection(
+                cid, normalized_provider, str(client_id).strip(),
+                scopes=selected_scopes,
                 client_secret=str(client_secret or ""),
             )
             fresh_token = self.store.get_credential(cid, "access_token")
             if not fresh_token:
-                raise RuntimeError("GitHub OAuth completed without an access token")
+                raise RuntimeError(f"{adapter.descriptor.name} OAuth completed without an access token")
             return self.connect_native(
-                "github", access_token=fresh_token, connection_id=cid
+                normalized_app, access_token=fresh_token, connection_id=cid
             )
         except Exception as exc:
             failed = self.store.get_connection(cid)
@@ -438,6 +441,16 @@ class ConnectedAppsService:
                 failed["updated_at"] = time.time()
                 self.store.upsert_connection(failed)
             raise
+
+    @_serialized_connection_operation
+    def reauthorize_github(self, *, client_id, client_secret="", connection_id="github-native"):
+        """Compatibility wrapper for the GitHub OAuth card action."""
+        return self.reauthorize_native_oauth(
+            "github", "github",
+            client_id=client_id,
+            client_secret=client_secret,
+            connection_id=connection_id,
+        )
 
     @_serialized_connection_operation
     def begin_telegram_login(self, *, api_id, api_hash, phone):
@@ -651,17 +664,17 @@ class ConnectedAppsService:
                 disconnect = getattr(adapter, "disconnect", None)
                 if callable(disconnect):
                     disconnect(cid)
-                if app_id == "github":
-                    # Disconnect removes the local authorization token but
-                    # retains OAuth app credentials for the next fresh login.
+                if app_id in {"github", "google_calendar"}:
+                    # Disconnect removes provider bearer tokens while retaining
+                    # the OAuth client configuration for a later fresh login.
                     delete_credential = getattr(self.store, "delete_credential", None)
                     set_credential = getattr(self.store, "set_credential", None)
                     for key in ("access_token", "refresh_token", "id_token", "expires_at", "token_type"):
                         if callable(delete_credential):
                             delete_credential(cid, key)
                         elif callable(set_credential):
-                            # Compatibility with lightweight custom stores that
-                            # can write credentials but do not expose deletion.
+                            # Compatibility with lightweight stores that can
+                            # write credentials but do not expose deletion.
                             set_credential(cid, key, "")
             else:
                 runtime.disconnect(cid)
@@ -673,7 +686,7 @@ class ConnectedAppsService:
             raise RuntimeError(f"Disconnect failed: {row['last_error']}") from exc
         row["status"] = ConnectionStatus.DISCONNECTED.value
         row["last_error"] = ""
-        if str(row.get("app_id") or "").casefold() == "github":
+        if str(row.get("app_id") or "").casefold() in {"github", "google_calendar"}:
             metadata = dict(row.get("metadata") or {})
             metadata["health"] = "disconnected"
             row["metadata"] = metadata
