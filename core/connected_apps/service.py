@@ -387,7 +387,17 @@ class ConnectedAppsService:
         from core.connected_apps.agent import _validate_arguments
         args = {} if arguments is None else arguments
         _validate_arguments(tool.input_schema, args)
-        if not tool.read_only or tool.requires_confirmation:
+        # Native tools follow the same fail-closed policy as MCP tools:
+        # only explicitly trusted, read-only, non-destructive operations may
+        # bypass confirmation. The default is confirmation.
+        metadata = row.get("metadata") or {}
+        auto_approve = (
+            metadata.get("auto_approve_read_only") is True
+            and tool.read_only is True
+            and tool.destructive is not True
+            and tool.requires_confirmation is not True
+        )
+        if not auto_approve:
             from core import confirm
             return confirm.request(
                 key=f"connected_apps:{cid}:{tool_name}",
