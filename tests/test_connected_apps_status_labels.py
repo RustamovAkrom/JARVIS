@@ -1,13 +1,24 @@
 from pathlib import Path
 
 
-def test_native_app_status_labels_are_updated_and_connect_actions_are_hidden():
+def test_native_app_status_labels_show_connected_error_and_not_connected_states():
     source = Path("gui/settings/connected_apps_panel.py").read_text(encoding="utf-8")
 
-    assert 'self.github_status_label.setText(native_status.get("github"' in source
-    assert 'self.calendar_status_label.setText(native_status.get("google_calendar"' in source
-    assert 'self.add_github_btn.setVisible(not github_connected)' in source
-    assert 'self.add_calendar_btn.setVisible(not calendar_connected)' in source
+    assert 'self.github_status_label.setText(' in source
+    assert 'self.calendar_status_label.setText(' in source
+    assert '"Connected" if github_connected else' in source
+    assert '"Error" if github_status == "error" else "Not connected"' in source
+    assert '"Connected" if calendar_connected else' in source
+    assert '"Error" if calendar_status == "error" else "Not connected"' in source
+
+
+def test_native_app_connect_actions_are_visible_but_disabled_when_connected():
+    source = Path("gui/settings/connected_apps_panel.py").read_text(encoding="utf-8")
+
+    assert 'self.add_github_btn.setVisible(True)' in source
+    assert 'self.add_github_btn.setEnabled(not github_connected)' in source
+    assert 'self.add_calendar_btn.setVisible(True)' in source
+    assert 'self.add_calendar_btn.setEnabled(not calendar_connected)' in source
 
 
 def test_connected_app_selection_does_not_reveal_connect_action():
@@ -21,8 +32,6 @@ def test_connected_app_selection_does_not_reveal_connect_action():
 
 
 def test_connected_apps_panel_does_not_duplicate_settings_category_header():
-    from pathlib import Path
-
     source = Path("gui/settings/connected_apps_panel.py").read_text(encoding="utf-8")
     assert 'title=QLabel("Connected Apps")' not in source
     assert 'subtitle=QLabel("Connect trusted services and manage integrations, authorization and tool permissions.")' not in source
