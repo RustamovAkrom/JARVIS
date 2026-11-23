@@ -92,7 +92,7 @@ The live token tests above verify provider APIs, but cannot replace a real inter
 3. Read primary-calendar events.
 4. In a dedicated test calendar, create a clearly named test event and approve the confirmation prompt. Verify the event appears, then remove the test event manually.
 5. Restart JARVIS and verify the connection.
-6. Disconnect using the selected-connection management controls, then connect again and verify a new access token works.
+6. Click the Google Calendar card's Disconnect button, then click Reconnect and verify a new access token works.
 
 Do not use production calendars for write tests.
 
@@ -125,7 +125,7 @@ Use dedicated test endpoints for both streamable HTTP and SSE:
 
 The Qt tests exercise core high-risk dialogs and button paths offscreen. Before considering the feature fully verified, also run the visible UI in Windows:
 - GitHub Connect, Reconnect, Disconnect and the selected-connection details.
-- Google Calendar Connect, selected-connection Disconnect, health status and confirmation for event creation.
+- Google Calendar Connect, Reconnect, Disconnect, health status and confirmation for event creation.
 - Telegram Connect, verification code, 2FA, Permissions / chats, Cancel and Disconnect.
 - MCP add STDIO / HTTP / SSE, Connect, Reconnect all, Check health, Block / Allow tool, Rename, Disconnect, Remove and diagnostics.
 - Confirm busy states disable conflicting controls and every operation restores the controls after success and failure.
