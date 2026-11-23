@@ -69,7 +69,7 @@ class ConnectedAppsPanel(QWidget):
         self.add_github_btn.clicked.connect(self.connect_github_oauth)
         self.native_disconnect_btn=QPushButton("Disconnect")
         self.native_disconnect_btn.setProperty("compact", True)
-        self.native_disconnect_btn.clicked.connect(self.disconnect_native_selected)
+        self.native_disconnect_btn.clicked.connect(lambda: self.disconnect_native_app("github"))
         self.native_disconnect_btn.setEnabled(False)
         github_actions.addWidget(self.add_github_btn)
         github_actions.addWidget(self.native_disconnect_btn)
@@ -322,7 +322,9 @@ class ConnectedAppsPanel(QWidget):
         # Actions must reflect the real connection state, not merely the presence
         # of a persisted row. Stale/error rows are not usable connections.
         self.telegram_manage_btn.setEnabled(connected)
+        self.telegram_manage_btn.setVisible(connected)
         self.telegram_disconnect_btn.setEnabled(connected)
+        self.telegram_disconnect_btn.setVisible(connected)
 
     def connect_telegram_personal(self):
         api_id,ok=QInputDialog.getText(self,"Telegram Personal","Telegram API ID:")
@@ -592,6 +594,7 @@ class ConnectedAppsPanel(QWidget):
         self.add_github_btn.setVisible(True)
         self.add_github_btn.setEnabled(not github_connected)
         self.native_disconnect_btn.setEnabled(False)
+        self.native_disconnect_btn.setVisible(github_connected)
         self.add_calendar_btn.setText("Reconnect" if calendar_connected else "Connect")
         self.add_calendar_btn.setVisible(True)
         self.add_calendar_btn.setEnabled(not calendar_connected)
@@ -645,6 +648,21 @@ class ConnectedAppsPanel(QWidget):
         ]
         self.details.setPlainText("\n".join(lines))
         self.status.setText(f"{row.get('display_name','Connected App')}: {row.get('status','unknown')} · {len(tools)} tools")
+
+    def disconnect_native_app(self, app_id):
+        row = next((item for item in service.connections()
+                    if str(item.get("app_id") or "").casefold() == app_id.casefold()), None)
+        if not row or row.get("status") != "connected":
+            self.status.setText(f"{app_id}: no active connection to disconnect.")
+            self.refresh()
+            return
+        cid = row.get("id")
+        self._busy(True, f"Disconnecting {row.get('display_name', app_id)}…")
+        worker = _Worker(lambda: service.disconnect(cid))
+        worker.signals.finished.connect(
+            lambda result, error, connection_id=cid: self._native_disconnected(connection_id, result, error)
+        )
+        self.pool.start(worker)
 
     def disconnect_native_selected(self):
         cid=self.native_selected_id()
