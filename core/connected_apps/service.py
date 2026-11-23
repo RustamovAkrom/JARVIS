@@ -548,7 +548,13 @@ class ConnectedAppsService:
         if not row:
             return False
         try:
-            if not (row.get("metadata") or {}).get("native"):
+            metadata = row.get("metadata") or {}
+            if metadata.get("native"):
+                adapter = self._native_adapters.get(str(row.get("app_id") or "").casefold())
+                disconnect = getattr(adapter, "disconnect", None)
+                if callable(disconnect):
+                    disconnect(cid)
+            else:
                 runtime.disconnect(cid)
         except Exception as exc:
             row["status"] = ConnectionStatus.ERROR.value
@@ -565,8 +571,15 @@ class ConnectedAppsService:
     @_serialized_connection_operation
     def remove(self, cid):
         row = self.store.get_connection(cid)
-        if row and not (row.get("metadata") or {}).get("native"):
-            runtime.disconnect(cid)
+        if row:
+            metadata = row.get("metadata") or {}
+            if metadata.get("native"):
+                adapter = self._native_adapters.get(str(row.get("app_id") or "").casefold())
+                disconnect = getattr(adapter, "disconnect", None)
+                if callable(disconnect):
+                    disconnect(cid)
+            else:
+                runtime.disconnect(cid)
         return self.store.remove_connection(cid)
 
     @_serialized_connection_operation
