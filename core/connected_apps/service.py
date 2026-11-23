@@ -357,15 +357,17 @@ class ConnectedAppsService:
         data = _serialize(row)
         self.store.upsert_connection(data)
         self.store.set_credential(cid, "access_token", access_token)
+        # OAuth credentials are persisted at this point. A health-check failure
+        # should not erase the authenticated connection state: transient API
+        # failures and adapter health-check issues are surfaced separately.
         try:
-            if not adapter.health_check(cid):
-                raise RuntimeError("Telegram session health check failed")
-            row.status = ConnectionStatus.CONNECTED
-            row.metadata["health"] = "healthy"
+            healthy = bool(adapter.health_check(cid))
+            row.metadata["health"] = "healthy" if healthy else "unhealthy"
+            row.last_error = "" if healthy else "Native adapter health check failed"
         except Exception as exc:
-            row.status = ConnectionStatus.ERROR
-            row.last_error = _safe_error(exc)
             row.metadata["health"] = "unhealthy"
+            row.last_error = _safe_error(exc)
+        row.status = ConnectionStatus.CONNECTED
         result = _serialize(row)
         self.store.upsert_connection(result)
         return result
@@ -626,7 +628,9 @@ class ConnectedAppsService:
                 metadata["health"] = "healthy" if healthy else "unavailable"
                 metadata["last_health_check"] = checked_at
                 row["metadata"] = metadata
-                row["status"] = ConnectionStatus.CONNECTED.value if healthy else ConnectionStatus.ERROR.value
+                # Health is a diagnostic, not the OAuth/session lifecycle.
+                # Keep the connection usable while exposing health separately.
+                row["status"] = ConnectionStatus.CONNECTED.value
                 row["last_error"] = "" if healthy else "Native adapter health check failed"
                 row["updated_at"] = checked_at
                 self.store.upsert_connection(row)
