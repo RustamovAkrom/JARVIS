@@ -77,7 +77,7 @@ class OAuthService:
             if tokens.get("expires_in") else None,
         }
 
-    def _save(self, cid, tokens):
+    def _save(self, cid, tokens, *, preserve_refresh_token=False):
         values = {
             "access_token": str(tokens["access_token"]),
             "token_type": str(tokens.get("token_type", "Bearer")),
@@ -91,7 +91,7 @@ class OAuthService:
         except (TypeError, ValueError):
             expires_at = 0
         values["expires_at"] = str(expires_at)
-        delete = [key for key in ("refresh_token", "id_token") if key not in values]
+        delete = [key for key in ("refresh_token", "id_token") if key not in values]\n        if preserve_refresh_token:\n            delete.remove("refresh_token") if "refresh_token" in delete else None
         batch_writer = getattr(self.store, "set_credentials", None)
         if callable(batch_writer):
             batch_writer(cid, values, delete=delete)
