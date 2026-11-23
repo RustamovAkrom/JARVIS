@@ -660,7 +660,11 @@ class ConnectedAppsPanel(QWidget):
     def disconnect_native_app(self, app_id):
         row = next((item for item in service.connections()
                     if str(item.get("app_id") or "").casefold() == app_id.casefold()), None)
-        if not row or row.get("status") != "connected":
+        authenticated = bool(
+            row and app_id.casefold() == "github"
+            and service.store.get_credential(row.get("id"), "access_token")
+        )
+        if not row or (row.get("status") != "connected" and not authenticated):
             self.status.setText(f"{app_id}: no active connection to disconnect.")
             self.refresh()
             return
@@ -946,9 +950,26 @@ class ConnectedAppsPanel(QWidget):
         self.pool.start(worker)
 
     def connect_github_oauth(self):
-        if self.github_status_label.text().casefold() == "connected":
-            self.status.setText("GitHub is already connected. Disconnect it before reconnecting.")
-            return
+        # Reconnect an already-authenticated GitHub account using its persisted
+        # OAuth token. Do not make the visible Reconnect button a no-op.
+        native_row = next(
+            (row for row in service.connections()
+             if str(row.get("app_id") or "").casefold() == "github"),
+            None,
+        )
+        if native_row and self.github_status_label.text().casefold() == "connected":
+            connection_id = native_row.get("id")
+            token = service.store.get_credential(connection_id, "access_token")
+            if token:
+                self._busy(True, "Reconnecting GitHub…")
+                worker = _Worker(
+                    lambda: service.connect_native(
+                        "github", access_token=token, connection_id=connection_id
+                    )
+                )
+                worker.signals.finished.connect(self._connected)
+                self.pool.start(worker)
+                return
         client_id,ok=QInputDialog.getText(
             self,"Connect GitHub","GitHub OAuth App Client ID:"
         )
