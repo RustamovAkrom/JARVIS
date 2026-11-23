@@ -728,7 +728,10 @@ class ConnectedAppsService:
                 row["metadata"] = metadata
                 # Health is a diagnostic, not the OAuth/session lifecycle.
                 # Keep the connection usable while exposing health separately.
-                row["status"] = ConnectionStatus.CONNECTED.value
+                row["status"] = (
+                    ConnectionStatus.CONNECTED.value
+                    if healthy else ConnectionStatus.ERROR.value
+                )
                 row["last_error"] = "" if healthy else "Native adapter health check failed"
                 row["updated_at"] = checked_at
                 self.store.upsert_connection(row)
