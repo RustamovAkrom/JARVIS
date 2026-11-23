@@ -599,7 +599,7 @@ class ConnectedAppsPanel(QWidget):
         self.add_github_btn.setText("Reconnect" if github_connected else "Connect")
         self.add_github_btn.setVisible(True)
         self.add_github_btn.setEnabled(not github_connected)
-        self.native_disconnect_btn.setEnabled(False)
+        self.native_disconnect_btn.setEnabled(github_connected)
         self.native_disconnect_btn.setVisible(github_connected)
         self.add_calendar_btn.setText("Reconnect" if calendar_connected else "Connect")
         self.add_calendar_btn.setVisible(True)
