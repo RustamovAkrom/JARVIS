@@ -35,6 +35,13 @@ class MemoryStore:
         with self.lock:
             self.credentials[(cid, key)] = value
 
+    def set_credentials(self, cid, values, *, delete=()):
+        with self.lock:
+            for key in delete:
+                self.credentials.pop((cid, key), None)
+            for key, value in values.items():
+                self.credentials[(cid, key)] = value
+
     def get_credential(self, cid, key):
         with self.lock:
             return self.credentials.get((cid, key), "")
@@ -465,3 +472,31 @@ def test_connected_apps_restart_restores_persisted_native_connection(tmp_path, m
 
     assert restored["status"] == "connected"
     assert second_store.get_credential("github-restart", "access_token") == "persisted-test-token"
+
+
+def test_native_connection_recovers_after_transient_network_failure():
+    from urllib.error import URLError
+    from core.connected_apps.service import ConnectedAppsService
+
+    store = MemoryStore()
+    service = ConnectedAppsService(store=store)
+    adapter = service._native_adapters["github"]
+    states = {"calls": 0}
+
+    def health_check(_cid):
+        states["calls"] += 1
+        if states["calls"] == 1:
+            raise URLError("temporary network outage")
+        return True
+
+    adapter.health_check = health_check
+    failed = service.connect_native(
+        "github", access_token="test-token", connection_id="github-network-recovery"
+    )
+    assert failed["status"] == "error"
+    assert "network" in failed["last_error"].casefold()
+
+    recovered = service.reconnect("github-network-recovery", attempts=1)
+    assert recovered["status"] == "connected"
+    assert recovered["last_error"] == ""
+    assert states["calls"] == 2
