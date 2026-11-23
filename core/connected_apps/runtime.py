@@ -118,16 +118,19 @@ class MCPRuntime:
             future.cancel()
             raise RuntimeUnavailable(f"MCP operation timed out after {timeout}s") from None
 
-    async def _connect(self, cid, factory):
+    async def _connection_worker(self, cid, factory, ready, stop_event):
+        """Own a transport/session for its complete lifetime in one asyncio task.
+
+        AnyIO task groups and cancel scopes must be exited by the same task that
+        entered them. Keeping AsyncExitStack inside this long-lived task avoids
+        cross-task cleanup when the UI later requests disconnect.
+        """
+        task = asyncio.current_task()
+        stack = AsyncExitStack()
+        failure = None
         try:
             from mcp import ClientSession
-        except ImportError as exc:
-            raise RuntimeUnavailable(
-                "MCP SDK is missing. Install JARVIS with the connected-apps extra."
-            ) from exc
 
-        stack = AsyncExitStack()
-        try:
             transport = await stack.enter_async_context(factory())
             if isinstance(transport, (tuple, list)):
                 transport = transport[:2]
@@ -143,26 +146,65 @@ class MCPRuntime:
                 }
                 for tool in result.tools
             ]
+
             with self._lock:
-                old = self._sessions.pop(cid, None)
-                self._tools.pop(cid, None)
-                self._sessions[cid] = (stack, session)
+                self._sessions[cid] = (task, session, stop_event)
                 self._tools[cid] = tools
-            if old:
-                # A failed cleanup of the previous session must not tear down
-                # the newly established connection.
-                try:
-                    await old[0].aclose()
-                except Exception:
-                    pass
-            return tools
-        except BaseException:
-            # Preserve the original connect/initialize failure. A transport
-            # cleanup error must not replace the actionable root cause.
+            if not ready.done():
+                ready.set_result(tools)
+
+            # This task deliberately stays alive while the transport is active.
+            # Disconnect/reconnect/shutdown signal stop_event; the owner task
+            # then unwinds ClientSession and transport contexts itself.
+            await stop_event.wait()
+        except BaseException as exc:
+            failure = exc
+            if not ready.done():
+                ready.set_exception(exc)
+        finally:
+            with self._lock:
+                current = self._sessions.get(cid)
+                if current is not None and current[0] is task:
+                    self._sessions.pop(cid, None)
+                    self._tools.pop(cid, None)
             try:
                 await stack.aclose()
+            except BaseException as cleanup_error:
+                if failure is None:
+                    failure = cleanup_error
+                else:
+                    logger.warning(
+                        "MCP transport cleanup failed after session error for %s",
+                        cid,
+                        exc_info=True,
+                    )
+
+        if failure is not None:
+            raise failure
+
+    async def _connect(self, cid, factory):
+        """Start a dedicated owner task and return after MCP initialization."""
+        # A reconnect must fully close the previous owner task before a new
+        # transport is created for the same connection id.
+        await self._close(cid)
+
+        loop = asyncio.get_running_loop()
+        ready = loop.create_future()
+        stop_event = asyncio.Event()
+        task = asyncio.create_task(
+            self._connection_worker(cid, factory, ready, stop_event),
+            name=f"connected-apps-mcp:{cid}",
+        )
+        try:
+            return await asyncio.wait_for(ready, timeout=85)
+        except BaseException:
+            # If startup fails or its caller times out/cancels, don't leave a
+            # subprocess or HTTP transport running in the background.
+            stop_event.set()
+            try:
+                await task
             except BaseException:
-                logger.warning("MCP transport cleanup failed after connection error", exc_info=True)
+                pass
             raise
 
     def connect_stdio(self, cid, command, args=None, env=None):
@@ -253,14 +295,21 @@ class MCPRuntime:
         return True
 
     def health(self, cid, timeout=10):
-        return self._submit(self._ping(cid), timeout=timeout)
+        with self._connection_lock(cid):
+            return self._submit(self._ping(cid), timeout=timeout)
 
     async def _close(self, cid):
         with self._lock:
-            entry = self._sessions.pop(cid, None)
-            self._tools.pop(cid, None)
-        if entry:
-            await entry[0].aclose()
+            entry = self._sessions.get(cid)
+            if entry is None:
+                self._tools.pop(cid, None)
+                return
+
+        owner_task, _session, stop_event = entry
+        stop_event.set()
+        if owner_task is not asyncio.current_task():
+            # The owner task exits its own AsyncExitStack in its finally block.
+            await owner_task
 
     def tools(self, cid):
         with self._lock:
@@ -287,16 +336,27 @@ class MCPRuntime:
     async def _close_all(self):
         with self._lock:
             entries = list(self._sessions.items())
+
+        # Ask each dedicated owner task to exit its own AsyncExitStack. Never
+        # close transport stacks from the shutdown caller's task.
+        for _cid, entry in entries:
+            entry[2].set()
+        if entries:
+            results = await asyncio.gather(
+                *(entry[0] for _cid, entry in entries),
+                return_exceptions=True,
+            )
+            for (cid, _entry), result in zip(entries, results):
+                if isinstance(result, BaseException):
+                    logger.warning(
+                        "MCP session cleanup failed during shutdown for %s: %s",
+                        cid,
+                        type(result).__name__,
+                    )
+
+        with self._lock:
             self._sessions.clear()
             self._tools.clear()
-        errors = []
-        for cid, (stack, _session) in entries:
-            try:
-                await stack.aclose()
-            except Exception as exc:
-                errors.append((cid, exc))
-        for cid, exc in errors:
-            logger.warning("MCP session cleanup failed during shutdown for %s: %s", cid, type(exc).__name__)
 
     def shutdown(self):
         # Idempotent, best-effort teardown. Close every transport before
