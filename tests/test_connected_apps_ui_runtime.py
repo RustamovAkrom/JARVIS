@@ -328,13 +328,13 @@ def test_connected_apps_panel_tabs_and_mcp_controls_are_mounted(qapp, monkeypatc
         assert panel.sections.count() == 2
         assert panel.sections.tabText(0) == "Apps"
         assert panel.sections.tabText(1) == "MCP Servers"
-        assert panel.add_server_btn.isVisible()
-        assert panel.reconnect_all_btn.isVisible()
-        assert panel.health_all_btn.isVisible()
 
         panel.sections.setCurrentIndex(1)
         QTest.qWait(20)
         assert panel.sections.currentIndex() == 1
+        assert panel.add_server_btn.isVisible()
+        assert panel.reconnect_all_btn.isVisible()
+        assert panel.health_all_btn.isVisible()
         panel.sections.setCurrentIndex(0)
         QTest.qWait(20)
         assert panel.sections.currentIndex() == 0
