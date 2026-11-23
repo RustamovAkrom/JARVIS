@@ -104,6 +104,44 @@ class ConnectedAppsPanel(QWidget):
         calendar_actions.addStretch(1)
         calendar_layout.addLayout(calendar_actions)
         native_cards.addWidget(calendar_card,1)
+
+        telegram_card=QFrame()
+        telegram_card.setObjectName("nativeAppCard")
+        telegram_layout=QVBoxLayout(telegram_card)
+        telegram_layout.setContentsMargins(10,8,10,8)
+        telegram_layout.setSpacing(5)
+        telegram_header=QHBoxLayout()
+        telegram_name=QLabel("Telegram Personal")
+        telegram_name.setObjectName("nativeAppName")
+        telegram_header.addWidget(telegram_name)
+        telegram_header.addStretch(1)
+        self.telegram_status_label=QLabel("Not connected")
+        self.telegram_status_label.setObjectName("nativeAppStatus")
+        telegram_header.addWidget(self.telegram_status_label)
+        telegram_layout.addLayout(telegram_header)
+        telegram_summary=QLabel("Personal account via MTProto. Chat allowlist and granular permissions.")
+        telegram_summary.setObjectName("nativeAppDescription")
+        telegram_summary.setWordWrap(True)
+        telegram_layout.addWidget(telegram_summary)
+        telegram_actions=QHBoxLayout()
+        self.telegram_connect_btn=QPushButton("Connect")
+        self.telegram_connect_btn.setObjectName("primaryAction")
+        self.telegram_connect_btn.setProperty("compact",True)
+        self.telegram_connect_btn.clicked.connect(self.connect_telegram_personal)
+        self.telegram_manage_btn=QPushButton("Permissions / chats")
+        self.telegram_manage_btn.setProperty("compact",True)
+        self.telegram_manage_btn.clicked.connect(self.manage_telegram_personal)
+        self.telegram_manage_btn.setEnabled(False)
+        self.telegram_disconnect_btn=QPushButton("Disconnect")
+        self.telegram_disconnect_btn.setProperty("compact",True)
+        self.telegram_disconnect_btn.clicked.connect(self.disconnect_telegram_personal)
+        self.telegram_disconnect_btn.setEnabled(False)
+        telegram_actions.addWidget(self.telegram_connect_btn)
+        telegram_actions.addWidget(self.telegram_manage_btn)
+        telegram_actions.addWidget(self.telegram_disconnect_btn)
+        telegram_actions.addStretch(1)
+        telegram_layout.addLayout(telegram_actions)
+        native_cards.addWidget(telegram_card,1)
         native_layout.addLayout(native_cards)
 
         self.native_list=QListWidget()
@@ -273,6 +311,130 @@ class ConnectedAppsPanel(QWidget):
         self._apply_theme_styles()
         self._check_runtime()
         self.refresh()
+    def _telegram_connection(self):
+        return next((row for row in service.connections() if row.get("app_id")=="telegram_personal"),None)
+
+    def _refresh_telegram_card(self):
+        row=self._telegram_connection()
+        connected=bool(row and row.get("status")=="connected")
+        self.telegram_status_label.setText("Connected" if connected else "Not connected")
+        self.telegram_connect_btn.setText("Reconnect" if connected else "Connect")
+        self.telegram_manage_btn.setEnabled(connected)
+        self.telegram_disconnect_btn.setEnabled(bool(row))
+
+    def connect_telegram_personal(self):
+        api_id,ok=QInputDialog.getText(self,"Telegram Personal","Telegram API ID:")
+        if not ok or not api_id.strip():return
+        api_hash,ok=QInputDialog.getText(self,"Telegram Personal","Telegram API Hash:",QLineEdit.EchoMode.Password)
+        if not ok or not api_hash.strip():return
+        phone,ok=QInputDialog.getText(self,"Telegram Personal","Phone number (international format):")
+        if not ok or not phone.strip():return
+        self._busy(True,"Sending Telegram login code…")
+        worker=_Worker(lambda:service.begin_telegram_login(api_id=api_id.strip(),api_hash=api_hash.strip(),phone=phone.strip()))
+        worker.signals.finished.connect(lambda result,error:self._telegram_code_sent(phone.strip(),api_id.strip(),api_hash.strip(),result,error))
+        self.pool.start(worker)
+
+    def _telegram_code_sent(self,phone,api_id,api_hash,result,error):
+        self._busy(False)
+        if error:
+            QMessageBox.warning(self,"Telegram login",self._friendly_error(str(error)));return
+        code,ok=QInputDialog.getText(self,"Telegram login","Enter the verification code sent by Telegram:")
+        if not ok or not code.strip():
+            service.cancel_telegram_login(phone);return
+        self._busy(True,"Verifying Telegram code…")
+        worker=_Worker(lambda:service.finish_telegram_login(phone=phone,code=code.strip()))
+        worker.signals.finished.connect(lambda result,error:self._telegram_login_finished(phone,api_id,api_hash,code.strip(),result,error))
+        self.pool.start(worker)
+
+    def _telegram_login_finished(self,phone,api_id,api_hash,code,result,error):
+        self._busy(False)
+        if error:
+            QMessageBox.warning(self,"Telegram login",self._friendly_error(str(error)))
+            service.cancel_telegram_login(phone);return
+        if result and result.get("two_factor_required"):
+            password,ok=QInputDialog.getText(self,"Telegram 2FA","Two-step verification password:",QLineEdit.EchoMode.Password)
+            if not ok or not password:
+                service.cancel_telegram_login(phone);return
+            self._busy(True,"Verifying Telegram 2FA…")
+            worker=_Worker(lambda:service.finish_telegram_login(phone=phone,code=code,password=password))
+            worker.signals.finished.connect(lambda result,error:self._telegram_login_finished(phone,api_id,api_hash,code,result,error))
+            self.pool.start(worker);return
+        if not result or not result.get("connection"):
+            QMessageBox.warning(self,"Telegram login","Authentication did not return a connection.");return
+        self.status.setText("Telegram Personal connected.")
+        self.refresh();self._refresh_telegram_card();self.connections_changed.emit()
+        self.manage_telegram_personal()
+
+    def manage_telegram_personal(self):
+        row=self._telegram_connection()
+        if not row or row.get("status")!="connected":
+            QMessageBox.information(self,"Telegram permissions","Connect Telegram Personal first.");return
+        metadata=row.get("metadata") or {}
+        current=dict(metadata.get("telegram_permissions") or {})
+        allowed=set(map(str,metadata.get("telegram_allowed_chats") or []))
+        try:
+            chats=service.call_native_tool(row["id"],"telegram_list_chats",{"limit":100})
+        except Exception as exc:
+            QMessageBox.warning(self,"Telegram chats",self._friendly_error(str(exc)));return
+        dialog=QDialog(self);dialog.setWindowTitle("Telegram Personal permissions");dialog.resize(540,620)
+        layout=QVBoxLayout(dialog)
+        note=QLabel("Select chats JARVIS may access. AI content access is disabled. Write actions require confirmation.")
+        note.setWordWrap(True);layout.addWidget(note)
+        permissions_group=QGroupBox("Permissions");permissions_layout=QVBoxLayout(permissions_group)
+        permission_labels={
+            "list_chats":"List chat metadata",
+            "search_messages":"Search messages",
+            "read_recent_messages":"Read recent messages",
+            "read_history":"Read full history",
+            "read_media":"Read media",
+            "send_messages":"Send messages",
+            "reply_messages":"Reply to messages",
+            "forward_messages":"Forward messages",
+            "edit_messages":"Edit messages",
+            "delete_messages":"Delete messages",
+            "contacts":"Access contacts",
+        }
+        checks={}
+        for key,label in permission_labels.items():
+            checkbox=QCheckBox(label);checkbox.setChecked(bool(current.get(key,False)));checks[key]=checkbox;permissions_layout.addWidget(checkbox)
+        layout.addWidget(permissions_group)
+        chats_group=QGroupBox("Allowed chats");chats_layout=QVBoxLayout(chats_group)
+        chat_list=QListWidget()
+        for chat in chats or []:
+            item=QListWidgetItem(f"{chat.get('name','Unknown')}  ·  {chat.get('chat_id')}")
+            item.setData(Qt.ItemDataRole.UserRole,str(chat.get("chat_id")))
+            item.setFlags(item.flags()|Qt.ItemFlag.ItemIsUserCheckable)
+            item.setCheckState(Qt.CheckState.Checked if str(chat.get("chat_id")) in allowed else Qt.CheckState.Unchecked)
+            chat_list.addItem(item)
+        chats_layout.addWidget(chat_list);layout.addWidget(chats_group,1)
+        buttons=QDialogButtonBox(QDialogButtonBox.StandardButton.Save|QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(dialog.accept);buttons.rejected.connect(dialog.reject);layout.addWidget(buttons)
+        if dialog.exec()!=QDialog.DialogCode.Accepted:return
+        permissions={key:check.isChecked() for key,check in checks.items()}
+        permissions["ai_access"]=False
+        selected=[chat_list.item(i).data(Qt.ItemDataRole.UserRole) for i in range(chat_list.count()) if chat_list.item(i).checkState()==Qt.CheckState.Checked]
+        try:
+            service.update_telegram_permissions(row["id"],permissions=permissions,allowed_chats=selected)
+            self.status.setText("Telegram permissions and chat allowlist updated.")
+            self.refresh();self.connections_changed.emit()
+        except Exception as exc:
+            QMessageBox.warning(self,"Telegram permissions",self._friendly_error(str(exc)))
+
+    def disconnect_telegram_personal(self):
+        row=self._telegram_connection()
+        if not row:return
+        if QMessageBox.question(self,"Disconnect Telegram","Disconnect the personal Telegram session and remove stored credentials?",QMessageBox.StandardButton.Yes|QMessageButton.StandardButton.No)!=QMessageBox.StandardButton.Yes:return
+        self._busy(True,"Disconnecting Telegram…")
+        worker=_Worker(lambda:service.remove(row["id"]))
+        worker.signals.finished.connect(lambda result,error:self._telegram_disconnected(result,error))
+        self.pool.start(worker)
+
+    def _telegram_disconnected(self,result,error):
+        self._busy(False)
+        if error:QMessageBox.warning(self,"Telegram disconnect",self._friendly_error(str(error)))
+        else:self.status.setText("Telegram Personal disconnected and credentials removed.")
+        self.refresh();self._refresh_telegram_card();self.connections_changed.emit()
+
     @staticmethod
     def _native_icon_path(app_id):
         from pathlib import Path
@@ -381,6 +543,7 @@ class ConnectedAppsPanel(QWidget):
         for w in (self.add_github_btn,self.add_calendar_btn,self.native_disconnect_btn,self.add_catalog_btn,self.add_server_btn,self.reconnect_all_btn,self.health_all_btn,self.connect_btn,self.rename_btn,self.disconnect_btn,self.remove_btn,self.block_tool_btn,self.allow_tool_btn,self.copy_diagnostics_btn,self.health_btn,self.enabled_checkbox,self.auto_read_checkbox):w.setEnabled(not busy)
         if message:self.status.setText(message)
     def refresh(self,*_):
+        self._refresh_telegram_card()
         query=self.search.text().casefold().strip()
         selected=self.selected_id()
         native_selected=self.native_selected_id()
