@@ -92,7 +92,8 @@ class OAuthService:
             expires_at = 0
         values["expires_at"] = str(expires_at)
         delete = [key for key in ("refresh_token", "id_token") if key not in values]
-        if preserve_refresh_token:\n            delete.remove("refresh_token") if "refresh_token" in delete else None
+        if preserve_refresh_token and "refresh_token" in delete:
+            delete.remove("refresh_token")
         batch_writer = getattr(self.store, "set_credentials", None)
         if callable(batch_writer):
             batch_writer(cid, values, delete=delete)
