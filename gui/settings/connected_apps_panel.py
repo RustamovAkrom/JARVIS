@@ -100,7 +100,12 @@ class ConnectedAppsPanel(QWidget):
         self.add_calendar_btn.setObjectName("primaryAction")
         self.add_calendar_btn.setProperty("compact", True)
         self.add_calendar_btn.clicked.connect(self.connect_google_calendar)
+        self.calendar_disconnect_btn=QPushButton("Disconnect")
+        self.calendar_disconnect_btn.setProperty("compact", True)
+        self.calendar_disconnect_btn.clicked.connect(lambda: self.disconnect_native_app("google_calendar"))
+        self.calendar_disconnect_btn.setEnabled(False)
         calendar_actions.addWidget(self.add_calendar_btn)
+        calendar_actions.addWidget(self.calendar_disconnect_btn)
         calendar_actions.addStretch(1)
         calendar_layout.addLayout(calendar_actions)
         native_cards.addWidget(calendar_card,1)
@@ -544,7 +549,7 @@ class ConnectedAppsPanel(QWidget):
             self.runtime_help.setText("Connected Apps runtime is available.")
 
     def _busy(self,busy,message=""):
-        for w in (self.add_github_btn,self.add_calendar_btn,self.native_disconnect_btn,self.add_catalog_btn,self.add_server_btn,self.reconnect_all_btn,self.health_all_btn,self.connect_btn,self.rename_btn,self.disconnect_btn,self.remove_btn,self.block_tool_btn,self.allow_tool_btn,self.copy_diagnostics_btn,self.health_btn,self.enabled_checkbox,self.auto_read_checkbox):w.setEnabled(not busy)
+        for w in (self.add_github_btn,self.add_calendar_btn,self.calendar_disconnect_btn,self.native_disconnect_btn,self.add_catalog_btn,self.add_server_btn,self.reconnect_all_btn,self.health_all_btn,self.connect_btn,self.rename_btn,self.disconnect_btn,self.remove_btn,self.block_tool_btn,self.allow_tool_btn,self.copy_diagnostics_btn,self.health_btn,self.enabled_checkbox,self.auto_read_checkbox):w.setEnabled(not busy)
         if message:self.status.setText(message)
     def refresh(self,*_):
         self._refresh_telegram_card()
@@ -603,25 +608,44 @@ class ConnectedAppsPanel(QWidget):
                 or github_has_token
             )
         )
+        calendar_error_text = str((calendar_row or {}).get("last_error") or "")
+        calendar_has_token = bool(
+            calendar_row and service.store.get_credential(calendar_row.get("id"), "access_token")
+        )
         calendar_connected = calendar_status == "connected"
+        calendar_error = calendar_status == "error"
+        calendar_reconnect = bool(
+            calendar_row and (
+                calendar_status in {"connected", "error", "connecting"}
+                or calendar_has_token
+            )
+        )
+        calendar_disconnect_available = bool(
+            calendar_row and (
+                calendar_status in {"connected", "error", "connecting"}
+                or calendar_has_token
+            )
+        )
         self.github_status_label.setText(
             "Connected" if github_connected else
             ("Error" if github_error else "Not connected")
         )
         self.calendar_status_label.setText(
             "Connected" if calendar_connected else
-            ("Error" if calendar_status == "error" else "Not connected")
+            ("Error" if calendar_error else "Not connected")
         )
         self.github_status_label.setToolTip(github_error_text)
-        self.calendar_status_label.setToolTip((calendar_row or {}).get("last_error") or "")
+        self.calendar_status_label.setToolTip(calendar_error_text)
         self.add_github_btn.setText("Reconnect" if github_reconnect else "Connect")
         self.add_github_btn.setVisible(True)
         self.add_github_btn.setEnabled(True)
         self.native_disconnect_btn.setEnabled(github_disconnect_available)
         self.native_disconnect_btn.setVisible(github_disconnect_available)
-        self.add_calendar_btn.setText("Reconnect" if calendar_connected else "Connect")
+        self.add_calendar_btn.setText("Reconnect" if calendar_reconnect else "Connect")
         self.add_calendar_btn.setVisible(True)
-        self.add_calendar_btn.setEnabled(not calendar_connected)
+        self.add_calendar_btn.setEnabled(True)
+        self.calendar_disconnect_btn.setVisible(calendar_disconnect_available)
+        self.calendar_disconnect_btn.setEnabled(calendar_disconnect_available)
         self.native_list.clear()
         for row in native_rows:
             app_id = str(row.get("app_id") or "").casefold()
@@ -942,30 +966,39 @@ class ConnectedAppsPanel(QWidget):
     @staticmethod
     def _slug(value):return "-".join(value.strip().lower().split()) or "app"
     def connect_google_calendar(self):
-        if self.calendar_status_label.text().casefold() == "connected":
-            self.status.setText("Google Calendar is already connected. Disconnect it before reconnecting.")
-            return
-        client_id,ok=QInputDialog.getText(
-            self,"Connect Google Calendar","Google OAuth Client ID:"
+        native_row = next(
+            (row for row in service.connections()
+             if str(row.get("app_id") or "").casefold() == "google_calendar"),
+            None,
         )
-        if not ok or not client_id.strip():
-            return
-        client_secret,ok=QInputDialog.getText(
-            self,"Connect Google Calendar","OAuth Client Secret (optional for installed apps):",
-            QLineEdit.EchoMode.Password,
+        connection_id = (native_row or {}).get("id") or "google-calendar-native"
+        client_id = service.store.get_credential(connection_id, "oauth_client_id")
+        client_secret = service.store.get_credential(connection_id, "oauth_client_secret")
+        if not client_id:
+            client_id, ok = QInputDialog.getText(
+                self, "Connect Google Calendar", "Google OAuth Client ID:"
+            )
+            if not ok or not client_id.strip():
+                return
+        if not client_secret:
+            client_secret, ok = QInputDialog.getText(
+                self, "Connect Google Calendar",
+                "OAuth Client Secret (optional for installed apps):",
+                QLineEdit.EchoMode.Password,
+            )
+            if not ok:
+                return
+
+        self._busy(True, "Opening Google authorization in browser…")
+        worker = _Worker(
+            lambda: service.reauthorize_native_oauth(
+                "google_calendar",
+                "google",
+                client_id=client_id.strip(),
+                client_secret=client_secret.strip(),
+                connection_id=connection_id,
+            )
         )
-        if not ok:
-            return
-        self._busy(True,"Opening Google authorization in browser…")
-        def authorize():
-            from core.connected_apps.auth_service import OAuthService
-            auth=OAuthService(service.store)
-            connection_id="google-calendar-native"
-            scopes=["https://www.googleapis.com/auth/calendar.events"]
-            auth.authorize_connection(connection_id,"google",client_id.strip(),scopes=scopes,client_secret=client_secret)
-            token=auth.get_access_token(connection_id)
-            return service.connect_native("google_calendar",access_token=token,connection_id=connection_id)
-        worker=_Worker(authorize)
         worker.signals.finished.connect(self._connected)
         self.pool.start(worker)
 
