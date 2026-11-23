@@ -61,6 +61,8 @@ class TelegramPersonalAdapter(NativeAppAdapter):
         self._clients: dict[str, Any] = {}
         self._locks: dict[str, threading.RLock] = {}
         self._guard = threading.RLock()
+        self._loop = None
+        self._loop_thread = None
 
     def _lock(self, cid):
         with self._guard:
@@ -109,16 +111,18 @@ class TelegramPersonalAdapter(NativeAppAdapter):
             self._clients[cid] = client
             return client
 
-    @staticmethod
-    def _run(coro):
-        # Telethon clients are run from a dedicated thread-safe event loop.
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            return asyncio.run(coro)
-        if loop.is_running():
-            raise RuntimeError("Telegram operation cannot run inside the caller event loop")
-        return asyncio.run(coro)
+    def _run(self, coro):
+        # Telethon requires one stable event loop for each client lifetime.
+        with self._guard:
+            if self._loop is None:
+                self._loop = asyncio.new_event_loop()
+                self._loop_thread = threading.Thread(
+                    target=self._loop.run_forever, name="jarvis-telegram-loop", daemon=True
+                )
+                self._loop_thread.start()
+            loop = self._loop
+        future = asyncio.run_coroutine_threadsafe(coro, loop)
+        return future.result(timeout=60)
 
     def health_check(self, cid):
         try:
