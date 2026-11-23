@@ -61,11 +61,11 @@ def test_github_reauthorize_discards_old_token_and_uses_fresh_oauth(monkeypatch)
     monkeypatch.setattr(service._native_adapters["github"], "health_check", lambda cid: True)
     calls = []
 
-    def authorize(auth_service, cid, provider_id, client_id, client_secret=""):
+    def authorize(auth_service, cid, provider_id, client_id, scopes=None, client_secret=""):
         # Reauthorization must clear the previous bearer token before launching
         # the provider flow, so an invalid token can never be reused.
         assert store.get_credential(cid, "access_token") == ""
-        calls.append((cid, provider_id, client_id, client_secret))
+        calls.append((cid, provider_id, client_id, list(scopes or []), client_secret))
         store.set_credential(cid, "access_token", "fresh-token")
         store.set_credential(cid, "oauth_client_id", client_id)
         store.set_credential(cid, "oauth_client_secret", client_secret)
@@ -78,7 +78,10 @@ def test_github_reauthorize_discards_old_token_and_uses_fresh_oauth(monkeypatch)
         connection_id="github-native",
     )
 
-    assert calls == [("github-native", "github", "saved-client-id", "saved-client-secret")]
+    assert calls == [(
+        "github-native", "github", "saved-client-id",
+        ["repo", "read:user", "user:email"], "saved-client-secret",
+    )]
     assert result["status"] == "connected"
     assert store.get_credential("github-native", "access_token") == "fresh-token"
 
