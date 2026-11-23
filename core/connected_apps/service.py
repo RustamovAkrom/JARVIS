@@ -25,6 +25,17 @@ def _serialize(row):
     }
 
 
+def _auto_approve_read_only(metadata, *, read_only, destructive=False, requires_confirmation=False):
+    """Shared fail-closed policy for MCP and native tool execution."""
+    return (
+        isinstance(metadata, dict)
+        and metadata.get("auto_approve_read_only") is True
+        and read_only is True
+        and destructive is not True
+        and requires_confirmation is not True
+    )
+
+
 def _safe_error(exc: Exception) -> str:
     import re
     text = str(exc).replace("\r", " ").replace("\n", " ")
