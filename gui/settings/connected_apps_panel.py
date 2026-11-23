@@ -578,7 +578,13 @@ class ConnectedAppsPanel(QWidget):
         calendar_row = native_by_app.get("google_calendar")
         github_status = str((github_row or {}).get("status") or "not connected").casefold()
         calendar_status = str((calendar_row or {}).get("status") or "not connected").casefold()
-        github_connected = github_status == "connected"
+        # OAuth token presence means the account is authenticated even if an
+        # earlier health check marked the row as error. Health is shown as a
+        # tooltip and must not hide Disconnect or offer a fresh Connect.
+        github_authenticated = bool(
+            github_row and service.store.get_credential(github_row.get("id"), "access_token")
+        )
+        github_connected = github_status == "connected" or github_authenticated
         calendar_connected = calendar_status == "connected"
         self.github_status_label.setText(
             "Connected" if github_connected else
@@ -602,6 +608,8 @@ class ConnectedAppsPanel(QWidget):
         for row in native_rows:
             app_id = str(row.get("app_id") or "").casefold()
             status = str(row.get("status") or "unknown").replace("_", " ").title()
+            if app_id == "github" and github_authenticated:
+                status = "Connected"
             item=QListWidgetItem(f"{row.get('display_name', app_id)}  ·  {status}")
             item.setData(Qt.ItemDataRole.UserRole,row.get("id"))
             item.setIcon(QIcon(str(self._native_icon_path(app_id))) if self._native_icon_path(app_id) else QIcon())
