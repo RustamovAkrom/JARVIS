@@ -61,12 +61,12 @@ class OAuthService:
         tokens = authorize(config)
         self._save(connection_id, tokens)
         if not tokens.get("refresh_token"):
-            self.store.delete_credential(connection_id, "refresh_token")
+            self._delete_credential(connection_id, "refresh_token")
         self.store.set_credential(connection_id, "oauth_client_id", client_id)
         if client_secret:
             self.store.set_credential(connection_id, "oauth_client_secret", client_secret)
         else:
-            self.store.delete_credential(connection_id, "oauth_client_secret")
+            self._delete_credential(connection_id, "oauth_client_secret")
         self.store.set_credential(connection_id, "oauth_scopes", " ".join(selected_scopes))
         self.store.set_credential(connection_id, "oauth_resource", resource_url)
         self.store.set_credential(connection_id, "oauth_metadata", json.dumps(discovery, separators=(",", ":")))
