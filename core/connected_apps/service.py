@@ -357,20 +357,87 @@ class ConnectedAppsService:
         data = _serialize(row)
         self.store.upsert_connection(data)
         self.store.set_credential(cid, "access_token", access_token)
-        # OAuth credentials are persisted at this point. A health-check failure
-        # should not erase the authenticated connection state: transient API
-        # failures and adapter health-check issues are surfaced separately.
+        # GitHub authentication must be verified before the UI marks the
+        # connection usable. A 401 means the OAuth token is invalid and must
+        # not be presented as Connected. Keep the existing behavior for other
+        # native providers to avoid changing their lifecycle here.
         try:
             healthy = bool(adapter.health_check(cid))
-            row.metadata["health"] = "healthy" if healthy else "unhealthy"
+            if adapter.descriptor.id == "github" and not healthy:
+                raise RuntimeError("GitHub authorization health check failed")
+            row.metadata["health"] = "healthy" if healthy else "unavailable"
             row.last_error = "" if healthy else "Native adapter health check failed"
+            row.status = ConnectionStatus.CONNECTED
         except Exception as exc:
             row.metadata["health"] = "unhealthy"
             row.last_error = _safe_error(exc)
-        row.status = ConnectionStatus.CONNECTED
+            row.status = (
+                ConnectionStatus.ERROR
+                if adapter.descriptor.id == "github"
+                else ConnectionStatus.CONNECTED
+            )
         result = _serialize(row)
         self.store.upsert_connection(result)
         return result
+
+    @_serialized_connection_operation
+    def reauthorize_github(self, *, client_id, client_secret="", connection_id="github-native"):
+        """Run a fresh GitHub OAuth flow; never retry an existing bearer token."""
+        adapter = self._native_adapters.get("github")
+        if adapter is None:
+            raise RuntimeError("GitHub native adapter is unavailable")
+        if not str(client_id or "").strip():
+            raise ValueError("GitHub OAuth Client ID is required")
+
+        cid = str(connection_id or "github-native")
+        row = self.store.get_connection(cid)
+        if row and str(row.get("app_id") or "").casefold() != "github":
+            raise ValueError("Connection ID belongs to a different Connected App")
+
+        # Remove only bearer-token material before opening OAuth. Preserve the
+        # OAuth app configuration so the user does not have to re-enter it.
+        delete_credential = getattr(self.store, "delete_credential", None)
+        token_keys = ("access_token", "refresh_token", "id_token", "expires_at", "token_type")
+        for key in token_keys:
+            if callable(delete_credential):
+                delete_credential(cid, key)
+            else:
+                self.store.set_credential(cid, key, "")
+
+        if row:
+            row["status"] = ConnectionStatus.CONNECTING.value
+            row["last_error"] = ""
+            metadata = dict(row.get("metadata") or {})
+            metadata["health"] = "pending"
+            row["metadata"] = metadata
+            row["updated_at"] = time.time()
+            self.store.upsert_connection(row)
+
+        try:
+            from core.connected_apps.auth_service import OAuthService
+
+            auth = OAuthService(self.store)
+            auth.authorize_connection(
+                cid, "github", str(client_id).strip(),
+                client_secret=str(client_secret or ""),
+            )
+            fresh_token = self.store.get_credential(cid, "access_token")
+            if not fresh_token:
+                raise RuntimeError("GitHub OAuth completed without an access token")
+            return self.connect_native(
+                "github", access_token=fresh_token, connection_id=cid
+            )
+        except Exception as exc:
+            failed = self.store.get_connection(cid)
+            if failed:
+                failed["status"] = ConnectionStatus.ERROR.value
+                failed["last_error"] = _safe_error(exc)
+                metadata = dict(failed.get("metadata") or {})
+                metadata["health"] = "unhealthy"
+                failed["metadata"] = metadata
+                failed["updated_at"] = time.time()
+                self.store.upsert_connection(failed)
+            raise
 
     @_serialized_connection_operation
     def begin_telegram_login(self, *, api_id, api_hash, phone):
@@ -578,11 +645,21 @@ class ConnectedAppsService:
             return False
         try:
             metadata = row.get("metadata") or {}
+            app_id = str(row.get("app_id") or "").casefold()
             if metadata.get("native"):
-                adapter = self._native_adapters.get(str(row.get("app_id") or "").casefold())
+                adapter = self._native_adapters.get(app_id)
                 disconnect = getattr(adapter, "disconnect", None)
                 if callable(disconnect):
                     disconnect(cid)
+                if app_id == "github":
+                    # Disconnect removes the local authorization token but
+                    # retains OAuth app credentials for the next fresh login.
+                    delete_credential = getattr(self.store, "delete_credential", None)
+                    for key in ("access_token", "refresh_token", "id_token", "expires_at", "token_type"):
+                        if callable(delete_credential):
+                            delete_credential(cid, key)
+                        else:
+                            self.store.set_credential(cid, key, "")
             else:
                 runtime.disconnect(cid)
         except Exception as exc:
@@ -593,6 +670,10 @@ class ConnectedAppsService:
             raise RuntimeError(f"Disconnect failed: {row['last_error']}") from exc
         row["status"] = ConnectionStatus.DISCONNECTED.value
         row["last_error"] = ""
+        if str(row.get("app_id") or "").casefold() == "github":
+            metadata = dict(row.get("metadata") or {})
+            metadata["health"] = "disconnected"
+            row["metadata"] = metadata
         row["updated_at"] = time.time()
         self.store.upsert_connection(row)
         return True
