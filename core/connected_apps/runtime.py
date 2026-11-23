@@ -61,7 +61,8 @@ class MCPRuntime:
         self._thread = None
         self._sessions = {}
         self._tools = {}
-        self._connection_locks = {}\n        self._shutting_down = False
+        self._connection_locks = {}
+        self._shutting_down = False
 
     def _connection_lock(self, cid):
         with self._lock:
@@ -71,7 +72,8 @@ class MCPRuntime:
         with self._lock:
             if self._loop and self._loop.is_running():
                 return
-            self._shutting_down = False\n            ready = threading.Event()
+            self._shutting_down = False
+            ready = threading.Event()
 
             def run():
                 loop = asyncio.new_event_loop()
