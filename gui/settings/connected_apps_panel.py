@@ -319,8 +319,10 @@ class ConnectedAppsPanel(QWidget):
         connected=bool(row and row.get("status")=="connected")
         self.telegram_status_label.setText("Connected" if connected else "Not connected")
         self.telegram_connect_btn.setText("Reconnect" if connected else "Connect")
+        # Actions must reflect the real connection state, not merely the presence
+        # of a persisted row. Stale/error rows are not usable connections.
         self.telegram_manage_btn.setEnabled(connected)
-        self.telegram_disconnect_btn.setEnabled(bool(row))
+        self.telegram_disconnect_btn.setEnabled(connected)
 
     def connect_telegram_personal(self):
         api_id,ok=QInputDialog.getText(self,"Telegram Personal","Telegram API ID:")
@@ -565,15 +567,34 @@ class ConnectedAppsPanel(QWidget):
             self.list.addItem(item)
             if selected and item.data(Qt.ItemDataRole.UserRole)==selected:
                 self.list.setCurrentItem(item)
-        native_status={str(row.get("app_id") or "").casefold(): str(row.get("status") or "unknown") for row in native_rows}
-        self.github_status_label.setText(native_status.get("github","not connected").replace("_"," ").title())
-        self.calendar_status_label.setText(native_status.get("google_calendar","not connected").replace("_"," ").title())
-        github_connected = native_status.get("github") == "connected"
-        calendar_connected = native_status.get("google_calendar") == "connected"
-        self.add_github_btn.setText("Connect")
-        self.add_github_btn.setVisible(not github_connected)
-        self.add_calendar_btn.setText("Connect")
-        self.add_calendar_btn.setVisible(not calendar_connected)
+        # Use the latest persisted row per app and normalize status values.
+        native_by_app = {}
+        for row in native_rows:
+            app_id = str(row.get("app_id") or "").casefold()
+            native_by_app[app_id] = row
+        github_row = native_by_app.get("github")
+        calendar_row = native_by_app.get("google_calendar")
+        github_status = str((github_row or {}).get("status") or "not connected").casefold()
+        calendar_status = str((calendar_row or {}).get("status") or "not connected").casefold()
+        github_connected = github_status == "connected"
+        calendar_connected = calendar_status == "connected"
+        self.github_status_label.setText(
+            "Connected" if github_connected else
+            ("Error" if github_status == "error" else "Not connected")
+        )
+        self.calendar_status_label.setText(
+            "Connected" if calendar_connected else
+            ("Error" if calendar_status == "error" else "Not connected")
+        )
+        self.github_status_label.setToolTip((github_row or {}).get("last_error") or "")
+        self.calendar_status_label.setToolTip((calendar_row or {}).get("last_error") or "")
+        self.add_github_btn.setText("Reconnect" if github_connected else "Connect")
+        self.add_github_btn.setVisible(True)
+        self.add_github_btn.setEnabled(not github_connected)
+        self.native_disconnect_btn.setEnabled(False)
+        self.add_calendar_btn.setText("Reconnect" if calendar_connected else "Connect")
+        self.add_calendar_btn.setVisible(True)
+        self.add_calendar_btn.setEnabled(not calendar_connected)
         self.native_list.clear()
         for row in native_rows:
             app_id = str(row.get("app_id") or "").casefold()
@@ -611,6 +632,8 @@ class ConnectedAppsPanel(QWidget):
         # Connect visibility is app-global and is set by refresh(); selection
         # must not re-show a button for an already-connected app.
         self.native_disconnect_btn.setEnabled(connected)
+        # The card-level Disconnect action is selection-based; make its target
+        # explicit and avoid disconnecting a stale/non-connected row.
         if not row:
             return
         tools=service.native_tools(cid)
