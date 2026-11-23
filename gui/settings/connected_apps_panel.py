@@ -423,7 +423,7 @@ class ConnectedAppsPanel(QWidget):
     def disconnect_telegram_personal(self):
         row=self._telegram_connection()
         if not row:return
-        if QMessageBox.question(self,"Disconnect Telegram","Disconnect the personal Telegram session and remove stored credentials?",QMessageBox.StandardButton.Yes|QMessageButton.StandardButton.No)!=QMessageBox.StandardButton.Yes:return
+        if QMessageBox.question(self,"Disconnect Telegram","Disconnect the personal Telegram session and remove stored credentials?",QMessageBox.StandardButton.Yes|QMessageBox.StandardButton.No)!=QMessageBox.StandardButton.Yes:return
         self._busy(True,"Disconnecting Telegram…")
         worker=_Worker(lambda:service.remove(row["id"]))
         worker.signals.finished.connect(lambda result,error:self._telegram_disconnected(result,error))
