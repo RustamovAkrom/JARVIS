@@ -655,11 +655,14 @@ class ConnectedAppsService:
                     # Disconnect removes the local authorization token but
                     # retains OAuth app credentials for the next fresh login.
                     delete_credential = getattr(self.store, "delete_credential", None)
+                    set_credential = getattr(self.store, "set_credential", None)
                     for key in ("access_token", "refresh_token", "id_token", "expires_at", "token_type"):
                         if callable(delete_credential):
                             delete_credential(cid, key)
-                        else:
-                            self.store.set_credential(cid, key, "")
+                        elif callable(set_credential):
+                            # Compatibility with lightweight custom stores that
+                            # can write credentials but do not expose deletion.
+                            set_credential(cid, key, "")
             else:
                 runtime.disconnect(cid)
         except Exception as exc:
