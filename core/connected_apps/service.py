@@ -369,6 +369,88 @@ class ConnectedAppsService:
         self.store.upsert_connection(result)
         return result
 
+    @_serialized_connection_operation
+    def connect_telegram_personal(
+        self, *, api_id, api_hash, session_string, permissions=None,
+        allowed_chats=None, display_name="Telegram Personal", connection_id=None,
+    ):
+        """Connect Telegram Personal using a user-created MTProto session.
+
+        Authentication/session creation is deliberately kept outside the AI
+        tool surface. The caller must complete Telegram's login flow locally.
+        """
+        adapter = self._native_adapters.get("telegram_personal")
+        if adapter is None:
+            raise RuntimeError("Telegram Personal adapter is unavailable")
+        if not session_string or not api_hash or not api_id:
+            raise ValueError("api_id, api_hash and session_string are required")
+        from core.connected_apps.adapters.telegram_personal import DEFAULT_PERMISSIONS
+        perms = dict(DEFAULT_PERMISSIONS)
+        if permissions:
+            for key, value in permissions.items():
+                if key not in perms:
+                    raise ValueError(f"Unknown Telegram permission: {key}")
+                if not isinstance(value, bool):
+                    raise TypeError("Telegram permissions must be booleans")
+                perms[key] = value
+        # AI access remains hard-disabled. Telegram platform terms currently
+        # restrict AI/ML use of platform content; never enable it by settings.
+        perms["ai_access"] = False
+        cid = connection_id or secrets.token_urlsafe(16)
+        previous = self.store.get_connection(cid)
+        row = AppConnection(
+            id=cid, app_id="telegram_personal", display_name=display_name,
+            status=ConnectionStatus.CONNECTING, auth_type=AuthType.CUSTOM,
+            scopes=["local-mtproto-session"],
+            created_at=(previous or {}).get("created_at", time.time()),
+            metadata={
+                **dict((previous or {}).get("metadata") or {}),
+                "native": True, "native_adapter": "telegram_personal",
+                "telegram_permissions": perms,
+                "telegram_allowed_chats": sorted({str(x) for x in (allowed_chats or [])}),
+                "health": "pending",
+            },
+        )
+        self.store.upsert_connection(_serialize(row))
+        self.store.set_credentials(cid, {
+            "mtproto_session": session_string,
+            "telegram_api_config": json.dumps({"api_id": int(api_id), "api_hash": str(api_hash)}),
+        })
+        try:
+            if not adapter.health_check(cid):
+                raise RuntimeError("Telegram session health check failed")
+            row.status = ConnectionStatus.CONNECTED
+            row.metadata["health"] = "healthy"
+        except Exception as exc:
+            row.status = ConnectionStatus.ERROR
+            row.last_error = _safe_error(exc)
+            row.metadata["health"] = "unhealthy"
+        result = _serialize(row)
+        self.store.upsert_connection(result)
+        return result
+
+    def update_telegram_permissions(self, cid, *, permissions=None, allowed_chats=None):
+        row = self.store.get_connection(cid)
+        if not row or row.get("app_id") != "telegram_personal":
+            raise ValueError("Telegram Personal connection not found")
+        from core.connected_apps.adapters.telegram_personal import DEFAULT_PERMISSIONS
+        metadata = dict(row.get("metadata") or {})
+        current = dict(DEFAULT_PERMISSIONS)
+        current.update(metadata.get("telegram_permissions") or {})
+        if permissions:
+            for key, value in permissions.items():
+                if key not in current or not isinstance(value, bool):
+                    raise ValueError(f"Invalid Telegram permission: {key}")
+                current[key] = value
+        current["ai_access"] = False
+        metadata["telegram_permissions"] = current
+        if allowed_chats is not None:
+            metadata["telegram_allowed_chats"] = sorted({str(x) for x in allowed_chats})
+        row["metadata"] = metadata
+        row["updated_at"] = time.time()
+        self.store.upsert_connection(row)
+        return row
+
     def native_tools(self, cid):
         row = self.store.get_connection(cid)
         if not row or not row.get("enabled", True) or not row.get("metadata", {}).get("native"):
