@@ -282,19 +282,38 @@ class MCPRuntime:
             logger.exception("Failed to disconnect MCP connection %s", cid)
             raise RuntimeUnavailable(f"Failed to disconnect MCP connection: {exc}") from exc
 
-    def shutdown(self):
+    async def _close_all(self):
         with self._lock:
-            connection_ids = list(self._sessions)
-            loop = self._loop
-        for cid in connection_ids:
+            entries = list(self._sessions.items())
+            self._sessions.clear()
+            self._tools.clear()
+        errors = []
+        for cid, (stack, _session) in entries:
             try:
-                self.disconnect(cid)
-            except RuntimeUnavailable:
-                logger.warning("Could not cleanly disconnect MCP connection %s during shutdown", cid)
+                await stack.aclose()
+            except Exception as exc:
+                errors.append((cid, exc))
+        for cid, exc in errors:
+            logger.warning("MCP session cleanup failed during shutdown for %s: %s", cid, type(exc).__name__)
+
+    def shutdown(self):
+        # Idempotent, best-effort teardown. Close every transport before
+        # stopping the event loop so AsyncExitStack cleanup can run.
+        with self._lock:
+            loop = self._loop
+            thread = self._thread
         if loop and loop.is_running():
-            loop.call_soon_threadsafe(loop.stop)
-        if self._thread and self._thread.is_alive():
-            self._thread.join(timeout=3)
+            try:
+                self._submit(self._close_all(), timeout=15)
+            except Exception:
+                logger.warning("MCP runtime shutdown cleanup failed", exc_info=True)
+            if loop.is_running():
+                loop.call_soon_threadsafe(loop.stop)
+        if thread and thread.is_alive() and thread is not threading.current_thread():
+            thread.join(timeout=3)
+        with self._lock:
+            if self._thread is thread and (not thread or not thread.is_alive()):
+                self._thread = None
 
 
 runtime = MCPRuntime()
