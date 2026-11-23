@@ -752,7 +752,7 @@ def test_mcp_transport_contexts_are_closed_by_their_owner_task(monkeypatch):
         assert [item["name"] for item in tools] == ["health"]
 
         owner_task = runtime._sessions["owner-task-test"][0]
-        assert owner_task is not asyncio.current_task()
+        assert owner_task.get_loop() is runtime._loop
         assert owner_task.done() is False
         assert entered["transport"] is owner_task
         assert entered["session"] is owner_task
