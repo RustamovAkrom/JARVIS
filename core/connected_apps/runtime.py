@@ -175,7 +175,7 @@ class MCPRuntime:
         )):
             raise ValueError("MCP environment must be a string mapping")
 
-        async def factory():
+        def factory():
             from mcp.client.stdio import stdio_client, StdioServerParameters
             params = StdioServerParameters(command=str(command).strip(), args=list(args or []), env=dict(env or {}) or None)
             return stdio_client(params)
@@ -187,7 +187,7 @@ class MCPRuntime:
         url = _validate_http_endpoint(url)
         headers = _validate_headers(headers or {})
 
-        async def factory():
+        def factory():
             from mcp.client.streamable_http import streamablehttp_client
             return streamablehttp_client(url, headers=headers)
 
@@ -198,7 +198,7 @@ class MCPRuntime:
         url = _validate_http_endpoint(url)
         headers = _validate_headers(headers or {})
 
-        async def factory():
+        def factory():
             from mcp.client.sse import sse_client
             return sse_client(url, headers=headers)
 
