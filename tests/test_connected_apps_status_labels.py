@@ -18,7 +18,7 @@ def test_native_app_connect_actions_are_visible_but_disabled_when_connected():
     assert 'self.add_github_btn.setVisible(True)' in source
     assert 'self.add_github_btn.setEnabled(True)' in source
     assert 'self.native_disconnect_btn.setEnabled(github_disconnect_available)' in source
-    assert 'self.native_disconnect_btn.setVisible(github_connected)' in source
+    assert 'self.native_disconnect_btn.setVisible(github_disconnect_available)' in source
     assert 'self.add_calendar_btn.setVisible(True)' in source
     assert 'self.add_calendar_btn.setEnabled(not calendar_connected)' in source
 
@@ -51,4 +51,5 @@ def test_github_reconnect_uses_fresh_oauth_flow_not_saved_bearer_token():
     assert 'service.store.get_credential(connection_id, "oauth_client_id")' in handler
     assert 'service.store.get_credential(connection_id, "oauth_client_secret")' in handler
     assert 'access_token=token' not in handler
-    assert 'row.get("status") != "connected" and not authenticated' in source
+    assert 'status in {"connected", "error", "connecting"}' in source
+    assert 'has_github_token' in source
