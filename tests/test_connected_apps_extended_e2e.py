@@ -70,7 +70,10 @@ class FakeStringSession:
 
 
 class FakeTelegramClient:
+    instances = []
+
     def __init__(self, session, api_id, api_hash, **kwargs):
+        self.__class__.instances.append(self)
         self.session = session if isinstance(session, FakeStringSession) else FakeStringSession()
         self.authorized = self.session.value == "restored-session"
         self.connected = False
@@ -127,6 +130,7 @@ def test_telegram_login_handles_2fa_and_keeps_one_event_loop(monkeypatch):
 
     monkeypatch.setattr(telegram, "TelegramClient", FakeTelegramClient)
     monkeypatch.setattr(telegram, "StringSession", FakeStringSession)
+    FakeTelegramClient.instances.clear()
     adapter = telegram.TelegramPersonalAdapter(MemoryStore())
 
     try:
@@ -149,8 +153,9 @@ def test_telegram_login_handles_2fa_and_keeps_one_event_loop(monkeypatch):
 
         # Telethon clients must remain bound to one event loop for their
         # complete login/connect/disconnect lifecycle.
-        client = adapter._pending.get("+10000000000")
-        assert client is None
+        assert adapter._pending == {}
+        client = FakeTelegramClient.instances[-1]
+        assert len(client.loop_ids) == 1
     finally:
         _stop_telegram_loop(adapter)
 
