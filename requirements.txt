@@ -158,3 +158,6 @@ sherlock-project>=0.14.4     # osint_toolkit — username lookup CLI
 
 # ── Test runner ──────────────────────────────────────────────────────────────
 pytest>=8,<10
+
+# Optional personal-account Telegram MTProto integration (install explicitly).
+# pip install -e .[telegram-personal]
