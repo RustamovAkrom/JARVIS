@@ -385,8 +385,8 @@ class ConnectedAppsService:
         if auth.get("two_factor_required"):
             return {"two_factor_required": True}
         connection = self.connect_telegram_personal(
-            api_id=adapter._pending_api_id if hasattr(adapter, "_pending_api_id") else 0,
-            api_hash=adapter._pending_api_hash if hasattr(adapter, "_pending_api_hash") else "",
+            api_id=auth["api_id"],
+            api_hash=auth["api_hash"],
             session_string=auth["session_string"],
             permissions=permissions, allowed_chats=allowed_chats,
             display_name=display_name or auth.get("user", {}).get("username") or "Telegram Personal",
