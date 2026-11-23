@@ -500,3 +500,33 @@ def test_native_connection_recovers_after_transient_network_failure():
     assert recovered["status"] == "connected"
     assert recovered["last_error"] == ""
     assert states["calls"] == 2
+
+
+
+def test_native_health_check_false_marks_connection_error():
+    from core.connected_apps.service import ConnectedAppsService
+
+    store = MemoryStore(
+        rows={
+            "telegram-invalid-session": {
+                "id": "telegram-invalid-session",
+                "app_id": "telegram_personal",
+                "display_name": "Telegram Personal",
+                "status": "connected",
+                "enabled": True,
+                "metadata": {"native": True, "native_adapter": "telegram_personal"},
+                "last_error": "",
+                "updated_at": 0,
+            }
+        }
+    )
+    service = ConnectedAppsService(store=store)
+    service._native_adapters["telegram_personal"].health_check = lambda cid: False
+
+    result = service.health_check("telegram-invalid-session")
+    row = store.get_connection("telegram-invalid-session")
+
+    assert result["healthy"] is False
+    assert result["status"] == "error"
+    assert row["status"] == "error"
+    assert row["metadata"]["health"] == "unavailable"
