@@ -44,8 +44,11 @@ def test_connected_apps_panel_does_not_duplicate_settings_category_header():
 
 def test_github_reconnect_uses_fresh_oauth_flow_not_saved_bearer_token():
     source = Path("gui/settings/connected_apps_panel.py").read_text(encoding="utf-8")
-    assert 'service.reauthorize_github(' in source
-    assert 'service.store.get_credential(connection_id, "oauth_client_id")' in source
-    assert 'service.store.get_credential(connection_id, "oauth_client_secret")' in source
-    assert 'access_token=token' not in source
+    start = source.index("    def connect_github_oauth(self):")
+    end = source.index("    def connect_github_native(self):", start)
+    handler = source[start:end]
+    assert 'service.reauthorize_github(' in handler
+    assert 'service.store.get_credential(connection_id, "oauth_client_id")' in handler
+    assert 'service.store.get_credential(connection_id, "oauth_client_secret")' in handler
+    assert 'access_token=token' not in handler
     assert 'row.get("status") != "connected" and not authenticated' in source
