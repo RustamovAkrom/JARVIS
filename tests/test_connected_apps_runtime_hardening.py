@@ -675,3 +675,126 @@ def test_mcp_transport_factory_returns_async_context_manager_not_coroutine(
 
     assert captured["is_async_context_manager"] is True
     assert captured["is_awaitable"] is False
+
+
+
+def test_mcp_transport_contexts_are_closed_by_their_owner_task(monkeypatch):
+    import asyncio
+    import mcp
+    from types import SimpleNamespace
+    from core.connected_apps.runtime import MCPRuntime
+
+    entered = {}
+    exited = {}
+
+    class FakeTransportContext:
+        async def __aenter__(self):
+            entered["transport"] = asyncio.current_task()
+            return (object(), object())
+
+        async def __aexit__(self, exc_type, exc, tb):
+            exited["transport"] = asyncio.current_task()
+            return False
+
+    class FakeClientSession:
+        def __init__(self, *_transport):
+            pass
+
+        async def __aenter__(self):
+            entered["session"] = asyncio.current_task()
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            exited["session"] = asyncio.current_task()
+            return False
+
+        async def initialize(self):
+            return None
+
+        async def list_tools(self):
+            return SimpleNamespace(tools=[
+                SimpleNamespace(
+                    name="health",
+                    description="",
+                    inputSchema={"type": "object"},
+                    annotations=None,
+                )
+            ])
+
+        async def ping(self):
+            return None
+
+    monkeypatch.setattr(mcp, "ClientSession", FakeClientSession)
+    runtime = MCPRuntime()
+    try:
+        tools = runtime._submit(
+            runtime._connect("owner-task-test", lambda: FakeTransportContext()),
+            timeout=10,
+        )
+        assert [item["name"] for item in tools] == ["health"]
+
+        owner_task = runtime._sessions["owner-task-test"][0]
+        assert owner_task is not asyncio.current_task()
+        assert owner_task.done() is False
+        assert entered["transport"] is owner_task
+        assert entered["session"] is owner_task
+
+        assert runtime.disconnect("owner-task-test") is True
+
+        assert owner_task.done() is True
+        assert exited["session"] is owner_task
+        assert exited["transport"] is owner_task
+        assert "owner-task-test" not in runtime._sessions
+        assert runtime.tools("owner-task-test") == []
+    finally:
+        runtime.shutdown()
+
+
+def test_mcp_shutdown_closes_all_sessions_from_owner_tasks(monkeypatch):
+    import asyncio
+    import mcp
+    from types import SimpleNamespace
+    from core.connected_apps.runtime import MCPRuntime
+
+    exited = []
+
+    class FakeTransportContext:
+        async def __aenter__(self):
+            return (object(), object())
+
+        async def __aexit__(self, exc_type, exc, tb):
+            exited.append(("transport", asyncio.current_task()))
+            return False
+
+    class FakeClientSession:
+        def __init__(self, *_transport):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            exited.append(("session", asyncio.current_task()))
+            return False
+
+        async def initialize(self):
+            return None
+
+        async def list_tools(self):
+            return SimpleNamespace(tools=[])
+
+    monkeypatch.setattr(mcp, "ClientSession", FakeClientSession)
+    runtime = MCPRuntime()
+    runtime._submit(
+        runtime._connect("shutdown-owner-test", lambda: FakeTransportContext()),
+        timeout=10,
+    )
+    owner_task = runtime._sessions["shutdown-owner-test"][0]
+
+    runtime.shutdown()
+
+    assert owner_task.done() is True
+    assert {kind for kind, _task in exited} == {"transport", "session"}
+    assert all(task is owner_task for _kind, task in exited)
+    assert runtime._sessions == {}
+    assert runtime._tools == {}
