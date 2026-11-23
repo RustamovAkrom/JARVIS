@@ -370,6 +370,32 @@ class ConnectedAppsService:
         return result
 
     @_serialized_connection_operation
+    def begin_telegram_login(self, *, api_id, api_hash, phone):
+        adapter = self._native_adapters.get("telegram_personal")
+        if adapter is None:
+            raise RuntimeError("Telegram Personal adapter is unavailable")
+        return adapter.begin_login(api_id, api_hash, phone)
+
+    def finish_telegram_login(self, *, phone, code, password=None, permissions=None, allowed_chats=None, display_name=None):
+        adapter = self._native_adapters.get("telegram_personal")
+        if adapter is None:
+            raise RuntimeError("Telegram Personal adapter is unavailable")
+        auth = adapter.finish_login(phone, code, password=password)
+        if auth.get("two_factor_required"):
+            return {"two_factor_required": True}
+        connection = self.connect_telegram_personal(
+            api_id=adapter._pending_api_id if hasattr(adapter, "_pending_api_id") else 0,
+            api_hash=adapter._pending_api_hash if hasattr(adapter, "_pending_api_hash") else "",
+            session_string=auth["session_string"],
+            permissions=permissions, allowed_chats=allowed_chats,
+            display_name=display_name or auth.get("user", {}).get("username") or "Telegram Personal",
+        )
+        return {"two_factor_required": False, "connection": connection, "user": auth.get("user")}
+
+    def cancel_telegram_login(self, phone):
+        adapter = self._native_adapters.get("telegram_personal")
+        return bool(adapter and adapter.cancel_login(phone))
+
     def connect_telegram_personal(
         self, *, api_id, api_hash, session_string, permissions=None,
         allowed_chats=None, display_name="Telegram Personal", connection_id=None,
