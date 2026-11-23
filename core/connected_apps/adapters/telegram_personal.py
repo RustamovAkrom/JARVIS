@@ -62,7 +62,7 @@ class TelegramPersonalAdapter(NativeAppAdapter):
         self._locks: dict[str, threading.RLock] = {}
         self._guard = threading.RLock()
         self._loop = None
-        self._loop_thread = None
+        self._loop_thread = None\n        self._pending = {}
 
     def _lock(self, cid):
         with self._guard:
@@ -123,6 +123,60 @@ class TelegramPersonalAdapter(NativeAppAdapter):
             loop = self._loop
         future = asyncio.run_coroutine_threadsafe(coro, loop)
         return future.result(timeout=60)
+
+    def begin_login(self, api_id, api_hash, phone):
+        if TelegramClient is None:
+            raise RuntimeError("Telethon is not installed. Install .[telegram-personal].")
+        api_id = int(api_id)
+        if api_id <= 0 or not api_hash or not phone:
+            raise ValueError("Valid api_id, api_hash and phone are required")
+        client = TelegramClient(StringSession(), api_id, str(api_hash))
+        self._run(client.connect())
+        sent = self._run(client.send_code_request(str(phone)))
+        token = sent.phone_code_hash
+        key = str(phone)
+        with self._guard:
+            self._pending[key] = {"client": client, "api_id": api_id, "api_hash": str(api_hash), "phone_code_hash": token}
+        return {"phone": key, "code_sent": True, "code_type": getattr(sent, "type", None).__class__.__name__ if getattr(sent, "type", None) else "unknown"}
+
+    def finish_login(self, phone, code, password=None):
+        key = str(phone)
+        with self._guard:
+            pending = self._pending.get(key)
+        if not pending:
+            raise RuntimeError("No pending Telegram login. Start authentication again.")
+        client = pending["client"]
+        async def authenticate():
+            try:
+                await client.sign_in(phone=key, code=str(code), phone_code_hash=pending["phone_code_hash"])
+            except Exception as exc:
+                # Telethon raises SessionPasswordNeededError when 2FA is enabled.
+                if type(exc).__name__ == "SessionPasswordNeededError":
+                    if not password:
+                        return {"two_factor_required": True}
+                    await client.sign_in(password=str(password))
+                else:
+                    raise
+            if not await client.is_user_authorized():
+                raise RuntimeError("Telegram authentication was not completed")
+            return {"two_factor_required": False, "session": client.session.save(), "me": await client.get_me()}
+        result = self._run(authenticate())
+        if result.get("two_factor_required"):
+            return result
+        with self._guard:
+            self._pending.pop(key, None)
+        self._run(client.disconnect())
+        return {"authenticated": True, "session_string": result["session"], "user": {"id": result["me"].id, "name": result["me"].first_name or "", "username": result["me"].username or ""}}
+
+    def cancel_login(self, phone):
+        with self._guard:
+            pending = self._pending.pop(str(phone), None)
+        if pending:
+            try:
+                self._run(pending["client"].disconnect())
+            except Exception:
+                pass
+        return bool(pending)
 
     def health_check(self, cid):
         try:
