@@ -204,7 +204,17 @@ def test_native_github_tools_use_confirmation_for_write(monkeypatch):
     monkeypatch.setattr(svc._native_adapters["github"],"execute",lambda cid,name,args: {"ok":name})
     svc.connect_native("github",access_token="token",connection_id="c1")
     agent=ConnectedAppsAgent(svc)
+    captured={}
+    # Native read-only execution is confirmation-gated by default. The
+    # connection-level setting is the explicit opt-in for trusted automation.
+    with patch("core.confirm.request",side_effect=lambda **kw: captured.update(kw) or "pending"):
+        result=agent.execute("c1","github_get_profile",{},read_only=True)
+    assert result=="pending"
+    assert captured["key"]=="connected_apps:c1:github_get_profile"
+
+    store.rows["c1"]["metadata"]["auto_approve_read_only"]=True
     assert agent.execute("c1","github_get_profile",{},read_only=True)=={"ok":"github_get_profile"}
+
     captured={}
     with patch("core.confirm.request",side_effect=lambda **kw: captured.update(kw) or "pending"):
         result=agent.execute("c1","github_create_issue",{"repository":"owner/repo","title":"Test"})
