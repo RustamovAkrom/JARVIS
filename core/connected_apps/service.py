@@ -358,7 +358,8 @@ class ConnectedAppsService:
         self.store.upsert_connection(data)
         self.store.set_credential(cid, "access_token", access_token)
         try:
-            adapter.health_check(cid)
+            if not adapter.health_check(cid):
+                raise RuntimeError("Telegram session health check failed")
             row.status = ConnectionStatus.CONNECTED
             row.metadata["health"] = "healthy"
         except Exception as exc:
