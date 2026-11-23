@@ -12,7 +12,7 @@ def test_native_app_status_labels_show_connected_error_and_not_connected_states(
     assert '"Error" if calendar_status == "error" else "Not connected"' in source
 
 
-def test_native_app_connect_actions_are_visible_but_disabled_when_connected():
+def test_native_app_card_actions_remain_available_when_reconnect_is_possible():
     source = Path("gui/settings/connected_apps_panel.py").read_text(encoding="utf-8")
 
     assert 'self.add_github_btn.setVisible(True)' in source
@@ -20,7 +20,9 @@ def test_native_app_connect_actions_are_visible_but_disabled_when_connected():
     assert 'self.native_disconnect_btn.setEnabled(github_disconnect_available)' in source
     assert 'self.native_disconnect_btn.setVisible(github_disconnect_available)' in source
     assert 'self.add_calendar_btn.setVisible(True)' in source
-    assert 'self.add_calendar_btn.setEnabled(not calendar_connected)' in source
+    assert 'self.add_calendar_btn.setEnabled(True)' in source
+    assert 'self.calendar_disconnect_btn.setEnabled(calendar_disconnect_available)' in source
+    assert 'self.calendar_disconnect_btn.setVisible(calendar_disconnect_available)' in source
 
 
 def test_connected_app_selection_does_not_reveal_connect_action():
@@ -53,3 +55,16 @@ def test_github_reconnect_uses_fresh_oauth_flow_not_saved_bearer_token():
     assert 'access_token=token' not in handler
     assert 'status in {"connected", "error", "connecting"}' in source
     assert 'has_github_token' in source
+
+
+
+def test_google_calendar_reconnect_uses_fresh_oauth_lifecycle():
+    source = Path("gui/settings/connected_apps_panel.py").read_text(encoding="utf-8")
+    start = source.index("    def connect_google_calendar(self):")
+    end = source.index("    def connect_github_oauth(self):", start)
+    handler = source[start:end]
+    assert 'service.reauthorize_native_oauth(' in handler
+    assert '"google_calendar"' in handler
+    assert '"google"' in handler
+    assert 'oauth_client_id' in handler
+    assert 'oauth_client_secret' in handler
