@@ -137,11 +137,15 @@ class TelegramPersonalAdapter(NativeAppAdapter):
         if api_id <= 0 or not api_hash or not phone:
             raise ValueError("Valid api_id, api_hash and phone are required")
         client = TelegramClient(StringSession(), api_id, str(api_hash))
-        with self._guard:
-            self._pending_api_id = api_id
-            self._pending_api_hash = str(api_hash)
-        self._run(client.connect())
-        sent = self._run(client.send_code_request(str(phone)))
+        try:
+            self._run(client.connect())
+            sent = self._run(client.send_code_request(str(phone)))
+        except Exception:
+            try:
+                self._run(client.disconnect())
+            except Exception:
+                pass
+            raise
         token = sent.phone_code_hash
         key = str(phone)
         with self._guard:
@@ -175,7 +179,7 @@ class TelegramPersonalAdapter(NativeAppAdapter):
         with self._guard:
             self._pending.pop(key, None)
         self._run(client.disconnect())
-        return {"authenticated": True, "session_string": result["session"], "user": {"id": result["me"].id, "name": result["me"].first_name or "", "username": result["me"].username or ""}}
+        return {"authenticated": True, "session_string": result["session"], "api_id": pending["api_id"], "api_hash": pending["api_hash"], "user": {"id": result["me"].id, "name": result["me"].first_name or "", "username": result["me"].username or ""}}
 
     def cancel_login(self, phone):
         with self._guard:
