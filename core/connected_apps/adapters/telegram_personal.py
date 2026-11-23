@@ -62,7 +62,8 @@ class TelegramPersonalAdapter(NativeAppAdapter):
         self._locks: dict[str, threading.RLock] = {}
         self._guard = threading.RLock()
         self._loop = None
-        self._loop_thread = None\n        self._pending = {}
+        self._loop_thread = None
+        self._pending = {}
 
     def _lock(self, cid):
         with self._guard:
