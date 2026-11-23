@@ -131,6 +131,9 @@ class TelegramPersonalAdapter(NativeAppAdapter):
         if api_id <= 0 or not api_hash or not phone:
             raise ValueError("Valid api_id, api_hash and phone are required")
         client = TelegramClient(StringSession(), api_id, str(api_hash))
+        with self._guard:
+            self._pending_api_id = api_id
+            self._pending_api_hash = str(api_hash)
         self._run(client.connect())
         sent = self._run(client.send_code_request(str(phone)))
         token = sent.phone_code_hash
