@@ -578,30 +578,47 @@ class ConnectedAppsPanel(QWidget):
         calendar_row = native_by_app.get("google_calendar")
         github_status = str((github_row or {}).get("status") or "not connected").casefold()
         calendar_status = str((calendar_row or {}).get("status") or "not connected").casefold()
-        # OAuth token presence means the account is authenticated even if an
-        # earlier health check marked the row as error. Health is shown as a
-        # tooltip and must not hide Disconnect or offer a fresh Connect.
-        github_authenticated = bool(
+        github_error_text = str((github_row or {}).get("last_error") or "")
+        github_has_token = bool(
             github_row and service.store.get_credential(github_row.get("id"), "access_token")
         )
-        github_connected = github_status == "connected" or github_authenticated
+        # Older builds could persist status=connected after a failed 401 check.
+        # Treat that exact condition as an authentication error, not as a live
+        # connection. Token presence only enables local Disconnect.
+        github_auth_rejected = (
+            "401" in github_error_text
+            or "bad credentials" in github_error_text.casefold()
+        )
+        github_connected = github_status == "connected" and not github_auth_rejected
+        github_error = github_status == "error" or github_auth_rejected
+        github_disconnect_available = bool(
+            github_row and (
+                github_status in {"connected", "error", "connecting"}
+                or github_has_token
+            )
+        )
+        github_reconnect = bool(
+            github_row and (
+                github_status in {"connected", "error", "connecting"}
+                or github_has_token
+            )
+        )
         calendar_connected = calendar_status == "connected"
         self.github_status_label.setText(
             "Connected" if github_connected else
-            ("Error" if github_status == "error" else "Not connected")
+            ("Error" if github_error else "Not connected")
         )
         self.calendar_status_label.setText(
             "Connected" if calendar_connected else
             ("Error" if calendar_status == "error" else "Not connected")
         )
-        self.github_status_label.setToolTip((github_row or {}).get("last_error") or "")
+        self.github_status_label.setToolTip(github_error_text)
         self.calendar_status_label.setToolTip((calendar_row or {}).get("last_error") or "")
-        self.add_github_btn.setText("Reconnect" if github_connected else "Connect")
+        self.add_github_btn.setText("Reconnect" if github_reconnect else "Connect")
         self.add_github_btn.setVisible(True)
-        # Reconnect is an actionable operation even when already authenticated.
         self.add_github_btn.setEnabled(True)
-        self.native_disconnect_btn.setEnabled(github_connected)
-        self.native_disconnect_btn.setVisible(github_connected)
+        self.native_disconnect_btn.setEnabled(github_disconnect_available)
+        self.native_disconnect_btn.setVisible(github_disconnect_available)
         self.add_calendar_btn.setText("Reconnect" if calendar_connected else "Connect")
         self.add_calendar_btn.setVisible(True)
         self.add_calendar_btn.setEnabled(not calendar_connected)
@@ -609,8 +626,8 @@ class ConnectedAppsPanel(QWidget):
         for row in native_rows:
             app_id = str(row.get("app_id") or "").casefold()
             status = str(row.get("status") or "unknown").replace("_", " ").title()
-            if app_id == "github" and github_authenticated:
-                status = "Connected"
+            if app_id == "github":
+                status = "Connected" if github_connected else ("Error" if github_error else status)
             item=QListWidgetItem(f"{row.get('display_name', app_id)}  ·  {status}")
             item.setData(Qt.ItemDataRole.UserRole,row.get("id"))
             item.setIcon(QIcon(str(self._native_icon_path(app_id))) if self._native_icon_path(app_id) else QIcon())
@@ -639,15 +656,10 @@ class ConnectedAppsPanel(QWidget):
     def _native_selection_changed(self):
         cid=self.native_selected_id()
         row=service.store.get_connection(cid) if cid else None
-        connected=bool(row and row.get("status")=="connected")
-        app_id=str((row or {}).get("app_id") or "").casefold()
-        # Connect visibility is app-global and is set by refresh(); selection
-        # must not re-show a button for an already-connected app.
-        self.native_disconnect_btn.setEnabled(connected)
-        # The card-level Disconnect action is selection-based; make its target
-        # explicit and avoid disconnecting a stale/non-connected row.
         if not row:
             return
+        # GitHub card actions are app-scoped and are managed only by refresh().
+        # Selecting a row must never override their enabled/visible state.
         tools=service.native_tools(cid)
         lines=[
             f"{row.get('display_name','Connected App')}",
@@ -661,11 +673,18 @@ class ConnectedAppsPanel(QWidget):
     def disconnect_native_app(self, app_id):
         row = next((item for item in service.connections()
                     if str(item.get("app_id") or "").casefold() == app_id.casefold()), None)
-        authenticated = bool(
+        has_github_token = bool(
             row and app_id.casefold() == "github"
             and service.store.get_credential(row.get("id"), "access_token")
         )
-        if not row or (row.get("status") != "connected" and not authenticated):
+        status = str((row or {}).get("status") or "").casefold()
+        can_disconnect = bool(
+            row and (
+                status in {"connected", "error", "connecting"}
+                or has_github_token
+            )
+        )
+        if not can_disconnect:
             self.status.setText(f"{app_id}: no active connection to disconnect.")
             self.refresh()
             return
@@ -951,48 +970,39 @@ class ConnectedAppsPanel(QWidget):
         self.pool.start(worker)
 
     def connect_github_oauth(self):
-        # Reconnect an already-authenticated GitHub account using its persisted
-        # OAuth token. Do not make the visible Reconnect button a no-op.
+        # A Reconnect always starts a new OAuth authorization-code flow. GitHub
+        # OAuth App access tokens are not refreshed by retrying the old token.
         native_row = next(
             (row for row in service.connections()
              if str(row.get("app_id") or "").casefold() == "github"),
             None,
         )
-        if native_row and self.github_status_label.text().casefold() == "connected":
-            connection_id = native_row.get("id")
-            token = service.store.get_credential(connection_id, "access_token")
-            if token:
-                self._busy(True, "Reconnecting GitHub…")
-                worker = _Worker(
-                    lambda: service.connect_native(
-                        "github", access_token=token, connection_id=connection_id
-                    )
-                )
-                worker.signals.finished.connect(self._connected)
-                self.pool.start(worker)
+        connection_id = (native_row or {}).get("id") or "github-native"
+        client_id = service.store.get_credential(connection_id, "oauth_client_id")
+        client_secret = service.store.get_credential(connection_id, "oauth_client_secret")
+        if not client_id:
+            client_id, ok = QInputDialog.getText(
+                self, "Connect GitHub", "GitHub OAuth App Client ID:"
+            )
+            if not ok or not client_id.strip():
                 return
-        client_id,ok=QInputDialog.getText(
-            self,"Connect GitHub","GitHub OAuth App Client ID:"
+        if not client_secret:
+            client_secret, ok = QInputDialog.getText(
+                self, "Connect GitHub",
+                "GitHub OAuth App Client Secret:",
+                QLineEdit.EchoMode.Password,
+            )
+            if not ok or not client_secret.strip():
+                return
+
+        self._busy(True, "Opening GitHub authorization in browser…")
+        worker = _Worker(
+            lambda: service.reauthorize_github(
+                client_id=client_id.strip(),
+                client_secret=client_secret.strip(),
+                connection_id=connection_id,
+            )
         )
-        if not ok or not client_id.strip():
-            return
-        client_secret,ok=QInputDialog.getText(
-            self,"Connect GitHub","OAuth App Client Secret (required by GitHub OAuth Apps):",
-            QLineEdit.EchoMode.Password,
-        )
-        if not ok:
-            return
-        self._busy(True,"Opening GitHub authorization in browser…")
-        def authorize():
-            from core.connected_apps.auth_service import OAuthService
-            auth=OAuthService(service.store)
-            connection_id="github-native"
-            auth.authorize_connection(connection_id,"github",client_id.strip(),client_secret=client_secret)
-            token=auth.get_access_token(connection_id)
-            result=service.connect_native("github",access_token=token,connection_id=connection_id)
-            # Keep the native connection ID stable and avoid exposing OAuth metadata.
-            return result
-        worker=_Worker(authorize)
         worker.signals.finished.connect(self._connected)
         self.pool.start(worker)
 
