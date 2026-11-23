@@ -82,6 +82,9 @@ class ConnectedAppsService:
         self._register_native_adapter(
             "google_calendar", "core.connected_apps.adapters.google_calendar", "GoogleCalendarAdapter"
         )
+        self._register_native_adapter(
+            "telegram_personal", "core.connected_apps.adapters.telegram_personal", "TelegramPersonalAdapter"
+        )
 
     def _connection_lock(self, cid):
         with self._connection_lock_guard:
