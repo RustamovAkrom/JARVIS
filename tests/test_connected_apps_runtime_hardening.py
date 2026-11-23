@@ -608,3 +608,25 @@ def test_native_disconnect_disable_and_remove_do_not_require_mcp_runtime(monkeyp
     service.set_enabled("native-1", False)
     assert store.get_connection("native-1")["enabled"] is False
     assert service.remove("native-1") is True
+
+
+def test_runtime_shutdown_closes_remaining_session_stacks():
+    from core.connected_apps.runtime import MCPRuntime
+
+    class Stack:
+        def __init__(self):
+            self.closed = False
+        async def aclose(self):
+            self.closed = True
+
+    runtime = MCPRuntime()
+    stack = Stack()
+    runtime._sessions["c1"] = (stack, object())
+    runtime._tools["c1"] = [{"name": "tool"}]
+    runtime._ensure_loop()
+    runtime.shutdown()
+    assert stack.closed is True
+    assert runtime._sessions == {}
+    assert runtime._tools == {}
+    assert runtime._thread is None
+    runtime.shutdown()
