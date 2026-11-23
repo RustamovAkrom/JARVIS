@@ -365,7 +365,13 @@ class ConnectedAppsAgent:
         # Automatic execution is permitted only when the MCP server explicitly
         # marks the operation read-only and non-destructive. All other calls fail closed.
         from core.connected_apps.service import _auto_approve_read_only
-        safe_read = _auto_approve_read_only(\n            tool.get("connection_metadata") or {},\n            read_only=_annotation(tool, "readOnlyHint"),\n            destructive=_annotation(tool, "destructiveHint"),\n            requires_confirmation=False,\n        )\n        if read_only and safe_read and not destructive:
+        safe_read = _auto_approve_read_only(
+            tool.get("connection_metadata") or {},
+            read_only=_annotation(tool, "readOnlyHint"),
+            destructive=_annotation(tool, "destructiveHint"),
+            requires_confirmation=False,
+        )
+        if read_only and safe_read and not destructive:
             return self._service.call_tool(connection_id, tool_name, args)
         from core import confirm
         return confirm.request(
