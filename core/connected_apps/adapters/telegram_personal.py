@@ -45,6 +45,7 @@ TOOLS = (
     NativeTool("telegram_send_message", "Send a message. Confirmation is required by default.", {"type":"object","properties":{"chat_id":{"type":"string"},"text":{"type":"string","minLength":1,"maxLength":4096}},"required":["chat_id","text"],"additionalProperties":False}, read_only=False, requires_confirmation=True),
     NativeTool("telegram_reply_message", "Reply to a message. Confirmation is required by default.", {"type":"object","properties":{"chat_id":{"type":"string"},"message_id":{"type":"integer"},"text":{"type":"string","minLength":1,"maxLength":4096}},"required":["chat_id","message_id","text"],"additionalProperties":False}, read_only=False, requires_confirmation=True),
     NativeTool("telegram_get_history", "Read older messages from an explicitly allowed chat.", {"type":"object","properties":{"chat_id":{"type":"string"},"limit":{"type":"integer","minimum":1,"maximum":100}},"required":["chat_id"],"additionalProperties":False}, read_only=True),
+    NativeTool("telegram_get_media_metadata", "Read media metadata from a message without downloading its content.", {"type":"object","properties":{"chat_id":{"type":"string"},"message_id":{"type":"integer"}},"required":["chat_id","message_id"],"additionalProperties":False}, read_only=True),
     NativeTool("telegram_forward_message", "Forward a message. Confirmation is required.", {"type":"object","properties":{"source_chat_id":{"type":"string"},"message_id":{"type":"integer"},"destination_chat_id":{"type":"string"}},"required":["source_chat_id","message_id","destination_chat_id"],"additionalProperties":False}, read_only=False, requires_confirmation=True),
     NativeTool("telegram_edit_message", "Edit a sent message. Confirmation is required.", {"type":"object","properties":{"chat_id":{"type":"string"},"message_id":{"type":"integer"},"text":{"type":"string","minLength":1,"maxLength":4096}},"required":["chat_id","message_id","text"],"additionalProperties":False}, read_only=False, requires_confirmation=True),
     NativeTool("telegram_delete_message", "Delete a message. Confirmation is required.", {"type":"object","properties":{"chat_id":{"type":"string"},"message_id":{"type":"integer"}},"required":["chat_id","message_id"],"additionalProperties":False}, read_only=False, destructive=True, requires_confirmation=True),
@@ -260,6 +261,19 @@ class TelegramPersonalAdapter(NativeAppAdapter):
                 async for msg in client.iter_messages(int(chat_id),limit=limit):
                     rows.append({"message_id":msg.id,"date":msg.date.isoformat() if msg.date else None,"text":msg.message or ""})
                 return rows
+            return self._run(run())
+
+        if tool_name == "telegram_get_media_metadata":
+            chat_id=str(args["chat_id"])
+            self._require(cid,"read_media",chat_id)
+            client=self._client(cid)
+            async def run():
+                msg=await client.get_messages(int(chat_id),ids=int(args["message_id"]))
+                if not msg:return None
+                media=msg.media
+                if not media:return {"has_media":False}
+                file_obj=getattr(msg,"file",None)
+                return {"has_media":True,"media_type":type(media).__name__,"mime_type":getattr(file_obj,"mime_type",None),"name":getattr(file_obj,"name",None),"size":getattr(file_obj,"size",None)}
             return self._run(run())
 
         if tool_name == "telegram_list_contacts":
