@@ -630,3 +630,48 @@ def test_runtime_shutdown_closes_remaining_session_stacks():
     assert runtime._tools == {}
     assert runtime._thread is None
     runtime.shutdown()
+
+
+
+@pytest.mark.parametrize("transport", ["stdio", "http", "sse"])
+def test_mcp_transport_factory_returns_async_context_manager_not_coroutine(
+    monkeypatch, transport
+):
+    """Regression: transport factories must return async context managers directly."""
+    import inspect
+
+    pytest.importorskip("mcp")
+    from core.connected_apps.runtime import MCPRuntime
+
+    runtime = MCPRuntime()
+    captured = {}
+
+    def inspect_submit(coro, timeout=60):
+        # _connect receives this factory and passes factory() to
+        # AsyncExitStack.enter_async_context(). The factory itself must not be
+        # async, otherwise it returns a coroutine rather than an async CM.
+        factory = coro.cr_frame.f_locals["factory"]
+        context_manager = factory()
+        captured["is_async_context_manager"] = (
+            callable(getattr(context_manager, "__aenter__", None))
+            and callable(getattr(context_manager, "__aexit__", None))
+        )
+        captured["is_awaitable"] = inspect.isawaitable(context_manager)
+        coro.close()
+        return []
+
+    monkeypatch.setattr(runtime, "_submit", inspect_submit)
+
+    if transport == "stdio":
+        runtime.connect_stdio(
+            "factory-contract-stdio",
+            "python",
+            ["-c", "pass"],
+        )
+    elif transport == "http":
+        runtime.connect_http("factory-contract-http", "https://example.com/mcp")
+    else:
+        runtime.connect_sse("factory-contract-sse", "https://example.com/sse")
+
+    assert captured["is_async_context_manager"] is True
+    assert captured["is_awaitable"] is False
