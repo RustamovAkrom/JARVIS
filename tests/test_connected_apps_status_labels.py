@@ -17,6 +17,8 @@ def test_native_app_connect_actions_are_visible_but_disabled_when_connected():
 
     assert 'self.add_github_btn.setVisible(True)' in source
     assert 'self.add_github_btn.setEnabled(not github_connected)' in source
+    assert 'self.native_disconnect_btn.setEnabled(github_connected)' in source
+    assert 'self.native_disconnect_btn.setVisible(github_connected)' in source
     assert 'self.add_calendar_btn.setVisible(True)' in source
     assert 'self.add_calendar_btn.setEnabled(not calendar_connected)' in source
 
