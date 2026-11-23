@@ -65,6 +65,18 @@ class FakeConnectedAppsService:
         self.store.set_credential(connection_id, "access_token", "fresh-test-token")
         return row
 
+    def reauthorize_native_oauth(
+        self, app_id, provider_id, *, client_id, client_secret="", connection_id=None
+    ):
+        self.reauthorize_calls.append((app_id, provider_id, client_id, client_secret, connection_id))
+        row = self.store.get_connection(connection_id)
+        row["status"] = "connected"
+        row["last_error"] = ""
+        row.setdefault("metadata", {})["health"] = "healthy"
+        self.store.upsert_connection(row)
+        self.store.set_credential(connection_id, "access_token", "fresh-calendar-token")
+        return row
+
     def disconnect(self, cid):
         self.disconnect_calls.append(cid)
         row = self.store.get_connection(cid)
@@ -73,7 +85,8 @@ class FakeConnectedAppsService:
             row["last_error"] = ""
             row.setdefault("metadata", {})["health"] = "disconnected"
             self.store.upsert_connection(row)
-            self.store.delete_credential(cid, "access_token")
+            for key in ("access_token", "refresh_token", "id_token", "expires_at", "token_type"):
+                self.store.delete_credential(cid, key)
         return True
 
     def remove(self, cid):
@@ -126,6 +139,20 @@ def _github_row():
         "scopes": ["repo", "read:user", "user:email"],
         "last_error": "",
         "metadata": {"native": True, "native_adapter": "github", "health": "healthy"},
+    }
+
+
+def _google_calendar_row():
+    return {
+        "id": "google-calendar-native",
+        "app_id": "google_calendar",
+        "display_name": "Google Calendar",
+        "status": "connected",
+        "enabled": True,
+        "auth_type": "oauth2",
+        "scopes": ["https://www.googleapis.com/auth/calendar.events"],
+        "last_error": "",
+        "metadata": {"native": True, "native_adapter": "google_calendar", "health": "healthy"},
     }
 
 
@@ -311,6 +338,65 @@ def test_connected_apps_panel_tabs_and_mcp_controls_are_mounted(qapp, monkeypatc
         panel.sections.setCurrentIndex(0)
         QTest.qWait(20)
         assert panel.sections.currentIndex() == 0
+    finally:
+        panel.close()
+        panel.deleteLater()
+        qapp.processEvents()
+
+
+
+def test_connected_apps_panel_google_calendar_reconnect_and_disconnect_runtime(
+    qapp, monkeypatch
+):
+    import gui.settings.connected_apps_panel as panel_module
+    from gui.settings.connected_apps_panel import ConnectedAppsPanel
+    from PyQt6.QtCore import Qt
+    from PyQt6.QtTest import QTest
+
+    service = FakeConnectedAppsService(
+        rows={"google-calendar-native": _google_calendar_row()},
+        credentials={
+            ("google-calendar-native", "access_token"): "old-calendar-token",
+            ("google-calendar-native", "oauth_client_id"): "google-client-id",
+            ("google-calendar-native", "oauth_client_secret"): "google-client-secret",
+        },
+    )
+    monkeypatch.setattr(panel_module, "service", service)
+
+    panel = ConnectedAppsPanel()
+    panel.pool = InlinePool()
+    panel.show()
+    qapp.processEvents()
+    try:
+        assert panel.calendar_status_label.text() == "Connected"
+        assert panel.add_calendar_btn.text() == "Reconnect"
+        assert panel.add_calendar_btn.isEnabled()
+        assert panel.calendar_disconnect_btn.isVisible()
+        assert panel.calendar_disconnect_btn.isEnabled()
+
+        QTest.mouseClick(panel.add_calendar_btn, Qt.MouseButton.LeftButton)
+        qapp.processEvents()
+        assert service.reauthorize_calls == [
+            (
+                "google_calendar",
+                "google",
+                "google-client-id",
+                "google-client-secret",
+                "google-calendar-native",
+            )
+        ]
+        assert service.store.get_credential(
+            "google-calendar-native", "access_token"
+        ) == "fresh-calendar-token"
+
+        QTest.mouseClick(panel.calendar_disconnect_btn, Qt.MouseButton.LeftButton)
+        qapp.processEvents()
+        assert service.disconnect_calls == ["google-calendar-native"]
+        assert service.store.get_credential(
+            "google-calendar-native", "access_token"
+        ) == ""
+        assert panel.calendar_status_label.text() == "Not connected"
+        assert not panel.calendar_disconnect_btn.isVisible()
     finally:
         panel.close()
         panel.deleteLater()
