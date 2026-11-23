@@ -73,6 +73,9 @@ dependencies = [
 connected-apps = [
     "mcp>=1.0,<2",
 ]
+telegram-personal = [
+    "telethon>=1.42,<2",
+]
 test = [
     "pytest>=8,<10",
 ]
