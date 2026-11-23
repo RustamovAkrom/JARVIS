@@ -598,7 +598,8 @@ class ConnectedAppsPanel(QWidget):
         self.calendar_status_label.setToolTip((calendar_row or {}).get("last_error") or "")
         self.add_github_btn.setText("Reconnect" if github_connected else "Connect")
         self.add_github_btn.setVisible(True)
-        self.add_github_btn.setEnabled(not github_connected)
+        # Reconnect is an actionable operation even when already authenticated.
+        self.add_github_btn.setEnabled(True)
         self.native_disconnect_btn.setEnabled(github_connected)
         self.native_disconnect_btn.setVisible(github_connected)
         self.add_calendar_btn.setText("Reconnect" if calendar_connected else "Connect")
