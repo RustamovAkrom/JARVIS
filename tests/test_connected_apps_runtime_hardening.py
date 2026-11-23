@@ -611,21 +611,39 @@ def test_native_disconnect_disable_and_remove_do_not_require_mcp_runtime(monkeyp
 
 
 def test_runtime_shutdown_closes_remaining_session_stacks():
+    import asyncio
     from core.connected_apps.runtime import MCPRuntime
 
     class Stack:
         def __init__(self):
             self.closed = False
+            self.exit_task = None
+
         async def aclose(self):
+            self.exit_task = asyncio.current_task()
             self.closed = True
 
     runtime = MCPRuntime()
     stack = Stack()
-    runtime._sessions["c1"] = (stack, object())
-    runtime._tools["c1"] = [{"name": "tool"}]
-    runtime._ensure_loop()
+
+    async def install_fake_owner():
+        stop_event = asyncio.Event()
+
+        async def owner():
+            await stop_event.wait()
+            await stack.aclose()
+
+        owner_task = asyncio.create_task(owner())
+        runtime._sessions["c1"] = (owner_task, object(), stop_event)
+        runtime._tools["c1"] = [{"name": "tool"}]
+        return owner_task
+
+    owner_task = runtime._submit(install_fake_owner())
     runtime.shutdown()
+
     assert stack.closed is True
+    assert stack.exit_task is owner_task
+    assert owner_task.done() is True
     assert runtime._sessions == {}
     assert runtime._tools == {}
     assert runtime._thread is None
