@@ -44,6 +44,11 @@ TOOLS = (
     NativeTool("telegram_get_recent_messages", "Read recent messages from an explicitly allowed chat.", {"type":"object","properties":{"chat_id":{"type":"string"},"limit":{"type":"integer","minimum":1,"maximum":50}},"required":["chat_id"],"additionalProperties":False}, read_only=True),
     NativeTool("telegram_send_message", "Send a message. Confirmation is required by default.", {"type":"object","properties":{"chat_id":{"type":"string"},"text":{"type":"string","minLength":1,"maxLength":4096}},"required":["chat_id","text"],"additionalProperties":False}, read_only=False, requires_confirmation=True),
     NativeTool("telegram_reply_message", "Reply to a message. Confirmation is required by default.", {"type":"object","properties":{"chat_id":{"type":"string"},"message_id":{"type":"integer"},"text":{"type":"string","minLength":1,"maxLength":4096}},"required":["chat_id","message_id","text"],"additionalProperties":False}, read_only=False, requires_confirmation=True),
+    NativeTool("telegram_get_history", "Read older messages from an explicitly allowed chat.", {"type":"object","properties":{"chat_id":{"type":"string"},"limit":{"type":"integer","minimum":1,"maximum":100}},"required":["chat_id"],"additionalProperties":False}, read_only=True),
+    NativeTool("telegram_forward_message", "Forward a message. Confirmation is required.", {"type":"object","properties":{"source_chat_id":{"type":"string"},"message_id":{"type":"integer"},"destination_chat_id":{"type":"string"}},"required":["source_chat_id","message_id","destination_chat_id"],"additionalProperties":False}, read_only=False, requires_confirmation=True),
+    NativeTool("telegram_edit_message", "Edit a sent message. Confirmation is required.", {"type":"object","properties":{"chat_id":{"type":"string"},"message_id":{"type":"integer"},"text":{"type":"string","minLength":1,"maxLength":4096}},"required":["chat_id","message_id","text"],"additionalProperties":False}, read_only=False, requires_confirmation=True),
+    NativeTool("telegram_delete_message", "Delete a message. Confirmation is required.", {"type":"object","properties":{"chat_id":{"type":"string"},"message_id":{"type":"integer"}},"required":["chat_id","message_id"],"additionalProperties":False}, read_only=False, destructive=True, requires_confirmation=True),
+    NativeTool("telegram_list_contacts", "List contacts metadata. Requires explicit contacts permission.", {"type":"object","properties":{"limit":{"type":"integer","minimum":1,"maximum":100}},"additionalProperties":False}, read_only=True),
 )
 
 class TelegramPersonalAdapter(NativeAppAdapter):
@@ -240,6 +245,52 @@ class TelegramPersonalAdapter(NativeAppAdapter):
                     messages.append({"message_id": msg.id, "date": msg.date.isoformat() if msg.date else None, "text": msg.message or ""})
                 return messages
             return self._run(run())
+
+        if tool_name == "telegram_get_history":
+            chat_id=str(args["chat_id"])
+            self._require(cid,"read_history",chat_id)
+            client=self._client(cid)
+            limit=min(max(int(args.get("limit",50)),1),100)
+            async def run():
+                rows=[]
+                async for msg in client.iter_messages(int(chat_id),limit=limit):
+                    rows.append({"message_id":msg.id,"date":msg.date.isoformat() if msg.date else None,"text":msg.message or ""})
+                return rows
+            return self._run(run())
+
+        if tool_name == "telegram_list_contacts":
+            self._require(cid,"contacts")
+            client=self._client(cid)
+            limit=min(max(int(args.get("limit",50)),1),100)
+            async def run():
+                result=await client.get_contacts()
+                return [{"id":str(user.id),"name":" ".join(x for x in (user.first_name,user.last_name) if x),"username":user.username or ""} for user in result.users[:limit]]
+            return self._run(run())
+
+        if tool_name == "telegram_forward_message":
+            source=str(args["source_chat_id"]); destination=str(args["destination_chat_id"])
+            self._require(cid,"forward_messages",source);self._require(cid,"forward_messages",destination)
+            client=self._client(cid)
+            async def run():
+                return await client.forward_messages(int(destination),int(args["message_id"]),int(source))
+            result=self._run(run())
+            return {"forwarded":True,"count":len(result) if isinstance(result,list) else 1}
+
+        if tool_name == "telegram_edit_message":
+            chat_id=str(args["chat_id"]);self._require(cid,"edit_messages",chat_id)
+            client=self._client(cid)
+            async def run():
+                return await client.edit_message(int(chat_id),int(args["message_id"]),str(args["text"]))
+            msg=self._run(run())
+            return {"edited":True,"message_id":msg.id}
+
+        if tool_name == "telegram_delete_message":
+            chat_id=str(args["chat_id"]);self._require(cid,"delete_messages",chat_id)
+            client=self._client(cid)
+            async def run():
+                return await client.delete_messages(int(chat_id),[int(args["message_id"])])
+            self._run(run())
+            return {"deleted":True,"message_id":int(args["message_id"])}
 
         if tool_name in {"telegram_send_message", "telegram_reply_message"}:
             chat_id = str(args["chat_id"])
