@@ -188,7 +188,23 @@ def _validate_arguments(schema: dict[str, Any], arguments: Any) -> None:
         raise ValueError("Tool arguments must be a JSON object")
     if not isinstance(schema, dict):
         raise ValueError("Tool input schema must be an object")
-    _validate_value(schema, arguments, "arguments")
+    # Bound validation work for schemas and payloads received from remote MCP
+    # servers. JSON serialization also rejects non-JSON Python objects.
+    import json
+    try:
+        schema_bytes = len(json.dumps(schema, ensure_ascii=False).encode("utf-8"))
+        argument_bytes = len(json.dumps(arguments, ensure_ascii=False).encode("utf-8"))
+    except (TypeError, ValueError, RecursionError):
+        raise ValueError("Tool schema or arguments are not valid JSON data") from None
+    if schema_bytes > 256 * 1024:
+        raise ValueError("Tool input schema is too large")
+    if argument_bytes > 1024 * 1024:
+        raise ValueError("Tool arguments are too large")
+    try:
+        _validate_value(schema, arguments, "arguments")
+    except (TypeError, KeyError, OverflowError, RecursionError):
+        # Malformed/untrusted schemas must fail closed with a stable error.
+        raise ValueError("Tool schema contains invalid validation constraints") from None
 
 
 class ConnectedAppsAgent:
