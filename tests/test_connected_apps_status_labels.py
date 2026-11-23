@@ -40,3 +40,10 @@ def test_connected_apps_panel_does_not_duplicate_settings_category_header():
     assert 'native_group=QGroupBox()' in source
     assert 'mcp_group=QGroupBox()' in source
     assert 'root.setContentsMargins(0,0,0,0)' in source
+
+
+def test_github_reconnect_uses_saved_token_and_disconnect_accepts_authenticated_error_state():
+    source = Path("gui/settings/connected_apps_panel.py").read_text(encoding="utf-8")
+    assert 'service.store.get_credential(connection_id, "access_token")' in source
+    assert 'service.connect_native("github", access_token=token, connection_id=connection_id)' in source
+    assert 'row.get("status") != "connected" and not authenticated' in source
