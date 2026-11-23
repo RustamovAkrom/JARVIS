@@ -7,7 +7,7 @@ def test_native_app_status_labels_show_connected_error_and_not_connected_states(
     assert 'self.github_status_label.setText(' in source
     assert 'self.calendar_status_label.setText(' in source
     assert '"Connected" if github_connected else' in source
-    assert '"Error" if github_status == "error" else "Not connected"' in source
+    assert '"Error" if github_error else "Not connected"' in source
     assert '"Connected" if calendar_connected else' in source
     assert '"Error" if calendar_status == "error" else "Not connected"' in source
 
