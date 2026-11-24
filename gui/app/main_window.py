@@ -10849,14 +10849,25 @@ class MainWindow(QMainWindow):
             activity_events = list(getattr(getattr(self, "_activity_panel", None), "_events", []) or [])
             action_events = [event for event in activity_events if event.get("category") == "actions"]
             issue_events = [event for event in activity_events if event.get("category") in {"errors", "warnings"}]
+            def _context_event_line(event):
+                message = str(event.get("message", "") or "").strip()
+                # Keep operational context readable; full diagnostics remain in Activity.
+                for prefix in ("[TOOL COMPLETE] ", "[TOOL START] ", "[TOOL FAILED] ", "[TOOL AWAITING USER] "):
+                    if message.startswith(prefix):
+                        message = message[len(prefix):]
+                        break
+                message = " ".join(message.split())
+                if len(message) > 112:
+                    message = message[:109].rstrip() + "..."
+                timestamp = str(event.get("time", "") or "").strip()
+                return f"{timestamp} · {message}" if timestamp else message
+
             recent_actions = [
-                f'{event.get("time", "")} · {str(event.get("message", ""))[:180]}'
-                for event in action_events[-5:]
-            ][::-1] or ["No tool/action events recorded in this session"]
+                _context_event_line(event) for event in action_events[-3:]
+            ][::-1] or ["No actions recorded in this session"]
             recent_issues = [
-                f'{event.get("time", "")} · {str(event.get("message", ""))[:180]}'
-                for event in issue_events[-3:]
-            ][::-1] or ["No warnings or errors recorded"]
+                _context_event_line(event) for event in issue_events[-2:]
+            ][::-1] or ["No issues recorded"]
 
             workspace = str(getattr(self, "_workspace_path", "") or "").strip()
             current_file = str(getattr(self, "_current_file", "") or "").strip()
