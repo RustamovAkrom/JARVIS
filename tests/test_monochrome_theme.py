@@ -1,5 +1,7 @@
 """Regression tests for theme contrast, dark surfaces and custom accents."""
 
+import colorsys
+
 from PyQt6.QtCore import QSettings
 
 from gui.themes.tokens import C, DEFAULT_UI_COLOR, apply_ui_accent, apply_ui_theme, current_theme_mode
@@ -47,6 +49,20 @@ def test_custom_accent_tints_canvas_surfaces_and_controls():
     assert C.BORDER != "#0d3347"
     assert C.GREEN != "#00ff88"
     assert C.RED != "#ff3355"
+
+
+def test_custom_colour_uses_one_hue_across_text_borders_and_status_tokens():
+    assert apply_ui_theme("dark")
+    assert apply_ui_accent("#ff3355")
+
+    def hue(value):
+        rgb = tuple(int(value[i:i + 2], 16) / 255 for i in (1, 3, 5))
+        return colorsys.rgb_to_hsv(*rgb)[0]
+
+    selected_hue = hue(C.PRI)
+    for token in (C.TEXT, C.TEXT_DIM, C.BORDER, C.BORDER_B, C.GREEN, C.RED, C.ACC):
+        distance = abs(hue(token) - selected_hue)
+        assert min(distance, 1.0 - distance) < 0.02
 
 
 def test_changing_custom_hue_updates_panel_backgrounds():
