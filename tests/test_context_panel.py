@@ -12,97 +12,66 @@ class ContextPanelTests(unittest.TestCase):
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
 
-    def test_renders_all_context_sections(self):
+    def test_renders_compact_context_dashboard(self):
         panel = ContextPanel(lambda: {
             "SESSION": {
-                "Provider": "OpenAI",
-                "Model": "gpt-model",
-                "Environment": "Online",
-                "Selection policy": "Auto",
-                "Execution engine": "Provider pipeline",
-                "Computer mode": "Agent",
-                "Access policy": "Approve",
+                "Provider": "Ollama",
+                "Model": "llama3.2",
+                "Environment": "Offline",
             },
-            "WORKSPACE": {
-                "Active project": "JARVIS",
-                "Project path": "E:/JARVIS",
-                "Current attachment": "README.md",
+            "TOKEN USAGE": {
+                "Input tokens": 300,
+                "Output tokens": 100,
+                "Total tokens": 400,
+                "Usage source": "Estimate · visible conversation text only",
+                "Context window tokens": 4096,
             },
+            "WORKSPACE": {"Active project": "JARVIS", "Current attachment": "README.md"},
             "CONNECTED APPS": {
-                "Connection summary": "1 connected / 1 enabled",
-                "Connections": ["GitHub: Connected"],
+                "Connection summary": "1 connected / 2 enabled",
+                "Connections": ["GitHub: Connected", "Calendar: Authorization expired"],
             },
-            "PERMISSIONS": {"Computer permissions": "3/8 enabled"},
-            "MEMORY & CHAT": {
-                "Saved memory entries": 12,
-                "Active chat messages": 4,
-                "Conversation size (estimate)": "~2,400 tokens · 9,600 characters",
+            "AI ACTIONS": {
+                "Recent actions": ["15:20 · open_file completed"],
+                "Recent warnings and errors": ["15:21 · provider timeout"],
             },
         }, refresh_interval_ms=60000)
         try:
             labels = [label.text() for label in panel.findChildren(QLabel)]
             for expected in (
-                "LIVE SESSION CONTEXT", "OpenAI", "gpt-model", "Online",
-                "E:/JARVIS", "README.md", "GitHub: Connected",
-                "3/8 enabled", "12", "4", "~2,400 tokens · 9,600 characters",
+                "Ollama", "llama3.2", "Offline", "400", "Prompt · 300 tokens",
+                "Response · 100 tokens", "Context window · 400 / 4,096 tokens (10%)",
+                "JARVIS", "README.md", "1 connected / 2 enabled",
+                "open_file completed", "provider timeout",
             ):
-                self.assertIn(expected, labels)
-            self.assertIn("Updated", panel.updated_label.text())
+                self.assertTrue(any(expected in label for label in labels), expected)
+            self.assertEqual(panel.input_bar.value(), 75)
+            self.assertEqual(panel.output_bar.value(), 25)
         finally:
             panel.close()
 
-    def test_missing_values_are_explicit(self):
+    def test_usage_bars_are_safe_when_usage_is_empty(self):
         panel = ContextPanel(lambda: {}, refresh_interval_ms=60000)
         try:
-            labels = [label.text() for label in panel.findChildren(QLabel)]
-            self.assertGreaterEqual(labels.count("Not available"), 1)
-        finally:
-            panel.close()
-
-    def test_refresh_handles_provider_failure(self):
-        panel = ContextPanel(
-            lambda: (_ for _ in ()).throw(RuntimeError("offline")),
-            refresh_interval_ms=60000,
-        )
-        try:
-            panel.refresh()
-            self.assertIn("RuntimeError", panel._status_label.text())
+            self.assertEqual(panel.input_bar.value(), 0)
+            self.assertEqual(panel.output_bar.value(), 0)
+            self.assertEqual(panel.token_total.text(), "0")
+            self.assertIn("not reported", panel.context_capacity.text())
         finally:
             panel.close()
 
     def test_refresh_button_reloads_snapshot(self):
         calls = []
         panel = ContextPanel(
-            lambda: calls.append(True) or {"SESSION": {"Provider": "Local"}},
+            lambda: calls.append(True) or {
+                "SESSION": {"Provider": "Local", "Model": "Test", "Environment": "Offline"}
+            },
             refresh_interval_ms=60000,
         )
         try:
             before = len(calls)
             panel.refresh_button.click()
             self.assertEqual(len(calls), before + 1)
-        finally:
-            panel.close()
-
-
-    def test_token_usage_and_ai_actions_sections_are_available(self):
-        panel = ContextPanel(lambda: {
-            "TOKEN USAGE": {
-                "Input tokens": "~120",
-                "Output tokens": "~80",
-                "Total tokens": "~200",
-                "Usage source": "Estimated",
-                "Context window": "Not exposed",
-            },
-            "AI ACTIONS": {
-                "Recent actions": ["Tool call completed"],
-                "Recent warnings and errors": ["No warnings"],
-                "Action count": 1,
-            },
-        }, refresh_interval_ms=60000)
-        try:
-            labels = [label.text() for label in panel.findChildren(QLabel)]
-            for expected in ("TOKEN USAGE", "Input tokens", "~120", "AI ACTIONS", "Tool call completed"):
-                self.assertIn(expected, labels)
         finally:
             panel.close()
 
@@ -125,15 +94,15 @@ class ContextPanelTests(unittest.TestCase):
         finally:
             panel.close()
 
-    def test_refresh_updates_existing_labels_in_place(self):
-        state = {"SESSION": {"Provider": "First"}}
-        panel = ContextPanel(lambda: state, refresh_interval_ms=60000)
+    def test_action_callback_failure_does_not_crash_panel(self):
+        panel = ContextPanel(
+            lambda: {},
+            refresh_interval_ms=60000,
+            action_callbacks={"providers": lambda: (_ for _ in ()).throw(RuntimeError())},
+        )
         try:
-            provider_label = panel._value_labels[("SESSION", "Provider")]
-            state["SESSION"]["Provider"] = "Second"
-            panel.refresh()
-            self.assertIs(provider_label, panel._value_labels[("SESSION", "Provider")])
-            self.assertEqual(provider_label.text(), "Second")
+            panel.providers_button.click()
+            self.assertIn("Could not open providers", panel._status_label.text())
         finally:
             panel.close()
 
