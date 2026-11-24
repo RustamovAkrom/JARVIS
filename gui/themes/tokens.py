@@ -26,9 +26,9 @@ class C:
     BORDER_B = "#1a5c7a"
     BORDER_A = "#0f4060"
     BORDER_H = "#2e7893"  # hover/active border emphasis
-    PRI = "#00d4ff"
-    PRI_DIM = "#007a99"
-    PRI_GHO = "#001f2e"
+    PRI = "#f2f2f2"
+    PRI_DIM = "#b8b8b8"
+    PRI_GHO = "#242424"
     ACC = "#ff6b00"
     ACC2 = "#ffcc00"
     GREEN = "#00ff88"
@@ -276,6 +276,7 @@ _DARK_THEME = {
     "BORDER_B": "#555555",
     "BORDER_A": "#414141",
     "BORDER_H": "#858585",
+    "PRI": "#f2f2f2",
     "PRI_DIM": "#b8b8b8",
     "PRI_GHO": "#242424",
     "TEXT": "#f2f2f2",
@@ -294,6 +295,7 @@ _LIGHT_THEME = {
     "BORDER_B": "#a8a8a8",
     "BORDER_A": "#bcbcbc",
     "BORDER_H": "#777777",
+    "PRI": "#171717",
     "PRI_DIM": "#555555",
     "PRI_GHO": "#e9e9e9",
     "TEXT": "#171717",
