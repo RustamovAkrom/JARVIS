@@ -72,7 +72,7 @@ class LogWidget(QTextEdit):
                 color = C.TEXT_MED
             char_format = QTextCharFormat()
             char_format.setForeground(QBrush(qcol(color)))
-            cursor.insertText(line + "\\n", char_format)
+            cursor.insertText(line + "\n", char_format)
         cursor.endEditBlock()
         self.setTextCursor(cursor)
         self.verticalScrollBar().setValue(self.verticalScrollBar().maximum())
