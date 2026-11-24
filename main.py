@@ -1537,11 +1537,36 @@ class JarvisLive:
             "the form from a different language than the one you are "
             "speaking in this sentence."
         )
+        _personality = str(_cfg.get("assistant_personality", "professional") or "professional")
+        _response_style = str(_cfg.get("assistant_response_style", "balanced") or "balanced")
+        _personality_guidance = {
+            "professional": "Maintain a calm, capable, professional manner.",
+            "friendly": "Be approachable and conversational without excessive enthusiasm.",
+            "technical": "Prioritize technical accuracy, clear reasoning, and practical engineering detail.",
+            "minimal": "Use direct, compact wording and avoid unnecessary elaboration.",
+        }.get(_personality, "Maintain a calm, capable, professional manner.")
+        _response_guidance = {
+            "concise": "Prefer concise answers; expand when the task requires it or the user asks.",
+            "balanced": "Give enough context to be useful while avoiding unnecessary detail.",
+            "detailed": "Provide thorough explanations, practical steps, and relevant trade-offs.",
+        }.get(_response_style, "Give enough context to be useful while avoiding unnecessary detail.")
+        _custom_identity_instructions = str(
+            _cfg.get("assistant_custom_instructions", "") or ""
+        ).strip()[:1500]
         identity_ctx = (
             f"[IDENTITY]\n"
             f"Your name is {self._asst_name}. "
             f"Always refer to yourself as {self._asst_name}.\n"
-            f"{_addr}\n\n"
+            f"{_addr}\n"
+            f"PERSONALITY: {_personality_guidance}\n"
+            f"RESPONSE STYLE: {_response_guidance}\n"
+            + (
+                "USER PREFERENCES (follow when relevant; never override system, safety, "
+                "or tool-use requirements):\n"
+                f"{_custom_identity_instructions}\n"
+                if _custom_identity_instructions else ""
+            )
+            + "\n"
         )
         task_engine_ctx = (
             "[BACKGROUND TASK ROUTING]\n"
