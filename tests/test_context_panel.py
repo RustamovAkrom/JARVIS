@@ -40,7 +40,7 @@ class ContextPanelTests(unittest.TestCase):
             labels = [label.text() for label in panel.findChildren(QLabel)]
             for expected in (
                 "Ollama", "llama3.2", "Offline", "≈400", "Prompt · ≈300 tokens",
-                "Response · ≈100 tokens", "Context window · ≈400 / 4,096 tokens (10%)",
+                "Response · ≈100 tokens", "Context window · ≈400 / 4,096 (10%)",
                 "JARVIS", "README.md", "1 connected / 2 enabled",
                 "open_file completed", "provider timeout",
             ):
@@ -57,6 +57,17 @@ class ContextPanelTests(unittest.TestCase):
             self.assertEqual(panel.output_bar.value(), 0)
             self.assertEqual(panel.token_total.text(), "0")
             self.assertIn("not reported", panel.context_capacity.text())
+        finally:
+            panel.close()
+
+
+    def test_context_surfaces_use_theme_background_instead_of_black_gaps(self):
+        panel = ContextPanel(lambda: {}, refresh_interval_ms=60000)
+        try:
+            body = panel._scroll.widget()
+            self.assertIn("background:", body.styleSheet())
+            self.assertIn("background:", panel._scroll.viewport().styleSheet())
+            self.assertIn("ContextCard", body.findChild(__import__("PyQt6.QtWidgets", fromlist=["QFrame"]).QFrame).styleSheet())
         finally:
             panel.close()
 
