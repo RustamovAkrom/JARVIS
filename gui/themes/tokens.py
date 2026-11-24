@@ -254,7 +254,11 @@ def _apply_palette() -> None:
     # green = healthy, amber = thinking/warning, red = muted/error.
     # Only the explicit Black/White presets collapse them to monochrome.
     for key, base in _STATUS_DEFAULTS.items():
-        if neutral_accent:
+        if key == "MUTED_C":
+            # A muted microphone is a safety-critical state cue and stays red
+            # even when the rest of the UI uses a monochrome preset.
+            value = base
+        elif neutral_accent:
             value = "#ffffff" if THEME_MODE == "dark" else "#000000"
         else:
             value = base
