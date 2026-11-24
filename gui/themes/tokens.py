@@ -87,12 +87,14 @@ if THEME_MODE not in {"dark", "light"}:
 # Custom Colour tints the canvas and every surface. Black/White presets
 # switch to a separate neutral palette with monochrome foregrounds.
 _DARK_SURFACES = {
-    "BG": "#07120f",
-    "PANEL": "#0c1d18",
-    "PANEL2": "#11291f",
-    "PANEL3": "#193a2d",
-    "DARK": "#07120f",
-    "BAR_BG": "#07120f",
+    # Preserve the original JARVIS dark canvas and blue-black panel hierarchy.
+    # These are the DEFAULT surfaces; custom accents may tint them at runtime.
+    "BG": "#000000",
+    "PANEL": "#020609",
+    "PANEL2": "#03090d",
+    "PANEL3": "#050d12",
+    "DARK": "#000000",
+    "BAR_BG": "#000000",
 }
 _LIGHT_SURFACES = {
     "BG": "#f8fafc",
