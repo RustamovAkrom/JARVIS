@@ -24,6 +24,7 @@ from PyQt6.QtWidgets import (
 )
 
 from memory import config_manager
+from gui.themes.tokens import C, DEFAULT_UI_COLOR, apply_ui_accent, apply_ui_theme
 from ui import (
     ChatInput,
     ClipboardPanel,
@@ -170,17 +171,19 @@ class CursorAssistantUiTests(unittest.TestCase):
                 canvas.close()
 
     def test_hud_orbit_uses_red_for_mute_and_amber_accents_for_thinking(self):
+        apply_ui_theme("dark")
+        apply_ui_accent(DEFAULT_UI_COLOR)
         canvas = HudCanvas("", "JARVIS")
         try:
             canvas.state = "IDLE"
             canvas.muted = False
-            main, accent = canvas._core_colours()
-            self.assertEqual(main.name(), "#00d4ff")
+            main, _accent = canvas._core_colours()
+            self.assertEqual(main.name(), C.PRI)
 
             canvas.state = "THINKING"
             main, accent = canvas._core_colours()
-            self.assertEqual(main.name(), "#00d4ff")
-            self.assertEqual(accent.name(), "#ffcc00")
+            self.assertEqual(main.name(), C.PRI)
+            self.assertEqual(accent.name(), C.ACC2)
 
             canvas.muted = True
             main, accent = canvas._core_colours()
@@ -189,6 +192,8 @@ class CursorAssistantUiTests(unittest.TestCase):
         finally:
             canvas._tmr.stop()
             canvas.close()
+            apply_ui_theme("dark")
+            apply_ui_accent(DEFAULT_UI_COLOR)
 
     def test_hud_orbit_reacts_to_cursor_and_recenters_on_leave(self):
         canvas = HudCanvas("", "JARVIS")
