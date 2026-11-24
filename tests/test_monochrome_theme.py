@@ -26,7 +26,7 @@ def test_light_theme_uses_white_surfaces_and_dark_text():
     assert C.PANEL == "#ffffff"
     assert C.TEXT == "#111111"
     assert C.WHITE == "#000000"
-    assert C.BORDER == "#d0d0d0"
+    assert C.BORDER == "#000000"
 
 
 def test_legacy_neutral_default_migrates_to_original_jarvis_accent():
@@ -105,10 +105,10 @@ def test_black_white_presets_are_pure_monochrome():
     assert apply_ui_accent("#ffffff")
     assert apply_ui_theme("dark")
     assert C.BG == "#000000"
-    assert C.PANEL == "#080808"
+    assert C.PANEL == "#000000"
     assert C.TEXT == "#e8e8e8"
     assert C.PRI == "#ffffff"
-    assert C.BORDER == "#303030"
+    assert C.BORDER == "#ffffff"
 
     assert apply_ui_accent("#000000")
     assert apply_ui_theme("light")
