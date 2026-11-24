@@ -169,6 +169,27 @@ class CursorAssistantUiTests(unittest.TestCase):
                 canvas._tmr.stop()
                 canvas.close()
 
+    def test_hud_orbit_uses_red_for_mute_and_amber_accents_for_thinking(self):
+        canvas = HudCanvas("", "JARVIS")
+        try:
+            canvas.state = "IDLE"
+            canvas.muted = False
+            main, accent = canvas._core_colours()
+            self.assertEqual(main.name(), "#00d4ff")
+
+            canvas.state = "THINKING"
+            main, accent = canvas._core_colours()
+            self.assertEqual(main.name(), "#00d4ff")
+            self.assertEqual(accent.name(), "#ffcc00")
+
+            canvas.muted = True
+            main, accent = canvas._core_colours()
+            self.assertEqual(main.name(), "#ff3366")
+            self.assertEqual(accent.name(), "#ff3366")
+        finally:
+            canvas._tmr.stop()
+            canvas.close()
+
     def test_hud_orbit_reacts_to_cursor_and_recenters_on_leave(self):
         canvas = HudCanvas("", "JARVIS")
         try:
