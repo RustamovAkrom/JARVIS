@@ -5,7 +5,9 @@ from datetime import datetime
 from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtWidgets import (
+    QAbstractItemView,
     QComboBox,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -113,9 +115,9 @@ class ActivityPanel(QWidget):
         self.event_list.setWordWrap(True)
         self.event_list.setUniformItemSizes(False)
         self.event_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.event_list.setVerticalScrollMode(QListWidget.ScrollMode.ScrollPerPixel)
+        self.event_list.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
         self.event_list.setHorizontalScrollMode(QListWidget.ScrollMode.ScrollPerPixel)
-        self.event_list.setFrameShape(QListWidget.Shape.NoFrame)
+        self.event_list.setFrameShape(QFrame.Shape.NoFrame)
         self.event_list.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
