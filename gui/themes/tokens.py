@@ -140,6 +140,11 @@ def apply_ui_accent(accent_hex: str) -> bool:
     except ValueError:
         return False
 
+    if accent_hex == "#00d4ff":
+        # Migrate the former built-in cyan default to the new neutral default.
+        C.PRI = "#f2f2f2" if THEME_MODE == "dark" else "#171717"
+        return apply_ui_theme(THEME_MODE)
+
     if accent_hex == "#000000":
         # Legacy BLACK preset now selects the monochrome dark theme.
         return apply_ui_theme("dark")
