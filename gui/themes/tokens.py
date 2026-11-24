@@ -88,17 +88,17 @@ if THEME_MODE not in {"dark", "light"}:
 # secondary surfaces, outlines, controls and indicators consistently.
 _DARK_SURFACES = {
     "BG": "#000000",
-    "PANEL": "#030609",
-    "PANEL2": "#050a10",
-    "PANEL3": "#080f18",
+    "PANEL": "#081018",
+    "PANEL2": "#0c1a28",
+    "PANEL3": "#102538",
     "DARK": "#000101",
     "BAR_BG": "#000202",
 }
 _LIGHT_SURFACES = {
     "BG": "#ffffff",
     "PANEL": "#ffffff",
-    "PANEL2": "#fafafa",
-    "PANEL3": "#f5f5f5",
+    "PANEL2": "#f8fafc",
+    "PANEL3": "#f1f5f9",
     "DARK": "#ffffff",
     "BAR_BG": "#ffffff",
 }
@@ -187,7 +187,7 @@ def _tint_surface(base_hex: str, accent_hex: str, mode: str) -> str:
     if accent_saturation < 0.08:
         return base_hex
     # Keep the dark/light luminance ladder intact; only tint its hue.
-    saturation = min(0.72 if mode == "dark" else 0.10, accent_saturation * (0.72 if mode == "dark" else 0.34))
+    saturation = min(0.78 if mode == "dark" else 0.20, accent_saturation * (0.78 if mode == "dark" else 0.55))
     red, green, blue = colorsys.hsv_to_rgb(hue, saturation, value)
     return "#{:02x}{:02x}{:02x}".format(
         round(red * 255), round(green * 255), round(blue * 255)
@@ -205,8 +205,33 @@ def _apply_palette() -> None:
             value = _tint_surface(value, _ACTIVE_ACCENT, THEME_MODE)
         setattr(C, key, value)
 
+    neutral_accent = (
+        colorsys.rgb_to_hsv(*(
+            int(_ACTIVE_ACCENT[i:i + 2], 16) / 255 for i in (1, 3, 5)
+        ))[1] < 0.08
+    )
     for key, base in accent_base.items():
-        if key == "PRI":
+        if neutral_accent:
+            if THEME_MODE == "dark":
+                neutral = {
+                    "BORDER": "#303030", "BORDER_B": "#555555",
+                    "BORDER_A": "#414141", "BORDER_H": "#777777",
+                    "PRI": "#ffffff", "PRI_DIM": "#b8b8b8",
+                    "PRI_GHO": "#242424", "TEXT": "#e8e8e8",
+                    "TEXT_DIM": "#a0a0a0", "TEXT_MED": "#c4c4c4",
+                    "WHITE": "#ffffff",
+                }
+            else:
+                neutral = {
+                    "BORDER": "#d0d0d0", "BORDER_B": "#a8a8a8",
+                    "BORDER_A": "#bcbcbc", "BORDER_H": "#888888",
+                    "PRI": "#000000", "PRI_DIM": "#555555",
+                    "PRI_GHO": "#eeeeee", "TEXT": "#111111",
+                    "TEXT_DIM": "#666666", "TEXT_MED": "#444444",
+                    "WHITE": "#000000",
+                }
+            value = neutral[key]
+        elif key == "PRI":
             value = _ACTIVE_ACCENT
         elif THEME_MODE == "light" and key in {"TEXT", "TEXT_DIM", "TEXT_MED", "WHITE"}:
             value = base
@@ -214,8 +239,8 @@ def _apply_palette() -> None:
             value = _shift_hue(base, _ACTIVE_ACCENT)
         setattr(C, key, value)
 
-    # Status colours follow the selected hue too, retaining their relative
-    # brightness so the interface has one coherent colour identity.
+    # Status indicators are neutral in Black/White presets and use the
+    # selected hue family in Custom Colour mode.
     for key, base in _STATUS_DEFAULTS.items():
         setattr(C, key, _shift_hue(base, _ACTIVE_ACCENT))
     _init_aliases()
