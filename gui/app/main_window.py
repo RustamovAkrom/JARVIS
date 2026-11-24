@@ -7818,9 +7818,9 @@ class MainWindow(QMainWindow):
         self._main_splitter = QSplitter(Qt.Orientation.Horizontal)
         self._main_splitter.setChildrenCollapsible(False)
         self._main_splitter.setContentsMargins(6, 6, 6, 6)
-        self._main_splitter.setStyleSheet("""
-            QSplitter::handle { background: transparent; width: 5px; }
-            QSplitter::handle:hover { background: ${C.PRI_GHO}; border-radius: 4px; }
+        self._main_splitter.setStyleSheet(f"""
+            QSplitter::handle {{ background: transparent; width: 5px; }}
+            QSplitter::handle:hover {{ background: {C.PRI_GHO}; border-radius: 4px; }}
         """)
 
         self._left_panel = self._build_left_panel()
