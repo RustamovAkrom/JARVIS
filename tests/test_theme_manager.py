@@ -7,6 +7,9 @@ from PyQt6.QtGui import QPalette
 from PyQt6.QtWidgets import QApplication, QWidget
 
 from gui.themes.manager import ThemeManager
+from gui.components.widgets import BusySpinner
+from gui.panels.system_monitor.widgets import MetricGauge
+
 from gui.themes.tokens import (
     C,
     DEFAULT_UI_COLOR,
@@ -90,3 +93,25 @@ def test_theme_manager_runs_owner_refresh_and_custom_widget_hooks():
         apply_ui_accent(DEFAULT_UI_COLOR)
         widget.close()
         widget.deleteLater()
+
+
+
+def test_custom_painted_controls_refresh_cached_semantic_colours():
+    app = _app()
+    apply_ui_theme("dark")
+    apply_ui_accent(DEFAULT_UI_COLOR)
+    manager = ThemeManager.for_app(app)
+    primary_gauge = MetricGauge("NET", C.PRI)
+    status_gauge = MetricGauge("CPU", C.GREEN)
+    spinner = BusySpinner(color=C.PRI)
+    try:
+        assert manager.apply(mode="dark", accent="#e34b72")
+        assert primary_gauge._color == C.PRI
+        assert status_gauge._color == C.GREEN
+        assert spinner._color.name() == C.PRI
+    finally:
+        apply_ui_theme("dark")
+        apply_ui_accent(DEFAULT_UI_COLOR)
+        primary_gauge.close()
+        status_gauge.close()
+        spinner.close()
