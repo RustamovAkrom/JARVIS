@@ -948,6 +948,8 @@ class HudCanvas(QWidget):
         amp = 0.0 if self.muted else self._amp_disp
         t = self._core_phase
         live = (self.speaking or amp > 0.04) and not self.muted
+        thinking = self.state in ("THINKING", "PROCESSING") and not self.muted
+        accent_active = live or thinking
         R = r * 0.60
         self._orb_hit_center = (cx, cy)
         self._orb_hit_radius = R * 1.48
@@ -1009,14 +1011,14 @@ class HudCanvas(QWidget):
         for lines, color, alpha, width in (
             (layers[0], main, 28, 0.6),
             (layers[1], main, 80, 0.8),
-            (layers[2], acc if live else main, 150 + 80 * amp, 1.1),
+            (layers[2], acc if accent_active else main, 150 + 80 * amp, 1.1),
         ):
             p.setPen(QPen(rgba(color, alpha), width))
             p.drawLines(lines)
         p.setPen(Qt.PenStyle.NoPen)
         for x, y, z in sorted(proj, key=lambda q: q[2]):
             d = max(0, min(1, (z + 1.3) / 2.6))
-            p.setBrush(QBrush(rgba(acc if live and z > 0.3 else main, 50 + 200 * d)))
+            p.setBrush(QBrush(rgba(acc if accent_active and z > 0.3 else main, 50 + 200 * d)))
             p.drawEllipse(
                 QPointF(x, y), 0.9 + 2.3 * d * (1 + amp), 0.9 + 2.3 * d * (1 + amp)
             )
@@ -9938,63 +9940,29 @@ class MainWindow(QMainWindow):
         brand.setContentsMargins(0, 0, 0, 0)
         brand.setSpacing(0)
         _disp = self._assistant_name.upper()
-        self._title_lbl = QLabel()
+        header_name = (
+            "J.A.R.V.I.S" if _disp in ("JARVIS", "J.A.R.V.I.S") else _disp
+        )
+        self._title_lbl = QLabel(header_name)
+        self._title_lbl.setObjectName("HeaderBrand")
         self._title_lbl.setAttribute(
             Qt.WidgetAttribute.WA_TransparentForMouseEvents, True
         )
         self._title_lbl.setAlignment(
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
         )
-        self._title_lbl.setFixedSize(150, 50)
+        self._title_lbl.setFixedSize(170, 50)
         self._title_lbl.setMargin(0)
-        self._title_lbl.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        # Paint an opaque header-colour patch behind the transparent PNG. This
-        # prevents an overlapping/translucent sibling from showing through the
-        # wordmark area, and keeps the brand above the header's other children.
+        self._title_lbl.setFont(QFont(FONT_MONO, 17, QFont.Weight.Bold))
         self._title_lbl.setStyleSheet(
-            f"background: {C.DARK}; border: none; padding: 0;"
+            f"color: {C.PRI}; background: {C.DARK}; border: none; padding: 0;"
         )
-        logo_path = BASE_DIR / "assets" / "desktop" / "interfays_icon.png"
-        logo = QPixmap(str(logo_path))
-        if not logo.isNull():
-            self._title_lbl.setPixmap(
-                logo.scaled(
-                    QSize(150, 50),
-                    Qt.AspectRatioMode.KeepAspectRatio,
-                    Qt.TransformationMode.SmoothTransformation,
-                )
-            )
-            self._title_lbl.setToolTip(_disp)
-        else:
-            # Keep a readable fallback for development copies that do not yet
-            # have the bundled brand artwork.
-            self._title_lbl.setText(_disp)
-            self._title_lbl.setFont(QFont(FONT_MONO, 17, QFont.Weight.Bold))
-            self._title_lbl.setStyleSheet(
-                f"color: {C.PRI}; background: {C.DARK}; border: none; padding: 0;"
-            )
+        self._title_lbl.setToolTip(header_name)
         self._title_lbl.raise_()
         brand.addWidget(self._title_lbl)
-        _sub_text = (
-            "Just A Rather Very Intelligent System · V2"
-            if _disp in ("JARVIS", "J.A.R.V.I.S")
-            else "Personal AI Assistant · V2"
-        )
-        self._sub_lbl = QLabel(_sub_text)
-        self._sub_lbl.setAttribute(
-            Qt.WidgetAttribute.WA_TransparentForMouseEvents, True
-        )
-        self._sub_lbl.setAlignment(
-            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
-        )
-        self._sub_lbl.setFont(QFont(FONT_MONO, 7))
-        self._sub_lbl.setStyleSheet(f"color: {C.PRI_DIM}; background: transparent;")
-        # The supplied wordmark already contains the product descriptor.
-        # Retain this label for custom assistant-name updates when falling
-        # back to plain text, but do not duplicate the branding under the logo.
-        self._sub_lbl.setVisible(logo.isNull())
-        if logo.isNull():
-            brand.addWidget(self._sub_lbl)
+        # The header intentionally contains a single text wordmark only.
+        self._sub_lbl = QLabel()
+        self._sub_lbl.hide()
 
         clock_frame = QFrame()
         clock_frame.setObjectName("HeaderClock")
@@ -16541,14 +16509,11 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         self._assistant_name = assistant_name
         display = assistant_name.upper()
         self.setWindowTitle(f"{display} — {APP_VERSION}")
-        if self._title_lbl.pixmap() is not None and not self._title_lbl.pixmap().isNull():
-            self._title_lbl.setToolTip(display)
-        else:
-            self._title_lbl.setText(display)
-            if display in ("JARVIS", "J.A.R.V.I.S"):
-                self._sub_lbl.setText("Just A Rather Very Intelligent System · V2")
-            else:
-                self._sub_lbl.setText("Personal AI Assistant · V2")
+        header_name = (
+            "J.A.R.V.I.S" if display in ("JARVIS", "J.A.R.V.I.S") else display
+        )
+        self._title_lbl.setText(header_name)
+        self._title_lbl.setToolTip(header_name)
         self._log._ai_name_lc = assistant_name.lower()
         self.hud._assistant_name = display
         self._preview_ui_opacity(ui_opacity)
