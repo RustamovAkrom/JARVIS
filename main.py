@@ -1505,6 +1505,7 @@ class JarvisLive:
             self._asst_name = (_cfg.get("assistant_name") or "JARVIS").strip()
             _user_name = (_cfg.get("user_name") or "").strip()
         except Exception:
+            _cfg = {}
             self._asst_name = "JARVIS"
             _user_name = ""
         from memory.config_manager import get_workspace_path
