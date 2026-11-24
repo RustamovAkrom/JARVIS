@@ -92,8 +92,10 @@ class MetricGauge(QWidget):
         p.drawEllipse(outer)
 
         p.setBrush(Qt.BrushStyle.NoBrush)
+        # The remainder track must stay visually separate from the
+        # semantic progress arc, including in the pure white/black presets.
         p.setPen(
-            QPen(qcol(C.BORDER_B), 6, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
+            QPen(qcol(C.BORDER_B, 72), 6, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
         )
         p.drawArc(ring, 90 * 16, -360 * 16)
 
