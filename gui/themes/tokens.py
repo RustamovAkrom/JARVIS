@@ -221,6 +221,9 @@ def apply_ui_accent(accent_hex: str) -> bool:
                 int(r * 255 + 0.5), int(g * 255 + 0.5), int(b * 255 + 0.5)
             ),
         )
+    # The accent itself is exact; derived palette shades remain secondary.
+    C.PRI = accent_hex
+    C.ACCENT = accent_hex
     _init_aliases()
     apply_ui_theme(THEME_MODE)
     return True
