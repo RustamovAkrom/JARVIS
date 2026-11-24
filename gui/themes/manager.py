@@ -226,9 +226,15 @@ class ThemeManager(QObject):
         }:
             return False
 
+        selected_mode = str(mode or "").strip().lower() if mode is not None else None
+        if selected_mode == "black":
+            selected_mode = "dark"
+        elif selected_mode == "white":
+            selected_mode = "light"
+
         self._applying = True
         try:
-            if mode is not None and not apply_ui_theme(mode):
+            if selected_mode is not None and not apply_ui_theme(selected_mode):
                 return False
             if accent is not None and not apply_ui_accent(accent):
                 return False
