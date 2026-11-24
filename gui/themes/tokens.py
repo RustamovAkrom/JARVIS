@@ -141,27 +141,12 @@ def apply_ui_accent(accent_hex: str) -> bool:
         return False
 
     if accent_hex == "#000000":
-        # Black is a dark-theme preset: keep the readable cyan accent while
-        # moving the structural palette to near-black surfaces.
-        for key, value in _PALETTE_DEFAULTS.items():
-            setattr(C, key, value)
-        for key, value in {
-            "BG": "#000103",
-            "PANEL": "#030609",
-            "PANEL2": "#050a10",
-            "PANEL3": "#0a1117",
-            "BORDER": "#101a22",
-            "BORDER_B": "#1b2d3a",
-            "BORDER_A": "#14232d",
-            "BORDER_H": "#233845",
-            "DARK": "#000205",
-            "BAR_BG": "#02070b",
-        }.items():
-            setattr(C, key, value)
-        _init_aliases()
-        return True
+        # Legacy BLACK preset now selects the monochrome dark theme.
+        return apply_ui_theme("dark")
 
     if accent_hex == "#ffffff":
+        # Legacy WHITE preset now selects the monochrome light theme.
+        return apply_ui_theme("light")
         # White is a neutral monochrome preset with light surfaces and dark text.
         for key, value in _PALETTE_DEFAULTS.items():
             setattr(C, key, value)
@@ -228,6 +213,7 @@ def apply_ui_accent(accent_hex: str) -> bool:
             ),
         )
     _init_aliases()
+    apply_ui_theme(THEME_MODE)
     return True
 
 
