@@ -251,11 +251,13 @@ from gui.panels.debug.log_widget import LogWidget
 from gui.themes.tokens import (
     C,
     DEFAULT_UI_COLOR,
+    THEME_MODE,
     _HUE_LINKED,
     _PALETTE_DEFAULTS,
     _STATUS_COLORS,
     _STATUS_DEFAULTS,
     apply_ui_accent,
+    apply_ui_theme,
     current_palette,
     qcol,
 )
@@ -2066,7 +2068,8 @@ class CustomizeOverlay(QWidget):
             f"border: 1px solid {C.BORDER}; border-radius: {R_S}px; }}"
             f"QPushButton:hover {{ color: {C.PRI}; border-color: {C.PRI_DIM}; }}"
         )
-        black_btn.clicked.connect(lambda: self._set_color("#000000"))
+        black_btn.setToolTip("Switch to the dark interface without changing the selected accent")
+        black_btn.clicked.connect(lambda: self._set_theme_mode("dark"))
         clr_hdr.addWidget(black_btn)
         white_btn = QPushButton(_translate("WHITE", self._language))
         white_btn.setFixedSize(58, 20)
@@ -2077,7 +2080,8 @@ class CustomizeOverlay(QWidget):
             f"border: 1px solid #aeb8c0; border-radius: {R_S}px; }}"
             f"QPushButton:hover {{ border-color: {C.PRI}; }}"
         )
-        white_btn.clicked.connect(lambda: self._set_color("#ffffff"))
+        white_btn.setToolTip("Switch to the light interface without changing the selected accent")
+        white_btn.clicked.connect(lambda: self._set_theme_mode("light"))
         clr_hdr.addWidget(white_btn)
         df_btn = QPushButton(_translate("DEFAULT", self._language))
         df_btn.setFixedSize(64, 20)
@@ -2096,7 +2100,10 @@ class CustomizeOverlay(QWidget):
 
         self._initial_color = (ui_color or DEFAULT_UI_COLOR).strip().lower()
         self._sel_color = self._initial_color
+        self._initial_theme_mode = THEME_MODE
+        self._theme_mode = THEME_MODE
         self.on_preview = None  # callable(hex) — live preview; MainWindow wires it
+        self.on_theme_preview = None  # callable(mode) — independent theme preview
         self._initial_opacity = max(60, min(100, int(ui_opacity)))
         self.on_opacity_preview = None
 
@@ -2228,6 +2235,15 @@ class CustomizeOverlay(QWidget):
                 """)
 
     # ── colour flow ──────────────────────────────────────────────────────────
+    def _set_theme_mode(self, mode: str):
+        """Switch the interface mode without overwriting the custom UI accent."""
+        selected = str(mode or "").strip().lower()
+        if selected not in {"dark", "light"}:
+            return
+        self._theme_mode = selected
+        if self.on_theme_preview:
+            self.on_theme_preview(selected)
+
     def _set_color(self, hx: str, update_wheel: bool = True, preview: bool = True):
         """Updates the selected colour; hex box + wheel stay in sync, theme is live-previewed."""
         self._sel_color = hx.strip().lower()
