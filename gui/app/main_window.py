@@ -10058,7 +10058,9 @@ class MainWindow(QMainWindow):
 
     def _update_adaptive_chrome(self) -> None:
         """Compact header/footer content before controls begin to collide."""
-        if not hasattr(self, "_header_nav_buttons"):
+        if not hasattr(self, "_header_nav_buttons") or not hasattr(
+            self, "_header_clock_frame"
+        ):
             return
         width = max(0, self.width())
 
