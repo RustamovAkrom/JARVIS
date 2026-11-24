@@ -562,7 +562,7 @@ class TaskPanel(QWidget):
                 stamp = self._format_time(event.get("t"))
                 kind = self._html(event.get("kind") or "event")
                 text = self._html(event.get("text") or "")
-                lines.append(f"<br><span style='color:{C.TEXT_DIM}'>[{stamp}]</span> <b>{kind}</b> — {text}")
+                lines.append(f"<br><span>[{stamp}]</span> <b>{kind}</b> — {text}")
         self.details_browser.setHtml("<br>".join(lines))
 
     @staticmethod
