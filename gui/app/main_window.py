@@ -2253,13 +2253,15 @@ class CustomizeOverlay(QWidget):
             self.on_opacity_preview(value)
 
     def _cancel(self):
-        # If a preview was applied, revert to the colour from launch
+        # Restore mode first and custom accent second. A monochrome mode
+        # callback also applies its neutral preset, so the original custom
+        # colour must be the final operation when cancelling a preview.
+        if self.on_theme_preview and self._theme_mode != self._initial_theme_mode:
+            self.on_theme_preview(self._initial_theme_mode)
         if self.on_preview and self._sel_color != self._initial_color:
             self.on_preview(self._initial_color)
         if self.on_opacity_preview:
             self.on_opacity_preview(self._initial_opacity)
-        if self.on_theme_preview and self._theme_mode != self._initial_theme_mode:
-            self.on_theme_preview(self._initial_theme_mode)
         self._theme_mode = self._initial_theme_mode
         if self._embedded:
             self._set_color(self._initial_color, update_wheel=True, preview=False)
