@@ -8573,7 +8573,7 @@ class MainWindow(QMainWindow):
         put(
             self._root_splitter,
             "QSplitter::handle { background: transparent; width:5px; }"
-            f"QSplitter::handle:hover {{ background:{C.PRI_GHO}; border-radius:3px; }}"",
+            f"QSplitter::handle:hover {{ background:{C.PRI_GHO}; border-radius:3px; }}",
         )
         put(
             self._workspace_split,
