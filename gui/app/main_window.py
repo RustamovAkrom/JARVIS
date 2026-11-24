@@ -10819,6 +10819,7 @@ class MainWindow(QMainWindow):
             # Prefer real provider usage recorded on turns; never label estimates as actual usage.
             usage_totals = {"input": 0, "output": 0, "total": 0}
             usage_found = False
+            provider_total_found = False
             for turn in visible_turns:
                 usage = turn.get("usage") or turn.get("token_usage") or turn.get("usage_metadata")
                 if not isinstance(usage, dict):
@@ -10833,10 +10834,10 @@ class MainWindow(QMainWindow):
                     if isinstance(raw, (int, float)) and raw >= 0:
                         usage_totals[bucket] += int(raw)
                         usage_found = True
-                if usage.get("total_tokens") is None and usage.get("total_token_count") is None:
-                    usage_totals["total"] += sum(
-                        int(usage_totals[k]) for k in ("input", "output")
-                    )
+                        if bucket == "total":
+                            provider_total_found = True
+            if usage_found and not provider_total_found:
+                usage_totals["total"] = usage_totals["input"] + usage_totals["output"]
 
             activity_events = list(getattr(getattr(self, "_activity_panel", None), "_events", []) or [])
             action_events = [event for event in activity_events if event.get("category") == "actions"]
@@ -10904,7 +10905,7 @@ class MainWindow(QMainWindow):
             action_callbacks={
                 "activity": lambda: self._left_tabs.setCurrentIndex(2),
                 "providers": lambda: self._handle_settings_action("providers"),
-                "permissions": lambda: self._handle_settings_action("computer"),
+                "permissions": lambda: self._handle_settings_action("security_info"),
             },
         )
         self._work_tabs.addTab(self._context_panel, self._tr("CONTEXT"))
