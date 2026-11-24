@@ -10883,11 +10883,24 @@ class MainWindow(QMainWindow):
                     "Connections": connection_summary,
                 },
                 "TOKEN USAGE": {
-                    "Input tokens": f'{usage_totals["input"]:,}' if usage_found else f'~{estimated_input_tokens:,}',
-                    "Output tokens": f'{usage_totals["output"]:,}' if usage_found else f'~{estimated_output_tokens:,}',
-                    "Total tokens": f'{usage_totals["total"]:,}' if usage_found else f'~{estimated_tokens:,}',
-                    "Usage source": "Provider-reported turn usage" if usage_found else "Estimated from visible chat text (characters ÷ 4)",
-                    "Context window": "Not exposed by the active provider adapter",
+                    "Input tokens": usage_totals["input"] if usage_found else estimated_input_tokens,
+                    "Output tokens": usage_totals["output"] if usage_found else estimated_output_tokens,
+                    "Total tokens": usage_totals["total"] if usage_found else estimated_tokens,
+                    "Usage source": (
+                        "Provider-reported usage" if usage_found
+                        else "Estimate · visible conversation text only"
+                    ),
+                    "Context window": "Provider context capacity",
+                    "Context window tokens": next(
+                        (
+                            int(llm_config[key])
+                            for key in ("context_window", "context_length", "num_ctx", "max_context_tokens")
+                            if isinstance(llm_config.get(key), (int, float))
+                            and not isinstance(llm_config.get(key), bool)
+                            and int(llm_config[key]) > 0
+                        ),
+                        0,
+                    ),
                 },
                 "PERMISSIONS": {
                     "Computer permissions": f"{permission_count}/{permission_total} enabled",
@@ -10911,8 +10924,8 @@ class MainWindow(QMainWindow):
             _session_context_snapshot,
             action_callbacks={
                 "activity": lambda: self._left_tabs.setCurrentIndex(2),
-                "providers": lambda: self._handle_settings_action("providers"),
-                "permissions": lambda: self._handle_settings_action("security_info"),
+                "providers": lambda: self._open_context_settings_category("integrations"),
+                "permissions": lambda: self._open_context_settings_category("permissions"),
             },
         )
         self._work_tabs.addTab(self._context_panel, self._tr("CONTEXT"))
@@ -13066,6 +13079,17 @@ class MainWindow(QMainWindow):
             )
         )
 
+    def _open_context_settings_category(self, category_id: str) -> None:
+        """Open Settings Center and navigate to a real settings category."""
+        self._open_settings_center()
+        if self._settings_center is not None:
+            opened = self._settings_center.show_category(category_id)
+            if opened:
+                self._settings_center.raise_()
+                self._settings_center.activateWindow()
+                return
+        self._append_activity(f"WARN: Settings category unavailable: {category_id}")
+
     def _handle_settings_action(self, action_id: str):
         """Keep Settings Center open and navigate to its embedded category."""
         # The console is a main-workspace surface. Keep Settings open while
@@ -13079,6 +13103,7 @@ class MainWindow(QMainWindow):
             "customize": "appearance",
             "audio": "audio",
             "providers": "integrations",
+            "permissions": "permissions",
             "plugins": "plugins",
             "plugin_settings": "plugins",
             "memory": "memory",
@@ -13087,8 +13112,11 @@ class MainWindow(QMainWindow):
             "updates": "updates",
         }
         category_id = category_by_action.get(action_id)
-        if self._settings_center is not None and category_id:
-            if self._settings_center.show_category(category_id):
+        if category_id:
+            # Context actions can be invoked before Settings Center has ever
+            # been opened. Build/show it first, then navigate to the page.
+            self._open_settings_center()
+            if self._settings_center is not None and self._settings_center.show_category(category_id):
                 self._settings_center.raise_()
                 self._settings_center.activateWindow()
                 return
