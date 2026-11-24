@@ -88,9 +88,9 @@ if THEME_MODE not in {"dark", "light"}:
 # secondary surfaces, outlines, controls and indicators consistently.
 _DARK_SURFACES = {
     "BG": "#000000",
-    "PANEL": "#010203",
-    "PANEL2": "#020405",
-    "PANEL3": "#030607",
+    "PANEL": "#030609",
+    "PANEL2": "#050a10",
+    "PANEL3": "#080f18",
     "DARK": "#000101",
     "BAR_BG": "#000202",
 }
@@ -186,7 +186,7 @@ def _tint_surface(base_hex: str, accent_hex: str, mode: str) -> str:
     if accent_saturation < 0.08:
         return base_hex
     # Keep the dark/light luminance ladder intact; only tint its hue.
-    saturation = min(0.34 if mode == "dark" else 0.10, accent_saturation * 0.34)
+    saturation = min(0.72 if mode == "dark" else 0.10, accent_saturation * (0.72 if mode == "dark" else 0.34))
     red, green, blue = colorsys.hsv_to_rgb(hue, saturation, value)
     return "#{:02x}{:02x}{:02x}".format(
         round(red * 255), round(green * 255), round(blue * 255)
