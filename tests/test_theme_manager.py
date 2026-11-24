@@ -136,3 +136,21 @@ def test_theme_manager_recovers_semantic_roles_from_monochrome_stylesheets():
         manager.apply(mode="dark", accent=DEFAULT_UI_COLOR)
         widget.close()
         widget.deleteLater()
+
+def test_default_accent_keeps_light_surfaces_white_and_neutral():
+    app = _app()
+    manager = ThemeManager.for_app(app)
+    try:
+        assert manager.apply(mode="light", accent=DEFAULT_UI_COLOR)
+        assert C.BG == "#f8fafc"
+        assert C.PANEL == "#ffffff"
+        assert C.PANEL2 == "#f8fafc"
+        assert C.PANEL3 == "#f1f5f9"
+        assert C.PRI == DEFAULT_UI_COLOR
+
+        # A genuinely custom accent still tints the surfaces by design.
+        assert manager.apply(mode="light", accent="#20a0d0")
+        assert C.BG != "#f8fafc"
+    finally:
+        manager.apply(mode="dark", accent=DEFAULT_UI_COLOR)
+
