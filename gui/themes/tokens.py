@@ -348,7 +348,7 @@ def apply_ui_theme(mode: str) -> bool:
 
     # Default accent is monochrome; an explicitly selected custom accent remains.
     if getattr(C, "ACCENT", DEFAULT_UI_COLOR) == DEFAULT_UI_COLOR:
-        C.PRI = "#f2f2f2" if selected == "dark" else "#171717"
+        C.PRI = "#ffffff" if selected == "dark" else "#000000"
     C.SUCCESS = C.GREEN
     C.WARNING = C.ACC2
     C.DANGER = C.RED
