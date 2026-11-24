@@ -49,6 +49,7 @@ def test_custom_accent_is_preserved_when_switching_theme():
 
 
 def test_black_and_white_presets_select_theme_modes():
+    assert apply_ui_accent(DEFAULT_UI_COLOR)
     assert apply_ui_accent("#ffffff")
     assert C.BG == "#ffffff"
     assert C.TEXT == "#1f2933"
@@ -58,6 +59,7 @@ def test_black_and_white_presets_select_theme_modes():
 
 
 def test_theme_mode_is_persisted_independently():
+    assert apply_ui_accent(DEFAULT_UI_COLOR)
     settings = QSettings("JARVIS", "JARVIS")
     try:
         assert apply_ui_theme("light")
