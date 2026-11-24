@@ -28,6 +28,7 @@ class C:
     BORDER_A = "#0f4060"
     BORDER_H = "#2e7893"  # hover/active border emphasis
     PRI = "#f2f2f2"
+    ACCENT = "#f2f2f2"
     PRI_DIM = "#b8b8b8"
     PRI_GHO = "#242424"
     ACC = "#ff6b00"
@@ -146,6 +147,7 @@ def apply_ui_accent(accent_hex: str) -> bool:
 
     if accent_hex == "#00d4ff":
         # Migrate the former built-in cyan default to the new neutral default.
+        C.ACCENT = DEFAULT_UI_COLOR
         C.PRI = "#f2f2f2" if THEME_MODE == "dark" else "#171717"
         return apply_ui_theme(THEME_MODE)
 
@@ -341,9 +343,9 @@ def apply_ui_theme(mode: str) -> bool:
     for key, value in palette.items():
         setattr(C, key, value)
 
-    # The primary foreground in monochrome mode is neutral. The selected
-    # custom accent is retained separately for restrained accent-only details.
-    C.ACCENT = getattr(C, "ACCENT", DEFAULT_UI_COLOR)
+    # Default accent is monochrome; an explicitly selected custom accent remains.
+    if getattr(C, "ACCENT", DEFAULT_UI_COLOR) == DEFAULT_UI_COLOR:
+        C.PRI = "#f2f2f2" if selected == "dark" else "#171717"
     C.SUCCESS = C.GREEN
     C.WARNING = C.ACC2
     C.DANGER = C.RED
