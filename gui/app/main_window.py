@@ -10058,6 +10058,8 @@ class MainWindow(QMainWindow):
 
     def _update_adaptive_chrome(self) -> None:
         """Compact header/footer content before controls begin to collide."""
+        if not hasattr(self, "_header_nav_buttons"):
+            return
         width = max(0, self.width())
 
         # The settings and fullscreen controls stay available longest.
@@ -10077,6 +10079,7 @@ class MainWindow(QMainWindow):
         # Preserve the clock on compact layouts, but remove the date first.
         compact = width < 1120
         self._date_lbl.setVisible(not compact)
+        self._header_clock_frame.setVisible(width >= 680)
         self._header_clock_frame.setFixedSize(112 if not compact else 88, 38)
 
         # A resize can arrive during widget construction, before the footer exists.
