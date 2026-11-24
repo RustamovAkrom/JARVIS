@@ -2,6 +2,16 @@
 
 Kept independent of widgets so presentation code can share the same palette
 without creating imports back into the legacy compatibility module.
+
+Layered surface model
+---------------------
+``BG``      window canvas (deepest)
+``PANEL``   raised card surface
+``PANEL2``  inset / well surface (inputs, lists)
+``PANEL3``  elevated surface (popovers, tooltips, headers)
+
+Every accent-linked token participates in the hue-shift performed by
+``apply_ui_accent``; status colours stay semantic and fixed.
 """
 
 from PyQt6.QtGui import QColor
@@ -11,9 +21,11 @@ class C:
     BG = "#00060a"
     PANEL = "#010d14"
     PANEL2 = "#010f18"
+    PANEL3 = "#03141d"  # elevated surface — popovers, headers, tooltips
     BORDER = "#0d3347"
     BORDER_B = "#1a5c7a"
     BORDER_A = "#0f4060"
+    BORDER_H = "#2e7893"  # hover/active border emphasis
     PRI = "#00d4ff"
     PRI_DIM = "#007a99"
     PRI_GHO = "#001f2e"
@@ -29,6 +41,12 @@ class C:
     WHITE = "#d8f8ff"
     DARK = "#000d14"
     BAR_BG = "#011520"
+
+    # --- semantic aliases (stable names, current values) ------------------
+    SUCCESS = GREEN
+    WARNING = ACC2
+    DANGER = RED
+    INFO = PRI
 
 
 class Space:
@@ -46,16 +64,48 @@ class Radius:
     SM = 6
     MD = 10
     LG = 14
+    XL = 18  # hero cards, overlays
+    PILL = 999  # fully rounded (chips, toggles)
 
 
-# Keys tied to the accent colour — status colours (ACC, GREEN, RED…) stay fixed
+class Motion:
+    """Animation durations (ms) and easing curves for UI transitions.
+
+    Values are deliberately short: desktop UIs feel "commercial" when
+    feedback is instant and transitions only smooth the change.
+    """
+
+    INSTANT = 0
+    FAST = 120
+    BASE = 180
+    SLOW = 260
+    # QEasingCurve presets used with QVariantAnimation/QPropertyAnimation
+    OUT_CUBIC = "OutCubic"
+    OUT_QUART = "OutQuart"
+    IN_OUT_CUBIC = "InOutCubic"
+
+
+class Focus:
+    """Focus / state ring conventions (keyboard accessibility)."""
+
+    RING_ALPHA = 170
+    RING_WIDTH = 2
+    # QSS hover overlays, expressed as alpha over the base colour
+    HOVER_ALPHA = 26
+    PRESSED_ALPHA = 51
+    SELECTED_ALPHA = 64
+
+
+# Keys tied to the accent colour – status colours (ACC, GREEN, RED…) stay fixed
 _HUE_LINKED = (
     "BG",
     "PANEL",
     "PANEL2",
+    "PANEL3",
     "BORDER",
     "BORDER_B",
     "BORDER_A",
+    "BORDER_H",
     "PRI",
     "PRI_DIM",
     "PRI_GHO",
@@ -68,8 +118,6 @@ _HUE_LINKED = (
 )
 _STATUS_COLORS = ("ACC", "ACC2", "GREEN", "GREEN_D", "RED", "MUTED_C")
 _STATUS_DEFAULTS = {key: getattr(C, key) for key in _STATUS_COLORS}
-from PyQt6.QtWebChannel import QWebChannel
-from PyQt6.QtWebEngineWidgets import QWebEngineView
 
 _PALETTE_DEFAULTS: dict[str, str] = {k: getattr(C, k) for k in _HUE_LINKED}
 DEFAULT_UI_COLOR = _PALETTE_DEFAULTS["PRI"]
@@ -101,13 +149,16 @@ def apply_ui_accent(accent_hex: str) -> bool:
             "BG": "#000103",
             "PANEL": "#030609",
             "PANEL2": "#050a10",
+            "PANEL3": "#0a1117",
             "BORDER": "#101a22",
             "BORDER_B": "#1b2d3a",
             "BORDER_A": "#14232d",
+            "BORDER_H": "#233845",
             "DARK": "#000205",
             "BAR_BG": "#02070b",
         }.items():
             setattr(C, key, value)
+        _init_aliases()
         return True
 
     if accent_hex == "#ffffff":
@@ -129,9 +180,11 @@ def apply_ui_accent(accent_hex: str) -> bool:
             "BG": "#f3f5f7",
             "PANEL": "#ffffff",
             "PANEL2": "#f7f9fb",
+            "PANEL3": "#eef2f6",
             "BORDER": "#d8dee5",
             "BORDER_B": "#b7c1cc",
             "BORDER_A": "#c6d0da",
+            "BORDER_H": "#98a6b2",
             "PRI": "#36434f",
             "PRI_DIM": "#62717f",
             "PRI_GHO": "#e8edf2",
@@ -143,6 +196,7 @@ def apply_ui_accent(accent_hex: str) -> bool:
             "BAR_BG": "#f7f9fb",
         }.items():
             setattr(C, key, value)
+        _init_aliases()
         return True
 
     def _hsv(h: str) -> tuple[float, float, float]:
@@ -173,6 +227,7 @@ def apply_ui_accent(accent_hex: str) -> bool:
                 int(r * 255 + 0.5), int(g * 255 + 0.5), int(b * 255 + 0.5)
             ),
         )
+    _init_aliases()
     return True
 
 
@@ -180,6 +235,38 @@ def current_palette() -> dict[str, str]:
     """A snapshot of the accent-linked colours currently on class C."""
     return {k: getattr(C, k) for k in (*_HUE_LINKED, *_STATUS_COLORS)}
 
+
+def _init_aliases() -> None:
+    """Point semantic aliases at their current semantic sources.
+
+    Called at import and after every accent switch so ``C.SUCCESS`` etc.
+    always track live class values (they are plain attributes, so a plain
+    rebind is enough; hue-shift never touches status colours).
+    """
+    C.SUCCESS = C.GREEN
+    C.WARNING = C.ACC2
+    C.DANGER = C.RED
+    C.INFO = C.PRI
+
+
+_init_aliases()
+
+
+def rgba(hex_color: str, alpha: int) -> str:
+    """Theme colour with alpha as a CSS ``rgba()`` string (0-255)."""
+    c = QColor(hex_color)
+    return f"rgba({c.red()}, {c.green()}, {c.blue()}, {alpha})"
+
+
+def mix(base: str, overlay: str, ratio: float = 0.5) -> str:
+    """Blend two hex colours; ``ratio`` is the weight of ``overlay``."""
+    b, o = QColor(base), QColor(overlay)
+    r = max(0.0, min(1.0, ratio))
+    return "#{:02x}{:02x}{:02x}".format(
+        round(b.red() + (o.red() - b.red()) * r),
+        round(b.green() + (o.green() - b.green()) * r),
+        round(b.blue() + (o.blue() - b.blue()) * r),
+    )
 
 
 def qcol(hex_color: str, alpha: int = 255) -> QColor:
