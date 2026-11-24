@@ -144,3 +144,17 @@ During Stages 1–6, do not add unrelated JARVIS features, redesign other settin
 ## Current implementation note
 
 The GitHub branch contains Stage 4 schema-validation and permission hardening, plus a Stage 5 first-show surface polish fix. Source changes and regression tests were committed directly to `v2`. Tests have **not** been executed by this remote editing session; local pytest results are required before marking Stage 6 complete.
+
+
+## User-requested Connected Apps completion checklist
+
+This is the consolidated status for the six requested workstreams. A source/test review can establish implementation coverage, but only a local test run can establish that the suite passes.
+
+- [x] **1. OAuth lifecycle and credential security — implementation and regression coverage reviewed.** PKCE/state, loopback callback validation, HTTPS metadata endpoints, refresh locking/rotation, protected credential storage, stale-token cleanup, and local revoke are implemented. Local end-to-end provider authorization still requires a real configured OAuth app.
+- [ ] **2. Adapter operations — partial static/test coverage.** GitHub and Google Calendar have mock-request coverage for their operation dispatch; Telegram Personal has permission/lifecycle coverage. Complete per-operation Telegram adapter tests and execute all adapter suites before closing.
+- [x] **3. Permissions management — implementation and regression coverage reviewed.** Tool schemas, blocked-tool enforcement, fail-closed annotations, read-only opt-in, write confirmation, and Telegram per-action/chat allowlists are present.
+- [x] **4. Connected Apps UI — implementation and Qt regression coverage reviewed.** Native status/reconnect/disconnect, permission dialog, health controls, diagnostics, and theme behavior are covered by UI tests. Visual verification on the user's Windows environment remains external.
+- [x] **5. Reconnect, disconnect, shutdown — implementation and lifecycle regression coverage reviewed.** Per-connection serialization, MCP owner-task cleanup, event-loop shutdown/drain, reconnect retries, native-vs-MCP separation, and disconnect failure reporting are implemented and tested.
+- [ ] **6. Mock API integration tests — expanded, but not fully closed.** GitHub/Google Calendar mock request tests cover provider operations; Telegram requires additional mocked-client tests. Run focused and full suites locally.
+
+**Release gate:** do not mark this stabilization complete until the remaining Telegram adapter test coverage is added and the user reports passing focused and full pytest runs. No new Native Connected Apps providers are in scope.
