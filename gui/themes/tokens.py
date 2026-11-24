@@ -229,6 +229,11 @@ def apply_ui_theme(mode: str) -> bool:
     return True
 
 
+def current_theme_mode() -> str:
+    """Return the currently active appearance mode."""
+    return THEME_MODE
+
+
 def current_palette() -> dict[str, str]:
     """Snapshot all dynamic palette tokens for safe live stylesheet replacement."""
     return {
