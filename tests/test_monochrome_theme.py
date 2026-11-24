@@ -7,21 +7,17 @@ from gui.themes.tokens import C, DEFAULT_UI_COLOR, apply_ui_accent, apply_ui_the
 def test_dark_theme_uses_monochrome_surfaces_and_foreground():
     assert apply_ui_accent(DEFAULT_UI_COLOR)
     assert apply_ui_theme("dark")
-    assert C.BG == "#000000"
-    assert C.TEXT == "#f2f2f2"
-    assert C.WHITE == "#ffffff"
-    assert C.BORDER == "#303030"
-    assert C.PRI == "#f2f2f2"
+    assert {C.BG, C.PANEL, C.PANEL2, C.PANEL3, C.DARK, C.BAR_BG} == {"#000000"}
+    assert {C.TEXT, C.TEXT_DIM, C.TEXT_MED, C.WHITE, C.PRI} == {"#ffffff"}
+    assert {C.BORDER, C.BORDER_B, C.BORDER_A, C.BORDER_H} == {"#ffffff"}
 
 
 def test_light_theme_uses_white_surfaces_and_dark_foreground():
     assert apply_ui_accent(DEFAULT_UI_COLOR)
     assert apply_ui_theme("light")
-    assert C.BG == "#ffffff"
-    assert C.TEXT == "#171717"
-    assert C.WHITE == "#111111"
-    assert C.BORDER == "#d0d0d0"
-    assert C.PRI == "#171717"
+    assert {C.BG, C.PANEL, C.PANEL2, C.PANEL3, C.DARK, C.BAR_BG} == {"#ffffff"}
+    assert {C.TEXT, C.TEXT_DIM, C.TEXT_MED, C.WHITE, C.PRI} == {"#000000"}
+    assert {C.BORDER, C.BORDER_B, C.BORDER_A, C.BORDER_H} == {"#000000"}
 
 
 def test_custom_accent_does_not_recolor_monochrome_surfaces():
@@ -30,18 +26,20 @@ def test_custom_accent_does_not_recolor_monochrome_surfaces():
     assert apply_ui_accent("#7c5cff")
     assert C.ACCENT == "#7c5cff"
     assert C.BG == "#000000"
-    assert C.TEXT == "#f2f2f2"
-    assert C.BORDER == "#303030"
+    assert C.TEXT == "#ffffff"
+    assert C.BORDER == "#ffffff"
+    assert C.PANEL == C.PANEL2 == C.PANEL3 == "#000000"
     assert C.PRI == "#7c5cff"
 
 
 def test_legacy_black_and_white_presets_select_theme_modes():
     assert apply_ui_accent("#ffffff")
     assert C.BG == "#ffffff"
-    assert C.TEXT == "#171717"
+    assert C.TEXT == "#000000"
+    assert C.PANEL == C.PANEL2 == C.PANEL3 == "#ffffff"
     assert apply_ui_accent("#000000")
     assert C.BG == "#000000"
-    assert C.TEXT == "#f2f2f2"
+    assert C.TEXT == "#ffffff"
 
 
 def test_theme_mode_is_persisted_independently():
