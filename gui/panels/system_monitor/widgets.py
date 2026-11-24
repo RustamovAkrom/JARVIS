@@ -12,18 +12,31 @@ from gui.themes.typography import FONT_MONO, FONT_UI
 
 class MetricGauge(QWidget):
 
-    def __init__(self, label: str, color: str = C.PRI, detail: str = "", parent=None):
+    def __init__(
+        self,
+        label: str,
+        color: str = C.PRI,
+        detail: str = "",
+        parent=None,
+        *,
+        theme_token: str | None = None,
+    ):
         super().__init__(parent)
         self._label = label
         self._color = color
         # Preserve semantic token identity so custom-painted gauges can follow
         # live theme changes without losing explicit caller-selected colours.
-        self._theme_color_key = next(
-            (
-                key for key in ("PRI", "GREEN", "GREEN_D", "ACC", "ACC2", "RED", "MUTED_C")
-                if getattr(C, key) == color
-            ),
-            None,
+        semantic_tokens = {"PRI", "GREEN", "GREEN_D", "ACC", "ACC2", "RED", "MUTED_C"}
+        self._theme_color_key = (
+            theme_token
+            if theme_token in semantic_tokens
+            else next(
+                (
+                    key for key in ("PRI", "GREEN", "GREEN_D", "ACC", "ACC2", "RED", "MUTED_C")
+                    if getattr(C, key) == color
+                ),
+                None,
+            )
         )
         self._detail = detail
         self._value = 0.0
