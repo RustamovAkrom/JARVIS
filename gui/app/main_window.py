@@ -8580,7 +8580,6 @@ class MainWindow(QMainWindow):
             f"border-radius:10px; padding:7px; selection-background-color:{C.PRI_GHO}; }}"
             + _scroll_qss(),
         )
-        put(self._history_list, _inset_qss("QListWidget"))
         put(
             self._log,
             _inset_qss("QTextEdit").replace("border-radius: 5px;", "border-radius: 10px;"),
