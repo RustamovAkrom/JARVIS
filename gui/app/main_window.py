@@ -7826,7 +7826,7 @@ class MainWindow(QMainWindow):
         self._main_splitter.setContentsMargins(6, 6, 6, 6)
         self._main_splitter.setStyleSheet("""
             QSplitter::handle { background: transparent; width: 5px; }
-            QSplitter::handle:hover { background: rgba(0,212,255,50); border-radius: 4px; }
+            QSplitter::handle:hover { background: rgba(255,255,255,72); border-radius: 4px; }
         """)
 
         self._left_panel = self._build_left_panel()
@@ -8554,7 +8554,7 @@ class MainWindow(QMainWindow):
         put(
             self._root_splitter,
             "QSplitter::handle { background: transparent; width:5px; }"
-            "QSplitter::handle:hover { background:rgba(0,212,255,36); border-radius:3px; }",
+            "QSplitter::handle:hover { background:rgba(255,255,255,72); border-radius:3px; }",
         )
         put(
             self._workspace_split,
@@ -15968,7 +15968,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         w = QWidget()
         w.setFixedHeight(30)
         w.setStyleSheet(
-            "background: rgba(8,14,32,170); border-top: 1px solid rgba(140,210,255,60);"
+            "background: rgba(0,0,0,255); border-top: 1px solid rgba(255,255,255,255);"
         )
         lay = QHBoxLayout(w)
         lay.setContentsMargins(14, 0, 14, 0)
