@@ -32,8 +32,6 @@ LIMITS:
 
 import asyncio
 import platform
-import subprocess
-import sys
 import threading
 import time
 from datetime import datetime, timedelta
@@ -108,20 +106,6 @@ _id_lock = threading.Lock()
 _id_counter = 0
 
 
-def _ensure_winsdk() -> bool:
-    """Checks if winsdk is installed; if not, attempts automatic installation via pip."""
-    try:
-        import winsdk  # noqa: F401
-        return True
-    except ImportError:
-        try:
-            subprocess.check_call([sys.executable, "-m", "pip", "install", "winsdk"])
-            import winsdk  # noqa: F401
-            return True
-        except Exception:
-            return False
-
-
 def _next_id() -> int:
     global _id_counter
     with _id_lock:
@@ -182,10 +166,10 @@ def _run_async(coro):
 
 
 async def _get_notifications():
-    from winsdk.windows.ui.notifications.management import (
+    from winrt.windows.ui.notifications.management import (
         UserNotificationListener, UserNotificationListenerAccessStatus,
     )
-    from winsdk.windows.ui.notifications import NotificationKinds
+    from winrt.windows.ui.notifications import NotificationKinds
 
     listener = UserNotificationListener.current
     status = await listener.request_access_async()
@@ -294,10 +278,6 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
     app_filter = (parameters.get("app") or "").strip().lower()
     pattern = (parameters.get("pattern") or "").strip().lower()
 
-    if not _ensure_winsdk():
-        return ("I need the 'winsdk' library to read Windows notifications, but automatic installation "
-                "failed. Please install it manually with: pip install winsdk")
-
     if action in ("watches", "list_watches"):
         with _watches_lock:
             if not _watches:
@@ -348,6 +328,13 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
 
     try:
         items, status_name = _run_async(_get_notifications())
+    except ModuleNotFoundError as e:
+        missing = e.name or "a required WinRT namespace"
+        return (
+            "Notification Reader is missing its Windows Runtime dependency "
+            f"({missing}). Install the project dependencies with "
+            "`uv sync` or reinstall JARVIS using its setup/update flow."
+        )
     except Exception as e:
         return f"I couldn't read notifications: {e}"
 
