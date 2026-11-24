@@ -269,7 +269,7 @@ class ContextPanel(QWidget):
         if capacity_value:
             percent = min(100, round(total_tokens * 100 / capacity_value))
             self.context_capacity.setText(
-                f"Context window · {total_tokens:,} / {capacity_value:,} tokens ({percent}%)"
+                f"Context window · {prefix}{total_tokens:,} / {capacity_value:,} tokens ({percent}%)"
             )
         else:
             self.context_capacity.setText(
