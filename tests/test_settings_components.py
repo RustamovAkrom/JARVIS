@@ -386,6 +386,40 @@ class SettingsComponentTests(unittest.TestCase):
         self.assertEqual(child.refresh_count, 1)
         center.close()
 
+    def test_context_settings_route_opens_center_before_navigation(self):
+        from types import SimpleNamespace
+
+        calls = []
+
+        class FakeSettingsCenter:
+            def show_category(self, category_id):
+                calls.append(("category", category_id))
+                return True
+
+            def raise_(self):
+                calls.append(("raise",))
+
+            def activateWindow(self):
+                calls.append(("activate",))
+
+        owner = SimpleNamespace(
+            _settings_center=None,
+            _open_settings_center=lambda: (
+                calls.append(("open",)),
+                setattr(owner, "_settings_center", FakeSettingsCenter()),
+            ),
+            _append_activity=lambda message: calls.append(("log", message)),
+        )
+        MainWindow._open_context_settings_category(owner, "integrations")
+        self.assertEqual(calls[0], ("open",))
+        self.assertIn(("category", "integrations"), calls)
+        self.assertIn(("raise",), calls)
+        self.assertIn(("activate",), calls)
+
+        calls.clear()
+        MainWindow._open_context_settings_category(owner, "permissions")
+        self.assertIn(("category", "permissions"), calls)
+
     def test_real_ai_providers_settings_page_stays_visible_after_apply(self):
         # Exercise MainWindow's actual category builder and embedding path.
         # The old test instantiated ProvidersOverlay(embedded=True) directly,
