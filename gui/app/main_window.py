@@ -2068,7 +2068,7 @@ class CustomizeOverlay(QWidget):
             f"border: 1px solid {C.BORDER}; border-radius: {R_S}px; }}"
             f"QPushButton:hover {{ color: {C.PRI}; border-color: {C.PRI_DIM}; }}"
         )
-        black_btn.setToolTip("Switch to the dark interface without changing the selected accent")
+        black_btn.setToolTip("Apply pure-black monochrome mode")
         black_btn.clicked.connect(lambda: self._set_theme_mode("dark"))
         clr_hdr.addWidget(black_btn)
         white_btn = QPushButton(_translate("WHITE", self._language))
@@ -2080,7 +2080,7 @@ class CustomizeOverlay(QWidget):
             f"border: 1px solid #aeb8c0; border-radius: {R_S}px; }}"
             f"QPushButton:hover {{ border-color: {C.PRI}; }}"
         )
-        white_btn.setToolTip("Switch to the light interface without changing the selected accent")
+        white_btn.setToolTip("Apply pure-white monochrome mode")
         white_btn.clicked.connect(lambda: self._set_theme_mode("light"))
         clr_hdr.addWidget(white_btn)
         df_btn = QPushButton(_translate("DEFAULT", self._language))
@@ -2236,11 +2236,15 @@ class CustomizeOverlay(QWidget):
 
     # ── colour flow ──────────────────────────────────────────────────────────
     def _set_theme_mode(self, mode: str):
-        """Switch the interface mode without overwriting the custom UI accent."""
+        """Apply a true monochrome Black/White preset."""
         selected = str(mode or "").strip().lower()
         if selected not in {"dark", "light"}:
             return
         self._theme_mode = selected
+        # Black mode uses white foregrounds; White mode uses black
+        # foregrounds. This intentionally exits Custom Colour mode.
+        preset_accent = "#ffffff" if selected == "dark" else "#000000"
+        self._set_color(preset_accent, update_wheel=True, preview=True)
         if self.on_theme_preview:
             self.on_theme_preview(selected)
 
