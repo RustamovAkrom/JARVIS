@@ -8455,6 +8455,31 @@ class MainWindow(QMainWindow):
 
     def _apply_design_system(self):
         """Apply the shared visual tokens to the completed main window."""
+        # Set Qt's native palette as well as per-widget QSS. This catches native
+        # menus, item views, tooltips and controls that do not own a stylesheet.
+        app = QApplication.instance()
+        if app is not None:
+            palette = app.palette()
+            role_colors = {
+                QPalette.ColorRole.Window: C.BG,
+                QPalette.ColorRole.WindowText: C.TEXT,
+                QPalette.ColorRole.Base: C.PANEL2,
+                QPalette.ColorRole.AlternateBase: C.PANEL2,
+                QPalette.ColorRole.ToolTipBase: C.PANEL,
+                QPalette.ColorRole.ToolTipText: C.TEXT,
+                QPalette.ColorRole.Text: C.TEXT,
+                QPalette.ColorRole.Button: C.PANEL,
+                QPalette.ColorRole.ButtonText: C.TEXT,
+                QPalette.ColorRole.BrightText: C.PRI,
+                QPalette.ColorRole.Highlight: C.PRI,
+                QPalette.ColorRole.HighlightedText: C.DARK,
+                QPalette.ColorRole.Link: C.PRI,
+                QPalette.ColorRole.LinkVisited: C.PRI,
+            }
+            for role, color in role_colors.items():
+                palette.setColor(role, QColor(color))
+            app.setPalette(palette)
+
         # Keep the toolbar icon-only, with tooltips and accessible names for clarity.
         header_buttons = (
             (self._drawer_btn, "settings.svg", "Open Settings Center"),
