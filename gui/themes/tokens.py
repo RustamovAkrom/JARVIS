@@ -157,8 +157,9 @@ def _shift_hue(base_hex: str, accent_hex: str) -> str:
     )
     default_h, _, _ = colorsys.rgb_to_hsv(*default_rgb)
     if accent_s < 0.08:
-        # Neutral selections keep the palette restrained instead of creating
-        # an unpredictable hue shift from an almost-grey colour.
+        # Neutral selections have no meaningful hue. Keep the base hue and
+        # reduce saturation rather than reading an undefined hue variable.
+        h = base_h
         sat *= 0.12
     else:
         # Apply only the delta from JARVIS cyan. With the default accent the
