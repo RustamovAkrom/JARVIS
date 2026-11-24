@@ -10787,13 +10787,20 @@ class MainWindow(QMainWindow):
                 str(row.get("status") or "").casefold() == "connected"
                 for row in enabled_rows
             )
-            connection_summary = [
-                f"{row.get('display_name') or row.get('app_id')}: "
-                f"{str(row.get('status') or 'unknown').replace('_', ' ').title()}"
-                if row.get("enabled", True)
-                else f"{row.get('display_name') or row.get('app_id')}: Disabled"
-                for row in connection_rows
-            ]
+            connection_summary = []
+            for row in connection_rows:
+                app_name = row.get("display_name") or row.get("app_id") or "Connected App"
+                status = (
+                    str(row.get("status") or "unknown").replace("_", " ").title()
+                    if row.get("enabled", True) else "Disabled"
+                )
+                line = f"{app_name}: {status}"
+                # ConnectedAppsService persists a credential-scrubbed last_error.
+                # Surface only that safe diagnostic, never connection metadata or credentials.
+                safe_error = str(row.get("last_error") or "").strip()
+                if safe_error and status.casefold() == "error":
+                    line += f" — {safe_error[:220]}"
+                connection_summary.append(line)
             if not connection_summary:
                 connection_summary = ["No Connected Apps configured"]
 
