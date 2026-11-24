@@ -35,7 +35,7 @@ def test_legacy_neutral_default_migrates_to_original_jarvis_accent():
     assert C.TEXT != "#ffffff"
 
 
-def test_custom_accent_tints_surfaces_and_controls_without_changing_canvas():
+def test_custom_accent_tints_canvas_surfaces_and_controls():
     assert apply_ui_theme("dark")
     assert apply_ui_accent("#7c5cff")
     assert C.ACCENT == "#7c5cff"
@@ -53,9 +53,12 @@ def test_changing_custom_hue_updates_panel_backgrounds():
     assert apply_ui_theme("dark")
     assert apply_ui_accent("#ff3355")
     red_panel = C.PANEL
+    red_canvas = C.BG
     assert apply_ui_accent("#7c5cff")
     purple_panel = C.PANEL
+    purple_canvas = C.BG
     assert red_panel != purple_panel
+    assert red_canvas != purple_canvas
     assert C.BG != "#000000"
     assert C.PRI == "#7c5cff"
 
