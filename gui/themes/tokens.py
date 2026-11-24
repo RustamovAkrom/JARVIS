@@ -204,14 +204,14 @@ def _apply_palette() -> None:
         # custom palette with a black/white canvas.
         surfaces = (
             {
-                "BG": "#000000", "PANEL": "#080808",
-                "PANEL2": "#111111", "PANEL3": "#1a1a1a",
+                "BG": "#000000", "PANEL": "#000000",
+                "PANEL2": "#000000", "PANEL3": "#000000",
                 "DARK": "#000000", "BAR_BG": "#000000",
             }
             if THEME_MODE == "dark"
             else {
                 "BG": "#ffffff", "PANEL": "#ffffff",
-                "PANEL2": "#f7f7f7", "PANEL3": "#eeeeee",
+                "PANEL2": "#ffffff", "PANEL3": "#ffffff",
                 "DARK": "#ffffff", "BAR_BG": "#ffffff",
             }
         )
@@ -227,20 +227,20 @@ def _apply_palette() -> None:
         if neutral_accent:
             if THEME_MODE == "dark":
                 neutral = {
-                    "BORDER": "#303030", "BORDER_B": "#555555",
-                    "BORDER_A": "#414141", "BORDER_H": "#777777",
-                    "PRI": "#ffffff", "PRI_DIM": "#b8b8b8",
-                    "PRI_GHO": "#242424", "TEXT": "#e8e8e8",
-                    "TEXT_DIM": "#a0a0a0", "TEXT_MED": "#c4c4c4",
+                    "BORDER": "#ffffff", "BORDER_B": "#ffffff",
+                    "BORDER_A": "#ffffff", "BORDER_H": "#ffffff",
+                    "PRI": "#ffffff", "PRI_DIM": "#ffffff",
+                    "PRI_GHO": "#000000", "TEXT": "#ffffff",
+                    "TEXT_DIM": "#ffffff", "TEXT_MED": "#ffffff",
                     "WHITE": "#ffffff",
                 }
             else:
                 neutral = {
-                    "BORDER": "#d0d0d0", "BORDER_B": "#a8a8a8",
-                    "BORDER_A": "#bcbcbc", "BORDER_H": "#888888",
-                    "PRI": "#000000", "PRI_DIM": "#555555",
-                    "PRI_GHO": "#eeeeee", "TEXT": "#111111",
-                    "TEXT_DIM": "#666666", "TEXT_MED": "#444444",
+                    "BORDER": "#000000", "BORDER_B": "#000000",
+                    "BORDER_A": "#000000", "BORDER_H": "#000000",
+                    "PRI": "#000000", "PRI_DIM": "#000000",
+                    "PRI_GHO": "#ffffff", "TEXT": "#000000",
+                    "TEXT_DIM": "#000000", "TEXT_MED": "#000000",
                     "WHITE": "#000000",
                 }
             value = neutral[key]
@@ -256,7 +256,7 @@ def _apply_palette() -> None:
     # selected hue family in Custom Colour mode.
     for key, base in _STATUS_DEFAULTS.items():
         if neutral_accent:
-            value = "#d0d0d0" if THEME_MODE == "dark" else "#333333"
+            value = "#ffffff" if THEME_MODE == "dark" else "#000000"
         else:
             value = _shift_hue(base, _ACTIVE_ACCENT)
         setattr(C, key, value)
