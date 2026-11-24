@@ -87,12 +87,12 @@ if THEME_MODE not in {"dark", "light"}:
 # Base canvas stays pure black/white. The selected custom hue tints all
 # secondary surfaces, outlines, controls and indicators consistently.
 _DARK_SURFACES = {
-    "BG": "#050d12",
-    "PANEL": "#081018",
-    "PANEL2": "#0c1a28",
-    "PANEL3": "#102538",
-    "DARK": "#050d12",
-    "BAR_BG": "#050d12",
+    "BG": "#07120f",
+    "PANEL": "#0c1d18",
+    "PANEL2": "#11291f",
+    "PANEL3": "#193a2d",
+    "DARK": "#07120f",
+    "BAR_BG": "#07120f",
 }
 _LIGHT_SURFACES = {
     "BG": "#f8fafc",
