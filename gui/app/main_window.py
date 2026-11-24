@@ -10812,7 +10812,43 @@ class MainWindow(QMainWindow):
                 len(str(row.get("request") or "")) + len(str(row.get("result") or ""))
                 for row in visible_turns
             )
-            estimated_tokens = round(context_chars / 4) if context_chars else 0
+            estimated_input_tokens = round(sum(len(str(row.get("request") or "")) for row in visible_turns) / 4)
+            estimated_output_tokens = round(sum(len(str(row.get("result") or "")) for row in visible_turns) / 4)
+            estimated_tokens = estimated_input_tokens + estimated_output_tokens
+
+            # Prefer real provider usage recorded on turns; never label estimates as actual usage.
+            usage_totals = {"input": 0, "output": 0, "total": 0}
+            usage_found = False
+            for turn in visible_turns:
+                usage = turn.get("usage") or turn.get("token_usage") or turn.get("usage_metadata")
+                if not isinstance(usage, dict):
+                    continue
+                aliases = {
+                    "input": ("input_tokens", "prompt_tokens", "prompt_token_count"),
+                    "output": ("output_tokens", "completion_tokens", "candidates_token_count"),
+                    "total": ("total_tokens", "total_token_count"),
+                }
+                for bucket, keys in aliases.items():
+                    raw = next((usage.get(key) for key in keys if usage.get(key) is not None), None)
+                    if isinstance(raw, (int, float)) and raw >= 0:
+                        usage_totals[bucket] += int(raw)
+                        usage_found = True
+                if usage.get("total_tokens") is None and usage.get("total_token_count") is None:
+                    usage_totals["total"] += sum(
+                        int(usage_totals[k]) for k in ("input", "output")
+                    )
+
+            activity_events = list(getattr(getattr(self, "_activity_panel", None), "_events", []) or [])
+            action_events = [event for event in activity_events if event.get("category") == "actions"]
+            issue_events = [event for event in activity_events if event.get("category") in {"errors", "warnings"}]
+            recent_actions = [
+                f'{event.get("time", "")} · {str(event.get("message", ""))[:180]}'
+                for event in action_events[-5:]
+            ][::-1] or ["No tool/action events recorded in this session"]
+            recent_issues = [
+                f'{event.get("time", "")} · {str(event.get("message", ""))[:180]}'
+                for event in issue_events[-3:]
+            ][::-1] or ["No warnings or errors recorded"]
 
             workspace = str(getattr(self, "_workspace_path", "") or "").strip()
             current_file = str(getattr(self, "_current_file", "") or "").strip()
@@ -10838,8 +10874,20 @@ class MainWindow(QMainWindow):
                     "Connection summary": f"{connected_count} connected / {len(enabled_rows)} enabled",
                     "Connections": connection_summary,
                 },
+                "TOKEN USAGE": {
+                    "Input tokens": f'{usage_totals["input"]:,}' if usage_found else f'~{estimated_input_tokens:,}',
+                    "Output tokens": f'{usage_totals["output"]:,}' if usage_found else f'~{estimated_output_tokens:,}',
+                    "Total tokens": f'{usage_totals["total"]:,}' if usage_found else f'~{estimated_tokens:,}',
+                    "Usage source": "Provider-reported turn usage" if usage_found else "Estimated from visible chat text (characters ÷ 4)",
+                    "Context window": "Not exposed by the active provider adapter",
+                },
                 "PERMISSIONS": {
                     "Computer permissions": f"{permission_count}/{permission_total} enabled",
+                },
+                "AI ACTIONS": {
+                    "Recent actions": recent_actions,
+                    "Recent warnings and errors": recent_issues,
+                    "Action count": len(action_events),
                 },
                 "MEMORY & CHAT": {
                     "Saved memory entries": memory_count,
@@ -10851,7 +10899,14 @@ class MainWindow(QMainWindow):
                 },
             }
 
-        self._context_panel = ContextPanel(_session_context_snapshot)
+        self._context_panel = ContextPanel(
+            _session_context_snapshot,
+            action_callbacks={
+                "activity": lambda: self._left_tabs.setCurrentIndex(2),
+                "providers": lambda: self._handle_settings_action("providers"),
+                "permissions": lambda: self._handle_settings_action("computer"),
+            },
+        )
         self._work_tabs.addTab(self._context_panel, self._tr("CONTEXT"))
         self._work_tabs.setTabToolTip(
             1, self._tr("Live runtime, workspace, Connected Apps, permissions, memory and chat context.")
