@@ -20,10 +20,14 @@ class AssistantIdentityPage(QWidget):
         voice: str,
         voices: Sequence[str],
         apply_changes: Callable[[str, str, str, str, str, str], bool],
+        personality: str = "professional",
+        response_style: str = "balanced",
+        custom_instructions: str = "",
+
         parent=None,
     ):
         super().__init__(parent)
-        self._initial = (assistant_name, user_name, voice, "professional", "balanced", "")
+        self._initial = (assistant_name, user_name, voice, personality, response_style, custom_instructions)
         self._apply_changes = apply_changes
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -66,6 +70,9 @@ class AssistantIdentityPage(QWidget):
             ("Minimal", "minimal"),
         ):
             self.personality_combo.addItem(label, value)
+        personality_index = self.personality_combo.findData(personality)
+        if personality_index >= 0:
+            self.personality_combo.setCurrentIndex(personality_index)
         behavior.add_row(SettingRow(
             "Personality",
             "Choose the default communication attitude. Safety rules remain unchanged.",
@@ -81,6 +88,9 @@ class AssistantIdentityPage(QWidget):
             ("Detailed", "detailed"),
         ):
             self.response_style_combo.addItem(label, value)
+        style_index = self.response_style_combo.findData(response_style)
+        if style_index >= 0:
+            self.response_style_combo.setCurrentIndex(style_index)
         behavior.add_row(SettingRow(
             "Response detail",
             "Set the default explanation depth; JARVIS can adapt to each request.",
@@ -94,6 +104,7 @@ class AssistantIdentityPage(QWidget):
             "Example: Prefer practical examples. Explain technical trade-offs. Use metric units."
         )
         self.custom_instructions.setMaximumHeight(112)
+        self.custom_instructions.setPlainText(str(custom_instructions or "")[:1500])
         behavior.add_row(SettingRow(
             "Custom instructions",
             "Optional preferences for tone, formatting, and workflow. Maximum 1,500 characters.",
