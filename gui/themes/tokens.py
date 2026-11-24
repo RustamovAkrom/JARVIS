@@ -333,3 +333,7 @@ def apply_ui_theme(mode: str) -> bool:
     C.INFO = C.PRI
     THEME_MODE = selected
     return True
+
+
+# Default startup appearance is the monochrome dark interface.
+apply_ui_theme("dark")
