@@ -149,15 +149,20 @@ def _valid_hex(value: str) -> bool:
 def _shift_hue(base_hex: str, accent_hex: str) -> str:
     base_rgb = tuple(int(base_hex[i:i + 2], 16) / 255 for i in (1, 3, 5))
     accent_rgb = tuple(int(accent_hex[i:i + 2], 16) / 255 for i in (1, 3, 5))
-    base_h, _, _ = colorsys.rgb_to_hsv(*base_rgb)
+    base_h, sat, val = colorsys.rgb_to_hsv(*base_rgb)
     accent_h, accent_s, _ = colorsys.rgb_to_hsv(*accent_rgb)
-    h, sat, val = colorsys.rgb_to_hsv(*base_rgb)
+    default_rgb = tuple(
+        int(DEFAULT_UI_COLOR[i:i + 2], 16) / 255 for i in (1, 3, 5)
+    )
+    default_h, _, _ = colorsys.rgb_to_hsv(*default_rgb)
     if accent_s < 0.08:
         # Neutral selections keep the palette restrained instead of creating
         # an unpredictable hue shift from an almost-grey colour.
         sat *= 0.12
     else:
-        h = (h + accent_h - base_h) % 1.0
+        # Apply only the delta from JARVIS cyan. With the default accent the
+        # original semantic token values remain byte-for-byte unchanged.
+        h = (base_h + accent_h - default_h) % 1.0
     r, g, b = colorsys.hsv_to_rgb(h, sat, val)
     return "#{:02x}{:02x}{:02x}".format(
         round(r * 255), round(g * 255), round(b * 255)
