@@ -317,7 +317,7 @@ class ContextPanel(QWidget):
         for line in connection_issues:
             if line not in issue_lines:
                 issue_lines.append(line)
-        issues = "\\n".join(issue_lines) if issue_lines else "No issues"
+        issues = "\n".join(issue_lines) if issue_lines else "No issues"
         self._labels["Recent actions"].setText(recent)
         self._labels["Issues"].setText(issues)
         self._labels["Issues"].setStyleSheet(
