@@ -1,45 +1,60 @@
-"""Regression tests for the independent monochrome interface themes."""
+"""Regression tests for theme contrast, dark surfaces and custom accents."""
+
 from PyQt6.QtCore import QSettings
 
 from gui.themes.tokens import C, DEFAULT_UI_COLOR, apply_ui_accent, apply_ui_theme
 
 
-def test_dark_theme_uses_monochrome_surfaces_and_foreground():
+def test_dark_theme_uses_near_black_surfaces_and_original_accent_language():
     assert apply_ui_accent(DEFAULT_UI_COLOR)
     assert apply_ui_theme("dark")
-    assert {C.BG, C.PANEL, C.PANEL2, C.PANEL3, C.DARK, C.BAR_BG} == {"#000000"}
-    assert {C.TEXT, C.TEXT_DIM, C.TEXT_MED, C.WHITE, C.PRI} == {"#ffffff"}
-    assert {C.BORDER, C.BORDER_B, C.BORDER_A, C.BORDER_H} == {"#ffffff"}
+    assert C.BG == "#000000"
+    assert C.PANEL != "#000000" and int(C.PANEL[1:], 16) < 0x080808
+    assert C.PANEL2 != "#000000" and int(C.PANEL2[1:], 16) < 0x0a0a0a
+    assert C.PRI == DEFAULT_UI_COLOR
+    assert C.TEXT.startswith("#")
+    assert C.BORDER != "#ffffff"
+    assert C.BORDER_B != "#ffffff"
 
 
-def test_light_theme_uses_white_surfaces_and_dark_foreground():
-    assert apply_ui_accent(DEFAULT_UI_COLOR)
+def test_light_theme_uses_white_surfaces_and_dark_text():
     assert apply_ui_theme("light")
-    assert {C.BG, C.PANEL, C.PANEL2, C.PANEL3, C.DARK, C.BAR_BG} == {"#ffffff"}
-    assert {C.TEXT, C.TEXT_DIM, C.TEXT_MED, C.WHITE, C.PRI} == {"#000000"}
-    assert {C.BORDER, C.BORDER_B, C.BORDER_A, C.BORDER_H} == {"#000000"}
+    assert C.BG == "#ffffff"
+    assert C.PANEL == "#ffffff"
+    assert C.TEXT == "#1f2933"
+    assert C.WHITE == "#111820"
+    assert C.BORDER == "#d8dee5"
 
 
-def test_custom_accent_does_not_recolor_monochrome_surfaces():
-    assert apply_ui_accent(DEFAULT_UI_COLOR)
+def test_custom_accent_recolours_accents_without_changing_surfaces():
     assert apply_ui_theme("dark")
     assert apply_ui_accent("#7c5cff")
     assert C.ACCENT == "#7c5cff"
-    assert C.BG == "#000000"
-    assert C.TEXT == "#ffffff"
-    assert C.BORDER == "#ffffff"
-    assert C.PANEL == C.PANEL2 == C.PANEL3 == "#000000"
     assert C.PRI == "#7c5cff"
+    assert C.BG == "#000000"
+    assert C.PANEL != "#000000"
+    assert C.BORDER != "#ffffff"
+    assert C.BORDER != "#0d3347"
 
 
-def test_legacy_black_and_white_presets_select_theme_modes():
+def test_custom_accent_is_preserved_when_switching_theme():
+    assert apply_ui_accent("#ff3355")
+    assert apply_ui_theme("light")
+    assert C.PRI == "#ff3355"
+    assert C.BG == "#ffffff"
+    assert C.TEXT == "#1f2933"
+    assert apply_ui_theme("dark")
+    assert C.PRI == "#ff3355"
+    assert C.BG == "#000000"
+
+
+def test_black_and_white_presets_select_theme_modes():
     assert apply_ui_accent("#ffffff")
     assert C.BG == "#ffffff"
-    assert C.TEXT == "#000000"
-    assert C.PANEL == C.PANEL2 == C.PANEL3 == "#ffffff"
+    assert C.TEXT == "#1f2933"
     assert apply_ui_accent("#000000")
     assert C.BG == "#000000"
-    assert C.TEXT == "#ffffff"
+    assert C.TEXT == "#8ffcff"
 
 
 def test_theme_mode_is_persisted_independently():
@@ -55,3 +70,4 @@ def test_theme_mode_is_persisted_independently():
         settings.remove("appearance/theme")
         settings.sync()
         apply_ui_theme("dark")
+        apply_ui_accent(DEFAULT_UI_COLOR)
