@@ -6119,7 +6119,7 @@ class RemoteKeyOverlay(QWidget):
         # cannot be reached and does not explain why is the single most
         # frustrating failure this app has.
         if bind_error:
-            lay.addWidget(_lbl("?  " + bind_error, 8, color="#f4b942"))
+            lay.addWidget(_lbl("?  " + bind_error, 8, color=C.ACC2))
 
         try:
             from dashboard.server import blocking_firewall_rules
@@ -8206,7 +8206,7 @@ class MainWindow(QMainWindow):
         self._root_splitter.setHandleWidth(5)
         self._root_splitter.setStyleSheet(
             "QSplitter::handle { background:transparent; width:5px; }"
-            "QSplitter::handle:hover { background:rgba(255,255,255,72); border-radius:3px; }"
+            f"QSplitter::handle:hover {{ background:{C.PRI_GHO}; border-radius:3px; }}"
         )
         self._root_splitter.addWidget(self._workspace_split)
         self._root_splitter.addWidget(self._right_panel)
@@ -11103,15 +11103,15 @@ class MainWindow(QMainWindow):
         self._interrupt_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._interrupt_btn.setStyleSheet(f"""
             QPushButton {{
-                background: rgba(20,0,8,150); color: {C.MUTED_C};
+                background: {C.PRI_GHO}; color: {C.MUTED_C};
                 border: 1px solid {C.MUTED_C}; border-radius: 9px;
                 padding: 0 7px; text-align: left;
             }}
             QPushButton:hover {{
-                background: rgba(32,0,16,180); border: 1px solid {C.MUTED_C};
+                background: {C.PRI_GHO}; border: 1px solid {C.MUTED_C};
             }}
             QPushButton:pressed {{
-                background: rgba(48,0,24,190);
+                background: {C.DARK};
             }}
         """)
         self._interrupt_btn.clicked.connect(self._do_interrupt)
