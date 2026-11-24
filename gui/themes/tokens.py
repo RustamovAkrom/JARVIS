@@ -87,20 +87,20 @@ if THEME_MODE not in {"dark", "light"}:
 # Base canvas stays pure black/white. The selected custom hue tints all
 # secondary surfaces, outlines, controls and indicators consistently.
 _DARK_SURFACES = {
-    "BG": "#000000",
+    "BG": "#050d12",
     "PANEL": "#081018",
     "PANEL2": "#0c1a28",
     "PANEL3": "#102538",
-    "DARK": "#000101",
-    "BAR_BG": "#000202",
+    "DARK": "#050d12",
+    "BAR_BG": "#050d12",
 }
 _LIGHT_SURFACES = {
-    "BG": "#ffffff",
+    "BG": "#f8fafc",
     "PANEL": "#ffffff",
     "PANEL2": "#f8fafc",
     "PANEL3": "#f1f5f9",
-    "DARK": "#ffffff",
-    "BAR_BG": "#ffffff",
+    "DARK": "#f8fafc",
+    "BAR_BG": "#f8fafc",
 }
 _DARK_ACCENT_BASE = {
     "BORDER": "#0d3347",
@@ -197,19 +197,36 @@ def _tint_surface(base_hex: str, accent_hex: str, mode: str) -> str:
 def _apply_palette() -> None:
     surfaces = _DARK_SURFACES if THEME_MODE == "dark" else _LIGHT_SURFACES
     accent_base = _DARK_ACCENT_BASE if THEME_MODE == "dark" else _LIGHT_ACCENT_BASE
-
-    # The two mode buttons control the canvas only: it is always pure black
-    # or pure white. Panels retain the user's selected hue as subtle tints.
-    for key, value in surfaces.items():
-        if key in {"PANEL", "PANEL2", "PANEL3", "BAR_BG"}:
-            value = _tint_surface(value, _ACTIVE_ACCENT, THEME_MODE)
-        setattr(C, key, value)
-
     neutral_accent = (
         colorsys.rgb_to_hsv(*(
             int(_ACTIVE_ACCENT[i:i + 2], 16) / 255 for i in (1, 3, 5)
         ))[1] < 0.08
     )
+
+    if neutral_accent:
+        # Black and White presets are genuinely monochrome, not a tinted
+        # custom palette with a black/white canvas.
+        surfaces = (
+            {
+                "BG": "#000000", "PANEL": "#080808",
+                "PANEL2": "#111111", "PANEL3": "#1a1a1a",
+                "DARK": "#000000", "BAR_BG": "#000000",
+            }
+            if THEME_MODE == "dark"
+            else {
+                "BG": "#ffffff", "PANEL": "#ffffff",
+                "PANEL2": "#f7f7f7", "PANEL3": "#eeeeee",
+                "DARK": "#ffffff", "BAR_BG": "#ffffff",
+            }
+        )
+
+    # In Custom Colour mode every major surface, including the canvas, is
+    # tinted from the selected hue. Black/White presets use neutral surfaces.
+    for key, value in surfaces.items():
+        if not neutral_accent:
+            value = _tint_surface(value, _ACTIVE_ACCENT, THEME_MODE)
+        setattr(C, key, value)
+
     for key, base in accent_base.items():
         if neutral_accent:
             if THEME_MODE == "dark":
@@ -242,7 +259,11 @@ def _apply_palette() -> None:
     # Status indicators are neutral in Black/White presets and use the
     # selected hue family in Custom Colour mode.
     for key, base in _STATUS_DEFAULTS.items():
-        setattr(C, key, _shift_hue(base, _ACTIVE_ACCENT))
+        if neutral_accent:
+            value = "#d0d0d0" if THEME_MODE == "dark" else "#333333"
+        else:
+            value = _shift_hue(base, _ACTIVE_ACCENT)
+        setattr(C, key, value)
     _init_aliases()
 
 
