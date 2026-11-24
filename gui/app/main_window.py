@@ -10171,11 +10171,11 @@ class MainWindow(QMainWindow):
         telemetry_row.addWidget(refresh_label)
         lay.addLayout(telemetry_row)
 
-        self._gauge_cpu = MetricGauge("CPU", C.GREEN, self._tr("LOAD"))
-        self._gauge_mem = MetricGauge(self._tr("MEM"), C.ACC2, self._tr("IN USE"))
-        self._gauge_net = MetricGauge(self._tr("NET"), C.PRI, self._tr("TRAFFIC"))
-        self._gauge_gpu = MetricGauge("GPU", C.ACC, self._tr("GRAPHICS"))
-        self._gauge_tmp = MetricGauge(self._tr("TMP"), C.MUTED_C, self._tr("THERMAL"))
+        self._gauge_cpu = MetricGauge("CPU", C.GREEN, self._tr("LOAD"), theme_token="GREEN")
+        self._gauge_mem = MetricGauge(self._tr("MEM"), C.ACC2, self._tr("IN USE"), theme_token="ACC2")
+        self._gauge_net = MetricGauge(self._tr("NET"), C.PRI, self._tr("TRAFFIC"), theme_token="PRI")
+        self._gauge_gpu = MetricGauge("GPU", C.ACC, self._tr("GRAPHICS"), theme_token="ACC")
+        self._gauge_tmp = MetricGauge(self._tr("TMP"), C.MUTED_C, self._tr("THERMAL"), theme_token="MUTED_C")
 
         gauges = [
             (self._gauge_cpu, "Current processor load"),
