@@ -109,7 +109,7 @@ def test_theme_mode_api_preserves_custom_colour_palette():
     assert C.PRI == "#ff3355"
 
 
-def test_black_white_presets_keep_neutral_ui_and_red_mute_warning():
+def test_black_white_presets_keep_neutral_canvas_and_semantic_telemetry():
     assert apply_ui_accent("#ffffff")
     assert apply_ui_theme("dark")
     assert C.BG == "#000000"
@@ -117,6 +117,9 @@ def test_black_white_presets_keep_neutral_ui_and_red_mute_warning():
     assert C.TEXT == "#ffffff"
     assert C.PRI == "#ffffff"
     assert C.BORDER == "#ffffff"
+    assert C.GREEN == "#00ff88"
+    assert C.ACC2 == "#ffcc00"
+    assert C.RED == "#ff3355"
     assert C.MUTED_C == "#ff3366"
 
     assert apply_ui_accent("#000000")
@@ -126,6 +129,9 @@ def test_black_white_presets_keep_neutral_ui_and_red_mute_warning():
     assert C.TEXT == "#000000"
     assert C.PRI == "#000000"
     assert C.BORDER == "#000000"
+    assert C.GREEN == "#00ff88"
+    assert C.ACC2 == "#ffcc00"
+    assert C.RED == "#ff3355"
     assert C.MUTED_C == "#ff3366"
 
 
