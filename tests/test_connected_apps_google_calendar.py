@@ -60,3 +60,21 @@ def test_calendar_api_error_is_sanitized(monkeypatch):
     monkeypatch.setattr("urllib.request.urlopen", lambda request, timeout: (_ for _ in ()).throw(error))
     with pytest.raises(PermissionError, match="authorization failed"):
         adapter.execute("c1", "google_calendar_list_events", {})
+
+
+def test_calendar_get_event_uses_encoded_calendar_and_event_ids(monkeypatch):
+    adapter = GoogleCalendarAdapter(Store())
+    captured = {}
+
+    def fake_request(cid, method, path, query=None, payload=None):
+        captured.update(method=method, path=path, query=query, payload=payload)
+        return {"id": "event-1"}
+
+    monkeypatch.setattr(adapter, "_request", fake_request)
+    result = adapter.execute(
+        "c1", "google_calendar_get_event",
+        {"calendar_id": "team@example.com", "event_id": "event/with space"},
+    )
+    assert result == {"id": "event-1"}
+    assert captured["method"] == "GET"
+    assert captured["path"] == "/calendars/team%40example.com/events/event%2Fwith%20space"
