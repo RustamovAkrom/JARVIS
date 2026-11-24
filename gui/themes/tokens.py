@@ -14,6 +14,7 @@ Every accent-linked token participates in the hue-shift performed by
 ``apply_ui_accent``; status colours stay semantic and fixed.
 """
 
+from PyQt6.QtCore import QSettings
 from PyQt6.QtGui import QColor
 
 
@@ -270,7 +271,10 @@ def qcol(hex_color: str, alpha: int = 255) -> QColor:
 # ---------------------------------------------------------------------------
 # Monochrome interface modes. Accent selection is intentionally independent:
 # theme mode owns surfaces, text and borders; C.PRI remains the chosen accent.
-THEME_MODE = "dark"
+_theme_settings = QSettings("JARVIS", "JARVIS")
+THEME_MODE = str(_theme_settings.value("appearance/theme", "dark") or "dark").lower()
+if THEME_MODE not in {"dark", "light"}:
+    THEME_MODE = "dark"
 
 _DARK_THEME = {
     "BG": "#000000",
@@ -339,6 +343,8 @@ def apply_ui_theme(mode: str) -> bool:
     C.DANGER = C.RED
     C.INFO = C.PRI
     THEME_MODE = selected
+    _theme_settings.setValue("appearance/theme", selected)
+    _theme_settings.sync()
     return True
 
 
