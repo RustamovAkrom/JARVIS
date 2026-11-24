@@ -1164,7 +1164,7 @@ class HudCanvas(QWidget):
             p.fillRect(QRectF(wx0 + i * bw, wy + 20 - hgt, bw - 1, hgt), cl)
 
         p.setClipping(False)
-        p.setPen(QPen(QColor(170, 220, 255, 46), 1))
+        p.setPen(QPen(qcol(C.BORDER_B, 46), 1))
         p.setBrush(Qt.BrushStyle.NoBrush)
         p.drawRoundedRect(QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5), R_L, R_L)
         p.end()  # end deterministically so the backing store never flushes an active painter
@@ -1424,7 +1424,7 @@ class _DropCanvas(QWidget):
         p.setFont(
             QFont("Segoe UI Emoji", 22) if _OS == "Windows" else QFont("Arial", 22)
         )
-        p.setPen(QPen(qcol(icon_col), 1))
+        p.setPen(QPen(qcol(C.PRI), 1))
         p.drawText(QRectF(block_x, 0, block_w, H), Qt.AlignmentFlag.AlignCenter, icon)
 
         tx = block_x + block_w + 6
