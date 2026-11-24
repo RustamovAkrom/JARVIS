@@ -305,8 +305,6 @@ def retheme_all_widgets(old: dict[str, str], new: dict[str, str]) -> None:
 
 def _tint_icon(icon: QIcon, color: str) -> QIcon:
     """Tint an icon while preserving its alpha mask."""
-    if C.PANEL.lower() != "#ffffff":
-        return icon
     source = icon.pixmap(QSize(24, 24))
     if source.isNull():
         return icon
@@ -8214,7 +8212,7 @@ class MainWindow(QMainWindow):
         self._root_splitter.setHandleWidth(5)
         self._root_splitter.setStyleSheet(
             "QSplitter::handle { background:transparent; width:5px; }"
-            "QSplitter::handle:hover { background:rgba(0,212,255,36); border-radius:3px; }"
+            "QSplitter::handle:hover { background:rgba(255,255,255,72); border-radius:3px; }"
         )
         self._root_splitter.addWidget(self._workspace_split)
         self._root_splitter.addWidget(self._right_panel)
@@ -8475,9 +8473,9 @@ class MainWindow(QMainWindow):
             button.setAccessibleName(self._tr(hint))
             button.setFixedSize(30, 30)
 
-        # Keep every icon monochrome in the white preset, including icons
-        # loaded from assets whose SVG strokes use a fixed green accent.
-        monochrome = C.PANEL.lower() == "#ffffff"
+        # All interface icons follow the monochrome foreground in both modes.
+        # Preserve each original icon once so repeated theme changes never tint
+        # an already-tinted pixmap and gradually damage its alpha mask.
         for widget in QApplication.allWidgets():
             if not isinstance(widget, QPushButton) or widget.icon().isNull():
                 continue
@@ -8485,7 +8483,7 @@ class MainWindow(QMainWindow):
             if original is None:
                 original = widget.icon()
                 widget._theme_original_icon = original
-            widget.setIcon(_tint_icon(original, C.PRI) if monochrome else original)
+            widget.setIcon(_tint_icon(original, C.PRI))
 
         def put(widget, css):
             try:
