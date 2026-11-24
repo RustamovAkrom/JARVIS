@@ -24,7 +24,7 @@ def test_light_theme_uses_white_surfaces_and_dark_text():
     assert apply_ui_theme("light")
     assert C.BG == "#ffffff"
     assert C.PANEL == "#ffffff"
-    assert C.TEXT == "#111111"
+    assert C.TEXT == "#000000"
     assert C.WHITE == "#000000"
     assert C.BORDER == "#000000"
 
@@ -106,7 +106,7 @@ def test_black_white_presets_are_pure_monochrome():
     assert apply_ui_theme("dark")
     assert C.BG == "#000000"
     assert C.PANEL == "#000000"
-    assert C.TEXT == "#e8e8e8"
+    assert C.TEXT == "#ffffff"
     assert C.PRI == "#ffffff"
     assert C.BORDER == "#ffffff"
 
@@ -114,9 +114,9 @@ def test_black_white_presets_are_pure_monochrome():
     assert apply_ui_theme("light")
     assert C.BG == "#ffffff"
     assert C.PANEL == "#ffffff"
-    assert C.TEXT == "#111111"
+    assert C.TEXT == "#000000"
     assert C.PRI == "#000000"
-    assert C.BORDER == "#d0d0d0"
+    assert C.BORDER == "#000000"
 
 
 def test_custom_white_or_black_hex_does_not_switch_theme_mode():
