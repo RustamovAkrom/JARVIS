@@ -274,3 +274,76 @@ def qcol(hex_color: str, alpha: int = 255) -> QColor:
     color = QColor(hex_color)
     color.setAlpha(alpha)
     return color
+
+
+# ---------------------------------------------------------------------------
+# Monochrome interface modes. Accent selection is intentionally independent:
+# theme mode owns surfaces, text and borders; C.PRI remains the chosen accent.
+THEME_MODE = "dark"
+
+_DARK_THEME = {
+    "BG": "#000000",
+    "PANEL": "#080808",
+    "PANEL2": "#101010",
+    "PANEL3": "#181818",
+    "BORDER": "#303030",
+    "BORDER_B": "#555555",
+    "BORDER_A": "#414141",
+    "BORDER_H": "#858585",
+    "PRI_DIM": "#b8b8b8",
+    "PRI_GHO": "#242424",
+    "TEXT": "#f2f2f2",
+    "TEXT_DIM": "#a0a0a0",
+    "TEXT_MED": "#c8c8c8",
+    "WHITE": "#ffffff",
+    "DARK": "#000000",
+    "BAR_BG": "#080808",
+}
+_LIGHT_THEME = {
+    "BG": "#ffffff",
+    "PANEL": "#ffffff",
+    "PANEL2": "#f7f7f7",
+    "PANEL3": "#eeeeee",
+    "BORDER": "#d0d0d0",
+    "BORDER_B": "#a8a8a8",
+    "BORDER_A": "#bcbcbc",
+    "BORDER_H": "#777777",
+    "PRI_DIM": "#555555",
+    "PRI_GHO": "#e9e9e9",
+    "TEXT": "#171717",
+    "TEXT_DIM": "#666666",
+    "TEXT_MED": "#444444",
+    "WHITE": "#111111",
+    "DARK": "#ffffff",
+    "BAR_BG": "#f7f7f7",
+}
+
+
+def apply_ui_theme(mode: str) -> bool:
+    """Apply the independent monochrome light/dark surface and typography theme.
+
+    The selected UI accent is retained in C.PRI. Theme changes never overwrite
+    the saved accent, status colours, or application behavior.
+    """
+    global THEME_MODE
+    selected = str(mode or "").strip().lower()
+    if selected in {"black", "dark"}:
+        selected = "dark"
+    elif selected in {"white", "light"}:
+        selected = "light"
+    else:
+        return False
+
+    palette = _DARK_THEME if selected == "dark" else _LIGHT_THEME
+    for key, value in palette.items():
+        setattr(C, key, value)
+
+    # The primary foreground in monochrome mode is neutral. The selected
+    # custom accent is retained separately for restrained accent-only details.
+    C.ACCENT = getattr(C, "ACCENT", DEFAULT_UI_COLOR)
+    C.SUCCESS = C.GREEN
+    C.WARNING = C.ACC2
+    C.DANGER = C.RED
+    C.INFO = C.PRI
+    THEME_MODE = selected
+    return True
