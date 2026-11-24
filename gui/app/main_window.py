@@ -18699,7 +18699,7 @@ class JarvisUI:
                     agent=str(payload.get("agent") or "general"),
                     minutes=payload.get("minutes"),
                     rounds=payload.get("rounds"),
-                    deliver=str(payload.get("deliver") or "panel"),
+                    deliver=str(payload.get("deliver") or "voice"),
                     origin="assistant",
                     title=str(payload.get("title") or ""),
                 )
