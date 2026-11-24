@@ -10937,6 +10937,7 @@ class MainWindow(QMainWindow):
                 "activity": lambda: self._left_tabs.setCurrentIndex(2),
                 "providers": lambda: self._open_context_settings_category("integrations"),
                 "permissions": lambda: self._open_context_settings_category("permissions"),
+                "connected_apps": lambda: self._open_context_settings_category("connected_apps"),
             },
         )
         self._work_tabs.addTab(self._context_panel, self._tr("CONTEXT"))
