@@ -87,19 +87,19 @@ if THEME_MODE not in {"dark", "light"}:
 # Surfaces intentionally do not participate in accent hue changes.
 _DARK_SURFACES = {
     "BG": "#000000",
-    "PANEL": "#020304",
-    "PANEL2": "#030506",
-    "PANEL3": "#050809",
-    "DARK": "#000000",
-    "BAR_BG": "#000000",
+    "PANEL": "#010203",
+    "PANEL2": "#020405",
+    "PANEL3": "#030607",
+    "DARK": "#000101",
+    "BAR_BG": "#000202",
 }
 _LIGHT_SURFACES = {
     "BG": "#ffffff",
-    "PANEL": "#ffffff",
+    "PANEL": "#fdfdfd",
     "PANEL2": "#f7f9fb",
     "PANEL3": "#eef2f6",
-    "DARK": "#ffffff",
-    "BAR_BG": "#f7f9fb",
+    "DARK": "#fefefe",
+    "BAR_BG": "#fcfcfc",
 }
 _DARK_ACCENT_BASE = {
     "BORDER": "#0d3347",
