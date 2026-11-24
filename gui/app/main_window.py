@@ -1395,7 +1395,7 @@ class _DropCanvas(QWidget):
             "Drop file here  or  Click to Browse",
         )
         p.setFont(QFont(FONT_MONO, 7))
-        p.setPen(QPen(qcol("#1a4a5a"), 1))
+        p.setPen(QPen(qcol(C.TEXT_DIM), 1))
         p.drawText(
             QRectF(0, cy + 24, W, 14),
             Qt.AlignmentFlag.AlignCenter,
@@ -1448,7 +1448,7 @@ class _DropCanvas(QWidget):
         )
 
         p.setFont(QFont(FONT_MONO, 6))
-        p.setPen(QPen(qcol("#1e5c6a"), 1))
+        p.setPen(QPen(qcol(C.TEXT_DIM), 1))
         par = str(path.parent)
         if len(par) > 42:
             par = "…" + par[-41:]
@@ -2030,7 +2030,7 @@ class CustomizeOverlay(QWidget):
         black_btn.setFont(QFont(FONT_MONO, 7, QFont.Weight.Bold))
         black_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         black_btn.setStyleSheet(
-            f"QPushButton {{ background: #000000; color: {C.TEXT_MED}; "
+            f"QPushButton {{ background: #000000; color: #ffffff; "
             f"border: 1px solid {C.BORDER}; border-radius: {R_S}px; }}"
             f"QPushButton:hover {{ color: {C.PRI}; border-color: {C.PRI_DIM}; }}"
         )
@@ -2042,8 +2042,8 @@ class CustomizeOverlay(QWidget):
         white_btn.setFont(QFont(FONT_MONO, 7, QFont.Weight.Bold))
         white_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         white_btn.setStyleSheet(
-            f"QPushButton {{ background: #ffffff; color: #111820; "
-            f"border: 1px solid #aeb8c0; border-radius: {R_S}px; }}"
+            f"QPushButton {{ background: #ffffff; color: #000000; "
+            f"border: 1px solid {C.BORDER}; border-radius: {R_S}px; }}"
             f"QPushButton:hover {{ border-color: {C.PRI}; }}"
         )
         white_btn.setToolTip("Apply pure-white monochrome mode")
@@ -2523,7 +2523,7 @@ class ConfirmBanner(_HudOverlay):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(f"""
             ConfirmBanner {{
-                background: rgba(14, 3, 0, 250);
+                background: {C.PANEL2};
                 border: 1px solid {C.ACC};
                 border-radius: 6px;
             }}
@@ -2562,7 +2562,7 @@ class ConfirmBanner(_HudOverlay):
         yes.setStyleSheet(f"""
             QPushButton {{ background: transparent; color: {C.ACC};
                 border: 1px solid {C.ACC}; border-radius: 3px; }}
-            QPushButton:hover {{ background: rgba(255,107,0,40); }}
+            QPushButton:hover {{ background: {C.PRI_GHO}; }}
         """)
         yes.clicked.connect(lambda: self.answered.emit(True))
         row.addWidget(yes)
@@ -6026,7 +6026,7 @@ class PluginSettingsOverlay(QWidget):
         if not lbl:
             return
         lbl.setText(msg)
-        color = C.PRI if ok else "#ff6b6b"
+        color = C.PRI if ok else C.RED
         lbl.setStyleSheet(f"color: {color}; background: transparent;")
 
 
@@ -7820,7 +7820,7 @@ class MainWindow(QMainWindow):
         self._main_splitter.setContentsMargins(6, 6, 6, 6)
         self._main_splitter.setStyleSheet("""
             QSplitter::handle { background: transparent; width: 5px; }
-            QSplitter::handle:hover { background: rgba(255,255,255,72); border-radius: 4px; }
+            QSplitter::handle:hover { background: ${C.PRI_GHO}; border-radius: 4px; }
         """)
 
         self._left_panel = self._build_left_panel()
@@ -12467,7 +12467,7 @@ class MainWindow(QMainWindow):
         )
         self._full_access_warning.setWordWrap(True)
         self._full_access_warning.setStyleSheet(
-            f"color:{C.ACC2}; background:rgba(255,170,40,18); "
+            f"color:{C.ACC2}; background:{C.PANEL2}; "
             f"border:1px solid {C.ACC2}; border-radius:7px; padding:8px;"
         )
         self._full_access_warning.setVisible(access["access_level"] == "full")
@@ -13350,7 +13350,7 @@ class MainWindow(QMainWindow):
         return panel
 
     def _terminal_theme(self) -> dict[str, str]:
-        light = C.PANEL.lower() == "#ffffff"
+        light = current_theme_mode() == "light"
         if light:
             colors = {
                 "black": "#25313b",
@@ -15979,7 +15979,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         w = QWidget()
         w.setFixedHeight(30)
         w.setStyleSheet(
-            "background: rgba(0,0,0,255); border-top: 1px solid rgba(255,255,255,255);"
+            f"background: {C.BG}; border-top: 1px solid {C.BORDER};"
         )
         lay = QHBoxLayout(w)
         lay.setContentsMargins(14, 0, 14, 0)
