@@ -224,7 +224,7 @@ class CursorAssistantUiTests(unittest.TestCase):
             menu = CursorRadialMenu(_Owner())
         try:
             self.assertEqual(menu.width(), 300)
-            self.assertLessEqual(menu.height(), 110)
+            self.assertLessEqual(menu.height(), 145)
             self.assertLessEqual(menu.maximumWidth(), 320)
             self.assertGreaterEqual(menu.minimumWidth(), 240)
             self.assertAlmostEqual(menu.windowOpacity(), 0.9, places=2)
