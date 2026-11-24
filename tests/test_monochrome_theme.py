@@ -34,15 +34,18 @@ def test_legacy_neutral_default_migrates_to_original_jarvis_accent():
     assert C.TEXT != "#ffffff"
 
 
-def test_custom_accent_recolours_accents_without_changing_surfaces():
+def test_custom_accent_tints_surfaces_and_controls_without_changing_canvas():
     assert apply_ui_theme("dark")
     assert apply_ui_accent("#7c5cff")
     assert C.ACCENT == "#7c5cff"
     assert C.PRI == "#7c5cff"
     assert C.BG == "#000000"
-    assert C.PANEL != "#000000"
+    assert C.PANEL != "#010203"
+    assert C.PANEL2 != "#020405"
     assert C.BORDER != "#ffffff"
     assert C.BORDER != "#0d3347"
+    assert C.GREEN != "#00ff88"
+    assert C.RED != "#ff3355"
 
 
 def test_custom_accent_is_preserved_when_switching_theme():
@@ -56,14 +59,23 @@ def test_custom_accent_is_preserved_when_switching_theme():
     assert C.BG == "#000000"
 
 
-def test_black_and_white_presets_select_theme_modes():
-    assert apply_ui_accent(DEFAULT_UI_COLOR)
-    assert apply_ui_accent("#ffffff")
+def test_dark_and_light_buttons_change_only_the_canvas_mode():
+    assert apply_ui_accent("#ff3355")
+    assert apply_ui_theme("light")
     assert C.BG == "#ffffff"
+    assert C.PRI == "#ff3355"
     assert C.TEXT == "#1f2933"
+    assert apply_ui_theme("dark")
+    assert C.BG == "#000000"
+    assert C.PRI == "#ff3355"
+
+
+def test_custom_white_or_black_hex_does_not_switch_theme_mode():
+    assert apply_ui_theme("dark")
+    assert apply_ui_accent("#ffffff")
+    assert C.BG == "#000000"
     assert apply_ui_accent("#000000")
     assert C.BG == "#000000"
-    assert C.TEXT == "#8ffcff"
 
 
 def test_theme_mode_is_persisted_independently():
