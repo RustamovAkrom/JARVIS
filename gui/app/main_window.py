@@ -3569,6 +3569,10 @@ class ProvidersOverlay(_HudOverlay):
         self._picked: dict[str, str] = {}
 
         self._category_tabs = QTabBar()
+        self._category_tabs.setMinimumWidth(0)
+        self._category_tabs.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+        )
         self._category_tabs.setExpanding(True)
         self._category_tabs.setUsesScrollButtons(False)
         self._category_tabs.setDrawBase(False)
@@ -3616,6 +3620,11 @@ class ProvidersOverlay(_HudOverlay):
         # ── Body ────────────────────────────────────────────────────────────
         self._scroll = QScrollArea()
         self._scroll.setWidgetResizable(True)
+        # The embedded page already owns the vertical scroll bar. Prevent a
+        # nested horizontal bar when Offline controls report wide size hints.
+        self._scroll.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
         self._scroll.setFrameShape(QFrame.Shape.NoFrame)
         self._scroll.setStyleSheet(
             "QScrollArea { background: transparent; }"
@@ -3631,9 +3640,13 @@ class ProvidersOverlay(_HudOverlay):
         outer.addWidget(self._scroll, 1)
 
         self._body = QWidget()
+        self._body.setMinimumWidth(0)
+        self._body.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
+        )
         self._body.setStyleSheet("background: transparent;")
         self._body_lay = QVBoxLayout(self._body)
-        self._body_lay.setContentsMargins(0, 2, 8, 2)
+        self._body_lay.setContentsMargins(0, 2, 0, 2)
         self._body_lay.setSpacing(10)
         self._scroll.setWidget(self._body)
 
@@ -3951,6 +3964,8 @@ class ProvidersOverlay(_HudOverlay):
         """A bordered section. Grouping is the difference between three
         decisions and eleven controls."""
         w = QWidget()
+        w.setMinimumWidth(0)
+        w.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         w.setStyleSheet(
             f"background: {C.PANEL}; border: 1px solid {C.BORDER}; "
             f"border-radius: 5px;"
@@ -4142,6 +4157,8 @@ class ProvidersOverlay(_HudOverlay):
     def _slot_box(self, slot: str, num: str, name: str, what: str) -> QWidget:
         head = self._label(f"{num}  {self._tr(name)}", 9, C.PRI, bold=True)
         w, lay = self._box([head, self._label(what, 7, C.TEXT_DIM)])
+        w.setMinimumWidth(0)
+        w.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
 
         entries = self._catalog(slot)
         box = self._combo()
@@ -5232,10 +5249,12 @@ class CursorRadialMenu(QWidget):
         )
         self.setObjectName("CursorQuickActions")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.setFixedWidth(356)
-        self.setMinimumHeight(82)
-        self.setMaximumHeight(150)
-        self.resize(356, 100)
+        self._menu_columns = 4
+        self.setMinimumWidth(240)
+        self.setMaximumWidth(320)
+        self.setMinimumHeight(76)
+        self.setMaximumHeight(170)
+        self.resize(300, 96)
         self.setWindowOpacity(0.9)
         self.setStyleSheet(f"""
             QWidget#CursorQuickActions {{
@@ -5325,6 +5344,7 @@ class CursorRadialMenu(QWidget):
         actions = [key for key in settings["menu_actions"] if key in self._ACTIONS]
         if not actions:
             actions = ["ask", "settings"]
+        columns = max(2, int(self._menu_columns))
         for index, key in enumerate(actions):
             label, hint, _callback = self._ACTIONS[key]
             if key == "microphone":
@@ -5352,19 +5372,29 @@ class CursorRadialMenu(QWidget):
             )
             button.clicked.connect(lambda _checked=False, action=key: self._run(action))
             self._buttons[key] = button
-            button.setFixedHeight(25)
-            self._actions_grid.addWidget(button, index // 5, index % 5)
+            button.setMinimumWidth(0)
+            button.setSizePolicy(
+                QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+            )
+            button.setFixedHeight(24)
+            self._actions_grid.addWidget(
+                button, index // columns, index % columns
+            )
         self.adjustSize()
 
     def show_near_cursor(self):
+        point = QCursor.pos()
+        screen = QApplication.screenAt(point) or QApplication.primaryScreen()
+        area = screen.availableGeometry() if screen else QRect(0, 0, 1920, 1080)
+        # Scale the quick actions to the available display width.
+        width = max(240, min(320, area.width() - 24))
+        self.setFixedWidth(width)
+        self._menu_columns = 4 if width >= 288 else 3 if width >= 252 else 2
         self._rebuild_actions()
         has_clipboard = bool(QApplication.clipboard().text().strip())
         self.prompt.setPlaceholderText(
             "Ask about copied text…" if has_clipboard else "Ask JARVIS…"
         )
-        point = QCursor.pos()
-        screen = QApplication.screenAt(point) or QApplication.primaryScreen()
-        area = screen.availableGeometry() if screen else QRect(0, 0, 1920, 1080)
         x = point.x() + 12
         y = point.y() + 12
         if x + self.width() > area.right() + 1:
