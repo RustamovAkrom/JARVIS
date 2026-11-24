@@ -246,8 +246,6 @@ def _apply_palette() -> None:
             value = neutral[key]
         elif key == "PRI":
             value = _ACTIVE_ACCENT
-        elif THEME_MODE == "light" and key in {"TEXT", "TEXT_DIM", "TEXT_MED", "WHITE"}:
-            value = base
         else:
             value = _shift_hue(base, _ACTIVE_ACCENT)
         setattr(C, key, value)
