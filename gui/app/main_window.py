@@ -10723,41 +10723,57 @@ class MainWindow(QMainWindow):
             lambda *_: self._update_chat_scroll_button()
         )
 
-        history_page = QWidget()
-        history_lay = QVBoxLayout(history_page)
-        history_lay.setContentsMargins(4, 4, 4, 4)
-        history_lay.setSpacing(4)
-        history_tools = QHBoxLayout()
-        history_tools.setSpacing(5)
-        history_note = QLabel(
-            self._tr("Previous conversations · Saved facts live in Memory")
-        )
-        history_note.setWordWrap(True)
-        history_note.setStyleSheet(f"color:{C.TEXT_DIM}; background:transparent;")
-        history_note.setFont(QFont(FONT_UI, 10))
-        history_tools.addWidget(history_note, 1)
-        self._clear_history_btn = QPushButton(self._tr("Clear conversations"))
-        self._clear_history_btn.setFixedHeight(20)
-        self._clear_history_btn.setToolTip(
-            self._tr(
-                "Delete saved conversations and the active chat. Saved facts in Memory stay."
+        from gui.panels.context import ContextPanel
+
+        def _session_context_snapshot():
+            config = _read_full_config()
+            provider = (
+                config.get("active_provider")
+                or config.get("ai_provider")
+                or config.get("provider")
             )
-        )
-        self._clear_history_btn.clicked.connect(self._clear_history)
-        history_tools.addWidget(self._clear_history_btn)
-        history_lay.addLayout(history_tools)
-        self._history_list = QListWidget()
-        self._history_list.setObjectName("saved_chats_list")
-        self._history_list.setStyleSheet(
-            f"background: {C.PANEL2}; color: {C.TEXT}; border: none; border-radius: 5px;"
-            f"QListWidget::item {{ padding: 6px; border-bottom: 1px solid {C.BORDER}; }}"
-            f"QListWidget::item:selected {{ background:{C.PRI_GHO}; color:{C.PRI}; }}"
-        )
-        self._history_list.itemClicked.connect(self._switch_chat_item)
-        history_lay.addWidget(self._history_list, 1)
-        self._work_tabs.addTab(history_page, self._tr("CONVERSATIONS"))
+            model = (
+                config.get("active_model")
+                or config.get("model")
+                or config.get("ai_model")
+            )
+            mode = config.get("execution_mode") or config.get("agent_mode")
+            project = getattr(self, "_project_root", None) or getattr(self, "_active_project", None)
+            attached = getattr(self, "_attached_files", None) or getattr(self, "_chat_attachments", None)
+            connected = config.get("connected_apps")
+            if isinstance(connected, dict):
+                connected = [
+                    name for name, item in connected.items()
+                    if isinstance(item, dict) and item.get("connected")
+                ]
+            permissions = config.get("tool_permissions") or config.get("permissions")
+            memory_enabled = config.get("memory_enabled")
+            usage = config.get("context_usage") or config.get("context_tokens")
+            return {
+                "SESSION": {
+                    "Provider": provider,
+                    "Model": model,
+                    "Execution mode": mode,
+                    "Active agent": getattr(self, "_active_agent", None),
+                },
+                "WORKSPACE": {
+                    "Active project": str(project) if project else None,
+                    "Attached files": attached,
+                },
+                "TOOLS & ACCESS": {
+                    "Connected tools": connected,
+                    "Permissions": permissions,
+                },
+                "MEMORY": {
+                    "Memory status": memory_enabled,
+                    "Context usage": usage,
+                },
+            }
+
+        self._context_panel = ContextPanel(_session_context_snapshot)
+        self._work_tabs.addTab(self._context_panel, self._tr("CONTEXT"))
         self._work_tabs.setTabToolTip(
-            1, self._tr("Previous conversations. Saved facts are managed separately in Memory.")
+            1, self._tr("Live view of the active model, workspace, tools, permissions and memory context.")
         )
 
         from gui.panels.tasks import TaskPanel
