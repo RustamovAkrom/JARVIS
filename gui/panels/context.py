@@ -140,7 +140,7 @@ class ContextPanel(QWidget):
         except Exception as exc:
             snapshot = {}
             self._status_label.setText(
-                f"Context unavailable · {type(exc).__name__}: {str(exc)[:120]}"
+                f"Context unavailable · {type(exc).__name__}"
             )
 
         for (section, field), label in self._value_labels.items():
