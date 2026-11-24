@@ -16,6 +16,15 @@ class MetricGauge(QWidget):
         super().__init__(parent)
         self._label = label
         self._color = color
+        # Preserve semantic token identity so custom-painted gauges can follow
+        # live theme changes without losing explicit caller-selected colours.
+        self._theme_color_key = next(
+            (
+                key for key in ("PRI", "GREEN", "GREEN_D", "ACC", "ACC2", "RED", "MUTED_C")
+                if getattr(C, key) == color
+            ),
+            None,
+        )
         self._detail = detail
         self._value = 0.0
         self._display_value = 0.0
@@ -25,6 +34,12 @@ class MetricGauge(QWidget):
         self._animation.setDuration(520)
         self._animation.setEasingCurve(QEasingCurve.Type.OutCubic)
         self._animation.valueChanged.connect(self._set_display_value)
+
+    def apply_jarvis_theme(self) -> None:
+        """Refresh cached semantic colour after a global theme transition."""
+        if self._theme_color_key:
+            self._color = getattr(C, self._theme_color_key)
+        self.update()
 
     def set_value(self, pct: float, text: str):
         v = max(0.0, min(100.0, float(pct)))
