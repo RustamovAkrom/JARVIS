@@ -8239,6 +8239,7 @@ class MainWindow(QMainWindow):
 
         self._update_brief_btn(_gbe())
 
+        self._update_adaptive_chrome()
         self._clock_tmr = QTimer(self)
         self._clock_tmr.timeout.connect(self._tick_clock)
         self._clock_tmr.start(1000)
@@ -9932,6 +9933,16 @@ class MainWindow(QMainWindow):
         nav.addWidget(self._terminal_toggle_btn)
 
         self._terminal_toggle_btn.hide()
+        # Keep references so the header can progressively compact on narrow windows.
+        self._header_nav_buttons = {
+            "settings": self._drawer_btn,
+            "left": self._left_toggle_btn,
+            "content": self._content_toggle_btn,
+            "right": self._right_toggle_btn,
+            "fullscreen": self._fullscreen_toggle_btn,
+            "debug": self._debug_toggle_btn,
+            "terminal": self._terminal_toggle_btn,
+        }
 
         brand = QVBoxLayout()
         # Keep the wordmark inside the 50 px header.  QBoxLayout's default
@@ -9951,7 +9962,9 @@ class MainWindow(QMainWindow):
         self._title_lbl.setAlignment(
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
         )
-        self._title_lbl.setFixedSize(170, 50)
+        self._title_lbl.setMinimumSize(0, 50)
+        self._title_lbl.setMaximumWidth(170)
+        self._title_lbl.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         self._title_lbl.setMargin(0)
         self._title_lbl.setFont(QFont(FONT_MONO, 17, QFont.Weight.Bold))
         self._title_lbl.setStyleSheet(
@@ -9989,6 +10002,7 @@ class MainWindow(QMainWindow):
         self._date_lbl.setStyleSheet(f"color: {C.TEXT_DIM}; background: transparent;")
         self._date_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         right_col.addWidget(self._date_lbl)
+        self._header_clock_frame = clock_frame
         # Keep the identity on the open left side and the controls grouped right.
         lay.addLayout(brand)
         lay.addStretch(1)
@@ -10040,6 +10054,51 @@ class MainWindow(QMainWindow):
     def _tick_clock(self):
         self._clock_lbl.setText(time.strftime("%H:%M:%S"))
         self._date_lbl.setText(time.strftime("%a %d %b %Y"))
+
+    def _update_adaptive_chrome(self) -> None:
+        """Compact header/footer content before controls begin to collide."""
+        width = max(0, self.width())
+
+        # The settings and fullscreen controls stay available longest.
+        nav_visibility = {
+            "settings": True,
+            "left": width >= 980,
+            "content": width >= 1120,
+            "right": width >= 900,
+            "fullscreen": True,
+            "debug": width >= 1240,
+            "terminal": width >= 1380 and self._terminal_toggle_btn.isVisible(),
+        }
+        for name, visible in nav_visibility.items():
+            button = self._header_nav_buttons.get(name)
+            if button is not None:
+                button.setVisible(visible)
+
+        # Preserve the clock on compact layouts, but remove the date first.
+        compact = width < 1120
+        self._date_lbl.setVisible(not compact)
+        self._header_clock_frame.setFixedSize(112 if not compact else 88, 38)
+
+        # The footer keeps useful shortcuts and drops attribution before clipping.
+        if width < 820:
+            self._footer_author_lbl.hide()
+        else:
+            self._footer_author_lbl.show()
+
+        if width < 620:
+            self._footer_hint_lbl.setText(
+                f"[F4] {self._tr('Mute')}  ·  [F11] {self._tr('Fullscreen')}"
+            )
+        elif width < 980:
+            self._footer_hint_lbl.setText(
+                f"[F4] {self._tr('Mute')}  ·  [F11] {self._tr('Fullscreen')}  ·  "
+                f"[ESC] {self._tr('Interrupt')}"
+            )
+        else:
+            self._footer_hint_lbl.setText(
+                f"[F4] {self._tr('Mute')}  ·  [F11] {self._tr('Fullscreen')}  ·  "
+                f"[ESC] {self._tr('Interrupt')}  ·  [Ctrl+K] {self._tr('Commands')}"
+            )
 
     def _build_left_panel(self) -> QWidget:
         w = QWidget()
@@ -15958,14 +16017,19 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             l.setStyleSheet(f"color: {C.TEXT_MED if color == C.PRI_DIM else color}; background: transparent;")
             return l
 
-        lay.addWidget(
-            _fl(
-                f"[F4] {self._tr('Mute')}  ·  [F11] {self._tr('Fullscreen')}  ·  "
-                f"[ESC] {self._tr('Interrupt')}  ·  [Ctrl+K] {self._tr('Commands')}"
-            )
+        self._footer_hint_lbl = _fl(
+            f"[F4] {self._tr('Mute')}  ·  [F11] {self._tr('Fullscreen')}  ·  "
+            f"[ESC] {self._tr('Interrupt')}  ·  [Ctrl+K] {self._tr('Commands')}"
         )
-        lay.addStretch()
-        lay.addWidget(_fl("By Akrom Rustamov", C.PRI_DIM))
+        self._footer_hint_lbl.setMinimumWidth(0)
+        self._footer_hint_lbl.setSizePolicy(
+            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred
+        )
+        lay.addWidget(self._footer_hint_lbl, 1)
+        lay.addStretch(1)
+        self._footer_author_lbl = _fl("By Akrom Rustamov", C.PRI_DIM)
+        self._footer_author_lbl.setMinimumWidth(0)
+        lay.addWidget(self._footer_author_lbl)
         return w
 
     def _on_file_selected(self, path: str):
