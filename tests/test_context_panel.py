@@ -39,8 +39,8 @@ class ContextPanelTests(unittest.TestCase):
         try:
             labels = [label.text() for label in panel.findChildren(QLabel)]
             for expected in (
-                "Ollama", "llama3.2", "Offline", "400", "Prompt · 300 tokens",
-                "Response · 100 tokens", "Context window · 400 / 4,096 tokens (10%)",
+                "Ollama", "llama3.2", "Offline", "≈400", "Prompt · ≈300 tokens",
+                "Response · ≈100 tokens", "Context window · ≈400 / 4,096 tokens (10%)",
                 "JARVIS", "README.md", "1 connected / 2 enabled",
                 "open_file completed", "provider timeout",
             ):
