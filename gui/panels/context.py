@@ -255,7 +255,9 @@ class ContextPanel(QWidget):
         output_tokens = self._integer(usage.get("Output tokens"))
         total_tokens = self._integer(usage.get("Total tokens")) or input_tokens + output_tokens
         source = self._text(usage.get("Usage source"), "Usage not reported")
-        estimated = "estimate" in source.casefold()\n        prefix = "≈" if estimated else ""\n        self.token_total.setText(f"{prefix}{total_tokens:,}")
+        estimated = "estimate" in source.casefold()
+        prefix = "≈" if estimated else ""
+        self.token_total.setText(f"{prefix}{total_tokens:,}")
         self.input_caption.setText(f"Prompt · {prefix}{input_tokens:,} tokens")
         self.output_caption.setText(f"Response · {prefix}{output_tokens:,} tokens")
         # Bars show the prompt/response composition of the observed session.
