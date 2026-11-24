@@ -285,42 +285,45 @@ if THEME_MODE not in {"dark", "light"}:
     THEME_MODE = "dark"
 
 _DARK_THEME = {
+    # One continuous black canvas across HUD, sidebars, chat, footer,
+    # drawers, cards, inputs, tabs and overlays. No charcoal panel layers.
     "BG": "#000000",
-    "PANEL": "#080808",
-    "PANEL2": "#101010",
-    "PANEL3": "#181818",
-    "BORDER": "#303030",
-    "BORDER_B": "#555555",
-    "BORDER_A": "#414141",
-    "BORDER_H": "#858585",
-    "PRI": "#f2f2f2",
-    "PRI_DIM": "#b8b8b8",
-    "PRI_GHO": "#242424",
-    "TEXT": "#f2f2f2",
-    "TEXT_DIM": "#a0a0a0",
-    "TEXT_MED": "#c8c8c8",
+    "PANEL": "#000000",
+    "PANEL2": "#000000",
+    "PANEL3": "#000000",
+    "BORDER": "#ffffff",
+    "BORDER_B": "#ffffff",
+    "BORDER_A": "#ffffff",
+    "BORDER_H": "#ffffff",
+    "PRI": "#ffffff",
+    "PRI_DIM": "#ffffff",
+    "PRI_GHO": "#000000",
+    "TEXT": "#ffffff",
+    "TEXT_DIM": "#ffffff",
+    "TEXT_MED": "#ffffff",
     "WHITE": "#ffffff",
     "DARK": "#000000",
-    "BAR_BG": "#080808",
+    "BAR_BG": "#000000",
 }
 _LIGHT_THEME = {
+    # Matching white canvas with black typography and outlines.
     "BG": "#ffffff",
     "PANEL": "#ffffff",
-    "PANEL2": "#f7f7f7",
-    "PANEL3": "#eeeeee",
-    "BORDER": "#d0d0d0",
-    "BORDER_B": "#a8a8a8",
-    "BORDER_A": "#bcbcbc",
-    "BORDER_H": "#777777",
-    "PRI": "#171717",
-    "PRI_DIM": "#555555",
-    "PRI_GHO": "#e9e9e9",
-    "TEXT": "#171717",
-    "TEXT_DIM": "#666666",
-    "TEXT_MED": "#444444",
-    "WHITE": "#111111",
+    "PANEL2": "#ffffff",
+    "PANEL3": "#ffffff",
+    "BORDER": "#000000",
+    "BORDER_B": "#000000",
+    "BORDER_A": "#000000",
+    "BORDER_H": "#000000",
+    "PRI": "#000000",
+    "PRI_DIM": "#000000",
+    "PRI_GHO": "#ffffff",
+    "TEXT": "#000000",
+    "TEXT_DIM": "#000000",
+    "TEXT_MED": "#000000",
+    "WHITE": "#000000",
     "DARK": "#ffffff",
-    "BAR_BG": "#f7f7f7",
+    "BAR_BG": "#ffffff",
 }
 
 
@@ -356,5 +359,5 @@ def apply_ui_theme(mode: str) -> bool:
     return True
 
 
-# Default startup appearance is the monochrome dark interface.
-apply_ui_theme("dark")
+# Restore the saved monochrome mode; dark is the first-run default.
+apply_ui_theme(THEME_MODE)
