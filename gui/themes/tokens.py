@@ -1,8 +1,8 @@
 """Semantic JARVIS theme tokens with independent theme and accent controls.
 
-The dark theme uses near-black surfaces while retaining the original JARVIS
-accent language. Custom UI colours tint accents and outlines, never the base
-surface. Light mode remains a high-contrast white/black interface.
+Dark and Light control the pure black/white canvas. The selected custom hue
+is applied consistently to secondary surfaces, outlines, controls and HUD
+accents without changing the canvas mode.
 """
 from __future__ import annotations
 
