@@ -525,17 +525,27 @@ class SettingsComponentTests(unittest.TestCase):
             user_name="Akrom",
             voice="Charon",
             voices=("Charon", "Kore"),
-            apply_changes=lambda name, user, voice: saved.append((name, user, voice)) or True,
+            apply_changes=lambda *values: saved.append(values) or True,
         )
         page.assistant_name_input.setText("Astra")
         page.user_name_input.setText("Alex")
         page.voice_combo.setCurrentIndex(1)
+        page.personality_combo.setCurrentIndex(page.personality_combo.findData("technical"))
+        page.response_style_combo.setCurrentIndex(page.response_style_combo.findData("detailed"))
+        page.custom_instructions.setPlainText("Prefer practical examples.")
         self.assertTrue(page.apply())
-        self.assertEqual(saved, [("Astra", "Alex", "Kore")])
+        self.assertEqual(
+            saved,
+            [("Astra", "Alex", "Kore", "technical", "detailed", "Prefer practical examples.")],
+        )
 
         page.assistant_name_input.setText("Unsaved")
+        page.personality_combo.setCurrentIndex(page.personality_combo.findData("friendly"))
+        page.custom_instructions.setPlainText("Unsaved")
         page.cancel()
         self.assertEqual(page.assistant_name_input.text(), "Astra")
+        self.assertEqual(page.personality_combo.currentData(), "technical")
+        self.assertEqual(page.custom_instructions.toPlainText(), "Prefer practical examples.")
         self.assertEqual(page.user_name_input.text(), "Alex")
 
         failed = AssistantIdentityPage(
