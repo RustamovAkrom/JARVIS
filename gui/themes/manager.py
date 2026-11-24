@@ -219,7 +219,10 @@ class ThemeManager(QObject):
         refresh_callbacks: Iterable[Callable[[], object]] = (),
     ) -> bool:
         """Apply one atomic theme transition and refresh all theme-aware UI."""
-        if accent is not None and not re.fullmatch(r"#[0-9a-fA-F]{6}", accent.strip()):
+        if accent is not None and (
+            not isinstance(accent, str)
+            or not re.fullmatch(r"#[0-9a-fA-F]{6}", accent.strip())
+        ):
             return False
         if mode is not None and str(mode).strip().lower() not in {
             "dark", "light", "black", "white"
