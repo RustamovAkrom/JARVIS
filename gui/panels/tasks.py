@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt, pyqtSignal, QDateTime
-from gui.themes.tokens import C
+from gui.themes.tokens import C, current_theme_mode
 
 from PyQt6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QPushButton, QVBoxLayout, QWidget, QDialog, QFormLayout, QGridLayout, QLineEdit, QSpinBox, QTextEdit, QDialogButtonBox, QFileDialog, QDateTimeEdit, QCheckBox, QProgressBar, QTextBrowser, QSizePolicy, QMessageBox, QApplication
 
@@ -41,11 +41,9 @@ class TaskPanel(QWidget):
         self.active_summary.setObjectName("task_active_summary")
         self.active_summary.setWordWrap(True)
         self.active_summary.setMaximumHeight(38)
-        light = self._is_light_theme()
         self.active_summary.setStyleSheet(
-            "color: #087f70; background: #e8f7f4; border: 1px solid #b9ddd6; border-radius: 5px; padding: 6px;"
-            if light else
-            "color: #67e8d0; background: rgba(5, 24, 29, 150); border: 1px solid #245b60; border-radius: 5px; padding: 6px;"
+            f"color: {C.PRI}; background: {C.PANEL2}; border: 1px solid {C.BORDER}; "
+            "border-radius: 6px; padding: 7px;"
         )
         root.addWidget(self.active_summary)
         self.search_box = QLineEdit()
@@ -183,7 +181,10 @@ class TaskPanel(QWidget):
         self.empty_label.setMaximumHeight(110)
         self.empty_label.setWordWrap(True)
         self.empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.empty_label.setStyleSheet("border: 1px dashed rgba(120,150,170,0.45); border-radius: 8px; padding: 12px; color: #718096;")
+        self.empty_label.setStyleSheet(
+            f"border: 1px dashed {C.BORDER}; border-radius: 8px; "
+            f"padding: 12px; color: {C.TEXT_DIM};"
+        )
         root.addWidget(self.empty_label, 1)
         actions = QGridLayout()
         actions.setHorizontalSpacing(5)
@@ -236,7 +237,11 @@ class TaskPanel(QWidget):
 
     @staticmethod
     def _is_light_theme():
-        return str(C.PANEL).strip().lower() in {"#ffffff", "#fff", "white"}
+        return current_theme_mode() == "light"
+
+    def apply_jarvis_theme(self):
+        """ThemeManager hook for panel-specific and cached theme state."""
+        self.refresh_theme()
 
     def refresh_theme(self):
         """Rebuild panel and dialog styles from the live application palette."""
@@ -294,7 +299,7 @@ class TaskPanel(QWidget):
         QDialog#CreateTaskDialog QCheckBox {{ color: {muted}; spacing: 8px; }}
         QDialog#CreateTaskDialog QPushButton {{ background: {surface}; color: {text}; border: 1px solid {border}; border-radius: 7px; padding: 7px 12px; min-width: 75px; }}
         QDialog#CreateTaskDialog QPushButton:hover {{ border-color: {accent}; }}
-        QDialog#CreateTaskDialog QPushButton:default {{ background: {accent}; color: white; }}
+        QDialog#CreateTaskDialog QPushButton:default {{ background: {accent}; color: {C.WHITE}; }}
         """
 
     def _create_task_dialog(self):
@@ -557,7 +562,7 @@ class TaskPanel(QWidget):
                 stamp = self._format_time(event.get("t"))
                 kind = self._html(event.get("kind") or "event")
                 text = self._html(event.get("text") or "")
-                lines.append(f"<br><span style='color:#8b9aa8'>[{stamp}]</span> <b>{kind}</b> — {text}")
+                lines.append(f"<br><span style='color:{C.TEXT_DIM}'>[{stamp}]</span> <b>{kind}</b> — {text}")
         self.details_browser.setHtml("<br>".join(lines))
 
     @staticmethod
@@ -1011,13 +1016,12 @@ class TaskPanel(QWidget):
         dialog.setWindowTitle(f"Background Task — {task.get('title') or task.get('task') or task_id}")
         dialog.setMinimumSize(560, 420)
         dialog.resize(760, 620)
-        light = self._is_light_theme()
-        dialog_bg = "#f4f7fb" if light else C.PANEL
-        surface = "#ffffff" if light else C.PANEL2
-        text_color = "#1f2937" if light else C.TEXT
-        muted = "#64748b" if light else C.TEXT_DIM
-        border = "#cbd5e1" if light else C.BORDER
-        accent = "#0f766e" if light else C.PRI
+        dialog_bg = C.BG
+        surface = C.PANEL2
+        text_color = C.TEXT
+        muted = C.TEXT_DIM
+        border = C.BORDER
+        accent = C.PRI
         dialog.setStyleSheet(f"""
             QDialog {{ background: {dialog_bg}; color: {text_color}; }}
             QLabel {{ color: {text_color}; background: transparent; }}
@@ -1025,7 +1029,7 @@ class TaskPanel(QWidget):
             QLabel#task_dialog_status {{ color: {muted}; padding: 2px 2px 6px; }}
             QTextBrowser {{ background: {surface}; color: {text_color}; border: 1px solid {border}; border-radius: 8px; padding: 10px; selection-background-color: {accent}; }}
             QPushButton {{ background: {surface}; color: {text_color}; border: 1px solid {border}; border-radius: 7px; padding: 7px 10px; min-height: 30px; }}
-            QPushButton:hover {{ background: {accent}; border-color: {accent}; color: white; }}
+            QPushButton:hover {{ background: {accent}; border-color: {accent}; color: {C.WHITE}; }}
             QPushButton:disabled {{ color: {muted}; background: {dialog_bg}; }}
         """)
         layout = QVBoxLayout(dialog)
