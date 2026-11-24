@@ -4,7 +4,7 @@ import ctypes
 import platform
 
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
-from PyQt6.QtGui import QFont, QKeySequence, QShortcut
+from PyQt6.QtGui import QColor, QFont, QKeySequence, QPalette, QShortcut
 from PyQt6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -42,7 +42,7 @@ def _center_style(glass_opacity: int = 100) -> str:
     panel_surface = glass_rgba(C.PANEL, glass_opacity, minimum_alpha=225, maximum_alpha=255)
     title_surface = glass_rgba(C.DARK, glass_opacity, minimum_alpha=220, maximum_alpha=255)
     return f"""
-        QDialog#SettingsCenter {{ background:{dialog_surface}; color:{C.TEXT}; border:1px solid {C.BORDER_B}; border-radius:{Radius.MD}px; }}
+        QDialog#SettingsCenter, QWidget#SettingsCenter {{ background:{dialog_surface}; color:{C.TEXT}; border:1px solid {C.BORDER}; border-radius:{Radius.MD}px; }}
         QWidget#SettingsContent {{ background:transparent; }}
         QFrame#SettingsTitleBar {{ background:{title_surface}; border-bottom:1px solid {C.BORDER}; border-top-left-radius:{Radius.MD}px; border-top-right-radius:{Radius.MD}px; }}
         QLabel#SettingsWindowTitle {{ color:{C.PRI}; background:transparent; letter-spacing:1px; }}
@@ -55,7 +55,7 @@ def _center_style(glass_opacity: int = 100) -> str:
         QScrollArea::viewport {{ background:transparent; border:0; }}
         QWidget#SettingsPage {{ background:transparent; }}
         QFrame#SettingsSidebar {{ background:{panel_surface}; border:1px solid {C.BORDER}; border-radius:{Radius.MD}px; }}
-        QFrame#SettingsEmbeddedCard {{ background:{panel_surface}; border:1px solid {C.BORDER}; border-radius:{Radius.MD}px; }}
+        QFrame#SettingsEmbeddedCard {{ background:transparent; border:0; }}
         QLabel {{ color:{C.TEXT}; background:transparent; }}
         QLineEdit {{ background:{glass_rgba(C.PANEL2, glass_opacity, minimum_alpha=220)}; color:{C.WHITE}; border:1px solid {C.BORDER}; border-radius:6px; padding:8px 10px; }}
         QLineEdit:focus {{ border-color:{C.PRI}; }}
@@ -133,6 +133,7 @@ class SettingsCenter(QDialog):
         # transparent.
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, False)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setAutoFillBackground(True)
         self._glass_opacity = 100
         screen = QApplication.primaryScreen()
         available = screen.availableGeometry() if screen is not None else None
@@ -145,6 +146,7 @@ class SettingsCenter(QDialog):
             min(980, max(minimum_width, available_width - 48)),
             min(680, max(minimum_height, available_height - 96)),
         )
+        self._sync_theme_palette()
         self.setStyleSheet(_center_style(self._glass_opacity))
 
         root = QVBoxLayout(self)
@@ -614,15 +616,33 @@ class SettingsCenter(QDialog):
                 f"QLabel {{ background:transparent; color:{C.TEXT}; border:0; }}"
             )
 
+    def _sync_theme_palette(self) -> None:
+        """Keep the native dialog surface in sync with the active JARVIS theme."""
+        palette = self.palette()
+        for role, color in (
+            (QPalette.ColorRole.Window, C.BG),
+            (QPalette.ColorRole.WindowText, C.TEXT),
+            (QPalette.ColorRole.Base, C.PANEL2),
+            (QPalette.ColorRole.AlternateBase, C.PANEL2),
+            (QPalette.ColorRole.Text, C.TEXT),
+            (QPalette.ColorRole.Button, C.PANEL),
+            (QPalette.ColorRole.ButtonText, C.TEXT),
+        ):
+            palette.setColor(role, QColor(color))
+        self.setPalette(palette)
+        self.setAutoFillBackground(True)
+
     def set_glass_opacity(self, opacity: int) -> None:
         """Apply the app's Glass value to Settings surfaces, not to its text."""
         self._glass_opacity = max(60, min(100, int(opacity)))
+        self._sync_theme_palette()
         self.setStyleSheet(_center_style(self._glass_opacity))
         self._apply_glass_to_widget(self)
         self.update()
 
     def refresh_theme(self) -> None:
         """Refresh token-based styles after the app accent/theme changes."""
+        self._sync_theme_palette()
         self.setStyleSheet(_center_style(self._glass_opacity))
         self._apply_glass_to_widget(self)
         for section in self.findChildren(SettingsSection):
