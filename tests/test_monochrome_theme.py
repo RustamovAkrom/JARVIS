@@ -109,7 +109,7 @@ def test_theme_mode_api_preserves_custom_colour_palette():
     assert C.PRI == "#ff3355"
 
 
-def test_black_white_presets_are_pure_monochrome():
+def test_black_white_presets_keep_neutral_ui_and_red_mute_warning():
     assert apply_ui_accent("#ffffff")
     assert apply_ui_theme("dark")
     assert C.BG == "#000000"
@@ -117,6 +117,7 @@ def test_black_white_presets_are_pure_monochrome():
     assert C.TEXT == "#ffffff"
     assert C.PRI == "#ffffff"
     assert C.BORDER == "#ffffff"
+    assert C.MUTED_C == "#ff3366"
 
     assert apply_ui_accent("#000000")
     assert apply_ui_theme("light")
@@ -125,6 +126,7 @@ def test_black_white_presets_are_pure_monochrome():
     assert C.TEXT == "#000000"
     assert C.PRI == "#000000"
     assert C.BORDER == "#000000"
+    assert C.MUTED_C == "#ff3366"
 
 
 def test_custom_white_or_black_hex_does_not_switch_theme_mode():
