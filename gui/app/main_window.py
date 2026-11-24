@@ -7191,8 +7191,28 @@ class _WinPTYTerminal:
         if self.isalive():
             self._process.write(data)
 
+    @property
+    def pid(self) -> int:
+        """Expose the child PID required by the shared terminal shutdown path."""
+        pid = getattr(self._process, "pid", None)
+        if pid is None:
+            raise RuntimeError("The Windows PTY process does not expose a child PID")
+        return int(pid)
+
     def isalive(self):
-        return bool(self._process.isalive())
+        try:
+            return bool(self._process.isalive())
+        except (OSError, RuntimeError):
+            return False
+
+    def kill(self):
+        """Force-stop the PTY child when graceful close did not finish."""
+        if not self.isalive():
+            return
+        try:
+            self._process.terminate(force=True)
+        except Exception:
+            self._process.close(force=True)
 
     def set_size(self, columns, rows):
         self._process.setwinsize(max(2, rows), max(2, columns))
@@ -13605,6 +13625,32 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                     os.close(pty["fd"])
                 except OSError:
                     pass
+            elif isinstance(pty, _WinPTYTerminal):
+                # pywinpty owns the process handle. Use its PID when available
+                # for tree termination, then close the PTY resources explicitly.
+                if pty.isalive():
+                    try:
+                        pid = pty.pid
+                    except (AttributeError, RuntimeError, TypeError, ValueError):
+                        pid = None
+                    if os.name == "nt" and pid:
+                        result = subprocess.run(
+                            ["taskkill", "/PID", str(pid), "/T", "/F"],
+                            capture_output=True,
+                            text=True,
+                            timeout=3,
+                            check=False,
+                            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                        )
+                        detail = result.stderr.strip()
+                        if pty.isalive():
+                            pty.kill()
+                    else:
+                        pty.kill()
+                        detail = ""
+                    if pty.isalive():
+                        raise OSError(detail or "Windows PTY child is still running")
+                pty.dispose()
             else:
                 try:
                     alive = pty.isalive()
@@ -13632,10 +13678,19 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                         )
                 if isinstance(pty, _QProcessTerminal):
                     pty.dispose()
-        except (OSError, subprocess.SubprocessError) as exc:
+        except Exception as exc:
+            # Shutdown must never be aborted by an adapter-specific PTY error.
             self._append_activity(
                 f"ERR: Could not stop terminal process {session_id}: {exc}"
             )
+            try:
+                if isinstance(pty, _WinPTYTerminal):
+                    pty.dispose()
+            except Exception:
+                pass
+            if isinstance(pty, _WinPTYTerminal) and not pty.isalive():
+                session.pty = None
+                self._remove_terminal_session(session_id)
             return
         session.pty = None
         self._remove_terminal_session(session_id)
