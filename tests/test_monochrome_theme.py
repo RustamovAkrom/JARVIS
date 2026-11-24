@@ -26,6 +26,14 @@ def test_light_theme_uses_white_surfaces_and_dark_text():
     assert C.BORDER == "#d8dee5"
 
 
+def test_legacy_neutral_default_migrates_to_original_jarvis_accent():
+    assert apply_ui_theme("dark")
+    assert apply_ui_accent("#f2f2f2")
+    assert C.PRI == DEFAULT_UI_COLOR
+    assert C.BORDER != "#ffffff"
+    assert C.TEXT != "#ffffff"
+
+
 def test_custom_accent_recolours_accents_without_changing_surfaces():
     assert apply_ui_theme("dark")
     assert apply_ui_accent("#7c5cff")
