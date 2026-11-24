@@ -128,15 +128,27 @@ def quote_support(quote: str, page: str) -> str:
 
 
 def parse_json(text: str):
-    """The JSON object in a model's reply, or None.
+    """Return the first valid JSON object embedded in a model reply.
 
-    Delegates to core.gemini.parse_json: slicing from the first "{" to the last
-    "}" broke on a reply whose prose after the object contained a brace, and on
-    reasoning blocks. Every caller here wants an object, so anything else is
-    still None."""
-    from core.gemini import parse_json as _parse
-    value = _parse(str(text or ""))
-    return value if isinstance(value, dict) else None
+    Keep this parser local: core.gemini exposes provider calls and as_json,
+    not a raw-string parse_json API. raw_decode avoids fragile brace slicing
+    when prose after the object contains additional braces.
+    """
+    raw = str(text or "").strip()
+    if not raw:
+        return None
+
+    decoder = json.JSONDecoder()
+    for index, char in enumerate(raw):
+        if char != "{":
+            continue
+        try:
+            value, _end = decoder.raw_decode(raw, index)
+        except (json.JSONDecodeError, ValueError):
+            continue
+        if isinstance(value, dict):
+            return value
+    return None
 
 
 def fix_citations(body: str, valid: set) -> str:
