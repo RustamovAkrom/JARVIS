@@ -99,6 +99,38 @@ class ThemeManager(QObject):
         if widget.styleSheet() != rendered:
             widget.setStyleSheet(rendered)
 
+    def retheme(self, old: dict[str, str], new: dict[str, str]) -> None:
+        """Compatibility bridge for legacy callers; new code should use apply()."""
+        destinations: dict[str, set[str]] = defaultdict(set)
+        for key, source in old.items():
+            target = new.get(key, source)
+            if source and target and source.lower() != target.lower():
+                destinations[source.lower()].add(target.lower())
+        replacements = {
+            source: next(iter(targets))
+            for source, targets in destinations.items()
+            if len(targets) == 1
+        }
+        if not replacements:
+            return
+        pattern = re.compile(
+            "|".join(re.escape(value) for value in sorted(replacements, key=len, reverse=True)),
+            re.IGNORECASE,
+        )
+        self._applying = True
+        try:
+            for widget in self._app.allWidgets():
+                source = widget.styleSheet()
+                rendered = pattern.sub(
+                    lambda match: replacements[match.group(0).lower()], source
+                ) if source else source
+                if rendered != source:
+                    widget.setStyleSheet(rendered)
+                widget.update()
+        finally:
+            self._applying = False
+        self._capture_all()
+
     def _apply_native_palette(self) -> None:
         palette = self._app.palette()
         roles = {
