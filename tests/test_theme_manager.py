@@ -112,3 +112,27 @@ def test_custom_painted_controls_refresh_cached_semantic_colours():
         primary_gauge.close()
         status_gauge.close()
         spinner.close()
+
+
+
+def test_theme_manager_recovers_semantic_roles_from_monochrome_stylesheets():
+    app = _app()
+    manager = ThemeManager.for_app(app)
+    apply_ui_theme("dark")
+    apply_ui_accent("#ffffff")
+    widget = QWidget()
+    widget.setStyleSheet(
+        f"QWidget {{ background:{C.PANEL}; color:{C.TEXT}; "
+        f"border:1px solid {C.BORDER}; }}"
+    )
+    manager._capture_widget(widget)
+    try:
+        assert manager.apply(mode="dark", accent="#a044dd")
+        style = widget.styleSheet().lower()
+        assert C.PANEL2.lower() in style
+        assert C.TEXT.lower() in style
+        assert C.BORDER.lower() in style
+    finally:
+        manager.apply(mode="dark", accent=DEFAULT_UI_COLOR)
+        widget.close()
+        widget.deleteLater()
