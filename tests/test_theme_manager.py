@@ -1,0 +1,91 @@
+"""Regression tests for the centralized live theme controller."""
+import os
+
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+from PyQt6.QtWidgets import QApplication, QWidget
+
+from gui.themes.manager import ThemeManager
+from gui.themes.tokens import (
+    C,
+    DEFAULT_UI_COLOR,
+    apply_ui_accent,
+    apply_ui_theme,
+    current_palette,
+)
+
+
+def _app():
+    return QApplication.instance() or QApplication([])
+
+
+def test_theme_manager_renders_styles_from_each_current_palette_without_drift():
+    app = _app()
+    apply_ui_theme("dark")
+    apply_ui_accent(DEFAULT_UI_COLOR)
+    widget = QWidget()
+    widget.setStyleSheet(
+        f"QWidget {{ background:{C.PANEL}; color:{C.TEXT}; "
+        f"border:1px solid {C.BORDER}; }}"
+    )
+    manager = ThemeManager.for_app(app)
+    manager._capture_widget(widget)
+
+    transitions = (
+        ("dark", "#ff3355"),
+        ("light", "#000000"),
+        ("dark", "#ffffff"),
+        ("dark", "#2764ff"),
+        ("light", "#f05ac8"),
+    )
+    try:
+        for mode, accent in transitions:
+            assert manager.apply(mode=mode, accent=accent)
+            style = widget.styleSheet().lower()
+            assert C.PANEL.lower() in style
+            assert C.TEXT.lower() in style
+            assert C.BORDER.lower() in style
+            assert app.palette().color(app.palette().ColorRole.Window).name() == C.BG
+    finally:
+        apply_ui_theme("dark")
+        apply_ui_accent(DEFAULT_UI_COLOR)
+        widget.close()
+        widget.deleteLater()
+
+
+def test_theme_manager_rejects_invalid_state_without_mutating_palette():
+    app = _app()
+    manager = ThemeManager.for_app(app)
+    before = current_palette()
+    assert not manager.apply(accent="not-a-colour")
+    assert not manager.apply(mode="sepia")
+    assert current_palette() == before
+
+
+def test_theme_manager_runs_owner_refresh_and_custom_widget_hooks():
+    app = _app()
+    manager = ThemeManager.for_app(app)
+
+    class ThemeAwareWidget(QWidget):
+        def __init__(self):
+            super().__init__()
+            self.refresh_count = 0
+
+        def apply_jarvis_theme(self):
+            self.refresh_count += 1
+
+    widget = ThemeAwareWidget()
+    calls = []
+    try:
+        assert manager.apply(
+            accent="#20a0d0",
+            mode="dark",
+            refresh_callbacks=(lambda: calls.append("owner"),),
+        )
+        assert calls == ["owner"]
+        assert widget.refresh_count >= 1
+    finally:
+        apply_ui_theme("dark")
+        apply_ui_accent(DEFAULT_UI_COLOR)
+        widget.close()
+        widget.deleteLater()
