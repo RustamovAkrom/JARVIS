@@ -51,8 +51,7 @@ def test_theme_manager_renders_styles_from_each_current_palette_without_drift():
             assert C.BORDER.lower() in style
             assert app.palette().color(QPalette.ColorRole.Window).name() == C.BG
     finally:
-        apply_ui_theme("dark")
-        apply_ui_accent(DEFAULT_UI_COLOR)
+        manager.apply(mode="dark", accent=DEFAULT_UI_COLOR)
         widget.close()
         widget.deleteLater()
 
@@ -89,8 +88,7 @@ def test_theme_manager_runs_owner_refresh_and_custom_widget_hooks():
         assert calls == ["owner"]
         assert widget.refresh_count >= 1
     finally:
-        apply_ui_theme("dark")
-        apply_ui_accent(DEFAULT_UI_COLOR)
+        manager.apply(mode="dark", accent=DEFAULT_UI_COLOR)
         widget.close()
         widget.deleteLater()
 
@@ -110,8 +108,7 @@ def test_custom_painted_controls_refresh_cached_semantic_colours():
         assert status_gauge._color == C.GREEN
         assert spinner._color.name() == C.PRI
     finally:
-        apply_ui_theme("dark")
-        apply_ui_accent(DEFAULT_UI_COLOR)
+        manager.apply(mode="dark", accent=DEFAULT_UI_COLOR)
         primary_gauge.close()
         status_gauge.close()
         spinner.close()
