@@ -2286,6 +2286,8 @@ class CustomizeOverlay(QWidget):
             self.on_preview(self._initial_color)
         if self.on_opacity_preview:
             self.on_opacity_preview(self._initial_opacity)
+        if self.on_theme_preview and self._theme_mode != self._initial_theme_mode:
+            self.on_theme_preview(self._initial_theme_mode)
         if self._embedded:
             self._set_color(self._initial_color, update_wheel=True, preview=False)
             self._name_input.setText(self._initial_assistant_name)
@@ -2311,6 +2313,7 @@ class CustomizeOverlay(QWidget):
             self._initial_user_name = user
             self._initial_voice = self._sel_voice
             self._initial_color = self._sel_color
+            self._initial_theme_mode = self._theme_mode
             self._initial_opacity = self._opacity_slider.value()
         else:
             self.hide()
@@ -12133,6 +12136,7 @@ class MainWindow(QMainWindow):
             appearance_only=True,
         )
         panel.on_preview = self._preview_ui_color
+        panel.on_theme_preview = self._preview_ui_theme
         panel.on_opacity_preview = self._preview_ui_opacity
         panel.saved.connect(self._apply_appearance_settings)
 
@@ -16491,6 +16495,19 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         old = current_palette()
         if apply_ui_accent(hex_color):
             retheme_all_widgets(old, current_palette())
+            self._apply_design_system()
+            settings = getattr(self, "_settings_center", None)
+            if settings is not None:
+                settings.refresh_theme()
+            self._refresh_access_status()
+
+    def _preview_ui_theme(self, mode: str):
+        """Preview dark/light surfaces without overwriting the selected accent."""
+        old = current_palette()
+        if apply_ui_theme(mode):
+            updated = current_palette()
+            if old != updated:
+                retheme_all_widgets(old, updated)
             self._apply_design_system()
             settings = getattr(self, "_settings_center", None)
             if settings is not None:
