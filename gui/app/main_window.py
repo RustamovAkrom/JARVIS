@@ -248,6 +248,7 @@ from gui.panels.activity import ActivityPanel
 from gui.panels.system_monitor.metrics import _SysMetrics
 from gui.panels.system_monitor.widgets import MetricGauge, MetricTrendChart
 from gui.panels.debug.log_widget import LogWidget
+from gui.themes.manager import ThemeManager
 from gui.themes.tokens import (
     C,
     DEFAULT_UI_COLOR,
@@ -264,45 +265,10 @@ from gui.themes.tokens import (
 
 
 def retheme_all_widgets(old: dict[str, str], new: dict[str, str]) -> None:
-    """
-    LIVE full theme change. Replaces the old palette colours with the new ones
-    in EVERY widget's stylesheet across the app and repaints them. This way the
-    colour change applies INSTANTLY across the whole interface — panels, buttons,
-    borders included — not just the painted elements. No restart needed.
-    """
-    mapping = {
-        old[k].lower(): new[k].lower()
-        for k in old
-        if old[k].lower() != new.get(k, old[k]).lower()
-    }
-    # A few older panels still use these literal surface colours in their QSS.
-    # Keep them attached to the live palette during a preview or saved change.
-    for literal, key in {
-        "#00060a": "BG",
-        "#000308": "BG",
-        "#000d12": "PANEL2",
-    }.items():
-        target = getattr(C, key).lower()
-        if literal != target:
-            mapping[literal] = target
-    if not mapping:
-        return
+    """Backward-compatible entry point routed through the central theme manager."""
     app = QApplication.instance()
-    if app is None:
-        return
-    for w in app.allWidgets():
-        try:
-            ss = w.styleSheet()
-            if ss:
-                s2 = ss
-                for o, n in mapping.items():
-                    if o in s2:
-                        s2 = s2.replace(o, n)
-                if s2 != ss:
-                    w.setStyleSheet(s2)
-            w.update()
-        except Exception:
-            pass
+    if app is not None:
+        ThemeManager.for_app(app).retheme(old, new)
 
 
 def _tint_icon(icon: QIcon, color: str) -> QIcon:
@@ -2244,7 +2210,9 @@ class CustomizeOverlay(QWidget):
         # Black mode uses white foregrounds; White mode uses black
         # foregrounds. This intentionally exits Custom Colour mode.
         preset_accent = "#ffffff" if selected == "dark" else "#000000"
-        self._set_color(preset_accent, update_wheel=True, preview=True)
+        # Update the controls without applying an intermediate accent-only
+        # palette. The owner applies mode + neutral preset atomically.
+        self._set_color(preset_accent, update_wheel=True, preview=False)
         if self.on_theme_preview:
             self.on_theme_preview(selected)
 
@@ -13118,16 +13086,7 @@ class MainWindow(QMainWindow):
 
         self._preview_ui_opacity(opacity)
         if color and color != previous_color:
-            old = current_palette()
-            if apply_ui_accent(color):
-                updated = current_palette()
-                if old != updated:
-                    retheme_all_widgets(old, updated)
-                self._apply_design_system()
-                settings = getattr(self, "_settings_center", None)
-                if settings is not None:
-                    settings.refresh_theme()
-                self._refresh_access_status()
+            self._apply_theme_state(accent=color)
         self._log.append_log("SYS: Appearance settings updated.")
         return True
 
@@ -16495,29 +16454,34 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
     def _open_customize(self):
         self._show_settings_category("identity")
 
-    def _preview_ui_color(self, hex_color: str):
-        """Live preview — paints the whole interface the new colour (does NOT write to config)."""
-        old = current_palette()
-        if apply_ui_accent(hex_color):
-            retheme_all_widgets(old, current_palette())
-            self._apply_design_system()
-            settings = getattr(self, "_settings_center", None)
-            if settings is not None:
-                settings.refresh_theme()
+    def _apply_theme_state(
+        self, *, accent: str | None = None, mode: str | None = None
+    ) -> bool:
+        """Apply a complete appearance state through the single theme controller."""
+        callbacks = [self._apply_design_system]
+        settings = getattr(self, "_settings_center", None)
+        if settings is not None:
+            callbacks.append(settings.refresh_theme)
+        applied = ThemeManager.for_app().apply(
+            accent=accent,
+            mode=mode,
+            refresh_callbacks=callbacks,
+        )
+        if applied:
             self._refresh_access_status()
+        return applied
+
+    def _preview_ui_color(self, hex_color: str):
+        """Live-preview a custom colour through the centralized theme controller."""
+        self._apply_theme_state(accent=hex_color)
 
     def _preview_ui_theme(self, mode: str):
-        """Preview dark/light surfaces without overwriting the selected accent."""
-        old = current_palette()
-        if apply_ui_theme(mode):
-            updated = current_palette()
-            if old != updated:
-                retheme_all_widgets(old, updated)
-            self._apply_design_system()
-            settings = getattr(self, "_settings_center", None)
-            if settings is not None:
-                settings.refresh_theme()
-            self._refresh_access_status()
+        """Apply a monochrome Black/White preset as one atomic theme transition."""
+        selected = str(mode or "").strip().lower()
+        if selected in {"dark", "black"}:
+            self._apply_theme_state(mode="dark", accent="#ffffff")
+        elif selected in {"light", "white"}:
+            self._apply_theme_state(mode="light", accent="#000000")
 
     def _preview_ui_opacity(self, opacity: int):
         value = max(60, min(100, int(opacity)))
@@ -16589,13 +16553,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
 
         color_changed = bool(color and color != previous_color)
         if color:
-            old = current_palette()
-            if apply_ui_accent(color):
-                updated = current_palette()
-                if old != updated:
-                    retheme_all_widgets(old, updated)
-                self._apply_design_system()
-            self._refresh_access_status()
+            self._apply_theme_state(accent=color)
 
         self._log.append_log(f"SYS: Identity updated — {display}")
         if color_changed:
