@@ -141,6 +141,9 @@ def apply_ui_accent(accent_hex: str) -> bool:
     except ValueError:
         return False
 
+    if accent_hex not in {"#000000", "#ffffff"}:
+        C.ACCENT = accent_hex
+
     if accent_hex == "#00d4ff":
         # Migrate the former built-in cyan default to the new neutral default.
         C.PRI = "#f2f2f2" if THEME_MODE == "dark" else "#171717"
