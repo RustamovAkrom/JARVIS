@@ -141,6 +141,13 @@ def test_default_accent_keeps_light_surfaces_white_and_neutral():
     app = _app()
     manager = ThemeManager.for_app(app)
     try:
+        assert manager.apply(mode="dark", accent=DEFAULT_UI_COLOR)
+        assert C.BG == "#000000"
+        assert C.PANEL == "#020609"
+        assert C.PANEL2 == "#03090d"
+        assert C.PANEL3 == "#050d12"
+        assert C.PRI == DEFAULT_UI_COLOR
+
         assert manager.apply(mode="light", accent=DEFAULT_UI_COLOR)
         assert C.BG == "#f8fafc"
         assert C.PANEL == "#ffffff"
