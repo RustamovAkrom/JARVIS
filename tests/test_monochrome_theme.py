@@ -2,14 +2,14 @@
 
 from PyQt6.QtCore import QSettings
 
-from gui.themes.tokens import C, DEFAULT_UI_COLOR, apply_ui_accent, apply_ui_theme
+from gui.themes.tokens import C, DEFAULT_UI_COLOR, apply_ui_accent, apply_ui_theme, current_theme_mode
 
 
 def test_dark_theme_uses_near_black_surfaces_and_original_accent_language():
     assert apply_ui_accent(DEFAULT_UI_COLOR)
     assert apply_ui_theme("dark")
-    assert C.BG == "#000000"
-    assert C.PANEL != "#000000" and int(C.PANEL[1:], 16) < 0x101010
+    assert C.BG != "#000000" and C.BG.startswith("#")
+    assert C.PANEL != C.BG and int(C.PANEL[1:], 16) < 0x303030
     assert C.PANEL2 != "#000000" and int(C.PANEL2[1:], 16) < 0x181818
     assert C.PRI == DEFAULT_UI_COLOR
     assert C.TEXT.startswith("#")
@@ -18,9 +18,10 @@ def test_dark_theme_uses_near_black_surfaces_and_original_accent_language():
 
 
 def test_light_theme_uses_white_surfaces_and_dark_text():
+    assert apply_ui_accent("#000000")
     assert apply_ui_theme("light")
     assert C.BG == "#ffffff"
-    assert C.PANEL != "#ffffff" and C.PANEL.startswith("#")
+    assert C.PANEL == "#ffffff"
     assert C.TEXT == "#1f2933"
     assert C.WHITE == "#111820"
     assert C.BORDER == "#d8dee5"
@@ -39,9 +40,9 @@ def test_custom_accent_tints_surfaces_and_controls_without_changing_canvas():
     assert apply_ui_accent("#7c5cff")
     assert C.ACCENT == "#7c5cff"
     assert C.PRI == "#7c5cff"
-    assert C.BG == "#000000"
-    assert C.PANEL != "#030609"
-    assert C.PANEL2 != "#050a10"
+    assert C.BG != "#000000"
+    assert C.PANEL != "#081018"
+    assert C.PANEL2 != "#0c1a28"
     assert C.BORDER != "#ffffff"
     assert C.BORDER != "#0d3347"
     assert C.GREEN != "#00ff88"
@@ -55,7 +56,7 @@ def test_changing_custom_hue_updates_panel_backgrounds():
     assert apply_ui_accent("#7c5cff")
     purple_panel = C.PANEL
     assert red_panel != purple_panel
-    assert C.BG == "#000000"
+    assert C.BG != "#000000"
     assert C.PRI == "#7c5cff"
 
 
@@ -81,12 +82,32 @@ def test_dark_and_light_buttons_change_only_the_canvas_mode():
     assert C.PRI == "#ff3355"
 
 
+def test_black_white_presets_are_pure_monochrome():
+    assert apply_ui_accent("#ffffff")
+    assert apply_ui_theme("dark")
+    assert C.BG == "#000000"
+    assert C.PANEL == "#080808"
+    assert C.TEXT == "#e8e8e8"
+    assert C.PRI == "#ffffff"
+    assert C.BORDER == "#303030"
+
+    assert apply_ui_accent("#000000")
+    assert apply_ui_theme("light")
+    assert C.BG == "#ffffff"
+    assert C.PANEL == "#ffffff"
+    assert C.TEXT == "#111111"
+    assert C.PRI == "#000000"
+    assert C.BORDER == "#d0d0d0"
+
+
 def test_custom_white_or_black_hex_does_not_switch_theme_mode():
     assert apply_ui_theme("dark")
     assert apply_ui_accent("#ffffff")
     assert C.BG == "#000000"
+    assert current_theme_mode() == "dark"
     assert apply_ui_accent("#000000")
     assert C.BG == "#000000"
+    assert current_theme_mode() == "dark"
 
 
 def test_theme_mode_is_persisted_independently():
