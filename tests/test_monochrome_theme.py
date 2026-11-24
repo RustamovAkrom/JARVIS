@@ -48,6 +48,17 @@ def test_custom_accent_tints_surfaces_and_controls_without_changing_canvas():
     assert C.RED != "#ff3355"
 
 
+def test_changing_custom_hue_updates_panel_backgrounds():
+    assert apply_ui_theme("dark")
+    assert apply_ui_accent("#ff3355")
+    red_panel = C.PANEL
+    assert apply_ui_accent("#7c5cff")
+    purple_panel = C.PANEL
+    assert red_panel != purple_panel
+    assert C.BG == "#000000"
+    assert C.PRI == "#7c5cff"
+
+
 def test_custom_accent_is_preserved_when_switching_theme():
     assert apply_ui_accent("#ff3355")
     assert apply_ui_theme("light")
