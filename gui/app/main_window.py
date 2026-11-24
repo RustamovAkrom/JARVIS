@@ -8573,7 +8573,7 @@ class MainWindow(QMainWindow):
         put(
             self._root_splitter,
             "QSplitter::handle { background: transparent; width:5px; }"
-            "QSplitter::handle:hover { background:rgba(255,255,255,72); border-radius:3px; }",
+            f"QSplitter::handle:hover {{ background:{C.PRI_GHO}; border-radius:3px; }}"",
         )
         put(
             self._workspace_split,
@@ -16249,10 +16249,10 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             return
         st = self._wake_state()
         _on = f"""
-            QPushButton {{ background: rgba(0,255,136,18); color: {C.GREEN};
+            QPushButton {{ background: {C.PRI_GHO}; color: {C.GREEN};
                 border: 1px solid {C.GREEN_D}; border-radius: 6px;
                 text-align: left; padding: 0 10px; }}
-            QPushButton:hover {{ background: rgba(0,255,136,30); }}"""
+            QPushButton:hover {{ background: {C.PANEL2}; }}"""
         _off = f"""
             QPushButton {{ background: {C.PANEL2}; color: {C.TEXT_MED};
                 border: 1px solid {C.BORDER}; border-radius: 6px;
@@ -17017,7 +17017,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                 QPushButton {{ background:{C.PRI_GHO}; color:{C.MUTED_C};
                     border:1px solid {C.MUTED_C}; border-radius:9px;
                     padding:0 7px; text-align:left; }}
-                QPushButton:hover {{ background:rgba(48,0,24,190); border-color:{C.MUTED_C}; }}
+                QPushButton:hover {{ background:{C.PRI_GHO}; border-color:{C.MUTED_C}; }}
             """)
         else:
             self._lecture_btn.setHint(self._tr("Lecture"))
