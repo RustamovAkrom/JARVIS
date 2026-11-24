@@ -1294,6 +1294,8 @@ dependencies = [
     { name = "velopack" },
     { name = "webview-python" },
     { name = "win10toast", marker = "sys_platform == 'win32'" },
+    { name = "winrt-windows-ui-notifications", marker = "sys_platform == 'win32'" },
+    { name = "winrt-windows-ui-notifications-management", marker = "sys_platform == 'win32'" },
     { name = "wmi", marker = "sys_platform == 'win32'" },
     { name = "youtube-transcript-api" },
     { name = "yt-dlp" },
@@ -1384,6 +1386,8 @@ requires-dist = [
     { name = "velopack", specifier = "==1.2.161" },
     { name = "webview-python", specifier = ">=1.1.3" },
     { name = "win10toast", marker = "sys_platform == 'win32'", specifier = ">=0.9" },
+    { name = "winrt-windows-ui-notifications", marker = "sys_platform == 'win32'", specifier = ">=4!10.0.28000.2705,<5!0" },
+    { name = "winrt-windows-ui-notifications-management", marker = "sys_platform == 'win32'", specifier = ">=4!10.0.28000.2705,<5!0" },
     { name = "wmi", marker = "sys_platform == 'win32'", specifier = ">=1.5.1" },
     { name = "youtube-transcript-api", specifier = ">=1.2.4" },
     { name = "yt-dlp", specifier = ">=2026.8.19" },
@@ -3237,6 +3241,83 @@ dependencies = [
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d4/ba/95c0ea87d9bcad68b90d8cb130a313b939c88d8338a2fed7c11eaee972fe/win10toast-0.9-py2.py3-none-any.whl", hash = "sha256:44e5afa1001de88a0ee533872231521fa67c7d144f39974089af242d9c4620a4", size = 21458, upload-time = "2018-01-26T03:40:02.437Z" },
+]
+
+[[package]]
+name = "winrt-runtime"
+version = "4.2.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "typing-extensions", marker = "sys_platform == 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/55/fa/b0234f7d3656919ad02481b711eac6e63fae3628aef7970effa0270cf968/winrt_runtime-4.2.1.tar.gz", hash = "sha256:5bd607fe329d4823fe3278105eedc4194efd60bd1eaba18103a93b3b2c90fe4d", size = 450941, upload-time = "2026-11-23T23:13:52.057Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d4/34/70b1a54f2f66f83e240778afbbb8b8bd693120b7f313f345d7c704830ea1/winrt_runtime-4.2.1-cp314-cp314-win32.whl", hash = "sha256:b190496cde441d80b238878f760d958f7f65a21173a4faafc589b199f7b6b088", size = 215743, upload-time = "2026-11-23T23:13:36.865Z" },
+    { url = "https://files.pythonhosted.org/packages/55/fb/02c67fcd9665b043080fc1054bda75135a3f6b578eb1c1510f56577beba0/winrt_runtime-4.2.1-cp314-cp314-win_amd64.whl", hash = "sha256:a098bbf9aa226427213cb65c2271a7973ea6e630acba191cbda5ade48be74caa", size = 261087, upload-time = "2026-11-23T23:13:38.093Z" },
+    { url = "https://files.pythonhosted.org/packages/57/9d/44adb44574e520d5f4df1af2194991f9525b9e47a058f98a07763e02c6cd/winrt_runtime-4.2.1-cp314-cp314-win_arm64.whl", hash = "sha256:7f1032ed4563a954520cda22510d5ad2c5be0e4223be1cff0f658010435106b6", size = 246198, upload-time = "2026-11-23T23:13:39.47Z" },
+    { url = "https://files.pythonhosted.org/packages/97/cd/8231cda15a6e2f0d21c252cb5f26ce51117bf15f8f4c0ff76839dbe2d603/winrt_runtime-4.2.1-cp314-cp314t-win32.whl", hash = "sha256:8125fbc026783f8aa251e1bbeba54999b6a23e69dc4cedda2e97a9c43541b803", size = 220439, upload-time = "2026-11-23T23:13:40.91Z" },
+    { url = "https://files.pythonhosted.org/packages/5e/39/2b2367e40e9c696a700bcd6642c094d6ef43127a1d8a11066f53063a82a6/winrt_runtime-4.2.1-cp314-cp314t-win_amd64.whl", hash = "sha256:a74e160e7d6dce4f526fd8f8e9b1caef89c4bbd85635c86380900f09c604a701", size = 269502, upload-time = "2026-11-23T23:13:42.409Z" },
+    { url = "https://files.pythonhosted.org/packages/0e/de/68203f7ad83650ff9a3ec480bd7eb2008a2f47223f4f35f994bf251b6ca6/winrt_runtime-4.2.1-cp314-cp314t-win_arm64.whl", hash = "sha256:7d513c7d6913640204dfb722a48333c0270f4d662baa3d548ce7f1f7714c3bbf", size = 254998, upload-time = "2026-11-23T23:13:43.768Z" },
+    { url = "https://files.pythonhosted.org/packages/00/e4/4fc580e3685fc5300e1d03bddc03e1fff025cbd1b8159bcc71daddf44281/winrt_runtime-4.2.1-cp315-cp315-win32.whl", hash = "sha256:2fb89c1378b11a1e7688f3cab6b89b4a6dae3084a3201e799c74c15563875c1b", size = 215968, upload-time = "2026-11-23T23:13:44.868Z" },
+    { url = "https://files.pythonhosted.org/packages/a0/78/c264d7ed74f57be56d52f73fc8214041ac71866f537ffd5570fd1fa2c0c5/winrt_runtime-4.2.1-cp315-cp315-win_amd64.whl", hash = "sha256:8f85ca1f370477581c0084239d8a0d62c3ce36015a05a40c0c125846141f0124", size = 261423, upload-time = "2026-11-23T23:13:46.047Z" },
+    { url = "https://files.pythonhosted.org/packages/8f/02/6e7b29e137515f2ba3ee9a4affec4862448842a73e13f14d7623d1bbd8bd/winrt_runtime-4.2.1-cp315-cp315-win_arm64.whl", hash = "sha256:c538be372db10a2864775acc5becb8e00c296d27a7e164ae6c3f2c11cd546697", size = 246581, upload-time = "2026-11-23T23:13:47.242Z" },
+    { url = "https://files.pythonhosted.org/packages/43/d5/821e926bdf237666cf49434b778f9b3fea5ebb34efefe0932fb1c6dbf7c0/winrt_runtime-4.2.1-cp315-cp315t-win32.whl", hash = "sha256:ea34b6b9a19409225b0f798e16201a08c1eb48b132a18fb80b0b952ac4c0548e", size = 220750, upload-time = "2026-11-23T23:13:48.413Z" },
+    { url = "https://files.pythonhosted.org/packages/a4/d8/356c8658b07c2e082ac9a52fb73d67028009778b1dd185c652bbdd2e4827/winrt_runtime-4.2.1-cp315-cp315t-win_amd64.whl", hash = "sha256:c2546d082c071cbf5d8eac6faf2189a4124b84b8d03efe5b2355aeb0eeaa5fca", size = 269597, upload-time = "2026-11-23T23:13:49.61Z" },
+    { url = "https://files.pythonhosted.org/packages/4d/24/a281fb9f36206664ee7f56ddf1a8f331f5218e28ebf8ea79c8f4e67effc1/winrt_runtime-4.2.1-cp315-cp315t-win_arm64.whl", hash = "sha256:47fbf015d6582e78c60ca2017d53c12d4bff2beb70c59b75c55ed51d72155048", size = 255258, upload-time = "2026-11-23T23:13:50.743Z" },
+]
+
+[[package]]
+name = "winrt-windows-foundation"
+version = "4!10.0.28000.2957"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "winrt-runtime", marker = "sys_platform == 'win32'" },
+    { name = "winrt-windows-foundation-collections", marker = "sys_platform == 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/57/44/2e4c51cdaff9cecbeb2f93c1de1135f5ed1b135205eca01ac723082b349d/winrt_windows_foundation-4!10.0.28000.2957.tar.gz", hash = "sha256:6f7d8e932e283991cd931741f84dc7c2e8bc595b4df09de73d16c1d580fc678a", size = 13969, upload-time = "2026-10-31T23:44:22.665Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/aa/9d/fd8d66972454141acb2c7bbdc01655d62f305e8b65104502a9ce248c3723/winrt_windows_foundation-4!10.0.28000.2957-py3-none-any.whl", hash = "sha256:0669de7ce480806a0f9a46d005837799e37f1738911b54c4bc04788b37974e69", size = 17675, upload-time = "2026-10-31T23:39:34.387Z" },
+]
+
+[[package]]
+name = "winrt-windows-foundation-collections"
+version = "4!10.0.28000.2957"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "winrt-runtime", marker = "sys_platform == 'win32'" },
+    { name = "winrt-windows-foundation", marker = "sys_platform == 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/4c/c3/ea71573d8aa64235a7860314c4d6ec69f726e5ead46d253873fb17639543/winrt_windows_foundation_collections-4!10.0.28000.2957.tar.gz", hash = "sha256:38989873bbdace2346d24168ceb66359800b7429128ea2ef1a36da55b255af1e", size = 8693, upload-time = "2026-10-31T23:44:23.349Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b7/f1/c8d3b74f1f89397ee826a1a5dc8085431664fc5f4d3660643b3cf9c9b536/winrt_windows_foundation_collections-4!10.0.28000.2957-py3-none-any.whl", hash = "sha256:0401c1b6ed512d1fdad8ba1571698e9000ebee6a69781db9a01994ffcc54a503", size = 11342, upload-time = "2026-10-31T23:39:35.446Z" },
+]
+
+[[package]]
+name = "winrt-windows-ui-notifications"
+version = "4!10.0.28000.2957"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "winrt-runtime", marker = "sys_platform == 'win32'" },
+    { name = "winrt-windows-foundation", marker = "sys_platform == 'win32'" },
+    { name = "winrt-windows-foundation-collections", marker = "sys_platform == 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/e6/f7/3decadf1cae14deb18e245749e0e37798de2c32e615ec0bebef5bd4d0040/winrt_windows_ui_notifications-4!10.0.28000.2957.tar.gz", hash = "sha256:5ab89819245c7a90db2d5fe2a0d0cc88158d50bf6fbba12c96145b25bc04a9d3", size = 27118, upload-time = "2026-10-31T23:46:18.168Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/9a/ca/985b65ada4f5bdca166a01f15239e5cbb25b5f5bd703f7bb54d80f5f2b19/winrt_windows_ui_notifications-4!10.0.28000.2957-py3-none-any.whl", hash = "sha256:2d4e78018df29bb107d0490926ae0a7254be68b6b9c1bd81547d0df569682ea7", size = 30930, upload-time = "2026-10-31T23:42:15.239Z" },
+]
+
+[[package]]
+name = "winrt-windows-ui-notifications-management"
+version = "4!10.0.28000.2957"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "winrt-runtime", marker = "sys_platform == 'win32'" },
+    { name = "winrt-windows-foundation", marker = "sys_platform == 'win32'" },
+    { name = "winrt-windows-foundation-collections", marker = "sys_platform == 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/da/30/456963162f48ba9a5458e2ea8098b2e0cc1f9f571b7e62d688bc8c420d6a/winrt_windows_ui_notifications_management-4!10.0.28000.2957.tar.gz", hash = "sha256:0bd120b991502406c1bf5876bfff3e598a712927f79cb7d1c26c9f6ee2b4e886", size = 5587, upload-time = "2026-10-31T23:46:19.033Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/66/24/2f21a847a71813cc20183a91072a9b0b4d7d7e9b6102a808e77c8fbe8805/winrt_windows_ui_notifications_management-4!10.0.28000.2957-py3-none-any.whl", hash = "sha256:a700959cb688e7b8c046afa4aac10bf90a715b3221f30966a6bec8308002c48c", size = 7358, upload-time = "2026-10-31T23:42:16.143Z" },
 ]
 
 [[package]]
