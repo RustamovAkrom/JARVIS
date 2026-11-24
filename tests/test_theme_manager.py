@@ -99,8 +99,8 @@ def test_custom_painted_controls_refresh_cached_semantic_colours():
     apply_ui_theme("dark")
     apply_ui_accent(DEFAULT_UI_COLOR)
     manager = ThemeManager.for_app(app)
-    primary_gauge = MetricGauge("NET", C.PRI)
-    status_gauge = MetricGauge("CPU", C.GREEN)
+    primary_gauge = MetricGauge("NET", C.PRI, theme_token="PRI")
+    status_gauge = MetricGauge("CPU", C.GREEN, theme_token="GREEN")
     spinner = BusySpinner(color=C.PRI)
     try:
         assert manager.apply(mode="dark", accent="#e34b72")
