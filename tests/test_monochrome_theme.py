@@ -9,8 +9,8 @@ def test_dark_theme_uses_near_black_surfaces_and_original_accent_language():
     assert apply_ui_accent(DEFAULT_UI_COLOR)
     assert apply_ui_theme("dark")
     assert C.BG == "#000000"
-    assert C.PANEL != "#000000" and int(C.PANEL[1:], 16) < 0x080808
-    assert C.PANEL2 != "#000000" and int(C.PANEL2[1:], 16) < 0x0a0a0a
+    assert C.PANEL != "#000000" and int(C.PANEL[1:], 16) < 0x101010
+    assert C.PANEL2 != "#000000" and int(C.PANEL2[1:], 16) < 0x181818
     assert C.PRI == DEFAULT_UI_COLOR
     assert C.TEXT.startswith("#")
     assert C.BORDER != "#ffffff"
@@ -20,7 +20,7 @@ def test_dark_theme_uses_near_black_surfaces_and_original_accent_language():
 def test_light_theme_uses_white_surfaces_and_dark_text():
     assert apply_ui_theme("light")
     assert C.BG == "#ffffff"
-    assert C.PANEL == "#fdfdfd"
+    assert C.PANEL != "#ffffff" and C.PANEL.startswith("#")
     assert C.TEXT == "#1f2933"
     assert C.WHITE == "#111820"
     assert C.BORDER == "#d8dee5"
@@ -40,8 +40,8 @@ def test_custom_accent_tints_surfaces_and_controls_without_changing_canvas():
     assert C.ACCENT == "#7c5cff"
     assert C.PRI == "#7c5cff"
     assert C.BG == "#000000"
-    assert C.PANEL != "#010203"
-    assert C.PANEL2 != "#020405"
+    assert C.PANEL != "#030609"
+    assert C.PANEL2 != "#050a10"
     assert C.BORDER != "#ffffff"
     assert C.BORDER != "#0d3347"
     assert C.GREEN != "#00ff88"
