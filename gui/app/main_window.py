@@ -5259,6 +5259,9 @@ class CursorRadialMenu(QWidget):
         self.setMinimumHeight(76)
         self.setMaximumHeight(170)
         self.resize(300, 96)
+        # Keep the initial card compact; show_near_cursor() may adapt this
+        # width later for narrow displays.
+        self.setFixedWidth(300)
         self.setWindowOpacity(0.9)
         self.setStyleSheet(f"""
             QWidget#CursorQuickActions {{
