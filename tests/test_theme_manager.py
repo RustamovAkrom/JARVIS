@@ -3,6 +3,7 @@ import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PyQt6.QtGui import QPalette
 from PyQt6.QtWidgets import QApplication, QWidget
 
 from gui.themes.manager import ThemeManager
@@ -45,7 +46,7 @@ def test_theme_manager_renders_styles_from_each_current_palette_without_drift():
             assert C.PANEL.lower() in style
             assert C.TEXT.lower() in style
             assert C.BORDER.lower() in style
-            assert app.palette().color(app.palette().ColorRole.Window).name() == C.BG
+            assert app.palette().color(QPalette.ColorRole.Window).name() == C.BG
     finally:
         apply_ui_theme("dark")
         apply_ui_accent(DEFAULT_UI_COLOR)
