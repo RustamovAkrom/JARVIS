@@ -20,7 +20,7 @@ def test_dark_theme_uses_near_black_surfaces_and_original_accent_language():
 def test_light_theme_uses_white_surfaces_and_dark_text():
     assert apply_ui_theme("light")
     assert C.BG == "#ffffff"
-    assert C.PANEL == "#ffffff"
+    assert C.PANEL == "#fdfdfd"
     assert C.TEXT == "#1f2933"
     assert C.WHITE == "#111820"
     assert C.BORDER == "#d8dee5"
