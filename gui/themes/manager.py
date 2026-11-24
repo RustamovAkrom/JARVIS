@@ -190,8 +190,8 @@ class ThemeManager(QObject):
         for callback in refresh_callbacks:
             try:
                 callback()
-            except RuntimeError:
-                continue
+            except Exception as exc:
+                print(f"[Theme] owner refresh failed: {exc}")
 
         # Custom-painted controls refresh cached semantic colours explicitly.
         for widget in self._app.allWidgets():
@@ -199,8 +199,8 @@ class ThemeManager(QObject):
             if callable(refresh):
                 try:
                     refresh()
-                except RuntimeError:
-                    continue
+                except Exception as exc:
+                    print(f"[Theme] widget refresh failed for {type(widget).__name__}: {exc}")
         self._capture_all()
         self._app.sendPostedEvents(None, QEvent.Type.UpdateRequest)
         return True
