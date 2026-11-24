@@ -164,7 +164,7 @@ class ContextPanel(QWidget):
         self.output_caption.setStyleSheet(f"color:{C.TEXT_MED};")
         layout.addWidget(self.output_caption)
         self.output_bar = QProgressBar()
-        self._style_progress(self.output_bar)
+        self._style_progress(self.output_bar, C.ACC)
         layout.addWidget(self.output_bar)
         self.usage_source = QLabel("Usage source unavailable")
         self.usage_source.setWordWrap(True)
@@ -190,14 +190,14 @@ class ContextPanel(QWidget):
         self._body.addStretch(1)
 
     @staticmethod
-    def _style_progress(bar: QProgressBar) -> None:
+    def _style_progress(bar: QProgressBar, color: str = C.PRI) -> None:
         bar.setRange(0, 100)
         bar.setValue(0)
         bar.setTextVisible(False)
         bar.setFixedHeight(8)
         bar.setStyleSheet(
             f"QProgressBar {{ background:{C.BG}; border:0; border-radius:4px; }}"
-            f"QProgressBar::chunk {{ background:{C.PRI}; border-radius:4px; }}"
+            f"QProgressBar::chunk {{ background:{color}; border-radius:4px; }}"
         )
 
     def _dispatch_action(self, action: str) -> None:
@@ -255,9 +255,9 @@ class ContextPanel(QWidget):
         output_tokens = self._integer(usage.get("Output tokens"))
         total_tokens = self._integer(usage.get("Total tokens")) or input_tokens + output_tokens
         source = self._text(usage.get("Usage source"), "Usage not reported")
-        self.token_total.setText(f"{total_tokens:,}")
-        self.input_caption.setText(f"Prompt · {input_tokens:,} tokens")
-        self.output_caption.setText(f"Response · {output_tokens:,} tokens")
+        estimated = "estimate" in source.casefold()\n        prefix = "≈" if estimated else ""\n        self.token_total.setText(f"{prefix}{total_tokens:,}")
+        self.input_caption.setText(f"Prompt · {prefix}{input_tokens:,} tokens")
+        self.output_caption.setText(f"Response · {prefix}{output_tokens:,} tokens")
         # Bars show the prompt/response composition of the observed session.
         # They are deliberately not labelled as context-window percentages.
         denominator = max(1, input_tokens + output_tokens)
