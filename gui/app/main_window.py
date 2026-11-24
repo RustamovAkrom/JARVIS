@@ -10725,54 +10725,129 @@ class MainWindow(QMainWindow):
         from gui.panels.context import ContextPanel
 
         def _session_context_snapshot():
+            """Read live, non-secret state from the same services used by JARVIS."""
+            from memory.config_manager import (
+                get_computer_access_settings,
+                get_computer_permissions,
+                get_pipeline,
+                get_provider_environment,
+                get_provider_mode,
+                get_provider_selection,
+            )
+            from memory.memory_manager import all_entries_for_ui
+            from core.connected_apps.service import service as connected_apps
+
             config = _read_full_config()
-            provider = (
-                config.get("active_provider")
-                or config.get("ai_provider")
-                or config.get("provider")
+            environment = get_provider_environment()
+            selection = get_provider_selection()
+            engine = get_provider_mode()
+            pipeline = get_pipeline(environment)
+            llm_id = str(pipeline.get("llm") or "").strip()
+            provider_block = config.get("providers")
+            provider_block = provider_block if isinstance(provider_block, dict) else {}
+            credentials_key = f"creds_{environment}"
+            credentials = provider_block.get(credentials_key)
+            credentials = credentials if isinstance(credentials, dict) else {}
+            if not credentials:
+                credentials = provider_block.get("creds")
+                credentials = credentials if isinstance(credentials, dict) else {}
+            llm_config = credentials.get(llm_id)
+            llm_config = llm_config if isinstance(llm_config, dict) else {}
+            catalog_id = str(llm_config.get("catalog") or "").strip()
+            model_name = (
+                llm_config.get("model")
+                or llm_config.get("model_name")
+                or catalog_id
+                or (llm_id if llm_id else None)
             )
-            model = (
-                config.get("active_model")
-                or config.get("model")
-                or config.get("ai_model")
+            if engine == "gemini":
+                provider_name = "Gemini Live"
+                model_name = (
+                    provider_block.get("gemini_model")
+                    or config.get("gemini_model")
+                    or "Configured Gemini model"
+                )
+            else:
+                provider_name = llm_id or "Pipeline not configured"
+
+            access = get_computer_access_settings()
+            permissions = get_computer_permissions()
+            permission_count = sum(bool(value) for value in permissions.values())
+            permission_total = len(permissions)
+            access_level = str(access.get("access_level") or "restricted").replace("_", " ").title()
+
+            connections = connected_apps.connections()
+            connected_rows = [
+                row for row in connections
+                if isinstance(row, dict) and row.get("enabled", True)
+            ]
+            connected_count = sum(
+                str(row.get("status") or "").casefold() == "connected"
+                for row in connected_rows
             )
-            mode = config.get("execution_mode") or config.get("agent_mode")
-            project = getattr(self, "_project_root", None) or getattr(self, "_active_project", None)
-            attached = getattr(self, "_attached_files", None) or getattr(self, "_chat_attachments", None)
-            connected = config.get("connected_apps")
-            if isinstance(connected, dict):
-                connected = [
-                    name for name, item in connected.items()
-                    if isinstance(item, dict) and item.get("connected")
-                ]
-            permissions = config.get("tool_permissions") or config.get("permissions")
-            memory_enabled = config.get("memory_enabled")
-            usage = config.get("context_usage") or config.get("context_tokens")
+            connected_summary = [
+                f"{row.get('display_name') or row.get('app_id')}: "
+                f"{str(row.get('status') or 'unknown').replace('_', ' ').title()}"
+                for row in connected_rows
+            ]
+            if not connected_summary:
+                connected_summary = ["No Connected Apps configured"]
+
+            memory_entries = all_entries_for_ui()
+            memory_count = len(memory_entries) if isinstance(memory_entries, list) else 0
+
+            turns = self._active_chat_turns()
+            context_messages = sum(
+                1 for row in turns
+                if isinstance(row, dict) and (
+                    str(row.get("request") or "").strip()
+                    or str(row.get("result") or "").strip()
+                )
+            )
+            context_chars = sum(
+                len(str(row.get("request") or "")) + len(str(row.get("result") or ""))
+                for row in turns if isinstance(row, dict)
+            )
+            estimated_tokens = max(1, round(context_chars / 4)) if context_chars else 0
+
+            workspace = str(getattr(self, "_workspace_path", "") or "").strip()
+            current_file = str(getattr(self, "_current_file", "") or "").strip()
+            attached_files = [Path(current_file).name] if current_file else ["No file attached"]
+            project_name = Path(workspace).name if workspace else "No project open"
+
             return {
                 "SESSION": {
-                    "Provider": provider,
-                    "Model": model,
-                    "Execution mode": mode,
-                    "Active agent": getattr(self, "_active_agent", None),
+                    "Provider": provider_name,
+                    "Model": model_name,
+                    "Environment": environment.title(),
+                    "Selection policy": selection.title(),
+                    "Execution engine": "Gemini Live" if engine == "gemini" else "Provider pipeline",
+                    "Agent access": access_level,
                 },
                 "WORKSPACE": {
-                    "Active project": str(project) if project else None,
-                    "Attached files": attached,
+                    "Active project": project_name,
+                    "Project path": workspace or "No project open",
+                    "Current attachment": attached_files,
                 },
                 "TOOLS & ACCESS": {
-                    "Connected tools": connected,
-                    "Permissions": permissions,
+                    "Connected Apps": f"{connected_count} connected / {len(connected_rows)} enabled",
+                    "Connections": connected_summary,
+                    "Computer permissions": f"{permission_count}/{permission_total} enabled",
                 },
-                "MEMORY": {
-                    "Memory status": memory_enabled,
-                    "Context usage": usage,
+                "MEMORY & CHAT": {
+                    "Saved memory entries": memory_count,
+                    "Active chat messages": context_messages,
+                    "Conversation size (estimate)": (
+                        f"~{estimated_tokens:,} tokens · {context_chars:,} characters"
+                        if context_chars else "Empty conversation"
+                    ),
                 },
             }
 
         self._context_panel = ContextPanel(_session_context_snapshot)
         self._work_tabs.addTab(self._context_panel, self._tr("CONTEXT"))
         self._work_tabs.setTabToolTip(
-            1, self._tr("Live view of the active model, workspace, tools, permissions and memory context.")
+            1, self._tr("Live runtime, workspace, connected services, permissions and memory overview.")
         )
 
         from gui.panels.tasks import TaskPanel
