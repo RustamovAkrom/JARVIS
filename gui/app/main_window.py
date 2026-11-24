@@ -11586,6 +11586,9 @@ class MainWindow(QMainWindow):
             user_name=config.get("user_name", "") or "",
             voice=config.get("voice_name", DEFAULT_VOICE) or DEFAULT_VOICE,
             voices=AVAILABLE_VOICES,
+            personality=config.get("assistant_personality", "professional"),
+            response_style=config.get("assistant_response_style", "balanced"),
+            custom_instructions=config.get("assistant_custom_instructions", ""),
             apply_changes=self._apply_identity_settings,
         )
 
@@ -12836,10 +12839,23 @@ class MainWindow(QMainWindow):
         self._log.append_log("SYS: Appearance settings updated.")
         return True
 
-    def _apply_identity_settings(self, assistant_name: str, user_name: str, voice: str) -> bool:
+    def _apply_identity_settings(
+        self,
+        assistant_name: str,
+        user_name: str,
+        voice: str,
+        personality: str = "professional",
+        response_style: str = "balanced",
+        custom_instructions: str = "",
+    ) -> bool:
         from memory.config_manager import get_ui_opacity
 
         config = _read_full_config()
+        identity_preferences = {
+            "assistant_personality": personality,
+            "assistant_response_style": response_style,
+            "assistant_custom_instructions": str(custom_instructions or "").strip()[:1500],
+        }
         return bool(
             self._apply_name_update(
                 assistant_name,
@@ -12847,6 +12863,7 @@ class MainWindow(QMainWindow):
                 config.get("ui_color", "") or DEFAULT_UI_COLOR,
                 voice,
                 get_ui_opacity(),
+                identity_preferences,
             )
         )
 
@@ -16159,6 +16176,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         ui_color: str = "",
         voice: str = "",
         ui_opacity: int = 100,
+        identity_preferences: dict | None = None,
     ):
         """Persist identity preferences first, then update the live interface."""
         assistant_name = name.strip() or "JARVIS"
@@ -16176,6 +16194,16 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             data["assistant_name"] = assistant_name
             data["user_name"] = user_name
             data["ui_opacity"] = ui_opacity
+            if identity_preferences:
+                allowed_personalities = {"professional", "friendly", "technical", "minimal"}
+                allowed_styles = {"concise", "balanced", "detailed"}
+                personality = str(identity_preferences.get("assistant_personality", "professional"))
+                response_style = str(identity_preferences.get("assistant_response_style", "balanced"))
+                data["assistant_personality"] = personality if personality in allowed_personalities else "professional"
+                data["assistant_response_style"] = response_style if response_style in allowed_styles else "balanced"
+                data["assistant_custom_instructions"] = str(
+                    identity_preferences.get("assistant_custom_instructions", "")
+                ).strip()[:1500]
             if color:
                 data["ui_color"] = color
             if voice:
