@@ -233,3 +233,50 @@ def test_github_code_search_and_pr_requests(monkeypatch):
     assert calls[1][1]=="/repos/owner/repo/pulls/12"
     assert calls[2][1]=="/repos/owner/repo/commits"
     assert calls[2][2]=={"per_page":4,"sha":"main"}
+
+
+@pytest.mark.parametrize(
+    ("tool", "arguments", "expected_method", "expected_path"),
+    [
+        ("github_list_repositories", {"limit": 8}, "GET", "/user/repos"),
+        ("github_list_issues", {"repository": "owner/repo", "state": "closed", "limit": 9}, "GET", "/repos/owner/repo/issues"),
+        ("github_get_issue", {"repository": "owner/repo", "number": 17}, "GET", "/repos/owner/repo/issues/17"),
+        ("github_list_pull_requests", {"repository": "owner/repo", "state": "all", "limit": 6}, "GET", "/repos/owner/repo/pulls"),
+        ("github_get_pull_request", {"repository": "owner/repo", "number": 18}, "GET", "/repos/owner/repo/pulls/18"),
+        ("github_list_commits", {"repository": "owner/repo", "branch": "dev", "limit": 5}, "GET", "/repos/owner/repo/commits"),
+        ("github_create_issue_comment", {"repository": "owner/repo", "number": 19, "body": "Reviewed"}, "POST", "/repos/owner/repo/issues/19/comments"),
+    ],
+)
+def test_github_adapter_dispatches_remaining_operations(
+    monkeypatch, tool, arguments, expected_method, expected_path
+):
+    adapter = GitHubAdapter(Store())
+    captured = {}
+
+    def fake_request(cid, method, path, query=None, payload=None):
+        captured.update(method=method, path=path, query=query, payload=payload)
+        return {"ok": True}
+
+    monkeypatch.setattr(adapter, "_request", fake_request)
+    assert adapter.execute("c1", tool, arguments) == {"ok": True}
+    assert captured["method"] == expected_method
+    assert captured["path"] == expected_path
+    if tool == "github_create_issue_comment":
+        assert captured["payload"] == {"body": "Reviewed"}
+
+
+def test_github_get_file_decodes_base64_content(monkeypatch):
+    adapter = GitHubAdapter(Store())
+    monkeypatch.setattr(
+        adapter,
+        "_request",
+        lambda *args, **kwargs: {
+            "encoding": "base64",
+            "content": base64.b64encode(b"print('jarvis')").decode("ascii"),
+        },
+    )
+    result = adapter.execute(
+        "c1", "github_get_file",
+        {"repository": "owner/repo", "path": "src/main.py", "ref": "v2"},
+    )
+    assert result["decoded_content"] == "print('jarvis')"
