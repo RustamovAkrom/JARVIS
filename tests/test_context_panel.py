@@ -83,6 +83,48 @@ class ContextPanelTests(unittest.TestCase):
         finally:
             panel.close()
 
+
+    def test_token_usage_and_ai_actions_sections_are_available(self):
+        panel = ContextPanel(lambda: {
+            "TOKEN USAGE": {
+                "Input tokens": "~120",
+                "Output tokens": "~80",
+                "Total tokens": "~200",
+                "Usage source": "Estimated",
+                "Context window": "Not exposed",
+            },
+            "AI ACTIONS": {
+                "Recent actions": ["Tool call completed"],
+                "Recent warnings and errors": ["No warnings"],
+                "Action count": 1,
+            },
+        }, refresh_interval_ms=60000)
+        try:
+            labels = [label.text() for label in panel.findChildren(QLabel)]
+            for expected in ("TOKEN USAGE", "Input tokens", "~120", "AI ACTIONS", "Tool call completed"):
+                self.assertIn(expected, labels)
+        finally:
+            panel.close()
+
+    def test_quick_actions_dispatch_to_callbacks(self):
+        calls = []
+        panel = ContextPanel(
+            lambda: {},
+            refresh_interval_ms=60000,
+            action_callbacks={
+                "activity": lambda: calls.append("activity"),
+                "providers": lambda: calls.append("providers"),
+                "permissions": lambda: calls.append("permissions"),
+            },
+        )
+        try:
+            panel.activity_button.click()
+            panel.providers_button.click()
+            panel.permissions_button.click()
+            self.assertEqual(calls, ["activity", "providers", "permissions"])
+        finally:
+            panel.close()
+
     def test_refresh_updates_existing_labels_in_place(self):
         state = {"SESSION": {"Provider": "First"}}
         panel = ContextPanel(lambda: state, refresh_interval_ms=60000)
