@@ -179,6 +179,10 @@ def _apply_palette() -> None:
     for key, base in accent_base.items():
         if key == "PRI":
             value = _ACTIVE_ACCENT
+        elif THEME_MODE == "light" and key in {"TEXT", "TEXT_DIM", "TEXT_MED", "WHITE"}:
+            # Light mode keeps readable neutral typography; the selected
+            # accent remains visible on controls, focus, borders and highlights.
+            value = base
         else:
             value = _shift_hue(base, _ACTIVE_ACCENT)
         setattr(C, key, value)
