@@ -63,7 +63,8 @@ class ContextPanel(QWidget):
         self.activity_button = self._action_button("Activity", "activity")
         self.providers_button = self._action_button("AI Providers", "providers")
         self.permissions_button = self._action_button("Permissions", "permissions")
-        for button in (self.activity_button, self.providers_button, self.permissions_button):
+        self.connected_apps_button = self._action_button("Connected Apps", "connected_apps")
+        for button in (self.activity_button, self.providers_button, self.permissions_button, self.connected_apps_button):
             action_row.addWidget(button)
         root.addLayout(action_row)
 
@@ -302,6 +303,21 @@ class ContextPanel(QWidget):
         actions = section("AI ACTIONS")
         recent = self._text(actions.get("Recent actions"), "No actions recorded")
         issues = self._text(actions.get("Recent warnings and errors"), "No issues")
+        # Connection failures are operational issues even when the Activity panel
+        # has not emitted an event for them (for example, startup auth failures).
+        connection_lines = self._text(apps.get("Connections"), "").splitlines()
+        connection_issues = [
+            line.strip() for line in connection_lines
+            if line.strip() and any(marker in line.casefold() for marker in (
+                "error", "failed", "failure", "unauthorized", "permissionerror",
+                "bad credentials", "authentication", "authorization",
+            ))
+        ]
+        issue_lines = [] if issues == "No issues" else issues.splitlines()
+        for line in connection_issues:
+            if line not in issue_lines:
+                issue_lines.append(line)
+        issues = "\\n".join(issue_lines) if issue_lines else "No issues"
         self._labels["Recent actions"].setText(recent)
         self._labels["Issues"].setText(issues)
         self._labels["Issues"].setStyleSheet(
