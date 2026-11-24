@@ -23,7 +23,7 @@ def task_engine(parameters: dict, player=None) -> str:
             task_id=task.get("id", ""),
             title=task.get("title") or args.get("title") or args.get("task", ""),
             status=task.get("status", "queued"),
-            note="Task is running in the shared Tasks panel. Continue with other work.",
+            note="Task is running in the background. I will notify you when it finishes and summarize the result.",
         )
     if action in {"list", "search"}:
         tasks = result.get("tasks") or []
