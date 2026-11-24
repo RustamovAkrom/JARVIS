@@ -14451,7 +14451,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
 
     def _refresh_composer_context(self):
         """Render only the optional goal chip; mode/permissions live in their own control."""
-        goal = str(getattr(self, "_active_chat_goal", "") or "").replace("\\n", " ").strip()
+        goal = str(getattr(self, "_active_chat_goal", "") or "").replace("\n", " ").strip()
         if len(goal) > 180:
             goal = goal[:177].rstrip() + "…"
         self._composer_goal_label.setText(f"GOAL  ·  {goal}" if goal else "")
