@@ -12,35 +12,89 @@ class ContextPanelTests(unittest.TestCase):
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
 
-    def test_renders_session_context_and_missing_values_safely(self):
+    def test_renders_all_context_sections(self):
         panel = ContextPanel(lambda: {
-            "SESSION": {"Provider": "OpenAI", "Model": "gpt-model", "Execution mode": "Online", "Active agent": "general"},
-            "WORKSPACE": {"Active project": "E:/JARVIS", "Attached files": ["README.md"]},
-            "TOOLS & ACCESS": {"Connected tools": ["GitHub"], "Permissions": {"read": True}},
-            "MEMORY": {"Memory status": True, "Context usage": "4k / 32k"},
-        })
+            "SESSION": {
+                "Provider": "OpenAI",
+                "Model": "gpt-model",
+                "Environment": "Online",
+                "Selection policy": "Auto",
+                "Execution engine": "Provider pipeline",
+                "Computer mode": "Agent",
+                "Access policy": "Approve",
+            },
+            "WORKSPACE": {
+                "Active project": "JARVIS",
+                "Project path": "E:/JARVIS",
+                "Current attachment": "README.md",
+            },
+            "CONNECTED APPS": {
+                "Connection summary": "1 connected / 1 enabled",
+                "Connections": ["GitHub: Connected"],
+            },
+            "PERMISSIONS": {"Computer permissions": "3/8 enabled"},
+            "MEMORY & CHAT": {
+                "Saved memory entries": 12,
+                "Active chat messages": 4,
+                "Conversation size (estimate)": "~2,400 tokens · 9,600 characters",
+            },
+        }, refresh_interval_ms=60000)
         try:
             labels = [label.text() for label in panel.findChildren(QLabel)]
-            for expected in ("CURRENT SESSION", "OpenAI", "gpt-model", "E:/JARVIS", "GitHub", "4k / 32k"):
+            for expected in (
+                "LIVE SESSION CONTEXT", "OpenAI", "gpt-model", "Online",
+                "E:/JARVIS", "README.md", "GitHub: Connected",
+                "3/8 enabled", "12", "4", "~2,400 tokens · 9,600 characters",
+            ):
                 self.assertIn(expected, labels)
+            self.assertIn("Updated", panel.updated_label.text())
+        finally:
+            panel.close()
+
+    def test_missing_values_are_explicit(self):
+        panel = ContextPanel(lambda: {}, refresh_interval_ms=60000)
+        try:
+            labels = [label.text() for label in panel.findChildren(QLabel)]
+            self.assertGreaterEqual(labels.count("Not available"), 1)
         finally:
             panel.close()
 
     def test_refresh_handles_provider_failure(self):
-        panel = ContextPanel(lambda: (_ for _ in ()).throw(RuntimeError("offline")))
+        panel = ContextPanel(
+            lambda: (_ for _ in ()).throw(RuntimeError("offline")),
+            refresh_interval_ms=60000,
+        )
         try:
             panel.refresh()
-            labels = [label.text() for label in panel.findChildren(QLabel)]
-            self.assertTrue(any("Unavailable" in value for value in labels))
+            self.assertIn("RuntimeError", panel._status_label.text())
         finally:
             panel.close()
 
     def test_refresh_button_reloads_snapshot(self):
         calls = []
-        panel = ContextPanel(lambda: calls.append(True) or {"SESSION": {"Provider": "Local"}})
+        panel = ContextPanel(
+            lambda: calls.append(True) or {"SESSION": {"Provider": "Local"}},
+            refresh_interval_ms=60000,
+        )
         try:
             before = len(calls)
             panel.refresh_button.click()
             self.assertEqual(len(calls), before + 1)
         finally:
             panel.close()
+
+    def test_refresh_updates_existing_labels_in_place(self):
+        state = {"SESSION": {"Provider": "First"}}
+        panel = ContextPanel(lambda: state, refresh_interval_ms=60000)
+        try:
+            provider_label = panel._value_labels[("SESSION", "Provider")]
+            state["SESSION"]["Provider"] = "Second"
+            panel.refresh()
+            self.assertIs(provider_label, panel._value_labels[("SESSION", "Provider")])
+            self.assertEqual(provider_label.text(), "Second")
+        finally:
+            panel.close()
+
+
+if __name__ == "__main__":
+    unittest.main()
