@@ -47,11 +47,13 @@ def test_custom_accent_tints_canvas_surfaces_and_controls():
     assert C.PANEL2 != "#0c1a28"
     assert C.BORDER != "#ffffff"
     assert C.BORDER != "#0d3347"
-    assert C.GREEN != "#00ff88"
-    assert C.RED != "#ff3355"
+    assert C.GREEN == "#00ff88"
+    assert C.RED == "#ff3355"
+    assert C.ACC2 == "#ffcc00"
+    assert C.MUTED_C == "#ff3366"
 
 
-def test_custom_colour_uses_one_hue_across_text_borders_and_status_tokens():
+def test_custom_colour_tints_interface_but_preserves_semantic_status_colors():
     assert apply_ui_theme("dark")
     assert apply_ui_accent("#ff3355")
 
@@ -60,9 +62,15 @@ def test_custom_colour_uses_one_hue_across_text_borders_and_status_tokens():
         return colorsys.rgb_to_hsv(*rgb)[0]
 
     selected_hue = hue(C.PRI)
-    for token in (C.TEXT, C.TEXT_DIM, C.BORDER, C.BORDER_B, C.GREEN, C.RED, C.ACC):
+    for token in (C.TEXT, C.TEXT_DIM, C.BORDER, C.BORDER_B):
         distance = abs(hue(token) - selected_hue)
         assert min(distance, 1.0 - distance) < 0.02
+
+    assert C.GREEN == "#00ff88"
+    assert C.ACC == "#ff6b00"
+    assert C.ACC2 == "#ffcc00"
+    assert C.RED == "#ff3355"
+    assert C.MUTED_C == "#ff3366"
 
 
 def test_changing_custom_hue_updates_panel_backgrounds():
