@@ -1,10 +1,11 @@
 """Regression tests for the independent monochrome interface themes."""
 from PyQt6.QtCore import QSettings
 
-from gui.themes.tokens import C, apply_ui_accent, apply_ui_theme
+from gui.themes.tokens import C, DEFAULT_UI_COLOR, apply_ui_accent, apply_ui_theme
 
 
 def test_dark_theme_uses_monochrome_surfaces_and_foreground():
+    assert apply_ui_accent(DEFAULT_UI_COLOR)
     assert apply_ui_theme("dark")
     assert C.BG == "#000000"
     assert C.TEXT == "#f2f2f2"
@@ -14,6 +15,7 @@ def test_dark_theme_uses_monochrome_surfaces_and_foreground():
 
 
 def test_light_theme_uses_white_surfaces_and_dark_foreground():
+    assert apply_ui_accent(DEFAULT_UI_COLOR)
     assert apply_ui_theme("light")
     assert C.BG == "#ffffff"
     assert C.TEXT == "#171717"
@@ -23,6 +25,7 @@ def test_light_theme_uses_white_surfaces_and_dark_foreground():
 
 
 def test_custom_accent_does_not_recolor_monochrome_surfaces():
+    assert apply_ui_accent(DEFAULT_UI_COLOR)
     assert apply_ui_theme("dark")
     assert apply_ui_accent("#7c5cff")
     assert C.ACCENT == "#7c5cff"
