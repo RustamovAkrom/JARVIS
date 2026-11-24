@@ -152,11 +152,13 @@ def apply_ui_accent(accent_hex: str) -> bool:
         return apply_ui_theme(THEME_MODE)
 
     if accent_hex == "#000000":
-        # Legacy BLACK preset now selects the monochrome dark theme.
+        # Legacy BLACK preset selects the monochrome dark theme, not an accent.
+        C.ACCENT = DEFAULT_UI_COLOR
         return apply_ui_theme("dark")
 
     if accent_hex == "#ffffff":
-        # Legacy WHITE preset now selects the monochrome light theme.
+        # Legacy WHITE preset selects the monochrome light theme, not an accent.
+        C.ACCENT = DEFAULT_UI_COLOR
         return apply_ui_theme("light")
         # White is a neutral monochrome preset with light surfaces and dark text.
         for key, value in _PALETTE_DEFAULTS.items():
@@ -349,6 +351,8 @@ def apply_ui_theme(mode: str) -> bool:
     # Default accent is monochrome; an explicitly selected custom accent remains.
     if getattr(C, "ACCENT", DEFAULT_UI_COLOR) == DEFAULT_UI_COLOR:
         C.PRI = "#ffffff" if selected == "dark" else "#000000"
+    else:
+        C.PRI = C.ACCENT
     C.SUCCESS = C.GREEN
     C.WARNING = C.ACC2
     C.DANGER = C.RED
