@@ -10818,12 +10818,48 @@ class MainWindow(QMainWindow):
             self._chat_interaction_mode = get_computer_access_settings().get("mode", "chat")
         except Exception:
             self._chat_interaction_mode = "chat"
-        self._composer_context = QLabel()
-        self._composer_context.setWordWrap(True)
+        # Goal is an independent, removable context chip. Mode and permission
+        # state remain in the access control inside the composer row.
+        self._composer_context = QFrame()
+        self._composer_context.setObjectName("ChatGoalChip")
         self._composer_context.setStyleSheet(
-            f"QLabel {{ color:{C.PRI}; background:{C.PRI_GHO}; "
-            f"border:1px solid {C.PRI_DIM}; border-radius:7px; padding:4px 8px; }}"
+            f"QFrame#ChatGoalChip {{ background:{C.PRI_GHO}; "
+            f"border:1px solid {C.PRI_DIM}; border-radius:8px; }}"
         )
+        goal_row = QHBoxLayout(self._composer_context)
+        goal_row.setContentsMargins(9, 4, 5, 4)
+        goal_row.setSpacing(6)
+        self._composer_goal_label = QLabel()
+        self._composer_goal_label.setObjectName("ChatGoalLabel")
+        self._composer_goal_label.setWordWrap(True)
+        self._composer_goal_label.setStyleSheet(
+            f"QLabel {{ color:{C.PRI}; background:transparent; border:0; }}"
+        )
+        goal_row.addWidget(self._composer_goal_label, 1)
+        self._composer_goal_edit = QToolButton()
+        self._composer_goal_edit.setObjectName("EditChatGoal")
+        self._composer_goal_edit.setText("Edit")
+        self._composer_goal_edit.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._composer_goal_edit.setToolTip(self._tr("Edit active chat goal"))
+        self._composer_goal_edit.setStyleSheet(
+            f"QToolButton {{ color:{C.TEXT_MED}; background:transparent; border:0; padding:3px 5px; }}"
+            f"QToolButton:hover {{ color:{C.PRI}; }}"
+        )
+        self._composer_goal_edit.clicked.connect(self._set_chat_goal)
+        goal_row.addWidget(self._composer_goal_edit)
+        self._composer_goal_clear = QToolButton()
+        self._composer_goal_clear.setObjectName("ClearChatGoal")
+        self._composer_goal_clear.setText("×")
+        self._composer_goal_clear.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._composer_goal_clear.setToolTip(self._tr("Remove active chat goal"))
+        self._composer_goal_clear.setAccessibleName(self._tr("Remove active chat goal"))
+        self._composer_goal_clear.setStyleSheet(
+            f"QToolButton {{ color:{C.TEXT_MED}; background:transparent; border:0; "
+            f"font-size:16px; padding:1px 5px; }}"
+            f"QToolButton:hover {{ color:{C.RED}; }}"
+        )
+        self._composer_goal_clear.clicked.connect(self._clear_chat_goal)
+        goal_row.addWidget(self._composer_goal_clear)
         self._composer_context.hide()
         lay.addWidget(self._composer_context)
         lay.addWidget(self._build_input_row())
@@ -14414,18 +14450,20 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
         )
 
     def _refresh_composer_context(self):
-        parts = []
-        if self._chat_plan_mode:
-            parts.append("PLAN MODE · actions stay paused")
-        elif self._chat_interaction_mode == "agent":
-            parts.append("AGENT MODE · actions follow permissions")
-        if self._active_chat_goal:
-            goal = self._active_chat_goal.replace("\n", " ").strip()
-            if len(goal) > 88:
-                goal = goal[:85].rstrip() + "…"
-            parts.append(f"GOAL · {goal}")
-        self._composer_context.setText("     ·     ".join(parts))
-        self._composer_context.setVisible(bool(parts))
+        """Render only the optional goal chip; mode/permissions live in their own control."""
+        goal = str(getattr(self, "_active_chat_goal", "") or "").replace("\\n", " ").strip()
+        if len(goal) > 180:
+            goal = goal[:177].rstrip() + "…"
+        self._composer_goal_label.setText(f"GOAL  ·  {goal}" if goal else "")
+        self._composer_context.setVisible(bool(goal))
+
+    def _clear_chat_goal(self, *_):
+        """Detach the goal from this chat without changing its mode or permissions."""
+        if not getattr(self, "_active_chat_goal", ""):
+            return
+        self._active_chat_goal = ""
+        self._refresh_composer_context()
+        self._append_activity("SYS: Chat goal removed.")
 
     def _refresh_access_status(self) -> None:
         """Show a compact live summary and an expandable permission checklist."""
