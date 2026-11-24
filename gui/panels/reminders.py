@@ -44,7 +44,7 @@ class RemindersPanel(QWidget):
         layout.addWidget(self.cancel_button)
         self.info = QLabel("Reminders are registered with the operating system and persist after JARVIS closes.")
         self.info.setWordWrap(True)
-        self.info.setStyleSheet("color: #6e9a9c;")
+        self.info.setStyleSheet(f"color: {C.TEXT_DIM};")
         layout.addWidget(self.info)
         self.create_button.clicked.connect(self._create)
         self.refresh_button.clicked.connect(self.refresh_requested.emit)
