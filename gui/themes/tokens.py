@@ -152,19 +152,15 @@ def _shift_hue(base_hex: str, accent_hex: str) -> str:
     accent_rgb = tuple(int(accent_hex[i:i + 2], 16) / 255 for i in (1, 3, 5))
     base_h, sat, val = colorsys.rgb_to_hsv(*base_rgb)
     accent_h, accent_s, _ = colorsys.rgb_to_hsv(*accent_rgb)
-    default_rgb = tuple(
-        int(DEFAULT_UI_COLOR[i:i + 2], 16) / 255 for i in (1, 3, 5)
-    )
-    default_h, _, _ = colorsys.rgb_to_hsv(*default_rgb)
     if accent_s < 0.08:
         # Neutral selections have no meaningful hue. Keep the base hue and
         # reduce saturation rather than reading an undefined hue variable.
         h = base_h
         sat *= 0.12
     else:
-        # Apply only the delta from JARVIS cyan. With the default accent the
-        # original semantic token values remain byte-for-byte unchanged.
-        h = (base_h + accent_h - default_h) % 1.0
+        # Use one selected hue across every semantic token. Preserve each
+        # token's saturation/value for hierarchy, but remove competing hues.
+        h = accent_h
     r, g, b = colorsys.hsv_to_rgb(h, sat, val)
     return "#{:02x}{:02x}{:02x}".format(
         round(r * 255), round(g * 255), round(b * 255)
