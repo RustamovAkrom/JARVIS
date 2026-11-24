@@ -50,6 +50,24 @@ class ContextPanelTests(unittest.TestCase):
         finally:
             panel.close()
 
+
+    def test_connected_app_auth_errors_are_also_reported_as_issues(self):
+        panel = ContextPanel(lambda: {
+            "CONNECTED APPS": {
+                "Connection summary": "0 connected / 1 enabled",
+                "Connections": ["GitHub: Error — PermissionError: GitHub authorization failed (401): Bad credentials"],
+            },
+            "AI ACTIONS": {
+                "Recent actions": ["No actions recorded in this session"],
+                "Recent warnings and errors": ["No issues recorded"],
+            },
+        }, refresh_interval_ms=60000)
+        try:
+            self.assertIn("GitHub: Error", panel._labels["Issues"].text())
+            self.assertIn("Bad credentials", panel._labels["Issues"].text())
+        finally:
+            panel.close()
+
     def test_usage_bars_are_safe_when_usage_is_empty(self):
         panel = ContextPanel(lambda: {}, refresh_interval_ms=60000)
         try:
@@ -95,13 +113,15 @@ class ContextPanelTests(unittest.TestCase):
                 "activity": lambda: calls.append("activity"),
                 "providers": lambda: calls.append("providers"),
                 "permissions": lambda: calls.append("permissions"),
+                "connected_apps": lambda: calls.append("connected_apps"),
             },
         )
         try:
             panel.activity_button.click()
             panel.providers_button.click()
             panel.permissions_button.click()
-            self.assertEqual(calls, ["activity", "providers", "permissions"])
+            panel.connected_apps_button.click()
+            self.assertEqual(calls, ["activity", "providers", "permissions", "connected_apps"])
         finally:
             panel.close()
 
