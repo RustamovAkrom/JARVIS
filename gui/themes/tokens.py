@@ -250,19 +250,11 @@ def _apply_palette() -> None:
             value = _shift_hue(base, _ACTIVE_ACCENT)
         setattr(C, key, value)
 
-    # Semantic status colours keep their meaning in Custom Colour mode:
-    # green = healthy, amber = thinking/warning, red = muted/error.
-    # Only the explicit Black/White presets collapse them to monochrome.
+    # Keep status/telemetry colours semantic in every appearance preset.
+    # Green = healthy/load, amber = warning/memory, orange = attention,
+    # red = error/muted. A monochrome canvas must not erase telemetry meaning.
     for key, base in _STATUS_DEFAULTS.items():
-        if key == "MUTED_C":
-            # A muted microphone is a safety-critical state cue and stays red
-            # even when the rest of the UI uses a monochrome preset.
-            value = base
-        elif neutral_accent:
-            value = "#ffffff" if THEME_MODE == "dark" else "#000000"
-        else:
-            value = base
-        setattr(C, key, value)
+        setattr(C, key, base)
     _init_aliases()
 
 
