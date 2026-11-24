@@ -257,13 +257,27 @@ class BusySpinner(QWidget):
     ):
         super().__init__(parent)
         self._angle = 0
-        self._color = QColor(color or C.PRI)
+        selected_color = color or C.PRI
+        self._color = QColor(selected_color)
+        self._theme_color_key = next(
+            (
+                key for key in ("PRI", "GREEN", "GREEN_D", "ACC", "ACC2", "RED", "MUTED_C")
+                if getattr(C, key) == selected_color
+            ),
+            None,
+        )
         self._line_width = max(1, int(line_width))
         self._timer = QTimer(self)
         self._timer.setInterval(30)
         self._timer.timeout.connect(self._advance)
         self.setFixedSize(max(12, int(size)), max(12, int(size)))
         self.setAccessibleName("Loading")
+
+    def apply_jarvis_theme(self) -> None:
+        """Refresh the cached semantic spinner colour after theme changes."""
+        if self._theme_color_key:
+            self._color = QColor(getattr(C, self._theme_color_key))
+        self.update()
 
     def start(self) -> None:
         if not self._timer.isActive():
@@ -319,7 +333,12 @@ class Toast(QFrame):
         except ValueError:
             self.level = ToastLevel.INFO
         self.setObjectName("DesignToast")
-        accent = _LEVEL_COLORS[self.level]
+        accent = {
+            ToastLevel.INFO: C.INFO,
+            ToastLevel.SUCCESS: C.SUCCESS,
+            ToastLevel.WARNING: C.WARNING,
+            ToastLevel.ERROR: C.DANGER,
+        }[self.level]
         self.setStyleSheet(
             f"QFrame#DesignToast {{ background:{C.PANEL3}; color:{C.TEXT};"
             f" border:1px solid {accent}; border-left:4px solid {accent};"
