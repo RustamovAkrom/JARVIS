@@ -6274,8 +6274,8 @@ class RemoteKeyOverlay(QWidget):
         self._key_lbl.setText("CONNECTED")
         self._key_lbl.setStyleSheet(f"""
             color: {C.GREEN};
-            background: rgba(34,197,94,0.08);
-            border: 2px solid rgba(34,197,94,0.4);
+            background: {C.PRI_GHO};
+            border: 2px solid {C.BORDER};
             border-radius: 8px;
             padding: 6px 4px;
             letter-spacing: 4px;
