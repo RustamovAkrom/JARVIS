@@ -84,8 +84,8 @@ THEME_MODE = str(_THEME_SETTINGS.value("appearance/theme", "dark") or "dark").lo
 if THEME_MODE not in {"dark", "light"}:
     THEME_MODE = "dark"
 
-# Base canvas stays pure black/white. The selected custom hue tints all
-# secondary surfaces, outlines, controls and indicators consistently.
+# Custom Colour tints the canvas and every surface. Black/White presets
+# switch to a separate neutral palette with monochrome foregrounds.
 _DARK_SURFACES = {
     "BG": "#07120f",
     "PANEL": "#0c1d18",
@@ -175,7 +175,7 @@ def _init_aliases() -> None:
 
 
 def _tint_surface(base_hex: str, accent_hex: str, mode: str) -> str:
-    """Apply a restrained version of the selected hue to a neutral surface."""
+    """Apply the selected hue to a surface while preserving its luminance level."""
     base_rgb = tuple(int(base_hex[i:i + 2], 16) / 255 for i in (1, 3, 5))
     accent_rgb = tuple(int(accent_hex[i:i + 2], 16) / 255 for i in (1, 3, 5))
     _, _, value = colorsys.rgb_to_hsv(*base_rgb)
