@@ -251,7 +251,7 @@ from gui.panels.debug.log_widget import LogWidget
 from gui.themes.tokens import (
     C,
     DEFAULT_UI_COLOR,
-    THEME_MODE,
+    current_theme_mode,
     _HUE_LINKED,
     _PALETTE_DEFAULTS,
     _STATUS_COLORS,
@@ -2100,8 +2100,8 @@ class CustomizeOverlay(QWidget):
 
         self._initial_color = (ui_color or DEFAULT_UI_COLOR).strip().lower()
         self._sel_color = self._initial_color
-        self._initial_theme_mode = THEME_MODE
-        self._theme_mode = THEME_MODE
+        self._initial_theme_mode = current_theme_mode()
+        self._theme_mode = self._initial_theme_mode
         self.on_preview = None  # callable(hex) — live preview; MainWindow wires it
         self.on_theme_preview = None  # callable(mode) — independent theme preview
         self._initial_opacity = max(60, min(100, int(ui_opacity)))
