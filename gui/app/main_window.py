@@ -2292,6 +2292,7 @@ class CustomizeOverlay(QWidget):
             self.on_opacity_preview(self._initial_opacity)
         if self.on_theme_preview and self._theme_mode != self._initial_theme_mode:
             self.on_theme_preview(self._initial_theme_mode)
+        self._theme_mode = self._initial_theme_mode
         if self._embedded:
             self._set_color(self._initial_color, update_wheel=True, preview=False)
             self._name_input.setText(self._initial_assistant_name)
