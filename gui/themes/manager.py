@@ -69,33 +69,91 @@ class ThemeManager(QObject):
             self._capture_widget(widget)
 
     @staticmethod
-    def _replacement_map(source_palette: dict[str, str], target_palette: dict[str, str]) -> dict[str, str]:
-        # A literal can represent multiple semantic tokens. Replace it only
-        # when all matching tokens resolve to the same destination.
+    def _replacement_map(
+        source_palette: dict[str, str], target_palette: dict[str, str]
+    ) -> tuple[dict[str, str], dict[str, str]]:
+        # A literal can represent several semantic tokens (all surfaces are
+        # intentionally black in Black mode). Resolve unique values globally
+        # and ambiguous values from their QSS property below.
         destinations: dict[str, set[str]] = defaultdict(set)
         for key, source in source_palette.items():
             target = target_palette.get(key)
             if source and target and source.lower() != target.lower():
                 destinations[source.lower()].add(target.lower())
-        return {
+        unique = {
             source: next(iter(targets))
             for source, targets in destinations.items()
             if len(targets) == 1
         }
+        ambiguous = {
+            source: ",".join(sorted(targets))
+            for source, targets in destinations.items()
+            if len(targets) > 1
+        }
+        return unique, ambiguous
 
-    def _render_widget(self, widget: QWidget, source: str, palette: dict[str, str]) -> None:
-        replacements = self._replacement_map(palette, current_palette())
-        if not source or not replacements:
-            if widget.styleSheet() != source:
-                widget.setStyleSheet(source)
-            return
-        pattern = re.compile(
-            "|".join(re.escape(value) for value in sorted(replacements, key=len, reverse=True)),
-            re.IGNORECASE,
-        )
-        rendered = pattern.sub(
-            lambda match: replacements[match.group(0).lower()], source
-        )
+    def _render_widget(
+        self, widget: QWidget, source: str, palette: dict[str, str]
+    ) -> None:
+        target_palette = current_palette()
+        replacements, ambiguous = self._replacement_map(palette, target_palette)
+        rendered = source
+        if replacements:
+            pattern = re.compile(
+                "|".join(
+                    re.escape(value)
+                    for value in sorted(replacements, key=len, reverse=True)
+                ),
+                re.IGNORECASE,
+            )
+            rendered = pattern.sub(
+                lambda match: replacements[match.group(0).lower()], rendered
+            )
+
+        if ambiguous:
+            property_roles = {
+                "background": "PANEL2",
+                "background-color": "PANEL2",
+                "color": "TEXT",
+                "border": "BORDER",
+                "border-color": "BORDER",
+                "border-top": "BORDER",
+                "border-right": "BORDER",
+                "border-bottom": "BORDER",
+                "border-left": "BORDER",
+                "outline": "BORDER",
+                "outline-color": "BORDER",
+                "selection-background-color": "PRI_GHO",
+                "selection-color": "TEXT",
+            }
+            declaration = re.compile(
+                r"(?P<property>selection-background-color|selection-color|"
+                r"background(?:-color)?|border(?:-(?:top|right|bottom|left))?"
+                r"(?:-color)?|outline(?:-color)?|color)\s*:\s*"
+                r"(?P<value>[^;{}]+)",
+                re.IGNORECASE,
+            )
+
+            def resolve(match):
+                role = property_roles.get(match.group("property").lower())
+                target = target_palette.get(role, "") if role else ""
+                value = match.group("value")
+                if not target:
+                    return match.group(0)
+                value_pattern = re.compile(r"#[0-9a-fA-F]{6}")
+                return (
+                    match.group("property")
+                    + ": "
+                    + value_pattern.sub(
+                        lambda color: target
+                        if color.group(0).lower() in ambiguous
+                        else color.group(0),
+                        value,
+                    )
+                )
+
+            rendered = declaration.sub(resolve, rendered)
+
         if widget.styleSheet() != rendered:
             widget.setStyleSheet(rendered)
 
@@ -168,7 +226,6 @@ class ThemeManager(QObject):
         }:
             return False
 
-        self._capture_all()
         self._applying = True
         try:
             if mode is not None and not apply_ui_theme(mode):
@@ -201,6 +258,5 @@ class ThemeManager(QObject):
                     refresh()
                 except Exception as exc:
                     print(f"[Theme] widget refresh failed for {type(widget).__name__}: {exc}")
-        self._capture_all()
         self._app.sendPostedEvents(None, QEvent.Type.UpdateRequest)
         return True
