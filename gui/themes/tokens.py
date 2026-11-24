@@ -250,13 +250,14 @@ def _apply_palette() -> None:
             value = _shift_hue(base, _ACTIVE_ACCENT)
         setattr(C, key, value)
 
-    # Status indicators are neutral in Black/White presets and use the
-    # selected hue family in Custom Colour mode.
+    # Semantic status colours keep their meaning in Custom Colour mode:
+    # green = healthy, amber = thinking/warning, red = muted/error.
+    # Only the explicit Black/White presets collapse them to monochrome.
     for key, base in _STATUS_DEFAULTS.items():
         if neutral_accent:
             value = "#ffffff" if THEME_MODE == "dark" else "#000000"
         else:
-            value = _shift_hue(base, _ACTIVE_ACCENT)
+            value = base
         setattr(C, key, value)
     _init_aliases()
 
