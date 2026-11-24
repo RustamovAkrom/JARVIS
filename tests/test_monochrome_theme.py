@@ -22,7 +22,7 @@ def test_light_theme_uses_white_surfaces_and_dark_text():
     assert apply_ui_theme("light")
     assert C.BG == "#ffffff"
     assert C.PANEL == "#ffffff"
-    assert C.TEXT == "#1f2933"
+    assert C.TEXT == "#111111"
     assert C.WHITE == "#000000"
     assert C.BORDER == "#d0d0d0"
 
