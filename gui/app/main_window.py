@@ -10068,7 +10068,6 @@ class MainWindow(QMainWindow):
             "right": width >= 900,
             "fullscreen": True,
             "debug": width >= 1240,
-            "terminal": width >= 1380 and self._terminal_toggle_btn.isVisible(),
         }
         for name, visible in nav_visibility.items():
             button = self._header_nav_buttons.get(name)
@@ -10079,6 +10078,10 @@ class MainWindow(QMainWindow):
         compact = width < 1120
         self._date_lbl.setVisible(not compact)
         self._header_clock_frame.setFixedSize(112 if not compact else 88, 38)
+
+        # A resize can arrive during widget construction, before the footer exists.
+        if not hasattr(self, "_footer_hint_lbl"):
+            return
 
         # The footer keeps useful shortcuts and drops attribution before clipping.
         if width < 820:
