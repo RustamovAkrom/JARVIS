@@ -199,6 +199,8 @@ def _apply_palette() -> None:
         ))[1] < 0.08
     )
 
+    default_accent = _ACTIVE_ACCENT == DEFAULT_UI_COLOR
+
     if neutral_accent:
         # Black and White presets are genuinely monochrome, not a tinted
         # custom palette with a black/white canvas.
@@ -219,7 +221,10 @@ def _apply_palette() -> None:
     # In Custom Colour mode every major surface, including the canvas, is
     # tinted from the selected hue. Black/White presets use neutral surfaces.
     for key, value in surfaces.items():
-        if not neutral_accent:
+        # The DEFAULT preset restores the original neutral light/dark surfaces
+        # while retaining JARVIS cyan for interactive accents. Only a
+        # user-selected custom colour should tint the entire canvas.
+        if not neutral_accent and not default_accent:
             value = _tint_surface(value, _ACTIVE_ACCENT, THEME_MODE)
         setattr(C, key, value)
 
