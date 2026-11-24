@@ -206,6 +206,11 @@ def apply_ui_accent(accent_hex: str) -> bool:
         return apply_ui_theme("dark")
     if selected == "#ffffff":
         return apply_ui_theme("light")
+    if selected == "#f2f2f2":
+        # Migrate the temporary neutral default written by the previous
+        # monochrome implementation back to JARVIS cyan. It was not a
+        # deliberate custom accent and otherwise desaturates the full palette.
+        selected = DEFAULT_UI_COLOR
     _ACTIVE_ACCENT = selected
     C.ACCENT = selected
     _apply_palette()
