@@ -22,7 +22,7 @@ class LogWidget(QTextEdit):
         self.setFont(QFont(FONT_MONO, 10))
         self.setStyleSheet(f"""
             QTextEdit {{
-                background: rgba(4, 10, 24, 120);
+                background: {C.PANEL2};
                 color: {C.TEXT};
                 border: 1px solid {C.BORDER};
                 border-radius: 10px;
