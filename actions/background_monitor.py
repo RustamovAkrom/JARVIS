@@ -99,7 +99,8 @@ def add_monitor(topic: str) -> str:
         "last_hash": "",
     }
     _save(monitors)
-    print(f"[Monitor] ➕ Added: {topic}")
+    from core.security_logging import redact_sensitive_text
+    print(f"[Monitor] ➕ Added: {redact_sensitive_text(topic)}")
     return f"Now monitoring: {topic}"
 
 
@@ -177,7 +178,8 @@ def check_all() -> list[str]:
             print(f"[Monitor] 🔔 New headline for '{topic}': {title[:60]}")
 
         except Exception as e:
-            print(f"[Monitor] ⚠️ Check failed for '{topic}': {e}")
+            from core.security_logging import redact_sensitive_text
+            print(f"[Monitor] ⚠️ Check failed for '{redact_sensitive_text(topic)}': {redact_sensitive_text(e)}")
 
     if changed:
         _save(monitors)
