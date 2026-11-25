@@ -33,7 +33,15 @@ from gui.app.main_window import (
     ProvidersOverlay,
 )
 from gui.themes.styles import glass_rgba, menu_qss
-from gui.themes.tokens import C, Radius, Space
+from gui.themes.tokens import (
+    C,
+    DEFAULT_UI_COLOR,
+    Radius,
+    Space,
+    apply_ui_accent,
+    apply_ui_theme,
+    current_theme_mode,
+)
 from gui.themes.typography import FONT_MONO, FONT_UI, TypeScale, mono_font, ui_font
 
 
@@ -390,16 +398,33 @@ class SettingsComponentTests(unittest.TestCase):
             _expanded_chat_turns=set(),
             _tr=lambda value: value,
         )
-        MainWindow._refresh_chat(owner)
-        self.assertIn(f"background:{C.PANEL3}", view.html)
-        self.assertIn("Hello", view.html)
-        self.assertIn("Hi", view.html)
+        original_mode = current_theme_mode()
+        original_accent = C.ACCENT
+        try:
+            for mode, accent in (
+                ("dark", DEFAULT_UI_COLOR),
+                ("light", DEFAULT_UI_COLOR),
+                ("light", "#ff003b"),
+            ):
+                with self.subTest(mode=mode, accent=accent):
+                    self.assertTrue(apply_ui_theme(mode))
+                    self.assertTrue(apply_ui_accent(accent))
+                    MainWindow._refresh_chat(owner)
+                    self.assertIn(f"background:{C.PANEL3}", view.html)
+                    self.assertIn("Hello", view.html)
+                    self.assertIn("Hi", view.html)
 
-        owner._active_chat_turns = lambda: []
-        MainWindow._refresh_chat(owner)
-        self.assertIn("No messages yet", view.html)
-        self.assertIn("Send a message to start a conversation", view.html)
-        self.assertIn("Previous conversations and saved memories are unchanged", view.html)
+            owner._active_chat_turns = lambda: []
+            MainWindow._refresh_chat(owner)
+            self.assertIn("No messages yet", view.html)
+            self.assertIn("Send a message to start a conversation", view.html)
+            self.assertIn(
+                "Previous conversations and saved memories are unchanged",
+                view.html,
+            )
+        finally:
+            apply_ui_theme(original_mode)
+            apply_ui_accent(original_accent)
 
     def test_advanced_telemetry_waits_until_both_columns_fit(self):
         from types import SimpleNamespace
