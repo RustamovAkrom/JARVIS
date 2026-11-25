@@ -54,8 +54,7 @@ def check(name: str, cond, detail: str = "") -> None:
     else:
         _fail += 1
         _failures.append(name)
-        from core.security_logging import redact_sensitive_text
-        print(f"  FAIL  {name}   {redact_sensitive_text(detail)}")
+        print(f"  FAIL  {name}")
 
 
 def section(title: str) -> None:
