@@ -234,7 +234,7 @@ def test_connected_apps_tool_calls_record_activity_and_errors(monkeypatch):
     class Store:
         def __init__(self):
             self.rows = {"c1": {"id": "c1", "status": "connected", "enabled": True,
-                "metadata": {}, "last_error": "", "updated_at": 0}}
+                "metadata": {"auto_approve_read_only": True}, "last_error": "", "updated_at": 0}}
         def get_connection(self, cid):
             return dict(self.rows[cid]) if cid in self.rows else None
         def upsert_connection(self, row):
