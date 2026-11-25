@@ -698,7 +698,7 @@ def _push_front(link) -> None:
     digest = hmac.new(
         hmac_key,
         json.dumps(front, sort_keys=True, ensure_ascii=False).encode("utf-8"),
-        hashlib.sha256,
+        "sha256",
     ).hexdigest()
     if not hmac.compare_digest(digest, str(_cfg().get("front_hash") or "")):
         link.op("front", {"front": front}, timeout=30)
