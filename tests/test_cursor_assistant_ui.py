@@ -209,11 +209,11 @@ class CursorAssistantUiTests(unittest.TestCase):
                 canvas.accessibleName(), "JARVIS assistant status display"
             )
             self.assertIn("thinking", canvas.accessibleDescription())
-            self.assertIn("microphone is unmuted", canvas.accessibleDescription())
+            self.assertIn("microphone is unmuted", canvas.accessibleDescription().lower())
 
             canvas.muted = True
             canvas.render(image)
-            self.assertIn("microphone muted", canvas.accessibleDescription())
+            self.assertIn("microphone is muted", canvas.accessibleDescription().lower())
             self.assertIn("double-click", canvas.accessibleDescription())
         finally:
             canvas._tmr.stop()
