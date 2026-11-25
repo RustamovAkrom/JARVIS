@@ -66,8 +66,7 @@ def _save_dir() -> Path:
         p.mkdir(parents=True, exist_ok=True)
         return p
     except Exception as e:
-        from core.security_logging import redact_sensitive_text
-        print(f"[Code] ⚠️ save_dir {redact_sensitive_text(raw)!r} unusable ({redact_sensitive_text(e)}) — using {DESKTOP}")
+        print("[Code] Configured save directory is unavailable; using the default folder.")
         return DESKTOP
 
 
