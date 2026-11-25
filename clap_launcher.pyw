@@ -368,7 +368,7 @@ def main() -> int:
             s.start()
             state["stream"] = s
             detector["d"].reset()
-            log(f"listening for {pattern()} (microphone: {name if device is not None else 'system default'})")
+            log(f"listening for {pattern()} ({'configured microphone' if device is not None else 'system default'})")
         except Exception as e:
             log(f"could not open the microphone: {e!r}")
         refresh()
