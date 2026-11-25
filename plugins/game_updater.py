@@ -194,12 +194,8 @@ def _setting_bool(key: str, default: bool = False) -> bool:
 
 def _redact_sensitive_text(text: str) -> str:
     """Mask common secret-bearing key/value fragments before logging."""
-    s = str(text)
-    return re.sub(
-        r'(?i)\b(password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key|refresh[_-]?token)\b(\s*[:=]\s*)([^\s,;]+)',
-        r"\1\2[REDACTED]",
-        s,
-    )
+    from core.security_logging import redact_sensitive_text
+    return redact_sensitive_text(text)
 
 
 def _log(msg: str) -> None:
