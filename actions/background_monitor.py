@@ -99,8 +99,7 @@ def add_monitor(topic: str) -> str:
         "last_hash": "",
     }
     _save(monitors)
-    from core.security_logging import redact_sensitive_text
-    print(f"[Monitor] ➕ Added: {redact_sensitive_text(topic)}")
+    print("[Monitor] Monitor added.")
     return f"Now monitoring: {topic}"
 
 
