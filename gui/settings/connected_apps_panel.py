@@ -23,6 +23,7 @@ class ConnectedAppsPanel(QWidget):
     def __init__(self,parent=None):
         super().__init__(parent)
         self.pool=QThreadPool.globalInstance()
+        self._busy_active = False
         self.setObjectName("ConnectedAppsPanel")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         root=QVBoxLayout(self)
@@ -329,11 +330,12 @@ class ConnectedAppsPanel(QWidget):
         )
         self.telegram_status_label.setToolTip(str((row or {}).get("last_error") or ""))
         self.telegram_connect_btn.setText("Reconnect" if connected else "Connect")
-        self.telegram_connect_btn.setEnabled(True)
+        available = not self._busy_active
+        self.telegram_connect_btn.setEnabled(available)
         # Management and disconnect are only meaningful for a live session.
-        self.telegram_manage_btn.setEnabled(connected)
+        self.telegram_manage_btn.setEnabled(connected and available)
         self.telegram_manage_btn.setVisible(connected)
-        self.telegram_disconnect_btn.setEnabled(connected)
+        self.telegram_disconnect_btn.setEnabled(connected and available)
         self.telegram_disconnect_btn.setVisible(connected)
 
     def connect_telegram_personal(self):
@@ -554,6 +556,7 @@ class ConnectedAppsPanel(QWidget):
             self.runtime_help.setText("Connected Apps runtime is available.")
 
     def _busy(self, busy, message=""):
+        self._busy_active = bool(busy)
         controls = (
             self.add_github_btn,
             self.native_disconnect_btn,
@@ -675,14 +678,15 @@ class ConnectedAppsPanel(QWidget):
         self.calendar_status_label.setToolTip(calendar_error_text)
         self.add_github_btn.setText("Reconnect" if github_reconnect else "Connect")
         self.add_github_btn.setVisible(True)
-        self.add_github_btn.setEnabled(True)
-        self.native_disconnect_btn.setEnabled(github_disconnect_available)
+        available = not self._busy_active
+        self.add_github_btn.setEnabled(available)
+        self.native_disconnect_btn.setEnabled(github_disconnect_available and available)
         self.native_disconnect_btn.setVisible(github_disconnect_available)
         self.add_calendar_btn.setText("Reconnect" if calendar_reconnect else "Connect")
         self.add_calendar_btn.setVisible(True)
-        self.add_calendar_btn.setEnabled(True)
+        self.add_calendar_btn.setEnabled(available)
         self.calendar_disconnect_btn.setVisible(calendar_disconnect_available)
-        self.calendar_disconnect_btn.setEnabled(calendar_disconnect_available)
+        self.calendar_disconnect_btn.setEnabled(calendar_disconnect_available and available)
         self.native_list.clear()
         for row in native_rows:
             app_id = str(row.get("app_id") or "").casefold()
