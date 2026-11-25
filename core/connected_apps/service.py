@@ -850,11 +850,34 @@ class ConnectedAppsService:
         )
         if not auto_approve:
             from core import confirm
+
+            def run_confirmed():
+                # Confirmation may be approved after the original request returns.
+                # Re-check connection state, permissions and the current schema at
+                # approval time to prevent stale approvals racing disconnect/revoke.
+                with self._connection_lock(cid):
+                    current = self.store.get_connection(cid)
+                    if not current or not current.get("enabled", True):
+                        raise RuntimeError("Connected app is no longer enabled")
+                    if current.get("status") != ConnectionStatus.CONNECTED.value:
+                        raise RuntimeError("Connected app is no longer connected")
+                    current_metadata = dict(current.get("metadata") or {})
+                    if tool in set(current_metadata.get("blocked_tools") or []):
+                        raise PermissionError("This MCP tool is blocked by Connected Apps permissions")
+                    current_tools = runtime.tools(cid)
+                    current_descriptor = next(
+                        (item for item in current_tools if item.get("name") == tool), None
+                    )
+                    if current_descriptor is None:
+                        raise ValueError("Tool is no longer available on this connection")
+                    _validate_arguments(current_descriptor.get("input_schema") or {}, args)
+                    return str(runtime.call(cid, tool, args))
+
             return confirm.request(
                 key=f"connected_apps:{cid}:{tool}",
                 title=f"Connected App — {tool}",
                 detail=f"Execute tool {tool} with arguments:\\n\\n{args!r}",
-                run=lambda: str(runtime.call(cid, tool, args)),
+                run=run_confirmed,
             )
 
         try:
