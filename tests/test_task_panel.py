@@ -173,6 +173,55 @@ class TaskPanelTests(unittest.TestCase):
         finally:
             panel.close()
 
+    def test_selection_reveals_details_and_only_relevant_actions(self):
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            report = root / "report.md"
+            report.write_text("# Completed report", encoding="utf-8")
+            workspace = root / "workspace"
+            workspace.mkdir()
+            (workspace / "result.txt").write_text("result", encoding="utf-8")
+
+            panel = TaskPanel()
+            try:
+                panel.set_tasks([
+                    {"id": "active", "title": "Running task", "status": "running"},
+                    {
+                        "id": "done", "title": "Completed task", "status": "done",
+                        "report_path": str(report), "workspace": str(workspace),
+                    },
+                ])
+                panel.list_widget.setCurrentRow(0)
+                self.assertFalse(panel.progress_bar.isHidden())
+                self.assertFalse(panel.details_browser.isHidden())
+                self.assertFalse(panel.task_actions_widget.isHidden())
+                self.assertFalse(panel.cancel_button.isHidden())
+                self.assertFalse(panel.steer_button.isHidden())
+                self.assertTrue(panel.report_actions_widget.isHidden())
+                self.assertTrue(panel.workspace_actions_widget.isHidden())
+
+                panel.filter_box.setCurrentIndex(panel.filter_box.findData("all"))
+                done_item = next(
+                    panel.list_widget.item(i)
+                    for i in range(panel.list_widget.count())
+                    if panel.list_widget.item(i).data(Qt.ItemDataRole.UserRole) == "done"
+                )
+                panel.list_widget.setCurrentItem(done_item)
+                self.assertFalse(panel.progress_bar.isHidden())
+                self.assertFalse(panel.details_browser.isHidden())
+                self.assertTrue(panel.task_actions_widget.isHidden())
+                self.assertFalse(panel.report_actions_widget.isHidden())
+                self.assertFalse(panel.workspace_actions_widget.isHidden())
+
+                panel.filter_box.setCurrentIndex(panel.filter_box.findData("history"))
+                self.assertFalse(panel.history_actions_widget.isHidden())
+                self.assertTrue(panel.delete_button.isEnabled())
+            finally:
+                panel.close()
+
     def test_invalid_snapshots_are_ignored(self):
         panel = TaskPanel()
         try:
