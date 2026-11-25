@@ -980,29 +980,39 @@ class TaskPanel(QWidget):
         task = self._tasks.get(tid, {})
         self._render_details(task)
         has_task = bool(task)
-        self.details_title.setVisible(False)
-        self.progress_bar.setVisible(False)
-        self.details_browser.setVisible(False)
+        # _render_details owns the visibility of the progress and detail
+        # widgets. Do not hide them again here after rendering a valid task.
         active = task.get("status") in _ACTIVE
-        self.retry_button.setEnabled(task.get("status") in {"failed", "cancelled"})
+        retryable = task.get("status") in {"failed", "cancelled"}
+        terminal = bool(task) and not active
+
+        self.retry_button.setEnabled(retryable)
         self.cancel_button.setEnabled(active)
         self.finish_button.setEnabled(active)
         self.steer_button.setEnabled(active)
 
-        # Keep the panel compact when no task is selected. Reveal only actions
-        # relevant to the selected task, avoiding empty disabled-button rows.
-        self.task_actions_widget.setVisible(False)
-        self.history_actions_widget.setVisible(False)
-        report_path = self._report_path(task)
-        report_available = bool(report_path and report_path.is_file())
-        self.report_actions_widget.setVisible(False)
-        workspace = self._workspace_path(task)
-        workspace_available = bool(workspace and workspace.is_dir())
-        self.workspace_actions_widget.setVisible(False)
-        self.retry_button.setVisible(task.get("status") in {"failed", "cancelled"})
+        # Reveal only actions that apply to the selected task. Previously
+        # these containers were always hidden, making the report/workspace
+        # actions unreachable from the panel.
+        self.task_actions_widget.setVisible(active or retryable)
+        self.retry_button.setVisible(retryable)
         self.cancel_button.setVisible(active)
         self.finish_button.setVisible(active)
         self.steer_button.setVisible(active)
+
+        report_path = self._report_path(task)
+        report_available = bool(report_path and report_path.is_file())
+        self.report_actions_widget.setVisible(report_available)
+        workspace = self._workspace_path(task)
+        workspace_available = bool(workspace and workspace.is_dir())
+        self.workspace_actions_widget.setVisible(workspace_available)
+        self.history_actions_widget.setVisible(
+            self.filter_box.currentData() == "history" and bool(self._tasks)
+        )
+        self.delete_button.setEnabled(terminal)
+        self.clear_history_button.setEnabled(
+            any(row.get("status") not in _ACTIVE for row in self._tasks.values())
+        )
         if tid:
             self.task_selected.emit(tid)
 
