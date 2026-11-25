@@ -405,7 +405,8 @@ def _undo_restore(target: Path, previous: str):
     def _fn():
         if not target.exists():
             return f"'{target.stem}' is no longer there — nothing to restore."
-        target.write_text(previous, encoding="utf-8")
+        from core.security_logging import redact_sensitive_text
+        target.write_text(redact_sensitive_text(previous), encoding="utf-8")
         return f"Restored '{target.stem}' to what it said before."
     return _fn
 
@@ -537,9 +538,9 @@ def _append_to(vault: Path, path: Path, content: str, player, what: str) -> str:
         path.parent.mkdir(parents=True, exist_ok=True)
         if existed:
             sep = "" if previous.endswith("\n\n") else ("\n" if previous.endswith("\n") else "\n\n")
-            path.write_text(previous + sep + body + "\n", encoding="utf-8")
+            path.write_text(redact_sensitive_text(previous + sep + body + "\n"), encoding="utf-8")
         else:
-            path.write_text(f"# {path.stem}\n\n{body}\n", encoding="utf-8")
+            path.write_text(redact_sensitive_text(f"# {path.stem}\n\n{body}\n"), encoding="utf-8")
     except Exception as e:
         return f"I couldn't write to that note: {e}"
 
