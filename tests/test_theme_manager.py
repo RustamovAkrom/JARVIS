@@ -146,10 +146,10 @@ def test_default_accent_keeps_light_surfaces_white_and_neutral():
         assert C.BG == "#000000"
         assert C.PRI == "#ffffff"
         assert manager.apply(accent=DEFAULT_UI_COLOR)
-        assert C.BG == "#000000"
-        assert C.PANEL == "#020609"
-        assert C.PANEL2 == "#03090d"
-        assert C.PANEL3 == "#050d12"
+        assert C.BG == "#05090d"
+        assert C.PANEL == "#081018"
+        assert C.PANEL2 == "#0c1a28"
+        assert C.PANEL3 == "#102235"
         assert C.PRI == DEFAULT_UI_COLOR
         assert C.TEXT == "#8ffcff"
 
