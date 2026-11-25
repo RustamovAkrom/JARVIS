@@ -352,6 +352,55 @@ class SettingsComponentTests(unittest.TestCase):
         wheel.set_color("#000000")
         self.assertEqual(wheel.color(), "#000000")
 
+    def test_chat_bubbles_use_theme_surface_and_empty_state_is_structured(self):
+        from types import SimpleNamespace
+
+        class ScrollBar:
+            def value(self):
+                return 0
+
+            def maximum(self):
+                return 0
+
+            def setValue(self, _value):
+                pass
+
+        class ChatView:
+            def __init__(self):
+                self.html = ""
+
+            def verticalScrollBar(self):
+                return ScrollBar()
+
+            def set_response_times(self, _values):
+                pass
+
+            def setHtml(self, value):
+                self.html = value
+
+        view = ChatView()
+        owner = SimpleNamespace(
+            _chat_view=view,
+            _active_chat_turns=lambda: [{
+                "id": "turn-1",
+                "request": "Hello",
+                "result": "Hi",
+                "status": "complete",
+            }],
+            _expanded_chat_turns=set(),
+            _tr=lambda value: value,
+        )
+        MainWindow._refresh_chat(owner)
+        self.assertIn(f"background:{C.PANEL3}", view.html)
+        self.assertIn("Hello", view.html)
+        self.assertIn("Hi", view.html)
+
+        owner._active_chat_turns = lambda: []
+        MainWindow._refresh_chat(owner)
+        self.assertIn("No messages yet", view.html)
+        self.assertIn("Send a message to start a conversation", view.html)
+        self.assertIn("Previous conversations and saved memories are unchanged", view.html)
+
     def test_advanced_telemetry_waits_until_both_columns_fit(self):
         from types import SimpleNamespace
 
