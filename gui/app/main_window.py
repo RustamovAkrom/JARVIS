@@ -15418,7 +15418,13 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                 1,
                 self._workspace_split.height() - self._workspace_split.handleWidth(),
             )
-            panel_height = min(max(150, int(available * 0.34)), max(120, available - 220))
+            # Keep the workspace dominant: terminal/debug is a secondary
+            # work area, not a third of the screen by default. Users can still
+            # resize the splitter manually after it opens.
+            panel_height = min(
+                max(136, int(available * 0.28)),
+                max(120, available - 240),
+            )
             current_sizes = self._workspace_split.sizes()
             start_height = min(
                 current_sizes[1] if len(current_sizes) > 1 else 0,
