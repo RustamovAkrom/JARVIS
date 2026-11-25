@@ -902,12 +902,12 @@ def test_service_call_tool_enforces_connection_and_permissions(monkeypatch):
     base = {
         "id": "c1", "app_id": "demo", "display_name": "Demo",
         "status": "connected", "enabled": True,
-        "metadata": {"blocked_tools": []}, "last_error": "", "updated_at": 0,
+        "metadata": {"blocked_tools": [], "auto_approve_read_only": True}, "last_error": "", "updated_at": 0,
     }
     store = Store(base)
     svc = ConnectedAppsService(store=store)
     monkeypatch.setattr(service_module.runtime, "tools", lambda cid: [
-        {"name": "read", "input_schema": {"type": "object", "properties": {
+        {"name": "read", "annotations": {"readOnlyHint": True, "destructiveHint": False}, "input_schema": {"type": "object", "properties": {
             "limit": {"type": "integer", "minimum": 1}
         }, "required": ["limit"], "additionalProperties": False}}
     ])
@@ -936,4 +936,89 @@ def test_service_call_tool_enforces_connection_and_permissions(monkeypatch):
         svc.call_tool("c1", "read", {})
     with pytest.raises(ValueError, match="unknown"):
         svc.call_tool("c1", "read", {"limit": 1, "unexpected": True})
+    assert len(calls) == 1
+
+
+def test_service_call_tool_requires_confirmation_without_explicit_safe_annotations(monkeypatch):
+    from core.connected_apps.service import ConnectedAppsService
+    from core.connected_apps import service as service_module
+
+    class Store:
+        def __init__(self):
+            self.row = {
+                "id": "c2", "app_id": "demo", "display_name": "Demo",
+                "status": "connected", "enabled": True,
+                "metadata": {"blocked_tools": [], "auto_approve_read_only": True},
+                "last_error": "", "updated_at": 0,
+            }
+        def get_connection(self, cid):
+            return dict(self.row) if cid == self.row["id"] else None
+        def upsert_connection(self, row):
+            self.row = dict(row)
+        def list_connections(self):
+            return [dict(self.row)]
+
+    store = Store()
+    svc = ConnectedAppsService(store=store)
+    descriptors = [
+        {"name": "missing_destructive_hint", "annotations": {"readOnlyHint": True}},
+        {"name": "destructive", "annotations": {"readOnlyHint": True, "destructiveHint": True}},
+        {"name": "not_read_only", "annotations": {"readOnlyHint": False, "destructiveHint": False}},
+    ]
+    current = {"tool": descriptors[0]}
+    monkeypatch.setattr(service_module.runtime, "tools", lambda cid: [current["tool"]])
+    calls = []
+    monkeypatch.setattr(service_module.runtime, "call", lambda *args: calls.append(args) or "executed")
+
+    confirmation_requests = []
+    from core import confirm
+    monkeypatch.setattr(confirm, "request", lambda **kwargs: confirmation_requests.append(kwargs) or "confirmation_required")
+
+    for descriptor in descriptors:
+        current["tool"] = descriptor
+        assert svc.call_tool("c2", descriptor["name"], {}) == "confirmation_required"
+
+    assert len(confirmation_requests) == 3
+    assert calls == []
+
+
+def test_service_call_tool_safe_auto_approval_requires_user_opt_in_and_explicit_hints(monkeypatch):
+    from core.connected_apps.service import ConnectedAppsService
+    from core.connected_apps import service as service_module
+
+    class Store:
+        def __init__(self):
+            self.row = {
+                "id": "c3", "app_id": "demo", "display_name": "Demo",
+                "status": "connected", "enabled": True,
+                "metadata": {"blocked_tools": [], "auto_approve_read_only": True},
+                "last_error": "", "updated_at": 0,
+            }
+        def get_connection(self, cid):
+            return dict(self.row) if cid == self.row["id"] else None
+        def upsert_connection(self, row):
+            self.row = dict(row)
+        def list_connections(self):
+            return [dict(self.row)]
+
+    store = Store()
+    svc = ConnectedAppsService(store=store)
+    descriptor = {
+        "name": "read",
+        "annotations": {"readOnlyHint": True, "destructiveHint": False},
+        "input_schema": {"type": "object"},
+    }
+    monkeypatch.setattr(service_module.runtime, "tools", lambda cid: [descriptor])
+    calls = []
+    monkeypatch.setattr(service_module.runtime, "call", lambda cid, tool, args: calls.append((cid, tool, args)) or "ok")
+
+    assert svc.call_tool("c3", "read", {}) == "ok"
+    assert calls == [("c3", "read", {})]
+
+    store.row["metadata"]["auto_approve_read_only"] = False
+    from core import confirm
+    prompts = []
+    monkeypatch.setattr(confirm, "request", lambda **kwargs: prompts.append(kwargs) or "confirmation_required")
+    assert svc.call_tool("c3", "read", {}) == "confirmation_required"
+    assert len(prompts) == 1
     assert len(calls) == 1
