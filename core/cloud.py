@@ -1182,7 +1182,9 @@ class ToolBox:
         from core import outcome
 
         args = dict(args or {})
-        self.rt.log(f"[Tool] {name} {json.dumps(args, ensure_ascii=False)[:200]}")
+        from core.security_logging import redact_sensitive_mapping
+        safe_args = redact_sensitive_mapping(args)
+        self.rt.log(f"[Tool] {name} {json.dumps(safe_args, ensure_ascii=False)[:200]}")
         if ctx.get("origin") != "telegram" and name not in _JOB_TOOLS:
             return outcome.failed(name, "background work cannot use this tool")
         try:
