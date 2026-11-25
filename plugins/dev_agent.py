@@ -70,8 +70,7 @@ def _projects_dir() -> Path:
         p.mkdir(parents=True, exist_ok=True)
         return p
     except Exception as e:
-        from core.security_logging import redact_sensitive_text
-        print(f"[DevAgent] ⚠️ projects_dir {redact_sensitive_text(raw)!r} unusable ({redact_sensitive_text(e)}) — using {PROJECTS_DIR}")
+        print("[DevAgent] Configured projects directory is unavailable; using the default folder.")
         return PROJECTS_DIR
 
 
