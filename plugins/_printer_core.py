@@ -581,6 +581,7 @@ class BambuJpegFeed(CameraFeed):
     def open(self) -> None:
         import struct
         ctx = ssl.create_default_context()
+        ctx.minimum_version = ssl.TLSVersion.TLSv1_2
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE          # self-signed, like the MQTT broker
         try:
