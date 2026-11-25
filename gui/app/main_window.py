@@ -333,7 +333,7 @@ class HudCanvas(QWidget):
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.setAccessibleName("JARVIS assistant status display")
         self.setAccessibleDescription(
-            "Status: initialising. Microphone is unmuted. "
+            "Status: initialising. microphone is unmuted. "
             "Double-click the orbital display to toggle the microphone."
         )
         self.setToolTip(
