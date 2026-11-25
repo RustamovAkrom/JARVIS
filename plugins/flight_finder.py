@@ -403,7 +403,7 @@ def flight_finder(parameters: dict, player=None, speak=None) -> str:
         return "Return date must be on or after the departure date."
 
     if player:
-        player.write_log(f"[FlightFinder] {origin} → {destination} on {date}")
+        player.write_log(f"[FlightFinder] {redact_sensitive_text(origin)} → {redact_sensitive_text(destination)} on {date}")
 
     if speak:
         speak(f"Searching flights from {origin} to {destination} on {date}.")
@@ -454,7 +454,7 @@ def flight_finder(parameters: dict, player=None, speak=None) -> str:
     except Exception as e:
         from core.security_logging import redact_sensitive_text
         print(f"[FlightFinder] ❌ {redact_sensitive_text(e)}")
-        return f"Flight search failed: {e}"
+        return f"Flight search failed: {type(e).__name__}"
 
 
 # ── Plugin entry point (auto-discovered by core/plugin_loader.py) ────────────
