@@ -551,6 +551,11 @@ def test_connected_apps_layout_reflows_for_narrow_and_wide_windows(qapp, monkeyp
             layout.direction() == QBoxLayout.Direction.TopToBottom
             for layout in responsive_layouts
         )
+        stylesheet = panel.styleSheet()
+        assert "QPushButton:focus" in stylesheet
+        assert "QCheckBox:focus" in stylesheet
+        assert "QListWidget:focus" in stylesheet
+        assert "border: 2px solid" in stylesheet
 
         panel.resize(1000, 900)
         qapp.processEvents()
