@@ -8,6 +8,21 @@ from typing import Any
 from core.connected_apps.service import service
 
 
+def _annotation(tool: dict[str, Any], name: str) -> bool:
+    """Return true only for an explicitly boolean-true MCP annotation.
+
+    Kept as a small compatibility/testing helper. Execution policy is enforced
+    by ConnectedAppsService, not by this agent-level helper.
+    """
+    annotations = tool.get("annotations")
+    if isinstance(annotations, dict):
+        return annotations.get(name) is True
+    try:
+        return getattr(annotations, name, False) is True
+    except Exception:
+        return False
+
+
 def _validate_value(schema: dict[str, Any], value: Any, path: str) -> None:
     if not isinstance(schema, dict):
         raise ValueError(f"{path} has an invalid schema")
