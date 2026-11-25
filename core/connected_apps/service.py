@@ -1046,3 +1046,41 @@ def test_service_call_tool_safe_auto_approval_requires_user_opt_in_and_explicit_
     assert svc.call_tool("c3", "read", {}) == "confirmation_required"
     assert len(prompts) == 1
     assert len(calls) == 1
+
+
+def test_service_call_tool_revalidates_state_when_confirmation_is_approved(monkeypatch):
+    import pytest
+    from core.connected_apps.service import ConnectedAppsService
+    from core.connected_apps import service as service_module
+    from core.connected_apps.models import ConnectionStatus
+
+    class Store:
+        def __init__(self):
+            self.row = {
+                "id": "c4", "app_id": "demo", "display_name": "Demo",
+                "status": "connected", "enabled": True,
+                "metadata": {"blocked_tools": []}, "last_error": "", "updated_at": 0,
+            }
+        def get_connection(self, cid):
+            return dict(self.row) if cid == self.row["id"] else None
+        def upsert_connection(self, row):
+            self.row = dict(row)
+        def list_connections(self):
+            return [dict(self.row)]
+
+    store = Store()
+    svc = ConnectedAppsService(store=store)
+    descriptor = {"name": "write", "input_schema": {"type": "object"}}
+    monkeypatch.setattr(service_module.runtime, "tools", lambda cid: [descriptor])
+    calls = []
+    monkeypatch.setattr(service_module.runtime, "call", lambda *args: calls.append(args) or "ok")
+
+    from core import confirm
+    pending = []
+    monkeypatch.setattr(confirm, "request", lambda **kwargs: pending.append(kwargs) or "confirmation_required")
+
+    assert svc.call_tool("c4", "write", {}) == "confirmation_required"
+    store.row["status"] = ConnectionStatus.DISCONNECTED.value
+    with pytest.raises(RuntimeError, match="no longer connected"):
+        pending[0]["run"]()
+    assert calls == []
