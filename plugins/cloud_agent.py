@@ -1172,7 +1172,8 @@ def _loop(player, stop: threading.Event) -> None:
     try:
         from core import cloud
     except Exception as e:
-        print(f"[CloudAgent] startup failed: {type(e).__name__}: {e}", flush=True)
+        from core.security_logging import redact_sensitive_text
+        print(f"[CloudAgent] startup failed: {type(e).__name__}: {redact_sensitive_text(e)}", flush=True)
         _log(player, f"SYS: Cloud memory could not start: {e}")
         with _lock:
             _state["running"] = False
@@ -1256,7 +1257,8 @@ def _loop(player, stop: threading.Event) -> None:
         except Exception as e:
             fails += 1
             _state["last_error"] = f"{type(e).__name__}: {e}"
-            print(f"[CloudAgent] loop error: {e}")
+            from core.security_logging import redact_sensitive_text
+            print(f"[CloudAgent] loop error: {redact_sensitive_text(e)}")
             stop.wait(min(60, 2 ** min(fails, 6)))
     try:
         if client is not None:
