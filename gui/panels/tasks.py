@@ -979,7 +979,6 @@ class TaskPanel(QWidget):
         tid = str(current.data(Qt.ItemDataRole.UserRole) or "") if current else ""
         task = self._tasks.get(tid, {})
         self._render_details(task)
-        has_task = bool(task)
         # _render_details owns the visibility of the progress and detail
         # widgets. Do not hide them again here after rendering a valid task.
         active = task.get("status") in _ACTIVE
@@ -1006,13 +1005,14 @@ class TaskPanel(QWidget):
         workspace = self._workspace_path(task)
         workspace_available = bool(workspace and workspace.is_dir())
         self.workspace_actions_widget.setVisible(workspace_available)
+        has_history = any(
+            row.get("status") not in _ACTIVE for row in self._tasks.values()
+        )
         self.history_actions_widget.setVisible(
-            self.filter_box.currentData() == "history" and bool(self._tasks)
+            self.filter_box.currentData() == "history" and has_history
         )
         self.delete_button.setEnabled(terminal)
-        self.clear_history_button.setEnabled(
-            any(row.get("status") not in _ACTIVE for row in self._tasks.values())
-        )
+        self.clear_history_button.setEnabled(has_history)
         if tid:
             self.task_selected.emit(tid)
 
