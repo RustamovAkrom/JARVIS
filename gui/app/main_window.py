@@ -2028,40 +2028,50 @@ class CustomizeOverlay(QWidget):
         )
         clr_hdr.addStretch()
         black_btn = QPushButton(_translate("BLACK", self._language))
-        black_btn.setFixedSize(58, 20)
-        black_btn.setFont(QFont(FONT_MONO, 7, QFont.Weight.Bold))
+        black_btn.setObjectName("AppearanceBlackPreset")
+        black_btn.setFixedSize(72, 30)
+        black_btn.setFont(QFont(FONT_MONO, 8, QFont.Weight.Bold))
         black_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        black_btn.setAccessibleName("Black theme preset")
         black_btn.setStyleSheet(
-            f"QPushButton {{ background: #000000; color: #ffffff; "
-            f"border: 1px solid {C.BORDER}; border-radius: {R_S}px; }}"
-            f"QPushButton:hover {{ color: {C.PRI}; border-color: {C.PRI_DIM}; }}"
+            f"QPushButton {{ background:#000000; color:#ffffff; "
+            f"border:1px solid {C.BORDER}; border-radius:{R_S}px; padding:2px 8px; }}"
+            f"QPushButton:hover {{ color:{C.PRI}; border-color:{C.PRI_DIM}; }}"
+            f"QPushButton:focus {{ border:2px solid {C.PRI}; }}"
         )
         black_btn.setToolTip("Apply pure-black monochrome mode")
         black_btn.clicked.connect(lambda: self._set_theme_mode("dark"))
         clr_hdr.addWidget(black_btn)
         white_btn = QPushButton(_translate("WHITE", self._language))
-        white_btn.setFixedSize(58, 20)
-        white_btn.setFont(QFont(FONT_MONO, 7, QFont.Weight.Bold))
+        white_btn.setObjectName("AppearanceWhitePreset")
+        white_btn.setFixedSize(72, 30)
+        white_btn.setFont(QFont(FONT_MONO, 8, QFont.Weight.Bold))
         white_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        white_btn.setAccessibleName("White theme preset")
         white_btn.setStyleSheet(
-            f"QPushButton {{ background: #ffffff; color: #000000; "
-            f"border: 1px solid {C.BORDER}; border-radius: {R_S}px; }}"
-            f"QPushButton:hover {{ border-color: {C.PRI}; }}"
+            f"QPushButton {{ background:#ffffff; color:#000000; "
+            f"border:1px solid {C.BORDER}; border-radius:{R_S}px; padding:2px 8px; }}"
+            f"QPushButton:hover {{ border-color:{C.PRI}; }}"
+            f"QPushButton:focus {{ border:2px solid {C.PRI}; }}"
         )
         white_btn.setToolTip("Apply pure-white monochrome mode")
         white_btn.clicked.connect(lambda: self._set_theme_mode("light"))
         clr_hdr.addWidget(white_btn)
         df_btn = QPushButton(_translate("DEFAULT", self._language))
-        df_btn.setFixedSize(64, 20)
-        df_btn.setFont(QFont(FONT_MONO, 7, QFont.Weight.Bold))
+        df_btn.setObjectName("AppearanceDefaultPreset")
+        df_btn.setFixedSize(84, 30)
+        df_btn.setFont(QFont(FONT_MONO, 8, QFont.Weight.Bold))
         df_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        df_btn.setAccessibleName("Default JARVIS color preset")
         df_btn.setStyleSheet(f"""
             QPushButton {{
-                background: transparent; color: {C.TEXT_MED};
-                border: 1px solid {C.BORDER}; border-radius: 3px;
+                background:transparent; color:{C.TEXT_MED};
+                border:1px solid {C.BORDER}; border-radius:{R_S}px; padding:2px 8px;
             }}
-            QPushButton:hover {{ color: {C.TEXT}; border-color: {C.BORDER_B}; }}
+            QPushButton:hover {{ color:{C.TEXT}; border-color:{C.BORDER_B}; }}
+            QPushButton:focus {{ border:2px solid {C.PRI}; }}
         """)
+        df_btn.setToolTip("Restore the default JARVIS cyan accent")
         df_btn.clicked.connect(lambda: self._set_color(DEFAULT_UI_COLOR))
         clr_hdr.addWidget(df_btn)
         lay.addLayout(clr_hdr)
