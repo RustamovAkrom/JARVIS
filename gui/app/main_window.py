@@ -331,6 +331,14 @@ class HudCanvas(QWidget):
         super().__init__(parent)
         self.setMinimumSize(300, 300)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.setAccessibleName("JARVIS assistant status display")
+        self.setAccessibleDescription(
+            "Status: initialising. Microphone is unmuted. "
+            "Double-click the orbital display to toggle the microphone."
+        )
+        self.setToolTip(
+            "JARVIS live status · Double-click the orbital display to toggle microphone"
+        )
 
         self.muted = False
         self.speaking = False
@@ -1121,6 +1129,17 @@ class HudCanvas(QWidget):
             txt, col = "LISTENING", qcol(C.GREEN)
         else:
             txt, col = self.state.replace("_", " "), qcol(C.PRI)
+
+        # Keep assistive technology in sync with the same state rendered by
+        # the HUD. Update only on transitions so the 30–60 Hz paint loop does
+        # not repeatedly emit accessibility notifications.
+        microphone_state = "muted" if self.muted else "unmuted"
+        accessible_status = (
+            f"JARVIS status: {txt.lower()}. Microphone is {microphone_state}. "
+            "Double-click the orbital display to toggle the microphone."
+        )
+        if self.accessibleDescription() != accessible_status:
+            self.setAccessibleDescription(accessible_status)
 
         status_font = QFont(FONT_MONO, 10, QFont.Weight.Bold)
         status_metrics = QFontMetricsF(status_font)
