@@ -557,6 +557,9 @@ class ConnectedAppsPanel(QWidget):
         QLineEdit:focus, QTextEdit:focus {{ border-color: {C.PRI}; }}
         QPushButton {{ background: {C.PANEL2}; color: {C.TEXT}; border: 1px solid {C.BORDER}; border-radius: 7px; padding: 6px 10px; min-height: 24px; }}
         QPushButton:hover {{ background: {C.PRI_GHO}; color: {C.PRI}; border-color: {C.PRI_DIM}; }}
+        QPushButton:focus, QCheckBox:focus, QListWidget:focus, QTabBar::tab:focus {{
+            border: 2px solid {C.PRI};
+        }}
         QPushButton:pressed {{ background: {C.PRI_GHO}; }}
         QPushButton:disabled {{ background: {C.PANEL}; color: {C.TEXT_DIM}; border-color: {C.BORDER}; }}
         QPushButton#primaryAction {{ background: {C.PRI_GHO}; color: {C.PRI}; border-color: {C.PRI_DIM}; font-weight: 600; }}
