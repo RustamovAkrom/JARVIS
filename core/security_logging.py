@@ -15,7 +15,7 @@ _SECRET_NAMES = (
     "recovery_code", "authorization", "cookie",
 )
 _SECRET_KEY = re.compile(
-    r"(?i)^(?:" + "|".join(re.escape(name) for name in _SECRET_NAMES) + r")$"
+    r"(?i)(?:^|[_-])(?:" + "|".join(re.escape(name) for name in _SECRET_NAMES) + r")$"
 )
 _SECRET_ASSIGNMENT = re.compile(
     r"""(?ix)
@@ -23,12 +23,14 @@ _SECRET_ASSIGNMENT = re.compile(
         ["']?
         (?:""" + "|".join(re.escape(name) for name in _SECRET_NAMES) + r""")
         ["']?
-        s*[:=]s*
+        \s*[:=]\s*
     )
     (?P<value>
         "(?:\\.|[^"\\])*"
         |
         '(?:\\.|[^'\\])*'
+        |
+        (?:Bearer|Basic)\s+[^\s,;]+
         |
         [^\s,;\}\]]+
     )
@@ -38,27 +40,22 @@ _SECRET_ASSIGNMENT = re.compile(
 
 def redact_sensitive_text(value: Any, *, replacement: str = "[REDACTED]") -> str:
     """Mask known credential assignments in text while preserving other text."""
-    text = str(value)
     return _SECRET_ASSIGNMENT.sub(
         lambda match: match.group("prefix") + replacement,
-        text,
+        str(value),
     )
 
 
 def redact_sensitive_mapping(value: Any) -> Any:
     """Return a recursively redacted copy of mappings and sequences."""
     if isinstance(value, dict):
-        return {
-            key: (
-                replacement
-                if (replacement := value[key]) not in (None, "")
-                and _SECRET_KEY.fullmatch(str(key))
-                else replacement
-            )
-            if _SECRET_KEY.fullmatch(str(key))
-            else redact_sensitive_mapping(item)
-            for key, item in value.items()
-        }
+        result = {}
+        for key, item in value.items():
+            if _SECRET_KEY.search(str(key)):
+                result[key] = "[REDACTED]" if item not in (None, "") else item
+            else:
+                result[key] = redact_sensitive_mapping(item)
+        return result
     if isinstance(value, list):
         return [redact_sensitive_mapping(item) for item in value]
     if isinstance(value, tuple):
