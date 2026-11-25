@@ -1434,7 +1434,13 @@ class ConnectedAppsPanel(QWidget):
             "metadata":safe_metadata,
             "runtime_tools":service.tools(cid),
         }
-        QApplication.clipboard().setText(json.dumps(diagnostics,ensure_ascii=False,indent=2))
+        # Sanitize the complete export, not just metadata. Persisted errors and
+        # remote tool schemas are also untrusted and may contain credential-like
+        # values from older providers or custom MCP servers.
+        safe_diagnostics = redact(diagnostics)
+        QApplication.clipboard().setText(
+            json.dumps(safe_diagnostics, ensure_ascii=False, indent=2)
+        )
         self.status.setText("Connection diagnostics copied. Credentials are excluded.")
 
     def set_tool_permission(self, blocked):
