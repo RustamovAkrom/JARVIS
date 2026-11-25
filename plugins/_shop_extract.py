@@ -492,7 +492,8 @@ def detect_platform(page: str, url: str) -> dict:
         if m:
             return {"platform": "amazon", "asin": m.group(1)}
     text = page or ""
-    if "cdn.shopify.com" in text or "Shopify.shop" in text or "shopify-section" in text:
+    shopify_cdn = re.search(r"https?://cdn\\.shopify\\.com(?:/|\\b)", text, re.IGNORECASE)
+    if shopify_cdn or "Shopify.shop" in text or "shopify-section" in text:
         variant = ""
         q = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
         if q.get("variant"):
