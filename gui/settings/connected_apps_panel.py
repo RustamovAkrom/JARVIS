@@ -320,12 +320,17 @@ class ConnectedAppsPanel(QWidget):
         return next((row for row in service.connections() if row.get("app_id")=="telegram_personal"),None)
 
     def _refresh_telegram_card(self):
-        row=self._telegram_connection()
-        connected=bool(row and row.get("status")=="connected")
-        self.telegram_status_label.setText("Connected" if connected else "Not connected")
+        row = self._telegram_connection()
+        status = str((row or {}).get("status") or "").casefold()
+        connected = status == "connected"
+
+        self.telegram_status_label.setText(
+            "Connected" if connected else ("Error" if status == "error" else "Not connected")
+        )
+        self.telegram_status_label.setToolTip(str((row or {}).get("last_error") or ""))
         self.telegram_connect_btn.setText("Reconnect" if connected else "Connect")
-        # Actions must reflect the real connection state, not merely the presence
-        # of a persisted row. Stale/error rows are not usable connections.
+        self.telegram_connect_btn.setEnabled(True)
+        # Management and disconnect are only meaningful for a live session.
         self.telegram_manage_btn.setEnabled(connected)
         self.telegram_manage_btn.setVisible(connected)
         self.telegram_disconnect_btn.setEnabled(connected)
@@ -548,9 +553,41 @@ class ConnectedAppsPanel(QWidget):
             self.runtime_status.setText("MCP SDK is available. STDIO and HTTP transports are ready.")
             self.runtime_help.setText("Connected Apps runtime is available.")
 
-    def _busy(self,busy,message=""):
-        for w in (self.add_github_btn,self.add_calendar_btn,self.calendar_disconnect_btn,self.native_disconnect_btn,self.add_catalog_btn,self.add_server_btn,self.reconnect_all_btn,self.health_all_btn,self.connect_btn,self.rename_btn,self.disconnect_btn,self.remove_btn,self.block_tool_btn,self.allow_tool_btn,self.copy_diagnostics_btn,self.health_btn,self.enabled_checkbox,self.auto_read_checkbox):w.setEnabled(not busy)
-        if message:self.status.setText(message)
+    def _busy(self, busy, message=""):
+        controls = (
+            self.add_github_btn,
+            self.native_disconnect_btn,
+            self.add_calendar_btn,
+            self.calendar_disconnect_btn,
+            self.telegram_connect_btn,
+            self.telegram_manage_btn,
+            self.telegram_disconnect_btn,
+            self.add_catalog_btn,
+            self.add_server_btn,
+            self.reconnect_all_btn,
+            self.health_all_btn,
+            self.connect_btn,
+            self.rename_btn,
+            self.disconnect_btn,
+            self.remove_btn,
+            self.block_tool_btn,
+            self.allow_tool_btn,
+            self.copy_diagnostics_btn,
+            self.health_btn,
+            self.enabled_checkbox,
+            self.auto_read_checkbox,
+        )
+        for widget in controls:
+            widget.setEnabled(not busy)
+
+        if message:
+            self.status.setText(message)
+
+        # Do not blindly enable every control when an operation finishes.
+        # Recompute visibility/enabled state from persisted connection data,
+        # including provider-specific actions and the selected MCP connection.
+        if not busy:
+            self.refresh()
     def refresh(self,*_):
         self._refresh_telegram_card()
         query=self.search.text().casefold().strip()
