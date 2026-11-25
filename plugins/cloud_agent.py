@@ -1114,9 +1114,10 @@ def _ensure_desk_tg(player) -> None:
     _state["tg_restart_at"] = time.monotonic()
     try:
         said = tr.run({"action": "start"}, player=player)
-        print(f"[CloudAgent] desk Telegram: {said}", flush=True)
+        from core.security_logging import redact_sensitive_text
+        print(f"[CloudAgent] desk Telegram: {redact_sensitive_text(said)}", flush=True)
     except Exception as e:
-        print(f"[CloudAgent] desk Telegram could not start: {e}", flush=True)
+        print(f"[CloudAgent] desk Telegram could not start: {type(e).__name__}", flush=True)
 
 
 def _let_go_telegram(player) -> None:
@@ -1281,7 +1282,7 @@ def _loop(player, stop: threading.Event) -> None:
         if client is not None:
             _give_back_telegram(player, client)
     except Exception as e:
-        print(f"[CloudAgent] cleanup failed: {type(e).__name__}: {e}", flush=True)
+        print(f"[CloudAgent] cleanup failed: {type(e).__name__}", flush=True)
     finally:
         with _lock:
             _state["running"] = False
@@ -1307,7 +1308,7 @@ def _apply_deltas(deltas: list) -> None:
             elif op in ("monitor_add", "monitor_remove", "monitor_state"):
                 _apply_monitor_delta(d)
         except Exception as e:
-            print(f"[CloudAgent] memory delta skipped: {e}")
+            print(f"[CloudAgent] memory delta skipped: {type(e).__name__}")
     _state["synced_mem_mtime"] = _mtimes()[0]
 
 
@@ -1469,7 +1470,7 @@ def _post(client, cmd_id: str, **payload) -> None:
     try:
         client.request("POST", "output", {"cmd_id": cmd_id, **payload}, timeout=60)
     except Exception as e:
-        print(f"[CloudAgent] could not return output: {e}")
+        print(f"[CloudAgent] could not return output: {type(e).__name__}")
 
 
 def _can_park() -> bool:
@@ -1527,7 +1528,7 @@ def _on_power(event: str) -> None:
     try:
         _give_back_telegram(_state.get("player"), _client())
     except Exception as e:
-        print(f"[CloudAgent] handing Telegram back before sleeping: {e}")
+        print(f"[CloudAgent] handing Telegram back before sleeping: {type(e).__name__}")
 
 
 def _run_command(player, client, cmd: dict) -> None:
@@ -1655,14 +1656,15 @@ def _run_command(player, client, cmd: dict) -> None:
                     quiet_until = time.monotonic() + _CMD_QUIET
         _post(client, cid, done=True)
     except Exception as e:
-        print(f"[CloudAgent] phone command failed: {type(e).__name__}: {e}", flush=True)
-        _post(client, cid, done=True, error=f"Command failed: {type(e).__name__}: {e}")
+        from core.security_logging import redact_sensitive_text
+        print(f"[CloudAgent] phone command failed: {type(e).__name__}: {redact_sensitive_text(e)}", flush=True)
+        _post(client, cid, done=True, error=f"Command failed: {type(e).__name__}")
     finally:
         if gate_started:
             try:
                 phonegate.end(chat)
             except Exception as e:
-                print(f"[CloudAgent] phone confirmation cleanup failed: {e}", flush=True)
+                print(f"[CloudAgent] phone confirmation cleanup failed: {type(e).__name__}", flush=True)
 
 
 # ── entry point ──────────────────────────────────────────────────────────────
