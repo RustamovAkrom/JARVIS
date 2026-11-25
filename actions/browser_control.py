@@ -852,7 +852,8 @@ class _BrowserSession:
             except PlaywrightTimeout:
                 pass  # page may have partially loaded — check URL below
             except Exception as e:
-                print(f"[Browser] goto exception (non-fatal): {e}")
+                from core.security_logging import redact_sensitive_text
+                print(f"[Browser] goto exception (non-fatal): {redact_sensitive_text(e)}")
             return p.url
 
         result_url = await _do_goto(page)
@@ -862,13 +863,14 @@ class _BrowserSession:
             "",
             None,
         ):
-            print(f"[Browser] Still blank after goto — retrying on new tab: {url}")
+            from core.security_logging import redact_sensitive_text
+            print(f"[Browser] Still blank after goto — retrying on new tab: {redact_sensitive_text(url)}")
             try:
                 new_page = await self._context.new_page()
                 self._page = new_page
                 result_url = await _do_goto(new_page)
             except Exception as e:
-                print(f"[Browser] New-tab retry failed: {e}")
+                print(f"[Browser] New-tab retry failed: {redact_sensitive_text(e)}")
 
         if result_url and result_url not in ("about:blank", "", None):
             # Verified, and cheaply: this is the page's OWN url read back after
@@ -1240,7 +1242,8 @@ def browser_control(
             except concurrent.futures.TimeoutError:
                 result = outcome.failed("browser_control", f"action '{action}' timed out after 60 seconds", action=action)
             except Exception as e:
-                result = outcome.failed("browser_control", f"browser action failed: {e}", action=action)
+                from core.security_logging import redact_sensitive_text
+        result = outcome.failed("browser_control", f"browser action failed: {redact_sensitive_text(e)}", action=action)
             _log(player, result)
             return result
 
@@ -1330,7 +1333,8 @@ def browser_control(
 
 
 def _log(player, text: str):
-    short = str(text)[:80]
+    from core.security_logging import redact_sensitive_text
+    short = redact_sensitive_text(text)[:80]
     print(f"[Browser] {short}")
     if player:
         print(f"[Browser] {short[:80]}")  # terminal, not the HUD
