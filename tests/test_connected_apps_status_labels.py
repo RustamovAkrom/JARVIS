@@ -16,12 +16,12 @@ def test_native_app_card_actions_remain_available_when_reconnect_is_possible():
     source = Path("gui/settings/connected_apps_panel.py").read_text(encoding="utf-8")
 
     assert 'self.add_github_btn.setVisible(True)' in source
-    assert 'self.add_github_btn.setEnabled(True)' in source
-    assert 'self.native_disconnect_btn.setEnabled(github_disconnect_available)' in source
+    assert 'self.add_github_btn.setEnabled(available)' in source
+    assert 'self.native_disconnect_btn.setEnabled(github_disconnect_available and available)' in source
     assert 'self.native_disconnect_btn.setVisible(github_disconnect_available)' in source
     assert 'self.add_calendar_btn.setVisible(True)' in source
-    assert 'self.add_calendar_btn.setEnabled(True)' in source
-    assert 'self.calendar_disconnect_btn.setEnabled(calendar_disconnect_available)' in source
+    assert 'self.add_calendar_btn.setEnabled(available)' in source
+    assert 'self.calendar_disconnect_btn.setEnabled(calendar_disconnect_available and available)' in source
     assert 'self.calendar_disconnect_btn.setVisible(calendar_disconnect_available)' in source
 
 
