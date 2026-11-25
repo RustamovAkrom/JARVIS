@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="https://github.com/RustamovAkrom/JARVIS/actions/workflows/tests.yml?query=branch%3Amain"><img src="https://github.com/RustamovAkrom/JARVIS/actions/workflows/tests.yml/badge.svg?branch=main" alt="Tests — main"></a>
-  <a href="https://github.com/RustamovAkrom/JARVIS/actions/workflows/tests.yml?query=branch%3Ag%6cm-ui-ux-modernization"><img src="https://github.com/RustamovAkrom/JARVIS/actions/workflows/tests.yml/badge.svg?branch=glm-ui-ux-modernization" alt="Tests — glm-ui-ux-modernization"></a>
+  <a href="https://github.com/RustamovAkrom/JARVIS/actions/workflows/tests.yml?query=branch%3Aglm-ui-ux-modernization"><img src="https://github.com/RustamovAkrom/JARVIS/actions/workflows/tests.yml/badge.svg?branch=glm-ui-ux-modernization" alt="Tests — glm-ui-ux-modernization"></a>
   <img src="https://img.shields.io/badge/Python-3.14-3776AB?logo=python&logoColor=white" alt="Python 3.14">
   <img src="https://img.shields.io/badge/UI-PyQt6-41CD52?logo=qt&logoColor=white" alt="PyQt6">
   <img src="https://img.shields.io/badge/Platforms-Windows%20%7C%20macOS%20%7C%20Linux-555" alt="Windows, macOS and Linux">
