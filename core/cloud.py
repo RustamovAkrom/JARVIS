@@ -154,6 +154,8 @@ _IMPORT_CHECK_CODE = (
 
 
 def _say(text: str) -> None:
+    from core.security_logging import redact_sensitive_text
+    text = redact_sensitive_text(text)
     try:
         print(text, flush=True)
     except UnicodeEncodeError:
