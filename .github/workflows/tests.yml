@@ -3,10 +3,18 @@ name: Tests
 on:
   workflow_call:
   push:
-    branches: [main, v2, integration/mark-lix-features, glm-ui-ux-modernization]
+    # Feature branches with an open PR are tested by pull_request synchronize.
+    # Avoid running the same 3-OS matrix twice for every feature-branch push.
+    branches: [main, v2, integration/mark-lix-features]
   pull_request:
     branches: [main, v2, integration/mark-lix-features]
   workflow_dispatch:
+
+# Cancel stale runs for the same PR branch when a newer commit is pushed.
+# Use the PR head branch rather than refs/pull/<number>/merge so the key is stable.
+concurrency:
+  group: tests-${{ github.workflow }}-${{ github.event.pull_request.head.ref || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
