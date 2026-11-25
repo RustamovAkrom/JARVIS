@@ -9661,9 +9661,13 @@ class MainWindow(QMainWindow):
         tabs = getattr(self, "_left_tabs", None)
         if panel is None or left is None or tabs is None:
             return
+        # The advanced column sits beside the five compact gauges. Its
+        # cards need their declared 260 px minimum plus the gauge column,
+        # panel padding and splitter handle; revealing it at 390 px squeezes
+        # both columns and produces clipped telemetry.
         expanded = (
             left.isVisible()
-            and left.width() >= 390
+            and left.width() >= 480
             and tabs.currentWidget() is getattr(self, "_system_page", None)
         )
         panel.setVisible(expanded)
