@@ -62,12 +62,13 @@ def test_service_call_tool_enforces_connection_and_permissions(monkeypatch):
     base = {
         "id": "c1", "app_id": "demo", "display_name": "Demo",
         "status": "connected", "enabled": True,
-        "metadata": {"blocked_tools": []}, "last_error": "", "updated_at": 0,
+        "metadata": {"blocked_tools": [], "auto_approve_read_only": True}, "last_error": "", "updated_at": 0,
     }
     store = Store(base)
     svc = ConnectedAppsService(store=store)
     monkeypatch.setattr(service_module.runtime, "tools", lambda cid: [
-        {"name": "read", "input_schema": {"type": "object", "properties": {
+        {"name": "read", "annotations": {"readOnlyHint": True, "destructiveHint": False},
+         "input_schema": {"type": "object", "properties": {
             "limit": {"type": "integer", "minimum": 1}
         }, "required": ["limit"], "additionalProperties": False}}
     ])
