@@ -16,6 +16,7 @@ from PyQt6.QtWidgets import (
 )
 
 from gui.components.settings import SettingRow, SettingsSection
+from gui.panels.context import ContextPanel
 from gui.onboarding import OnboardingDialog
 from memory.translations import translate, translate_from
 from gui.settings.categories.general import GeneralSettingsPage
@@ -359,6 +360,23 @@ class SettingsComponentTests(unittest.TestCase):
         self.assertEqual(wheel.color(), "#ffffff")
         wheel.set_color("#000000")
         self.assertEqual(wheel.color(), "#000000")
+
+    def test_context_actions_use_responsive_two_column_layout(self):
+        panel = ContextPanel(lambda: {})
+        try:
+            self.assertEqual(panel._action_grid.rowCount(), 2)
+            self.assertEqual(panel._action_grid.columnCount(), 2)
+            for button in (
+                panel.activity_button,
+                panel.providers_button,
+                panel.permissions_button,
+                panel.connected_apps_button,
+            ):
+                self.assertEqual(button.minimumWidth(), 0)
+                self.assertTrue(button.accessibleName().startswith("Open "))
+        finally:
+            panel._refresh_timer.stop()
+            panel.close()
 
     def test_chat_bubbles_use_theme_surface_and_empty_state_is_structured(self):
         from types import SimpleNamespace
