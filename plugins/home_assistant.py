@@ -279,7 +279,8 @@ def _connect(values: dict):
                 found = _status_in(other, values)
             except Exception:
                 continue
-            print(f"[SmartLight] the project answers from data centre '{other}', not '{region}'")
+            from core.security_logging import redact_sensitive_text
+            print(f"[SmartLight] the project answers from data centre '{redact_sensitive_text(other)}', not '{redact_sensitive_text(region)}'")
             save_plugin_config(_NS, {"region": other})
             values["region"] = other
             return found
