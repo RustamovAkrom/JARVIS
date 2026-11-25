@@ -1206,7 +1206,7 @@ def _loop(player, stop: threading.Event) -> None:
             if not synced:
                 resp = _sync(client, cfg)
                 synced = True
-                print(f"[CloudAgent] connected — {(resp.get('hello') or {}).get('host', 'server')}.", flush=True)
+                print("[CloudAgent] Connected.", flush=True)
                 _log(player, "SYS: Cloud memory connected.")
                 _take_telegram(player, client)
 
