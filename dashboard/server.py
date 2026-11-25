@@ -1231,7 +1231,7 @@ class DashboardServer:
                 f"https://{self._ip}:{SECURE_PORT}/{safe_path}{query}",
                 status_code=307)
 
-        cfg = uvicorn.Config(bounce, host="0.0.0.0", port=PORT,
+        cfg = uvicorn.Config(bounce, host=self._ip, port=PORT,
                              log_level="warning")
         print(f"[Dashboard] Type by hand:  {self._ip}:{PORT}  "
               f"(sends you to the secure page)")
@@ -1291,7 +1291,7 @@ class DashboardServer:
                   'certificate once).')
 
         cfg = uvicorn.Config(
-            self.app, host="0.0.0.0",
+            self.app, host=self._ip,
             port=SECURE_PORT if use_ssl else PORT, log_level="warning",
             **({"ssl_keyfile": str(ssl_key), "ssl_certfile": str(ssl_cert)}
                if use_ssl else {}),
