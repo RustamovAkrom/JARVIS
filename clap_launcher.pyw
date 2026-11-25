@@ -59,7 +59,9 @@ _APP_ID = "JARVIS_ClapLauncher"
 
 
 def log(msg: str) -> None:
-    line = f"{time.strftime('%Y-%m-%d %H:%M:%S')}  {msg}"
+    from core.security_logging import redact_sensitive_text
+    safe_msg = redact_sensitive_text(msg)
+    line = f"{time.strftime('%Y-%m-%d %H:%M:%S')}  {safe_msg}"
     try:
         with open(_LOG, "a", encoding="utf-8") as f:
             f.write(line + "\n")
