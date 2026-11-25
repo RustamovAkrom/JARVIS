@@ -784,7 +784,8 @@ def computer_control(
         if action == "random_data":
             dt = params.get("type", "name")
             result = _random_data(dt)
-            print(f"[ComputerControl] 🎲 random {dt} → {result}")
+            safe_result = "[REDACTED]" if str(dt).strip().lower() == "password" else str(result)
+            print(f"[ComputerControl] 🎲 random {dt} → {safe_result}")
             return result
 
         if action == "user_data":
@@ -794,14 +795,15 @@ def computer_control(
             if not value:
                 value = _random_data(field)
                 print(
-                    f"[ComputerControl] ⚠️ No '{field}' in memory, using random: {value}"
+                    f"[ComputerControl] ⚠️ No '{field}' in memory, using random: {'[REDACTED]' if str(field).strip().lower() == 'password' else value}"
                 )
             return value
 
         return f"Unknown action: '{action}'"
 
     except Exception as e:
-        print(f"[ComputerControl] ❌ {action}: {e}")
+        from core.security_logging import redact_sensitive_text
+        print(f"[ComputerControl] ❌ {action}: {redact_sensitive_text(e)}")
         return f"computer_control '{action}' failed: {e}"
     finally:
         if microphone_locked and input_lock is not None:
