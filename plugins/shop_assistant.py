@@ -132,10 +132,12 @@ def _print(text: str) -> None:
 
 
 def _log(player, text: str) -> None:
-    _print(text)
+    from core.security_logging import redact_sensitive_text
+    safe_text = redact_sensitive_text(text)
+    _print(safe_text)
     if player:
         try:
-            player.write_log(f"{get_assistant_name()}: {text}")
+            player.write_log(f"{get_assistant_name()}: {safe_text}")
         except Exception:
             pass
 
