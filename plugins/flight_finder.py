@@ -340,7 +340,8 @@ def _save_to_desktop(content: str, origin: str, destination: str) -> str:
     filepath = desktop / filename
 
     filepath.write_text(content, encoding="utf-8")
-    print(f"[FlightFinder] 💾 Saved: {filepath}")
+    from core.security_logging import redact_sensitive_text
+    print(f"[FlightFinder] 💾 Saved: {redact_sensitive_text(filepath)}")
 
     try:
         if is_windows():
@@ -408,7 +409,7 @@ def flight_finder(parameters: dict, player=None, speak=None) -> str:
         speak(f"Searching flights from {origin} to {destination} on {date}.")
 
     print(
-        f"[FlightFinder] ▶️ {origin} → {destination} | {date}"
+        f"[FlightFinder] ▶️ {redact_sensitive_text(origin)} → {redact_sensitive_text(destination)} | {date}"
         f"{' → ' + return_date if return_date else ''}"
         f" | {cabin} | {passengers} pax"
     )
@@ -451,7 +452,8 @@ def flight_finder(parameters: dict, player=None, speak=None) -> str:
         return result
 
     except Exception as e:
-        print(f"[FlightFinder] ❌ {e}")
+        from core.security_logging import redact_sensitive_text
+        print(f"[FlightFinder] ❌ {redact_sensitive_text(e)}")
         return f"Flight search failed: {e}"
 
 
