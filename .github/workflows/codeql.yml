@@ -6,7 +6,7 @@ name: "CodeQL Advanced"
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "glm-ui-ux-modernization"]
   pull_request:
     branches: ["main"]
   schedule:
