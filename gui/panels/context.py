@@ -58,15 +58,29 @@ class ContextPanel(QWidget):
         self._status_label.setStyleSheet(f"color:{C.TEXT_DIM}; background:transparent;")
         root.addWidget(self._status_label)
 
-        action_row = QHBoxLayout()
-        action_row.setSpacing(6)
+        # A two-column action grid remains legible at the right panel's
+        # minimum width. Four buttons in one row were compressed enough to
+        # truncate labels such as "Connected Apps" on smaller workspaces.
+        self._action_grid = QGridLayout()
+        self._action_grid.setContentsMargins(0, 0, 0, 0)
+        self._action_grid.setHorizontalSpacing(6)
+        self._action_grid.setVerticalSpacing(5)
         self.activity_button = self._action_button("Activity", "activity")
         self.providers_button = self._action_button("AI Providers", "providers")
         self.permissions_button = self._action_button("Permissions", "permissions")
         self.connected_apps_button = self._action_button("Connected Apps", "connected_apps")
-        for button in (self.activity_button, self.providers_button, self.permissions_button, self.connected_apps_button):
-            action_row.addWidget(button)
-        root.addLayout(action_row)
+        for index, button in enumerate((
+            self.activity_button,
+            self.providers_button,
+            self.permissions_button,
+            self.connected_apps_button,
+        )):
+            button.setMinimumWidth(0)
+            button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            self._action_grid.addWidget(button, index // 2, index % 2)
+        self._action_grid.setColumnStretch(0, 1)
+        self._action_grid.setColumnStretch(1, 1)
+        root.addLayout(self._action_grid)
 
         self._scroll = QScrollArea()
         self._scroll.setObjectName("ContextScrollArea")
@@ -102,7 +116,8 @@ class ContextPanel(QWidget):
         button = QPushButton(title)
         button.setCursor(Qt.CursorShape.PointingHandCursor)
         button.setToolTip(f"Open {title}")
-        button.setMinimumHeight(31)
+        button.setAccessibleName(f"Open {title}")
+        button.setMinimumHeight(32)
         button.clicked.connect(lambda: self._dispatch_action(action))
         button.setStyleSheet(
             f"QPushButton {{ color:{C.PRI}; background:{C.PANEL2}; "
