@@ -214,7 +214,7 @@ class CursorAssistantUiTests(unittest.TestCase):
             canvas.muted = True
             canvas.render(image)
             self.assertIn("microphone is muted", canvas.accessibleDescription().lower())
-            self.assertIn("double-click", canvas.accessibleDescription())
+            self.assertIn("double-click", canvas.accessibleDescription().lower())
         finally:
             canvas._tmr.stop()
             canvas.close()
