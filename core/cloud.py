@@ -279,7 +279,7 @@ def _network_sentence(host: str, port: int, exc: Exception) -> str:
     if "timed out" in text or isinstance(exc, socket.timeout):
         return (f"Nothing answered at {host}:{port}. Check the address, and open TCP port "
                 f"{port} in the VPS provider's firewall panel as well.")
-    return f"Could not reach {host}:{port}: {exc}"
+    return f"Could not reach {host}:{port} ({type(exc).__name__}). Check the address and network configuration."
 
 
 def fetch_pinned_pem(host: str, port: int, fingerprint: str, timeout: float = 10.0) -> str:
