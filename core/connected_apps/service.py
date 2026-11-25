@@ -871,7 +871,27 @@ class ConnectedAppsService:
                     if current_descriptor is None:
                         raise ValueError("Tool is no longer available on this connection")
                     _validate_arguments(current_descriptor.get("input_schema") or {}, args)
-                    return str(runtime.call(cid, tool, args))
+                    call_started = time.time()
+                    try:
+                        result = runtime.call(cid, tool, args)
+                    except Exception as exc:
+                        current_metadata["last_tool_activity"] = call_started
+                        current_metadata["last_tool_name"] = str(tool)[:200]
+                        current_metadata["last_tool_error"] = _safe_error(exc)
+                        current_metadata["tool_call_count"] = int(current_metadata.get("tool_call_count", 0)) + 1
+                        current["metadata"] = current_metadata
+                        current["updated_at"] = time.time()
+                        self.store.upsert_connection(current)
+                        raise
+                    current_metadata["last_tool_activity"] = call_started
+                    current_metadata["last_tool_name"] = str(tool)[:200]
+                    current_metadata["last_tool_error"] = ""
+                    current_metadata["tool_call_count"] = int(current_metadata.get("tool_call_count", 0)) + 1
+                    current_metadata["last_tool_duration_ms"] = round((time.time() - call_started) * 1000, 2)
+                    current["metadata"] = current_metadata
+                    current["updated_at"] = time.time()
+                    self.store.upsert_connection(current)
+                    return result
 
             return confirm.request(
                 key=f"connected_apps:{cid}:{tool}",
