@@ -829,6 +829,34 @@ class ConnectedAppsService:
         args = {} if arguments is None else arguments
         _validate_arguments(tool_descriptor.get("input_schema") or {}, args)
 
+        annotations = tool_descriptor.get("annotations")
+        if isinstance(annotations, dict):
+            read_only_hint = annotations.get("readOnlyHint") is True
+            # A missing destructiveHint is not proof that an operation is safe.
+            destructive_hint = annotations.get("destructiveHint")
+            requires_confirmation = annotations.get("requiresConfirmation") is True
+        else:
+            read_only_hint = getattr(annotations, "readOnlyHint", False) is True
+            destructive_hint = getattr(annotations, "destructiveHint", None)
+            requires_confirmation = getattr(annotations, "requiresConfirmation", False) is True
+
+        auto_approve = (
+            _auto_approve_read_only(
+                metadata,
+                read_only=read_only_hint,
+                destructive=destructive_hint is not False,
+                requires_confirmation=requires_confirmation,
+            )
+        )
+        if not auto_approve:
+            from core import confirm
+            return confirm.request(
+                key=f"connected_apps:{cid}:{tool}",
+                title=f"Connected App — {tool}",
+                detail=f"Execute tool {tool} with arguments:\\n\\n{args!r}",
+                run=lambda: str(runtime.call(cid, tool, args)),
+            )
+
         try:
             result = runtime.call(cid, tool, args)
         except Exception as exc:
