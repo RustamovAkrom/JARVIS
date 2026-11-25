@@ -1164,9 +1164,19 @@ class DashboardServer:
             safe = Path(filename).name
             if not safe or safe in (".", "..") or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_. -]{0,179}", safe):
                 return JSONResponse({"error": "Not found"}, status_code=404)
-            root = self._uploads_dir.resolve()
-            path = root.joinpath(safe)
-            if path.is_symlink() or not path.is_file():
+            # Resolve only entries already enumerated inside the uploads folder.
+            # Never use the raw request value as a filesystem path operand.
+            candidate = next(
+                (
+                    entry for entry in self._uploads_dir.iterdir()
+                    if entry.name == safe and not entry.is_symlink() and entry.is_file()
+                ),
+                None,
+            )
+            if candidate is None:
+                return JSONResponse({"error": "Not found"}, status_code=404)
+            path = candidate.resolve(strict=True)
+            if path.parent != self._uploads_dir.resolve():
                 return JSONResponse({"error": "Not found"}, status_code=404)
             return FileResponse(str(path), filename=safe)
 
