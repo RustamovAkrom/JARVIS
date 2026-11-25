@@ -695,9 +695,7 @@ def computer_control(
         # core/outcome.is_problem().
         print(f"[ComputerControl] {action}")
 
-    from core.security_logging import redact_sensitive_mapping, redact_sensitive_text
-    safe_params = redact_sensitive_mapping(params)
-    print(f"[ComputerControl] ▶ {action}  {safe_params}")
+    print("[ComputerControl] Action started.")
 
     try:
 
@@ -788,8 +786,7 @@ def computer_control(
             dt = params.get("type", "name")
             result = _random_data(dt)
             from core.security_logging import redact_sensitive_text
-            safe_result = "[REDACTED]" if str(dt).strip().lower() in {"password", "token", "secret", "api_key"} else redact_sensitive_text(result)
-            print(f"[ComputerControl] 🎲 random {dt} → {safe_result}")
+            print("[ComputerControl] Random data generated.")
             return result
 
         if action == "user_data":
@@ -798,9 +795,7 @@ def computer_control(
             value = profile.get(field, "")
             if not value:
                 value = _random_data(field)
-                print(
-                    f"[ComputerControl] ⚠️ No '{field}' in memory, using random: {'[REDACTED]' if str(field).strip().lower() in {'password', 'token', 'secret', 'api_key'} else redact_sensitive_text(value)}"
-                )
+                print("[ComputerControl] User data was unavailable; a generated value was used.")
             return value
 
         return f"Unknown action: '{action}'"
