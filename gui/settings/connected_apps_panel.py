@@ -321,11 +321,11 @@ class ConnectedAppsPanel(QWidget):
         root.addStretch(1)
 
         self._apply_theme_styles()
+        self._apply_responsive_layout()
         self._check_runtime()
         self.refresh()
-    def resizeEvent(self, event):
-        """Reflow action groups when the settings page has limited width."""
-        super().resizeEvent(event)
+    def _apply_responsive_layout(self):
+        """Apply the responsive layout state after construction and on resize."""
         compact = self.width() < 760
         direction = (
             QBoxLayout.Direction.TopToBottom
@@ -341,6 +341,11 @@ class ConnectedAppsPanel(QWidget):
         ):
             if layout.direction() != direction:
                 layout.setDirection(direction)
+
+    def resizeEvent(self, event):
+        """Reflow action groups when the settings page has limited width."""
+        super().resizeEvent(event)
+        self._apply_responsive_layout()
 
     def _telegram_connection(self):
         return next((row for row in service.connections() if row.get("app_id")=="telegram_personal"),None)
