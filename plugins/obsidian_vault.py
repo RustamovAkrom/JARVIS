@@ -514,7 +514,7 @@ def _do_create(vault: Path, note: str, content: str, player) -> str:
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         from core.security_logging import redact_sensitive_text
-        # Notes remain verbatim except explicit credential assignments.
+        # Preserve user content, but never persist clearly labelled credentials.
         body = redact_sensitive_text((content or "").strip())
         path.write_text(f"# {path.stem}\n\n{body}\n" if body else f"# {path.stem}\n",
                         encoding="utf-8")
