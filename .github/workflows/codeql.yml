@@ -1,8 +1,7 @@
 # CodeQL analysis for Python and GitHub Actions.
 #
-# Fetch full history so CodeQL can calculate pull-request diff ranges,
-# including for large pull requests. Security analysis remains enabled
-# for both languages and scans the complete repository.
+# Keep full Git history for reliable merge-base discovery. GitHub may still
+# cap PR diff retrieval at 300 files; CodeQL then falls back to full analysis.
 name: "CodeQL Advanced"
 
 on:
@@ -34,7 +33,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
