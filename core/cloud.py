@@ -285,6 +285,7 @@ def fetch_pinned_pem(host: str, port: int, fingerprint: str, timeout: float = 10
     the pairing code names. The fingerprint was carried by hand from the
     server's terminal, so a mismatch is refused, never learned."""
     probe = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    probe.minimum_version = ssl.TLSVersion.TLSv1_2
     probe.check_hostname = False
     probe.verify_mode = ssl.CERT_NONE
     try:
