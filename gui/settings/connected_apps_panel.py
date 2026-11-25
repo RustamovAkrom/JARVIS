@@ -908,34 +908,46 @@ class ConnectedAppsPanel(QWidget):
                 QMessageBox.warning(dialog, "Connected Apps permissions", "Connection no longer exists.")
                 return
 
-            try:
-                meta = dict(current.get("metadata") or {})
-                meta["auto_approve_read_only"] = bool(new_auto_read)
-                current["metadata"] = meta
-                service.store.upsert_connection(current)
-            except Exception as exc:
-                QMessageBox.warning(dialog, "Connected Apps permissions", self._friendly_error(str(exc)))
-                return
-
             apply_permissions.setEnabled(False)
             apply_permissions.setText("Applying…")
+
+            # Complete lifecycle changes first. If reconnect/disable fails, do
+            # not persist a partial permission update that the UI reports as failed.
             if bool(current.get("enabled", True)) != new_enabled:
                 worker = _Worker(lambda: service.set_enabled(cid, new_enabled, reconnect=new_enabled))
                 worker.signals.finished.connect(
-                    lambda result, error: permission_apply_finished(dialog, apply_permissions, result, error)
+                    lambda result, error: permission_apply_finished(
+                        dialog, apply_permissions, cid, new_auto_read, result, error
+                    )
                 )
                 self.pool.start(worker)
             else:
-                self.status.setText("Connected Apps permissions saved.")
-                self.refresh()
-                dialog.accept()
+                permission_apply_finished(
+                    dialog, apply_permissions, cid, new_auto_read, current, None
+                )
 
-        def permission_apply_finished(dialog, button, result, error):
+        def permission_apply_finished(dialog, button, connection_id, auto_read, result, error):
             button.setEnabled(True)
             button.setText("Apply permissions")
             if error:
                 QMessageBox.warning(dialog, "Connected Apps permissions", self._friendly_error(str(error)))
                 return
+
+            latest = service.store.get_connection(connection_id)
+            if not latest:
+                QMessageBox.warning(dialog, "Connected Apps permissions", "Connection no longer exists.")
+                return
+            try:
+                metadata = dict(latest.get("metadata") or {})
+                metadata["auto_approve_read_only"] = bool(auto_read)
+                latest["metadata"] = metadata
+                service.store.upsert_connection(latest)
+            except Exception as exc:
+                QMessageBox.warning(
+                    dialog, "Connected Apps permissions", self._friendly_error(str(exc))
+                )
+                return
+
             self.status.setText("Connected Apps permissions saved.")
             self.connections_changed.emit()
             self.refresh()
