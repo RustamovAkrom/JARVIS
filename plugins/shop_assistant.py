@@ -123,6 +123,8 @@ def _setting(key: str, default: Any = "") -> Any:
 
 
 def _print(text: str) -> None:
+    from core.security_logging import redact_sensitive_text
+    text = redact_sensitive_text(text)
     try:
         print(f"[shop_assistant] {text}")
     except Exception:
@@ -1164,7 +1166,9 @@ def _save_state(state: dict) -> None:
     try:
         STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
         tmp = STATE_FILE.with_suffix(".tmp")
-        tmp.write_text(json.dumps(state, ensure_ascii=False, indent=1), encoding="utf-8")
+        from core.security_logging import redact_sensitive_mapping
+        safe_state = redact_sensitive_mapping(state)
+        tmp.write_text(json.dumps(safe_state, ensure_ascii=False, indent=1), encoding="utf-8")
         tmp.replace(STATE_FILE)
     except Exception as exc:
         _print(f"state not saved: {exc}")
