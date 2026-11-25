@@ -195,6 +195,30 @@ class CursorAssistantUiTests(unittest.TestCase):
             apply_ui_theme("dark")
             apply_ui_accent(DEFAULT_UI_COLOR)
 
+    def test_hud_accessibility_description_tracks_live_status_and_mute(self):
+        canvas = HudCanvas("", "JARVIS")
+        try:
+            canvas.resize(320, 320)
+            image = QImage(320, 320, QImage.Format.Format_ARGB32)
+            image.fill(Qt.GlobalColor.transparent)
+
+            canvas.state = "THINKING"
+            canvas.muted = False
+            canvas.render(image)
+            self.assertEqual(
+                canvas.accessibleName(), "JARVIS assistant status display"
+            )
+            self.assertIn("thinking", canvas.accessibleDescription())
+            self.assertIn("microphone is unmuted", canvas.accessibleDescription())
+
+            canvas.muted = True
+            canvas.render(image)
+            self.assertIn("microphone muted", canvas.accessibleDescription())
+            self.assertIn("double-click", canvas.accessibleDescription())
+        finally:
+            canvas._tmr.stop()
+            canvas.close()
+
     def test_hud_orbit_reacts_to_cursor_and_recenters_on_leave(self):
         canvas = HudCanvas("", "JARVIS")
         try:
