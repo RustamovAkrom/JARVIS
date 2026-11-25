@@ -597,3 +597,67 @@ def test_connected_apps_refresh_preserves_operation_feedback_with_native_selecti
         panel.deleteLater()
         qapp.processEvents()
 
+
+def test_connected_apps_diagnostics_redacts_errors_metadata_and_remote_tool_schemas(
+    qapp, monkeypatch
+):
+    import gui.settings.connected_apps_panel as panel_module
+    from gui.settings.connected_apps_panel import ConnectedAppsPanel
+
+    row = {
+        "id": "mcp-test",
+        "app_id": "custom-mcp",
+        "display_name": "Custom MCP",
+        "status": "connected",
+        "enabled": True,
+        "auth_type": "api_key",
+        "scopes": [],
+        "created_at": 1,
+        "updated_at": 2,
+        "last_error": "Provider returned access_token=error-secret",
+        "metadata": {
+            "native": False,
+            "env": {"API_TOKEN": "metadata-secret"},
+            "args": ["--api-key", "argument-secret"],
+        },
+    }
+    service = FakeConnectedAppsService(rows={"mcp-test": row})
+    monkeypatch.setattr(panel_module, "service", service)
+    monkeypatch.setattr(
+        service,
+        "tools",
+        lambda cid: [{
+            "name": "inspect",
+            "description": "Authorization: Bearer schema-secret",
+            "input_schema": {
+                "type": "object",
+                "properties": {"token": {"type": "string", "default": "schema-default-secret"}},
+            },
+        }],
+    )
+
+    panel = ConnectedAppsPanel()
+    try:
+        panel.list.addItem("Custom MCP")
+        panel.list.setCurrentRow(0)
+        panel.list.currentItem().setData(
+            __import__("PyQt6.QtCore", fromlist=["Qt"]).Qt.ItemDataRole.UserRole,
+            "mcp-test",
+        )
+        panel.copy_diagnostics()
+        exported = panel_module.QApplication.clipboard().text()
+
+        for secret in (
+            "error-secret",
+            "metadata-secret",
+            "argument-secret",
+            "schema-secret",
+            "schema-default-secret",
+        ):
+            assert secret not in exported
+        assert "[redacted]" in exported
+    finally:
+        panel.close()
+        panel.deleteLater()
+        qapp.processEvents()
+
