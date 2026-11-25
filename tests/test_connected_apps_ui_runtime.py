@@ -312,6 +312,66 @@ def test_connected_apps_panel_telegram_disconnect_removes_session_and_credential
         qapp.processEvents()
 
 
+
+
+def test_connected_apps_panel_busy_state_blocks_and_restores_telegram_actions(
+    qapp, monkeypatch
+):
+    import gui.settings.connected_apps_panel as panel_module
+    from gui.settings.connected_apps_panel import ConnectedAppsPanel
+
+    service = FakeConnectedAppsService()
+    monkeypatch.setattr(panel_module, "service", service)
+
+    panel = ConnectedAppsPanel()
+    try:
+        assert panel.telegram_connect_btn.isEnabled()
+        assert not panel.telegram_manage_btn.isVisible()
+        assert not panel.telegram_disconnect_btn.isVisible()
+
+        panel._busy(True, "Connecting Telegram…")
+        assert not panel.telegram_connect_btn.isEnabled()
+        assert not panel.telegram_manage_btn.isEnabled()
+        assert not panel.telegram_disconnect_btn.isEnabled()
+
+        panel._busy(False)
+        assert panel.telegram_connect_btn.isEnabled()
+        assert not panel.telegram_manage_btn.isVisible()
+        assert not panel.telegram_disconnect_btn.isVisible()
+    finally:
+        panel.close()
+        panel.deleteLater()
+        qapp.processEvents()
+
+
+def test_connected_telegram_actions_restore_only_for_live_session(qapp, monkeypatch):
+    import gui.settings.connected_apps_panel as panel_module
+    from gui.settings.connected_apps_panel import ConnectedAppsPanel
+
+    service = FakeConnectedAppsService(rows={"telegram-test": _telegram_row()})
+    monkeypatch.setattr(panel_module, "service", service)
+
+    panel = ConnectedAppsPanel()
+    panel.show()
+    qapp.processEvents()
+    try:
+        panel._busy(True, "Disconnecting Telegram…")
+        assert not panel.telegram_connect_btn.isEnabled()
+        assert not panel.telegram_manage_btn.isEnabled()
+        assert not panel.telegram_disconnect_btn.isEnabled()
+
+        panel._busy(False)
+        assert panel.telegram_connect_btn.isEnabled()
+        assert panel.telegram_connect_btn.text() == "Reconnect"
+        assert panel.telegram_manage_btn.isVisible()
+        assert panel.telegram_manage_btn.isEnabled()
+        assert panel.telegram_disconnect_btn.isVisible()
+        assert panel.telegram_disconnect_btn.isEnabled()
+    finally:
+        panel.close()
+        panel.deleteLater()
+        qapp.processEvents()
+
 def test_connected_apps_panel_tabs_and_mcp_controls_are_mounted(qapp, monkeypatch):
     import gui.settings.connected_apps_panel as panel_module
     from gui.settings.connected_apps_panel import ConnectedAppsPanel
