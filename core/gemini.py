@@ -813,7 +813,8 @@ def call(
                 kwargs["config"] = config
             return cl.models.generate_content(**kwargs)
         except Exception as e:
-            msg = str(e)
+            from core.security_logging import redact_sensitive_text
+            msg = redact_sensitive_text(e)
             if is_quota_error(msg):
                 _cool(model)
                 print(
