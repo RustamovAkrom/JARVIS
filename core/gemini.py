@@ -815,19 +815,20 @@ def call(
         except Exception as e:
             from core.security_logging import redact_sensitive_text
             msg = redact_sensitive_text(e)
+            safe_model = redact_sensitive_text(model)
             if is_quota_error(msg):
                 _cool(model)
                 print(
-                    f"[Gemini] {model}: out of quota — skipping it for "
+                    f"[Gemini] {safe_model}: out of quota — skipping it for "
                     f"{_COOLDOWN_SECONDS // 60} minutes"
                 )
             elif is_gone_error(msg):
                 _cool(model, _GONE_SECONDS)
-                print(f"[Gemini] {model}: unavailable to this key — set aside")
+                print(f"[Gemini] {safe_model}: unavailable to this key — set aside")
             elif is_unavailable_error(msg):
                 _cool(model, _UNAVAILABLE_SECONDS)
                 print(
-                    f"[Gemini] {model}: not answering — resting it for "
+                    f"[Gemini] {safe_model}: not answering — resting it for "
                     f"{_UNAVAILABLE_SECONDS // 60} minutes"
                 )
             else:
