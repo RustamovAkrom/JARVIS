@@ -313,7 +313,7 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
     def _clamp(val, default, lo, hi):
         try:
             return max(lo, min(hi, int(val)))
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             return default
 
     work_min = _clamp(parameters.get("work_minutes"), 25, 1, 180)

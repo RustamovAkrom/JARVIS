@@ -48,6 +48,7 @@ import re
 import threading
 import time
 import json
+import os
 import traceback
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -84,6 +85,7 @@ from core.action_loader import strip_meta
 from actions.screen_processor import _capture_camera, _capture_screen
 from actions.system_monitor import SystemMonitor, get_system_status
 from actions.proactive import ProactiveEngine
+from core.presence import Presence, build_return_prompt, os_idle_seconds, screen_locked
 from actions.background_monitor import (
     add_monitor,
     remove_monitor,
@@ -100,12 +102,18 @@ from memory.config_manager import (
     get_turn_tuning,
     get_voice,
     get_wake_word_enabled,
+    get_wake_word_threshold,
+    get_typed_language_detection_enabled,
     save_wake_word_enabled,
+    save_wake_word_threshold,
     get_input_device,
     get_output_device,
+    get_presence_settings,
+    get_plugins_system_enabled,
 )
 from core import gemini as _gemini
-from core.plugin_loader import discover_plugins
+from core.plugin_runtime import safe_discover_plugins, DisabledPluginRegistry
+from memory.config_manager import get_plugins_subsystem_enabled
 from core import undo as undo_stack
 from core import confirm as confirm_gate
 from core import audio_devices
@@ -671,8 +679,10 @@ class JarvisLive:
         self._inputlock = inputlock
         self._inputlock.register_interface(self.ui)
         self.ui.on_plan_mode_change = self._set_plan_mode
+        self.ui.on_connected_apps_changed = self._on_connected_apps_changed
         self._asst_name = "JARVI    S"  # updated each session from config
         self.session = None
+        self._connected_app_tool_map = {}
         self.audio_in_queue = None
         self.out_queue = None
         self._loop = None
@@ -758,14 +768,42 @@ class JarvisLive:
         # selecting an older chat restores its own server-side context.
         self._turn_done_event: asyncio.Event | None = None
         self._dashboard = None
+        self._dashboard_task: asyncio.Task | None = None
+        self._dashboard_commands_task: asyncio.Task | None = None
         self._shutdown_requested = False
         self._shutdown_requested_at: float | None = None
         self._plan_mode_active = bool(
             getattr(getattr(self.ui, "_win", None), "_chat_plan_mode", False)
         )
         self._briefing_sent = False  # morning briefing fires once per process
+        self._clap_launch = os.environ.get("JARVIS_CLAP_LAUNCH", "0") == "1"
+        self._clap_welcome = os.environ.get("JARVIS_WELCOME", "0") == "1"
+        self._clap_welcome_sent = False
         self._sys_monitor = SystemMonitor()  # persistent cooldown state
         self._proactive = ProactiveEngine()
+        self._presence = Presence()
+        self._presence.apply(get_presence_settings())
+
+        # Routine engine is process-scoped and persists independently of Live reconnects.
+        from core.routines.engine import RoutineEngine
+        from core.routines.host import JarvisRoutineHost
+        from core.routines.runtime import set_engine
+
+        self._routine_host = JarvisRoutineHost(self, loop_getter=lambda: self._loop)
+        self._routine_engine = RoutineEngine(
+            PATHS.databases_dir / "routines.json",
+            self._routine_host,
+            logger=lambda msg: print(msg),
+        )
+        set_engine(self._routine_engine)
+        self._routine_session_started = False
+
+        # Dynamic, bounded status context for each new Live session.
+        from core import situation
+        situation.register("presence", self._presence_situation)
+        situation.register("routines", self._routines_situation)
+        situation.register("conversation_memory", self._conversation_situation)
+
         self._last_user_speech = time.monotonic()  # updated on every user utterance
         self._enhanced_live = (
             True  # proactive audio; auto-disabled if the server rejects it
@@ -786,30 +824,42 @@ class JarvisLive:
 
         # Plugins must not collide with either an inline tool or a discovered action.
         _core_names = _inline_names | self._action_registry.names()
-        self._plugin_registry = discover_plugins(
-            plugins_dir=_base_dir / "plugins",
-            user_plugins_dir=PATHS.plugins_dir,
-            core_tool_names=_core_names,
-            # Console gets the full boot transcript; the activity log gets only
-            # what the user has to know about. Every plugin loading correctly is
-            # the expected case and does not belong in their conversation.
-            logger=lambda msg: print(f"[Plugins] {msg}"),
-            notify=lambda msg: self.ui.write_log(f"SYS: {msg}"),
-        )
+        if get_plugins_subsystem_enabled():
+            self._plugin_registry = safe_discover_plugins(
+                plugins_dir=_base_dir / "plugins",
+                user_plugins_dir=PATHS.plugins_dir,
+                core_tool_names=_core_names,
+                logger=lambda msg: print(f"[Plugins] {msg}"),
+                notify=lambda msg: self.ui.write_log(f"SYS: {msg}"),
+            )
+        else:
+            self._plugin_registry = DisabledPluginRegistry(
+                "Disabled by user in Settings"
+            )
+            print("[Plugins] Plugin subsystem disabled; built-in actions remain available.")
         self.ui.get_plugins = self._plugin_registry.list_for_ui
         self.ui.get_plugin_settings = (
             self._plugin_registry.settings_schemas
         )  # ⚙ settings tab
         self.ui.request_say = self.plugin_say  # plugins: mid-task speech channel
-        self._plugin_registry.start_enabled_plugins(player=self.ui)
+        try:
+            self._plugin_registry.start_enabled_plugins(player=self.ui)
+        except Exception as _plugin_start_error:
+            print(f"[Plugins] Startup hooks failed: {_plugin_start_error}")
+            self.ui.write_log("SYS: Some plugins could not start. JARVIS Core remains available.")
 
         # ── Wake word ────────────────────────────────────────────────────────
         # _awake gates the mic (see _listen_audio) and the background speakers.
         # It is True whenever wake word is OFF, so default behaviour is unchanged.
         self._wake_enabled = get_wake_word_enabled()
-        self._awake = not self._wake_enabled
+        # A clap-launch is an explicit activation, so start awake even when
+        # wake-word mode is normally configured to start asleep.
+        self._awake = not self._wake_enabled or self._clap_launch
         self._wake_detector: WakeWordDetector | None = None
+        self._clap_detector = None
         self._wake_sleep_timeout = WAKE_SLEEP_TIMEOUT
+        if self._wake_enabled:
+            self._ensure_clap_detector()
 
         # Restore the saved push-to-talk preference. Doing it here rather than
         # in __init__ means the hotkey thread only exists once there is a
@@ -823,10 +873,26 @@ class JarvisLive:
         self.ui.wake_is_ready = wake_is_ready  # () -> bool
         self.ui.wake_get_state = self._wake_state  # () -> dict
         self.ui.on_wake_toggle = self._ui_wake_toggle  # (enable: bool) -> str
+        self.ui.on_wake_threshold_changed = self._set_wake_threshold
+        self.ui.on_presence_settings_changed = self._apply_presence_settings
+        if get_typed_language_detection_enabled():
+            threading.Thread(
+                target=lambda: __import__("core.language", fromlist=["warm"]).warm(),
+                daemon=True,
+                name="typed-language-warm",
+            ).start()
         self.ui.on_wake_manual = self._ui_wake_manual  # () -> toggle awake/asleep
         self.ui.on_wake_install = self._ui_wake_install  # () -> (ok, msg)
 
     # ── Wake word: state machine ─────────────────────────────────────────────
+
+    def _on_connected_apps_changed(self):
+        """Rebuild Live tool declarations after Connected Apps lifecycle changes."""
+        if self._engine_caps is not None:
+            # Pipeline engines discover tools per request; they do not need a
+            # Live-session rebuild.
+            return
+        self.request_reconnect(keep_context=True, reason="connected apps changed")
 
     def _set_plan_mode(self, enabled: bool) -> None:
         """Keep the backend tool guard in sync with the chat's plan toggle."""
@@ -840,11 +906,31 @@ class JarvisLive:
         )
         return {"enabled": self._wake_enabled, "awake": self._awake, "ready": ready}
 
+    def _ensure_clap_detector(self) -> bool:
+        """Create the local double-clap detector for sleeping wake-word mode."""
+        if self._clap_detector is not None:
+            return True
+        try:
+            from core.clap import ClapDetector, SENSITIVITY
+            from memory.config_manager import get_clap_launcher
+
+            settings = get_clap_launcher()
+            self._clap_detector = ClapDetector(
+                claps=settings["claps"],
+                sensitivity=SENSITIVITY[settings["sensitivity"]],
+                level=settings["level"],
+            )
+            return True
+        except Exception as exc:
+            print(f"[Wake] Double-clap detector unavailable: {type(exc).__name__}: {exc}")
+            return False
+
     def _ensure_wake_detector(self) -> bool:
         """Load the detector once (model loads on first start). Idempotent."""
         if self._wake_detector is None:
             self._wake_detector = WakeWordDetector(
                 on_detect=self._on_wake_detected,
+                threshold=get_wake_word_threshold(),
                 logger=lambda m: print(f"[Wake] {m}"),
                 notify=lambda m: self.ui.write_log(f"SYS: {m}"),
             )
@@ -852,9 +938,26 @@ class JarvisLive:
             return self._wake_detector.start()
         return True
 
+    def _apply_presence_settings(self, settings: dict) -> None:
+        """Apply persisted presence settings to the running monitor."""
+        try:
+            self._presence.apply(settings)
+        except Exception as exc:
+            print(f"[Presence] settings apply failed: {type(exc).__name__}: {exc}")
+
+    def _set_wake_threshold(self, threshold: float) -> float:
+        value = save_wake_word_threshold(threshold)
+        if self._wake_detector is not None:
+            self._wake_detector.set_threshold(value)
+        return value
+
     def _on_wake_detected(self) -> None:
-        """Called from the detector thread when 'Hey Jarvis' is heard."""
-        self.wake(reason="wake word")
+        """Marshal detector-thread callbacks onto the asyncio runtime."""
+        loop = getattr(self, "_loop", None)
+        if loop is not None and loop.is_running():
+            loop.call_soon_threadsafe(self.wake, "wake word")
+        else:
+            print("[Wake] Detection received without an active asyncio loop.")
 
     def wake(self, reason: str = "wake word") -> None:
         if self.ui.auth_locked:
@@ -899,6 +1002,7 @@ class JarvisLive:
             self._wake_enabled = True
             save_wake_word_enabled(True)
             self._ensure_wake_detector()
+            self._ensure_clap_detector()
             self.sleep(reason="wake word enabled")
             return "enabled"
         else:
@@ -1160,6 +1264,18 @@ class JarvisLive:
                 "tools or perform state-changing work. Read-only lookups are allowed "
                 "only when needed to make the plan accurate.",
             )
+        user_text = str(text).replace(plan_marker, "").strip()
+        # Typed requests get a confidence-gated language hint. Speech remains
+        # handled by Gemini Live's native multilingual recognition.
+        if get_typed_language_detection_enabled():
+            try:
+                from core.language import instruction as _language_instruction
+                _language_hint = _language_instruction(user_text)
+                if _language_hint:
+                    text = f"{_language_hint}\n\n{text}"
+            except Exception as _language_exc:
+                print(f"[Language] typed routing failed: {type(_language_exc).__name__}: {_language_exc}")
+
         # Respect wake-word sleep: a typed command must not be answered while
         # asleep either (the sleep gate is not just for the mic). Wake first with
         # "Hey Jarvis" or the WAKE NOW button.
@@ -1190,9 +1306,7 @@ class JarvisLive:
             )
             return
 
-        self._session_log.append(
-            f"User: {str(text).replace(plan_marker, '').strip()}"
-        )
+        self._session_log.append(f"User: {user_text}")
         asyncio.run_coroutine_threadsafe(
             self.session.send_client_content(
                 turns={"role": "user", "parts": [{"text": text}]}, turn_complete=True
@@ -1391,6 +1505,7 @@ class JarvisLive:
             self._asst_name = (_cfg.get("assistant_name") or "JARVIS").strip()
             _user_name = (_cfg.get("user_name") or "").strip()
         except Exception:
+            _cfg = {}
             self._asst_name = "JARVIS"
             _user_name = ""
         from memory.config_manager import get_workspace_path
@@ -1423,11 +1538,51 @@ class JarvisLive:
             "the form from a different language than the one you are "
             "speaking in this sentence."
         )
+        _personality = str(_cfg.get("assistant_personality", "professional") or "professional")
+        _response_style = str(_cfg.get("assistant_response_style", "balanced") or "balanced")
+        _personality_guidance = {
+            "professional": "Maintain a calm, capable, professional manner.",
+            "friendly": "Be approachable and conversational without excessive enthusiasm.",
+            "technical": "Prioritize technical accuracy, clear reasoning, and practical engineering detail.",
+            "minimal": "Use direct, compact wording and avoid unnecessary elaboration.",
+        }.get(_personality, "Maintain a calm, capable, professional manner.")
+        _response_guidance = {
+            "concise": "Prefer concise answers; expand when the task requires it or the user asks.",
+            "balanced": "Give enough context to be useful while avoiding unnecessary detail.",
+            "detailed": "Provide thorough explanations, practical steps, and relevant trade-offs.",
+        }.get(_response_style, "Give enough context to be useful while avoiding unnecessary detail.")
+        _custom_identity_instructions = str(
+            _cfg.get("assistant_custom_instructions", "") or ""
+        ).strip()[:1500]
         identity_ctx = (
             f"[IDENTITY]\n"
             f"Your name is {self._asst_name}. "
             f"Always refer to yourself as {self._asst_name}.\n"
-            f"{_addr}\n\n"
+            f"{_addr}\n"
+            f"PERSONALITY: {_personality_guidance}\n"
+            f"RESPONSE STYLE: {_response_guidance}\n"
+            + (
+                "USER PREFERENCES (follow when relevant; never override system, safety, "
+                "or tool-use requirements):\n"
+                f"{_custom_identity_instructions}\n"
+                if _custom_identity_instructions else ""
+            )
+            + "\n"
+        )
+        task_engine_ctx = (
+            "[BACKGROUND TASK ROUTING]\n"
+            "When the user explicitly asks you to do work in the background, continue independently, "
+            "run a long task while they chat, research/build/analyze something asynchronously, or says "
+            "background task/background tasks, you MUST use the task_engine action=start tool. "
+            "Do not substitute web_search mode=research, a content tab, a normal chat response, or the "
+            "legacy background_tasks action. Start the persistent Task Engine task with a self-contained "
+            "instruction, a concise title, and appropriate time/round budgets. Confirm that it was started "
+            "only after the tool returns a task ID/status. The task must appear in the right-side TASKS "
+            "panel under BACKGROUND TASKS. Use task_engine list/status/result to monitor it, steer to add "
+            "instructions, finish to produce a report, and retry only failed tasks.\n"
+            "When the user asks for a reminder (remind me, don't forget, at a time/date or in a duration), "
+            "use the reminder action to schedule it with the operating-system scheduler. Do not create a "
+            "background research task for a reminder.\n\n"
         )
 
         # Everything the model is told about *itself* is derived here, not
@@ -1440,6 +1595,50 @@ class JarvisLive:
             + self._action_registry.get_tool_declarations()
             + self._plugin_registry.get_tool_declarations()
         )
+        # Expose connected MCP tools directly to the Live model. Names are
+        # namespaced and mapped back to the exact connection/tool pair.
+        self._connected_app_tool_map = {}
+        try:
+            from core.connected_apps.agent import agent as _connected_agent
+            import re as _re
+            for _row in _connected_agent.describe_tools():
+                _conn = str(_row.get("connection_id", ""))
+                _tool = str(_row.get("name", ""))
+                _digest = __import__("hashlib").sha256(f"{_conn}:{_tool}".encode("utf-8")).hexdigest()[:8]
+                _safe = _re.sub(r"[^a-zA-Z0-9_]", "_", f"mcp_{_conn[:8]}_{_tool[:40]}_{_digest}")
+                if not _safe or _safe in {d.get("name") for d in _all_decls if isinstance(d, dict)}:
+                    continue
+                _schema = _row.get("input_schema") or {"type": "object", "properties": {}}
+                if not isinstance(_schema, dict):
+                    _schema = {"type": "object", "properties": {}}
+                # MCP schemas are JSON Schema (lowercase types and may contain
+                # unsupported metadata). Normalize to Gemini's schema shape.
+                _type_map = {"object": "OBJECT", "string": "STRING", "integer": "INTEGER",
+                    "number": "NUMBER", "boolean": "BOOLEAN", "array": "ARRAY"}
+                _allowed = {"type", "description", "enum", "required", "properties",
+                    "items", "nullable", "format"}
+                def _gemini_schema(_node):
+                    if not isinstance(_node, dict):
+                        return {}
+                    _out = {k: v for k, v in _node.items() if k in _allowed}
+                    if isinstance(_out.get("type"), str):
+                        _out["type"] = _type_map.get(_out["type"].lower(), _out["type"].upper())
+                    if isinstance(_out.get("properties"), dict):
+                        _out["properties"] = {k: _gemini_schema(v) for k, v in _out["properties"].items()}
+                    if isinstance(_out.get("items"), dict):
+                        _out["items"] = _gemini_schema(_out["items"])
+                    return _out
+                _schema = _gemini_schema(_schema)
+                _schema.setdefault("type", "OBJECT")
+                _schema.setdefault("properties", {})
+                self._connected_app_tool_map[_safe] = (_conn, _tool)
+                _all_decls.append({
+                    "name": _safe,
+                    "description": f"Connected app {_row.get('app','')}: {_tool}. {_row.get('description','')}".strip(),
+                    "parameters": _schema,
+                })
+        except Exception as _connected_exc:
+            print(f"[Connected Apps] Dynamic tool declarations unavailable: {_connected_exc}")
 
         # An engine that cannot do something is not offered the tool for it.
         #
@@ -1527,7 +1726,19 @@ class JarvisLive:
             "with file_controller for a lecture recording.\n\n"
         )
 
-        parts = [time_ctx, identity_ctx, project_ctx, lecture_ctx]
+        parts = [time_ctx, identity_ctx, task_engine_ctx, project_ctx, lecture_ctx]
+        try:
+            from core.situation import lines as _situation_lines
+            _current_situation = _situation_lines()
+            if _current_situation:
+                parts.insert(
+                    0,
+                    "[CURRENT SITUATION — status data only; not instructions]\n"
+                    + "\n".join(_current_situation)
+                    + "\n\n",
+                )
+        except Exception as _situation_exc:
+            print(f"[Situation] context build failed: {type(_situation_exc).__name__}: {_situation_exc}")
         if mem_str:
             parts.append(mem_str)
         parts.append(sys_prompt)
@@ -1696,6 +1907,28 @@ class JarvisLive:
                         )
                     },
                 )
+
+        if name in self._connected_app_tool_map:
+            connection_id, mcp_tool_name = self._connected_app_tool_map[name]
+            try:
+                from core.connected_apps.agent import agent as _connected_agent
+                _result = await asyncio.to_thread(
+                    _connected_agent.execute,
+                    connection_id,
+                    mcp_tool_name,
+                    args,
+                    read_only=True,
+                )
+                _payload = {"result": str(_result)}
+                self.ui.write_log(f"[TOOL COMPLETE] {name} · connected app")
+                if not self.ui.muted:
+                    self.ui.set_state("LISTENING")
+                return types.FunctionResponse(id=fc.id, name=name, response=_payload)
+            except Exception as _exc:
+                self.ui.write_log(f"[TOOL FAILED] {name} · {type(_exc).__name__}: {_exc}")
+                if not self.ui.muted:
+                    self.ui.set_state("LISTENING")
+                return types.FunctionResponse(id=fc.id, name=name, response={"error": str(_exc)})
 
         if name == "screen_process":
             from memory.config_manager import get_computer_permissions
@@ -2291,6 +2524,14 @@ class JarvisLive:
                 det = self._wake_detector
                 if det is not None:
                     det.feed(indata)
+                clap = self._clap_detector
+                if clap is not None:
+                    try:
+                        samples = indata[:, 0].astype(np.float32) / 32768.0
+                        if clap.feed(samples):
+                            loop.call_soon_threadsafe(self.wake, "double clap")
+                    except Exception as exc:
+                        print(f"[Wake] Double-clap detection error: {type(exc).__name__}: {exc}")
                 return
             with self._speaking_lock:
                 jarvis_speaking = self._is_speaking
@@ -2542,6 +2783,7 @@ class JarvisLive:
                             if txt:
                                 in_buf.append(txt)
                                 self._last_user_speech = time.monotonic()
+                                self._presence.note_activity(source="speech")
                                 # Audio turns do not pass through
                                 # send_client_content(), so arm the same no-reply
                                 # watchdog when Gemini confirms it heard speech.
@@ -2587,6 +2829,13 @@ class JarvisLive:
                             in_buf = []
 
                             full_out = " ".join(out_buf).strip()
+                            # Raw conversation recall is opt-in and writes asynchronously.
+                            if full_in or full_out:
+                                try:
+                                    from memory import conversations as _conversations
+                                    _conversations.record(full_in, full_out)
+                                except Exception as _recall_exc:
+                                    print(f"[ConversationRecall] record failed: {type(_recall_exc).__name__}: {_recall_exc}")
                             # Second line of defence: even if a repeat slips
                             # into a *fresh* buffer after a flush, never log the
                             # same answer (or a tail of it) twice in a row.
@@ -2681,6 +2930,11 @@ class JarvisLive:
                         )
                         await self._flush_pending_vision()
         except Exception as e:
+            # Shutdown is an intentional control-flow signal: the supervisor
+            # consumes it after the goodbye has finished. Do not report it as a
+            # receive failure or print a traceback for a normal user action.
+            if _is_shutdown_signal(e):
+                raise
             # Let the session supervisor handle expected Live policy closes.
             # Printing a traceback here happens before TaskGroup wraps and
             # forwards the exception to the reconnect logic below.
@@ -2837,6 +3091,38 @@ class JarvisLive:
             stream.close()
 
     # ── Morning briefing ────────────────────────────────────────────────────────
+
+    async def _send_clap_welcome(self) -> None:
+        """A short, tool-free greeting when JARVIS was launched by the clap listener."""
+        if self.ui.auth_locked or not self.session:
+            return
+        memory = await asyncio.to_thread(load_memory)
+        identity = memory.get("identity", {}) if isinstance(memory, dict) else {}
+
+        def value(key: str) -> str:
+            entry = identity.get(key, {})
+            return (entry.get("value", "") if isinstance(entry, dict) else str(entry)).strip()
+
+        language = value("language")
+        name = value("name")
+        prompt = (
+            "JARVIS has just been opened by the user's double-clap activation. "
+            "Give a concise, natural welcome and say you are ready. Do not call tools, "
+            "do not mention the activation mechanism, and keep it to one sentence."
+        )
+        if language:
+            prompt += f" Speak in {language}."
+        if name:
+            prompt += f" Address the user as {name}."
+        try:
+            await self.session.send_client_content(
+                turns={"role": "user", "parts": [{"text": prompt}]},
+                turn_complete=True,
+            )
+            self._clap_welcome_sent = True
+            print("[JARVIS] Clap-launch greeting sent.")
+        except Exception as exc:
+            print(f"[JARVIS] Clap-launch greeting failed: {type(exc).__name__}: {exc}")
 
     async def _send_startup_briefing(self) -> None:
         """
@@ -3033,6 +3319,142 @@ class JarvisLive:
 
     # ── System monitor ──────────────────────────────────────────────────────────
 
+    async def _send_presence_inbox(self, *, returned: bool = False) -> None:
+        """Deliver held notifications as one bounded, non-tool summary."""
+        if not self.session or self.ui.auth_locked:
+            return
+        settings = await asyncio.to_thread(get_presence_settings)
+        items = self._presence.take_inbox()
+        if not returned and not items:
+            return
+        prompt = build_return_prompt(items, greet=settings.get("greet", True))
+        if prompt is None:
+            return
+        try:
+            await self.session.send_client_content(
+                turns={"role": "user", "parts": [{"text": prompt}]},
+                turn_complete=True,
+            )
+        except Exception:
+            for item in items:
+                self._presence.hold(
+                    item.get("kind", "notification"),
+                    item.get("text", ""),
+                    item.get("label", ""),
+                )
+            raise
+
+    def _notify_or_hold(self, kind: str, text: str, label: str = "") -> bool:
+        """Return True when notification is held because the user is away."""
+        if self._presence.away:
+            self._presence.hold(kind, text, label)
+            return True
+        return False
+
+    def _presence_situation(self) -> str:
+        try:
+            return self._presence.describe()
+        except Exception:
+            return ""
+
+    def _routines_situation(self) -> str:
+        try:
+            rows = [r for r in self._routine_engine.list() if r.get("enabled")]
+            if not rows:
+                return ""
+            quiet = self._routine_engine.quiet_hours()
+            names = ", ".join(str(r.get("name") or r.get("id"))[:60] for r in rows[:5])
+            more = f" and {len(rows)-5} more" if len(rows) > 5 else ""
+            return f"{len(rows)} enabled routine(s): {names}{more}; quiet hours: {quiet or 'off'}."
+        except Exception:
+            return ""
+
+    def _conversation_situation(self) -> str:
+        try:
+            from memory.conversations import settings
+            cfg = settings()
+            if not cfg.get("enabled"):
+                return "local conversation recall is disabled"
+            return f"local conversation recall is enabled; retention {cfg.get('days', 90)} days"
+        except Exception:
+            return ""
+
+    async def _run_routine_scheduler(self) -> None:
+        """Tick persisted routines without blocking the Live event loop."""
+        try:
+            from memory import conversations as _conversations
+            await asyncio.to_thread(_conversations.prune)
+        except Exception as exc:
+            print(f"[ConversationRecall] retention cleanup failed: {type(exc).__name__}: {exc}")
+        while True:
+            try:
+                if not self._routine_session_started:
+                    self._routine_engine.session_started(awake=self._awake)
+                    self._routine_session_started = True
+                await asyncio.to_thread(self._routine_engine.tick)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                print(f"[Routines] Scheduler tick failed: {type(exc).__name__}: {exc}")
+            await asyncio.sleep(5)
+
+    async def _run_presence_monitor(self) -> None:
+        """Poll OS presence and deliver queued notifications when the user returns."""
+        poll_count = 0
+        last_locked = None
+        while True:
+            try:
+                settings = await asyncio.to_thread(get_presence_settings)
+                self._presence.apply(settings)
+                if not settings.get("enabled", True):
+                    await asyncio.sleep(5)
+                    continue
+
+                idle = await asyncio.to_thread(os_idle_seconds)
+                locked = last_locked
+                if poll_count % 3 == 0:
+                    locked = await asyncio.to_thread(screen_locked)
+                    last_locked = locked
+
+                change = self._presence.poll(idle, locked)
+                if change:
+                    event, away_seconds = change
+                    if event == "away":
+                        reason = self._presence.reason or "unknown"
+                        message = f"User away ({reason})."
+                    else:
+                        message = f"User returned after {away_seconds / 60:.1f} min."
+                    print(f"[Presence] {message}")
+                    try:
+                        self.ui.write_log(f"SYS: Presence — {message}")
+                    except Exception:
+                        pass
+                if change and change[0] == "back":
+                    try:
+                        await self._send_presence_inbox(returned=True)
+                    except Exception as exc:
+                        print(f"[Presence] Could not deliver return summary: {exc}")
+                # Deliver queued items even if the return transition happened
+                # while the UI was locked or Presence was disabled/re-enabled.
+                if (
+                    not self._presence.away
+                    and self._presence.inbox_size()
+                    and self.session
+                    and self._awake
+                    and not self.ui.auth_locked
+                ):
+                    try:
+                        await self._send_presence_inbox(returned=False)
+                    except Exception as exc:
+                        print(f"[Presence] Could not deliver queued notifications: {exc}")
+                poll_count += 1
+                await asyncio.sleep(2)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                print(f"[Presence] Poll failed: {type(exc).__name__}: {exc}")
+                await asyncio.sleep(5)
+
     async def _run_system_monitor(self) -> None:
         """Background task: voice alerts when metrics exceed thresholds."""
         while True:
@@ -3044,6 +3466,8 @@ class JarvisLive:
             with self._speaking_lock:
                 speaking = self._is_speaking
             if speaking or (time.monotonic() - self._last_user_speech) < 10:
+                continue
+            if self._notify_or_hold("system_monitor", alert):
                 continue
             try:
                 await self.session.send_client_content(
@@ -3077,17 +3501,20 @@ class JarvisLive:
                         for alert in alerts:
                             if self.ui.auth_locked:
                                 break
+                            if self._notify_or_hold("background_monitor", alert):
+                                print("[Presence] Monitor alert queued while user is away.")
+                                continue
                             msg = (
                                 f"{alert}\n\n"
                                 f"Inform the user about this development naturally in {lang}. "
-                                "One brief sentence only."
+                                "One brief sentence only. Do not call tools."
                             )
                             await self.session.send_client_content(
                                 turns={"role": "user", "parts": [{"text": msg}]},
                                 turn_complete=True,
                             )
                             print("[JARVIS] Monitor alert sent.")
-                            await asyncio.sleep(6)  # gap between consecutive alerts
+                            await asyncio.sleep(6)
                     except Exception as e:
                         print(f"[Monitor] ⚠️ Background check error: {e}")
             await asyncio.sleep(1800)  # check every 30 minutes
@@ -3108,7 +3535,7 @@ class JarvisLive:
 
             with self._speaking_lock:
                 speaking = self._is_speaking
-            if speaking:
+            if speaking or self._presence.away:
                 continue
 
             if not self._proactive.should_trigger(self._last_user_speech):
@@ -3162,6 +3589,52 @@ class JarvisLive:
 
     # ── dashboard command relay ─────────────────────────────────────────────
 
+    async def _shutdown_dashboard(self, timeout: float = 5.0) -> None:
+        """Stop dashboard workers and await Uvicorn's graceful lifespan exit."""
+        dashboard = self._dashboard
+        if dashboard is not None:
+            try:
+                dashboard.request_shutdown()
+            except Exception as exc:
+                print(
+                    f"[Dashboard] Shutdown request failed: "
+                    f"{type(exc).__name__}: {exc}"
+                )
+
+        command_task = self._dashboard_commands_task
+        if command_task is not None and not command_task.done():
+            command_task.cancel()
+            await asyncio.gather(command_task, return_exceptions=True)
+        self._dashboard_commands_task = None
+
+        server_tasks = []
+        if self._dashboard_task is not None:
+            server_tasks.append(self._dashboard_task)
+        redirect_task = getattr(dashboard, "_redirect_task", None)
+        if redirect_task is not None and redirect_task not in server_tasks:
+            server_tasks.append(redirect_task)
+
+        pending = [task for task in server_tasks if not task.done()]
+        if pending:
+            _, pending = await asyncio.wait(
+                pending, timeout=max(0.0, float(timeout))
+            )
+            if pending:
+                print(
+                    f"[Dashboard] Graceful shutdown exceeded {timeout:.1f}s; "
+                    "cancelling remaining server tasks."
+                )
+                for task in pending:
+                    task.cancel()
+
+        # Retrieve results from both completed and cancelled tasks. This keeps
+        # early Uvicorn startup/bind failures from surfacing as unhandled-task
+        # warnings during asyncio.run() finalization.
+        if server_tasks:
+            await asyncio.gather(*server_tasks, return_exceptions=True)
+
+        self._dashboard_task = None
+
     async def _process_dashboard_commands(self) -> None:
         while True:
             try:
@@ -3206,13 +3679,157 @@ class JarvisLive:
     # the import below raises ImportError, which is caught and reported as
     # "providers are not installed" — the assistant then runs exactly as it did
     # before any of this existed.
+    def _online_profile_available(self) -> bool:
+        """Check the configured Online route without blocking the UI/session loop."""
+        import socket
+
+        try:
+            from memory.config_manager import (
+                get_gemini_key,
+                get_online_provider_mode,
+                get_pipeline,
+                get_provider_config,
+            )
+            if get_online_provider_mode() == "gemini":
+                if not get_gemini_key():
+                    return False
+                host, port = "generativelanguage.googleapis.com", 443
+            else:
+                from urllib.parse import urlsplit
+                from providers import registry
+                pid = str(get_pipeline("online").get("llm") or "").strip()
+                if not pid:
+                    return False
+                cfg = get_provider_config(pid, "online")
+                if registry.missing_fields(pid, cfg):
+                    return False
+                endpoint = urlsplit(str(cfg.get("base_url") or ""))
+                if not endpoint.hostname:
+                    return False
+                host = endpoint.hostname
+                port = endpoint.port or (443 if endpoint.scheme == "https" else 80)
+            with socket.create_connection((host, port), timeout=1.5):
+                pass
+            return True
+        except Exception:
+            return False
+
+    def _offline_profile_ready(self) -> bool:
+        """Require a usable local LLM and every configured local speech component."""
+        try:
+            from memory.config_manager import get_pipeline, get_provider_config
+            from providers import registry
+
+            pipeline = get_pipeline("offline")
+            if not str(pipeline.get("llm") or "").strip():
+                return False
+
+            for slot in ("llm", "stt", "tts"):
+                pid = str(pipeline.get(slot) or "").strip()
+                if not pid:
+                    if slot == "llm":
+                        return False
+                    continue
+                declaration = registry.get_declaration(pid)
+                if not declaration or not declaration.get("_available", True):
+                    return False
+                cfg = get_provider_config(pid, "offline")
+                catalog_id = str(cfg.get("catalog") or "").strip()
+                catalog = declaration.get("catalog") or ()
+                selected = next(
+                    (entry for entry in catalog if entry.get("id") == catalog_id),
+                    None,
+                )
+                if selected is not None and selected.get("local") is not True:
+                    return False
+                if registry.missing_fields(pid, cfg):
+                    return False
+                # Readiness checks must not warm or download models. In
+                # particular Piper.probe() downloads and loads a voice, which
+                # is too expensive and surprising for a periodic Auto check.
+                if slot == "llm":
+                    provider = registry.build(pid, cfg)
+                    list_models = getattr(provider, "models", None)
+                    if list_models is None:
+                        return False
+                    available_models = list_models(timeout=3.0)
+                    selected_model = str(cfg.get("model") or "").strip()
+                    if not selected_model or selected_model not in available_models:
+                        return False
+                elif slot == "stt":
+                    if str(cfg.get("backend") or "local").strip().lower() != "local":
+                        return False
+                    from importlib.util import find_spec
+                    if find_spec("faster_whisper") is None:
+                        return False
+                elif slot == "tts":
+                    from providers import tts_piper
+                    if not tts_piper.available():
+                        return False
+                    voice = str(cfg.get("voice") or "").strip()
+                    if not voice or voice not in tts_piper.installed():
+                        return False
+            return True
+        except Exception as exc:
+            print(f"[JARVIS] Offline readiness check failed: {exc}")
+            return False
+
+    def _resolve_auto_environment(self) -> str:
+        from memory.config_manager import (
+            get_provider_selection,
+            resolve_provider_environment,
+            save_provider_runtime_environment,
+        )
+
+        if get_provider_selection() != "auto":
+            from memory.config_manager import get_provider_environment
+            return get_provider_environment()
+
+        resolved = resolve_provider_environment(
+            "auto",
+            online_available=self._online_profile_available(),
+            offline_ready=self._offline_profile_ready(),
+        )
+        save_provider_runtime_environment(resolved)
+        return resolved
+
     def _engine_mode(self) -> str:
         try:
-            from memory.config_manager import get_provider_mode
-
+            from memory.config_manager import (
+                get_provider_mode,
+                get_provider_selection,
+            )
+            if get_provider_selection() == "auto":
+                self._resolve_auto_environment()
             return get_provider_mode()
-        except Exception:
+        except Exception as exc:
+            print(f"[JARVIS] Could not resolve AI provider mode: {exc}")
             return "gemini"
+
+    async def _watch_auto_provider(self) -> None:
+        """Re-evaluate Auto periodically and reconnect only when its route changes."""
+        from memory.config_manager import (
+            get_provider_environment,
+            get_provider_selection,
+        )
+
+        while True:
+            await asyncio.sleep(15)
+            if get_provider_selection() != "auto":
+                continue
+            try:
+                resolved = await asyncio.to_thread(self._resolve_auto_environment)
+                connected = getattr(self, "_connected_environment", "online")
+                if resolved != connected:
+                    self.ui.write_log(
+                        f"SYS: Auto switched to {resolved.title()} — reconnecting."
+                    )
+                    self.request_reconnect(
+                        keep_context=True, reason=f"Auto switched to {resolved}"
+                    )
+                    return
+            except Exception as exc:
+                print(f"[JARVIS] Auto provider check failed: {exc}")
 
     def _resolve_engine_caps(self):
         """What the chosen engine can do — or None for Gemini Live.
@@ -3334,9 +3951,45 @@ class JarvisLive:
             self._engine = None
             await engine.close()
 
+    def shutdown_tasks(self) -> None:
+        try:
+            from core.connected_apps.runtime import runtime as connected_apps_runtime
+            connected_apps_runtime.shutdown()
+        except Exception as exc:
+            self.ui.write_log(f"[Connected Apps] Shutdown failed: {type(exc).__name__}: {exc}")
+        runtime = getattr(self, "_task_runtime", None)
+        if runtime is not None:
+            try:
+                runtime.shutdown(wait=2.0)
+            except Exception as exc:
+                self.ui.write_log(f"[Tasks] Shutdown failed: {exc}")
+
+    def _on_task_notification(self, event: str, task: dict, text: str) -> None:
+        """Deliver task completion through the UI's thread-safe bridge."""
+        title = str(task.get("title") or "Task")
+        status = str(event or task.get("status") or "updated")
+        self.ui.write_log(f"[Tasks] {title}: {status}")
+        if status == "done" and text:
+            self.ui.show_content(title, text, key=f"task:{task.get('id', '')}")
+
     async def run(self):
         self._loop = asyncio.get_event_loop()
         self._reconnect_event = asyncio.Event()
+
+        # Task Engine is optional and independent from the live-session engine.
+        try:
+            from core.tasks.runtime import TaskRuntime
+            self._task_runtime = TaskRuntime(
+                data_root=PATHS.user_data_root,
+                resource_root=PATHS.resource_root,
+                user_agents_dir=PATHS.user_data_root / "agents",
+                notify=self._on_task_notification,
+                log=self.ui.write_log,
+            )
+            self.ui.bind_task_engine(self._task_runtime.engine)
+        except Exception as exc:
+            self._task_runtime = None
+            self.ui.write_log(f"[Tasks] Task Engine disabled: {exc}")
 
         # ── Wire the shared core services to the interface ───────────────────
         # The confirmation gate is useless without a way to ask, and a memory
@@ -3364,9 +4017,14 @@ class JarvisLive:
 
             self._dashboard = DashboardServer()
             self._dashboard.set_connect_callback(self._on_phone_connected)
-            asyncio.create_task(self._dashboard.serve())
-            # Runs for the whole lifetime, not just inside an active session
-            asyncio.create_task(self._process_dashboard_commands())
+            self._dashboard_task = asyncio.create_task(
+                self._dashboard.serve(), name="jarvis-dashboard-server"
+            )
+            # Runs for the whole lifetime, not just inside an active session.
+            self._dashboard_commands_task = asyncio.create_task(
+                self._process_dashboard_commands(),
+                name="jarvis-dashboard-commands",
+            )
         except Exception as e:
             print(f"[Dashboard] Disabled: {e}")
             self._dashboard = None
@@ -3389,6 +4047,13 @@ class JarvisLive:
                 # install this returns None in a few microseconds and nothing
                 # below behaves any differently.
                 self._engine_caps = self._resolve_engine_caps()
+                from memory.config_manager import get_provider_environment
+                self._connected_environment = get_provider_environment()
+                # _resolve_engine_caps falls back to Gemini when the selected
+                # pipeline cannot start. Track the engine actually connected,
+                # otherwise Auto would incorrectly believe Offline is active.
+                if self._engine_caps is None and self._connected_environment == "offline":
+                    self._connected_environment = "online"
                 if self._engine_caps is not None:
                     # The local PipelineEngine owns its replayable history and
                     # cannot resume a Gemini Live server session.
@@ -3513,11 +4178,16 @@ class JarvisLive:
                     # until the user says "Hey Jarvis" or taps wake in the UI.
                     if self._wake_enabled:
                         self._ensure_wake_detector()
-                        self._awake = False
-                        self.ui.set_state("SLEEPING")
-                        self.ui.write_log(
-                            "SYS: JARVIS online — sleeping. Say 'Hey Jarvis' to wake me."
-                        )
+                        if self._clap_launch:
+                            self._awake = True
+                            self.ui.set_state("LISTENING")
+                            self.ui.write_log("SYS: JARVIS online — activated by double clap.")
+                        else:
+                            self._awake = False
+                            self.ui.set_state("SLEEPING")
+                            self.ui.write_log(
+                                "SYS: JARVIS online — sleeping. Say 'Hey Jarvis' to wake me."
+                            )
                     else:
                         self._awake = True
                         self.ui.set_state("LISTENING")
@@ -3525,12 +4195,12 @@ class JarvisLive:
                     print("[LiveDiag][GATES] Gate state initialized.")
 
                     try:
-                        from core.background_tasks import get_background_task_manager
+                        from core.tasks.desktop import attach
 
-                        get_background_task_manager(self.ui)
+                        attach(self.ui)
                     except (OSError, RuntimeError, ValueError) as exc:
                         self.ui.write_log(
-                            f"ERR: Background research could not be restored: {exc}"
+                            f"ERR: Background tasks could not be restored: {exc}"
                         )
 
                     # What this machine will not permit, said once, on screen.
@@ -3559,11 +4229,14 @@ class JarvisLive:
                         )
 
                     tg.create_task(self._watch_reconnect())
+                    tg.create_task(self._watch_auto_provider())
                     tg.create_task(self._watch_stall())
                     tg.create_task(self._send_realtime())
                     tg.create_task(self._listen_audio())
                     tg.create_task(self._receive_audio())
                     tg.create_task(self._play_audio())
+                    tg.create_task(self._run_routine_scheduler(), name="jarvis-routines")
+                    tg.create_task(self._run_presence_monitor(), name="jarvis-presence")
                     tg.create_task(self._run_system_monitor())
                     tg.create_task(self._run_background_monitor())
                     tg.create_task(self._run_proactive_mode())
@@ -3584,11 +4257,19 @@ class JarvisLive:
                     if (
                         not self._briefing_sent
                         and get_brief_enabled()
+                        and (not self._clap_launch or self._clap_welcome)
                         and self._awake
                         and not self.ui.auth_locked
                     ):
                         self._briefing_sent = True
                         tg.create_task(self._send_startup_briefing())
+                    elif (
+                        self._clap_welcome
+                        and not self._clap_welcome_sent
+                        and self._awake
+                        and not self.ui.auth_locked
+                    ):
+                        tg.create_task(self._send_clap_welcome())
 
             except KeyboardInterrupt:
                 raise
@@ -3818,13 +4499,72 @@ class JarvisLive:
 
         if self._shutdown_requested:
             self.set_speaking(False)
+            try:
+                routine_stopped = await asyncio.to_thread(
+                    self._routine_engine.close, 3.0
+                )
+                from core.routines.runtime import set_engine
+                set_engine(None)
+                if not routine_stopped:
+                    print("[Routines] Scheduler tick did not stop within 3s.")
+            except Exception as exc:
+                print(
+                    f"[Routines] Shutdown cleanup failed: "
+                    f"{type(exc).__name__}: {exc}"
+                )
+            try:
+                from core.tasks.desktop import shutdown as shutdown_tasks
+
+                tasks_stopped = await asyncio.to_thread(shutdown_tasks, 5.0)
+                if not tasks_stopped:
+                    print(
+                        "[BackgroundTasks] Workers are still finishing; "
+                        "unfinished research remains queued for the next launch."
+                    )
+            except Exception as exc:
+                print(
+                    f"[BackgroundTasks] Shutdown cleanup failed: "
+                    f"{type(exc).__name__}: {exc}"
+                )
+            try:
+                from memory import conversations as _conversations
+                await asyncio.to_thread(_conversations.flush, 3.0)
+            except Exception as exc:
+                print(f"[ConversationRecall] shutdown flush failed: {type(exc).__name__}: {exc}")
+            try:
+                if self._wake_detector is not None:
+                    await asyncio.to_thread(self._wake_detector.stop)
+            except Exception as exc:
+                print(f"[Wake] shutdown cleanup failed: {type(exc).__name__}: {exc}")
+            print("[JARVIS] Stopping Remote Dashboard...")
+            try:
+                await self._shutdown_dashboard()
+            except Exception as exc:
+                print(
+                    f"[Dashboard] Shutdown failed: "
+                    f"{type(exc).__name__}: {exc}"
+                )
             print("[JARVIS] Shutdown complete.")
             try:
                 self._inputlock.clear()
                 self._inputlock.unregister_interface(self.ui)
             except Exception:
                 pass
-            self.ui.root.quit()
+            try:
+                # Stop camera and tracking workers while the Qt event loop is
+                # still responsive. The aboutToQuit hook is then an idempotent
+                # no-op instead of joining those workers on the GUI thread.
+                self.ui.shutdown_services()
+            except Exception as exc:
+                print(
+                    f"[JARVIS] Shutdown cleanup failed: "
+                    f"{type(exc).__name__}: {exc}"
+                )
+            finally:
+                # Emit a Qt signal instead of quitting QApplication from the
+                # asyncio worker. The GUI thread must run MainWindow.closeEvent
+                # so timers, terminals and auxiliary windows are released.
+                self.ui.request_assistant_shutdown()
 
 
 def main():
@@ -3850,6 +4590,8 @@ def main():
             asyncio.run(jarvis.run())
         except KeyboardInterrupt:
             print("\n🔴 Shutting down...")
+        finally:
+            jarvis.shutdown_tasks()
 
     threading.Thread(target=runner, daemon=True).start()
     ui.root.mainloop()

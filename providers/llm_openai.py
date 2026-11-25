@@ -240,7 +240,7 @@ def _int_or(value, default):
     thing they can see they did."""
     try:
         n = int(str(value).strip())
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         return default
     return n if n > 0 else default
 

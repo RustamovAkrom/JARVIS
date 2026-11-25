@@ -60,12 +60,12 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 
 import numpy as np
+from core.runtime_paths import PATHS
 
 W, H = 1600, 1000
 BASE_DIR = Path(__file__).resolve().parent.parent
-# Both kept where .gitignore already looks (memory/*_cache.json, reports/), so
-# nothing a user downloads can end up in a commit.
-WORLD_FILE = BASE_DIR / "memory" / "planet_watch_world_cache.json"
+# Cache data follows the active user-data profile, not the replaceable bundle.
+WORLD_FILE = PATHS.memory_dir / "planet_watch_world_cache.json"
 
 _UA = "MarkJARVIS-planet_watch/1.0 (open-source desktop assistant plugin)"
 # Natural Earth 1:110m country outlines (public domain) as TopoJSON, 108 KB,

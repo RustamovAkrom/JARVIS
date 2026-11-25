@@ -40,6 +40,18 @@ class ComputerControlPermissionTests(unittest.TestCase):
                 "memory.config_manager.get_computer_permissions",
                 return_value=permissions,
             ),
+            # Application scoping is a separate persisted safety layer. Keep
+            # this permission unit test independent from the developer's local
+            # allowlist (which can legitimately deny Code.exe).
+            patch(
+                "memory.config_manager.get_computer_safety_settings",
+                return_value={
+                    "microphone_during_screen_actions": False,
+                    "application_rules_enabled": False,
+                    "application_rule_mode": "blocklist",
+                    "applications": [],
+                },
+            ),
             patch("actions.computer_control._click", return_value="clicked") as click,
             patch("builtins.print"),
         ):

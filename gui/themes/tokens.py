@@ -1,20 +1,28 @@
-"""Semantic color tokens and accent palette derivation.
+"""Semantic JARVIS theme tokens with independent theme and accent controls.
 
-Kept independent of widgets so presentation code can share the same palette
-without creating imports back into the legacy compatibility module.
+Dark and Light control the pure black/white canvas. The selected custom hue
+is applied consistently to secondary surfaces, outlines, controls and HUD
+accents without changing the canvas mode.
 """
+from __future__ import annotations
 
+import colorsys
+
+from PyQt6.QtCore import QSettings
 from PyQt6.QtGui import QColor
 
 
 class C:
-    BG = "#00060a"
-    PANEL = "#010d14"
-    PANEL2 = "#010f18"
+    BG = "#000000"
+    PANEL = "#020609"
+    PANEL2 = "#03090d"
+    PANEL3 = "#050d12"
     BORDER = "#0d3347"
     BORDER_B = "#1a5c7a"
     BORDER_A = "#0f4060"
+    BORDER_H = "#2e7893"
     PRI = "#00d4ff"
+    ACCENT = "#00d4ff"
     PRI_DIM = "#007a99"
     PRI_GHO = "#001f2e"
     ACC = "#ff6b00"
@@ -27,13 +35,15 @@ class C:
     TEXT_DIM = "#3a8a9a"
     TEXT_MED = "#5ab8cc"
     WHITE = "#d8f8ff"
-    DARK = "#000d14"
-    BAR_BG = "#011520"
+    DARK = "#000000"
+    BAR_BG = "#000000"
+    SUCCESS = GREEN
+    WARNING = ACC2
+    DANGER = RED
+    INFO = PRI
 
 
 class Space:
-    """Shared spacing scale (device-independent Qt pixels)."""
-
     XS = 4
     SM = 8
     MD = 12
@@ -46,144 +56,292 @@ class Radius:
     SM = 6
     MD = 10
     LG = 14
+    XL = 18
+    PILL = 999
 
 
-# Keys tied to the accent colour — status colours (ACC, GREEN, RED…) stay fixed
-_HUE_LINKED = (
-    "BG",
-    "PANEL",
-    "PANEL2",
-    "BORDER",
-    "BORDER_B",
-    "BORDER_A",
-    "PRI",
-    "PRI_DIM",
-    "PRI_GHO",
-    "TEXT",
-    "TEXT_DIM",
-    "TEXT_MED",
-    "WHITE",
-    "DARK",
-    "BAR_BG",
-)
+class Motion:
+    INSTANT = 0
+    FAST = 120
+    BASE = 180
+    SLOW = 260
+    OUT_CUBIC = "OutCubic"
+    OUT_QUART = "OutQuart"
+    IN_OUT_CUBIC = "InOutCubic"
+
+
+class Focus:
+    RING_ALPHA = 170
+    RING_WIDTH = 2
+    HOVER_ALPHA = 26
+    PRESSED_ALPHA = 51
+    SELECTED_ALPHA = 64
+
+
+DEFAULT_UI_COLOR = "#00d4ff"
+_THEME_SETTINGS = QSettings("JARVIS", "JARVIS")
+THEME_MODE = str(_THEME_SETTINGS.value("appearance/theme", "dark") or "dark").lower()
+if THEME_MODE not in {"dark", "light"}:
+    THEME_MODE = "dark"
+
+# Custom Colour tints the canvas and every surface. Black/White presets
+# switch to a separate neutral palette with monochrome foregrounds.
+_DARK_SURFACES = {
+    # Near-black blue surfaces keep the HUD depth while remaining hue-tintable.
+    # The DEFAULT cyan uses these neutral bases; custom accents tint each level.
+    "BG": "#05090d",
+    "PANEL": "#081018",
+    "PANEL2": "#0c1a28",
+    "PANEL3": "#102235",
+    "DARK": "#05090d",
+    "BAR_BG": "#05090d",
+}
+_LIGHT_SURFACES = {
+    "BG": "#f8fafc",
+    "PANEL": "#ffffff",
+    "PANEL2": "#f8fafc",
+    "PANEL3": "#f1f5f9",
+    "DARK": "#f8fafc",
+    "BAR_BG": "#f8fafc",
+}
+_DARK_ACCENT_BASE = {
+    "BORDER": "#0d3347",
+    "BORDER_B": "#1a5c7a",
+    "BORDER_A": "#0f4060",
+    "BORDER_H": "#2e7893",
+    "PRI": DEFAULT_UI_COLOR,
+    "PRI_DIM": "#007a99",
+    "PRI_GHO": "#001f2e",
+    "TEXT": "#8ffcff",
+    "TEXT_DIM": "#3a8a9a",
+    "TEXT_MED": "#5ab8cc",
+    "WHITE": "#d8f8ff",
+}
+_LIGHT_ACCENT_BASE = {
+    "BORDER": "#d8dee5",
+    "BORDER_B": "#b7c1cc",
+    "BORDER_A": "#c6d0da",
+    "BORDER_H": "#98a6b2",
+    "PRI": DEFAULT_UI_COLOR,
+    "PRI_DIM": "#007a99",
+    "PRI_GHO": "#e8f7fb",
+    "TEXT": "#1f2933",
+    "TEXT_DIM": "#61707d",
+    "TEXT_MED": "#45515d",
+    "WHITE": "#111820",
+}
+_HUE_LINKED = tuple((*_DARK_SURFACES.keys(), *_DARK_ACCENT_BASE.keys()))
 _STATUS_COLORS = ("ACC", "ACC2", "GREEN", "GREEN_D", "RED", "MUTED_C")
 _STATUS_DEFAULTS = {key: getattr(C, key) for key in _STATUS_COLORS}
-from PyQt6.QtWebChannel import QWebChannel
-from PyQt6.QtWebEngineWidgets import QWebEngineView
+_PALETTE_DEFAULTS: dict[str, str] = {
+    **_DARK_SURFACES,
+    **_DARK_ACCENT_BASE,
+}
 
-_PALETTE_DEFAULTS: dict[str, str] = {k: getattr(C, k) for k in _HUE_LINKED}
-DEFAULT_UI_COLOR = _PALETTE_DEFAULTS["PRI"]
 
-
-def apply_ui_accent(accent_hex: str) -> bool:
-    """
-    Re-derives the whole teal-family palette from the chosen accent colour
-    (hue shift — brightness/saturation ratios are preserved, design stays intact).
-    Painted elements (HUD, waveform, metrics) pick up the new colour on the next
-    frame; stylesheet-based panels pick it up when they are rebuilt.
-    """
-    import colorsys
-
-    accent_hex = (accent_hex or "").strip().lower()
-    if not (accent_hex.startswith("#") and len(accent_hex) == 7):
+def _valid_hex(value: str) -> bool:
+    if not isinstance(value, str) or len(value) != 7 or not value.startswith("#"):
         return False
     try:
-        int(accent_hex[1:], 16)
+        int(value[1:], 16)
+        return True
     except ValueError:
         return False
 
-    if accent_hex == "#000000":
-        # Black is a dark-theme preset: keep the readable cyan accent while
-        # moving the structural palette to near-black surfaces.
-        for key, value in _PALETTE_DEFAULTS.items():
-            setattr(C, key, value)
-        for key, value in {
-            "BG": "#000103",
-            "PANEL": "#030609",
-            "PANEL2": "#050a10",
-            "BORDER": "#101a22",
-            "BORDER_B": "#1b2d3a",
-            "BORDER_A": "#14232d",
-            "DARK": "#000205",
-            "BAR_BG": "#02070b",
-        }.items():
-            setattr(C, key, value)
-        return True
 
-    if accent_hex == "#ffffff":
-        # White is a neutral monochrome preset with light surfaces and dark text.
-        for key, value in _PALETTE_DEFAULTS.items():
-            setattr(C, key, value)
-        for key, value in _STATUS_DEFAULTS.items():
-            setattr(C, key, value)
-        for key, value in {
-            "ACC": "#b54708",
-            "ACC2": "#815b00",
-            "GREEN": "#137333",
-            "GREEN_D": "#116329",
-            "RED": "#b42318",
-            "MUTED_C": "#b42318",
-        }.items():
-            setattr(C, key, value)
-        for key, value in {
-            "BG": "#f3f5f7",
-            "PANEL": "#ffffff",
-            "PANEL2": "#f7f9fb",
-            "BORDER": "#d8dee5",
-            "BORDER_B": "#b7c1cc",
-            "BORDER_A": "#c6d0da",
-            "PRI": "#36434f",
-            "PRI_DIM": "#62717f",
-            "PRI_GHO": "#e8edf2",
-            "TEXT": "#1f2933",
-            "TEXT_DIM": "#61707d",
-            "TEXT_MED": "#45515d",
-            "WHITE": "#111820",
-            "DARK": "#ffffff",
-            "BAR_BG": "#f7f9fb",
-        }.items():
-            setattr(C, key, value)
-        return True
+def _shift_hue(base_hex: str, accent_hex: str) -> str:
+    base_rgb = tuple(int(base_hex[i:i + 2], 16) / 255 for i in (1, 3, 5))
+    accent_rgb = tuple(int(accent_hex[i:i + 2], 16) / 255 for i in (1, 3, 5))
+    base_h, sat, val = colorsys.rgb_to_hsv(*base_rgb)
+    accent_h, accent_s, _ = colorsys.rgb_to_hsv(*accent_rgb)
+    if accent_s < 0.08:
+        # Neutral selections have no meaningful hue. Keep the base hue and
+        # reduce saturation rather than reading an undefined hue variable.
+        h = base_h
+        sat *= 0.12
+    else:
+        # Use one selected hue across every semantic token. Preserve each
+        # token's saturation/value for hierarchy, but remove competing hues.
+        h = accent_h
+    r, g, b = colorsys.hsv_to_rgb(h, sat, val)
+    return "#{:02x}{:02x}{:02x}".format(
+        round(r * 255), round(g * 255), round(b * 255)
+    )
 
-    def _hsv(h: str) -> tuple[float, float, float]:
-        r = int(h[1:3], 16) / 255
-        g = int(h[3:5], 16) / 255
-        b = int(h[5:7], 16) / 255
-        return colorsys.rgb_to_hsv(r, g, b)
 
-    # Status colours return to their normal semantic colours for every
-    # chromatic palette; only the explicit white preset is monochrome.
-    for key, value in _STATUS_DEFAULTS.items():
+def _init_aliases() -> None:
+    C.SUCCESS = C.GREEN
+    C.WARNING = C.ACC2
+    C.DANGER = C.RED
+    C.INFO = C.PRI
+
+
+def _tint_surface(base_hex: str, accent_hex: str, mode: str) -> str:
+    """Apply the selected hue to a surface while preserving its luminance level."""
+    base_rgb = tuple(int(base_hex[i:i + 2], 16) / 255 for i in (1, 3, 5))
+    accent_rgb = tuple(int(accent_hex[i:i + 2], 16) / 255 for i in (1, 3, 5))
+    _, _, value = colorsys.rgb_to_hsv(*base_rgb)
+    hue, accent_saturation, _ = colorsys.rgb_to_hsv(*accent_rgb)
+    if accent_saturation < 0.08:
+        return base_hex
+    # Keep the dark/light luminance ladder intact; only tint its hue.
+    saturation = min(0.78 if mode == "dark" else 0.20, accent_saturation * (0.78 if mode == "dark" else 0.55))
+    red, green, blue = colorsys.hsv_to_rgb(hue, saturation, value)
+    return "#{:02x}{:02x}{:02x}".format(
+        round(red * 255), round(green * 255), round(blue * 255)
+    )
+
+
+def _apply_palette() -> None:
+    surfaces = _DARK_SURFACES if THEME_MODE == "dark" else _LIGHT_SURFACES
+    accent_base = _DARK_ACCENT_BASE if THEME_MODE == "dark" else _LIGHT_ACCENT_BASE
+    neutral_accent = (
+        colorsys.rgb_to_hsv(*(
+            int(_ACTIVE_ACCENT[i:i + 2], 16) / 255 for i in (1, 3, 5)
+        ))[1] < 0.08
+    )
+
+    default_accent = _ACTIVE_ACCENT == DEFAULT_UI_COLOR
+
+    if neutral_accent:
+        # Black and White presets are genuinely monochrome, not a tinted
+        # custom palette with a black/white canvas.
+        surfaces = (
+            {
+                "BG": "#000000", "PANEL": "#000000",
+                "PANEL2": "#000000", "PANEL3": "#000000",
+                "DARK": "#000000", "BAR_BG": "#000000",
+            }
+            if THEME_MODE == "dark"
+            else {
+                "BG": "#ffffff", "PANEL": "#ffffff",
+                "PANEL2": "#ffffff", "PANEL3": "#ffffff",
+                "DARK": "#ffffff", "BAR_BG": "#ffffff",
+            }
+        )
+
+    # In Custom Colour mode every major surface, including the canvas, is
+    # tinted from the selected hue. Black/White presets use neutral surfaces.
+    for key, value in surfaces.items():
+        # The DEFAULT preset restores the original neutral light/dark surfaces
+        # while retaining JARVIS cyan for interactive accents. Only a
+        # user-selected custom colour should tint the entire canvas.
+        if not neutral_accent and not default_accent:
+            value = _tint_surface(value, _ACTIVE_ACCENT, THEME_MODE)
         setattr(C, key, value)
 
-    base_h = _hsv(_PALETTE_DEFAULTS["PRI"])[0]
-    acc_h, acc_s, _av = _hsv(accent_hex)
-    dh = acc_h - base_h
-    grey = acc_s < 0.08  # near-grey accent → the whole theme is desaturated
+    for key, base in accent_base.items():
+        if neutral_accent:
+            if THEME_MODE == "dark":
+                neutral = {
+                    "BORDER": "#ffffff", "BORDER_B": "#ffffff",
+                    "BORDER_A": "#ffffff", "BORDER_H": "#ffffff",
+                    "PRI": "#ffffff", "PRI_DIM": "#ffffff",
+                    "PRI_GHO": "#000000", "TEXT": "#ffffff",
+                    "TEXT_DIM": "#ffffff", "TEXT_MED": "#ffffff",
+                    "WHITE": "#ffffff",
+                }
+            else:
+                neutral = {
+                    "BORDER": "#000000", "BORDER_B": "#000000",
+                    "BORDER_A": "#000000", "BORDER_H": "#000000",
+                    "PRI": "#000000", "PRI_DIM": "#000000",
+                    "PRI_GHO": "#ffffff", "TEXT": "#000000",
+                    "TEXT_DIM": "#000000", "TEXT_MED": "#000000",
+                    "WHITE": "#000000",
+                }
+            value = neutral[key]
+        elif key == "PRI":
+            value = _ACTIVE_ACCENT
+        elif default_accent:
+            # DEFAULT restores the authored JARVIS cyan palette exactly;
+            # hue shifting is reserved for a genuinely custom colour.
+            value = base
+        else:
+            value = _shift_hue(base, _ACTIVE_ACCENT)
+        setattr(C, key, value)
 
-    for key, hex0 in _PALETTE_DEFAULTS.items():
-        h, s, v = _hsv(hex0)
-        if grey:
-            s *= 0.15
-        r, g, b = colorsys.hsv_to_rgb((h + dh) % 1.0, s, v)
-        setattr(
-            C,
-            key,
-            "#{:02x}{:02x}{:02x}".format(
-                int(r * 255 + 0.5), int(g * 255 + 0.5), int(b * 255 + 0.5)
-            ),
-        )
+    # Keep status/telemetry colours semantic in every appearance preset.
+    # Green = healthy/load, amber = warning/memory, orange = attention,
+    # red = error/muted. A monochrome canvas must not erase telemetry meaning.
+    for key, base in _STATUS_DEFAULTS.items():
+        setattr(C, key, base)
+    _init_aliases()
+
+
+_ACTIVE_ACCENT = DEFAULT_UI_COLOR
+
+
+def apply_ui_accent(accent_hex: str) -> bool:
+    """Apply a custom accent without changing the selected light/dark mode.
+
+    The custom colour is independent from the Dark/White canvas mode.
+    Any valid hex value changes the interface hue without switching modes.
+    """
+    global _ACTIVE_ACCENT
+    selected = (accent_hex or "").strip().lower()
+    if not _valid_hex(selected):
+        return False
+    if selected == "#f2f2f2":
+        # Migrate the temporary neutral default written by the previous
+        # monochrome implementation back to JARVIS cyan. It was not a
+        # deliberate custom accent and otherwise desaturates the full palette.
+        selected = DEFAULT_UI_COLOR
+    _ACTIVE_ACCENT = selected
+    C.ACCENT = selected
+    _apply_palette()
     return True
 
 
-def current_palette() -> dict[str, str]:
-    """A snapshot of the accent-linked colours currently on class C."""
-    return {k: getattr(C, k) for k in (*_HUE_LINKED, *_STATUS_COLORS)}
+def apply_ui_theme(mode: str) -> bool:
+    """Switch between near-black and white surfaces, preserving custom accent."""
+    global THEME_MODE
+    selected = str(mode or "").strip().lower()
+    if selected in {"black", "dark"}:
+        selected = "dark"
+    elif selected in {"white", "light"}:
+        selected = "light"
+    else:
+        return False
+    THEME_MODE = selected
+    _THEME_SETTINGS.setValue("appearance/theme", selected)
+    _THEME_SETTINGS.sync()
+    _apply_palette()
+    return True
 
+
+def current_theme_mode() -> str:
+    """Return the currently active appearance mode."""
+    return THEME_MODE
+
+
+def current_palette() -> dict[str, str]:
+    """Snapshot all dynamic palette tokens for safe live stylesheet replacement."""
+    return {
+        key: getattr(C, key)
+        for key in (*_HUE_LINKED, *_STATUS_COLORS)
+    }
+
+
+def rgba(hex_color: str, alpha: int) -> str:
+    color = QColor(hex_color)
+    return f"rgba({color.red()}, {color.green()}, {color.blue()}, {alpha})"
+
+
+def mix(base: str, overlay: str, ratio: float = 0.5) -> str:
+    b, o = QColor(base), QColor(overlay)
+    r = max(0.0, min(1.0, ratio))
+    return "#{:02x}{:02x}{:02x}".format(
+        round(b.red() + (o.red() - b.red()) * r),
+        round(b.green() + (o.green() - b.green()) * r),
+        round(b.blue() + (o.blue() - b.blue()) * r),
+    )
 
 
 def qcol(hex_color: str, alpha: int = 255) -> QColor:
-    """Create a QColor from a semantic token and optional opacity."""
     color = QColor(hex_color)
     color.setAlpha(alpha)
     return color
+
+
+_apply_palette()

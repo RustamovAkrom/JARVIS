@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QProcess, Qt
 from PyQt6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -16,20 +16,33 @@ from PyQt6.QtWidgets import (
 )
 
 from gui.components.settings import SettingRow, SettingsSection
+from gui.panels.context import ContextPanel
+from gui.onboarding import OnboardingDialog
+from memory.translations import translate, translate_from
 from gui.settings.categories.general import GeneralSettingsPage
 from gui.settings.categories.identity import AssistantIdentityPage
 from gui.settings.registry import CATEGORIES, ENTRIES, search_entries
 from gui.settings.settings_center import SettingsCenter
 from gui.app.main_window import (
     PluginManagerOverlay,
+    _QProcessTerminal,
     AudioDeviceOverlay,
+    CustomizeOverlay,
     HueWheel,
     MainWindow,
     MemoryOverlay,
     ProvidersOverlay,
 )
 from gui.themes.styles import glass_rgba, menu_qss
-from gui.themes.tokens import C, Radius, Space
+from gui.themes.tokens import (
+    C,
+    DEFAULT_UI_COLOR,
+    Radius,
+    Space,
+    apply_ui_accent,
+    apply_ui_theme,
+    current_theme_mode,
+)
 from gui.themes.typography import FONT_MONO, FONT_UI, TypeScale, mono_font, ui_font
 
 
@@ -132,6 +145,92 @@ class SettingsComponentTests(unittest.TestCase):
         page.close()
         owner.close()
 
+    def test_clear_current_chat_requires_confirmation(self):
+        from types import SimpleNamespace
+        from PyQt6.QtWidgets import QMessageBox
+
+        store = SimpleNamespace(
+            get_chat=lambda chat_id: {"id": chat_id, "turns": [{"id": "turn-1"}]},
+            clear_chat=lambda chat_id: self.fail("clear_chat must not run after cancellation"),
+        )
+        owner = SimpleNamespace(_chat_store=store, _active_chat_id="chat-1")
+        with patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.No):
+            MainWindow._clear_chat(owner)
+
+    def test_delete_chat_turn_requires_confirmation(self):
+        from types import SimpleNamespace
+        from PyQt6.QtWidgets import QMessageBox
+
+        store = SimpleNamespace(
+            get_chat=lambda chat_id: {
+                "id": chat_id,
+                "turns": [{"id": "turn-1", "request": "hello", "result": "world"}],
+            },
+            save_chat=lambda *args, **kwargs: self.fail("save_chat must not run after cancellation"),
+        )
+        owner = SimpleNamespace(_chat_store=store, _active_chat_id="chat-1")
+        with patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.No):
+            MainWindow._delete_chat_turn(owner, "turn-1")
+
+    def test_workspace_layout_restore_applies_matching_splitter_sizes(self):
+        from types import SimpleNamespace
+
+        class Splitter:
+            def __init__(self, count):
+                self._count = count
+                self.applied = None
+
+            def count(self):
+                return self._count
+
+            def setSizes(self, sizes):
+                self.applied = list(sizes)
+
+        owner = SimpleNamespace(
+            _main_splitter=Splitter(2),
+            _root_splitter=Splitter(2),
+            _workspace_split=Splitter(2),
+            _center_split=Splitter(3),
+        )
+        saved = {
+            "main": [250, 750],
+            "root": [900, 300],
+            "workspace": [800, 200],
+            "center": [600, 200, 100],
+        }
+        with patch("memory.config_manager.get_workspace_layout_settings", return_value=saved):
+            MainWindow._restore_workspace_layout(owner)
+        self.assertEqual(owner._main_splitter.applied, [250, 750])
+        self.assertEqual(owner._root_splitter.applied, [900, 300])
+        self.assertEqual(owner._workspace_split.applied, [800, 200])
+        self.assertEqual(owner._center_split.applied, [600, 200, 100])
+
+    def test_workspace_layout_restore_ignores_mismatched_splitter_sizes(self):
+        from types import SimpleNamespace
+
+        class Splitter:
+            def __init__(self, count):
+                self._count = count
+                self.applied = None
+
+            def count(self):
+                return self._count
+
+            def setSizes(self, sizes):
+                self.applied = list(sizes)
+
+        owner = SimpleNamespace(
+            _main_splitter=Splitter(2),
+            _root_splitter=Splitter(2),
+            _workspace_split=Splitter(2),
+            _center_split=Splitter(3),
+        )
+        saved = {"main": [100, 200, 300], "root": [500, 400]}
+        with patch("memory.config_manager.get_workspace_layout_settings", return_value=saved):
+            MainWindow._restore_workspace_layout(owner)
+        self.assertIsNone(owner._main_splitter.applied)
+        self.assertEqual(owner._root_splitter.applied, [500, 400])
+
     def test_setting_row_pairs_control_with_accessible_description(self):
         control = QCheckBox("Enabled")
         row = SettingRow("Wake word", "Listen for the configured wake phrase.", control)
@@ -173,6 +272,21 @@ class SettingsComponentTests(unittest.TestCase):
         results = search_entries("microphone input")
         self.assertEqual([entry.id for entry in results], ["microphone"])
         self.assertEqual(results[0].action_id, "audio")
+
+        # The original JARVIS HUD is not exposed as a Mark LIX centrepiece
+        # selector; Appearance only controls the original theme and opacity.
+        self.assertEqual(search_entries("orbital HUD"), [])
+        self.assertNotIn("hud_style", {entry.id for entry in ENTRIES})
+
+        live_entries = search_entries("speech detection silence")
+        self.assertEqual([entry.id for entry in live_entries], ["turn_tuning"])
+        proactive_entries = search_entries("ambient audio")
+        self.assertEqual([entry.id for entry in proactive_entries], ["proactive_audio"])
+
+        quiet_entries = search_entries("quiet hours notifications")
+        self.assertEqual([entry.id for entry in quiet_entries], ["quiet_hours"])
+        presence_entries = search_entries("idle absence minutes")
+        self.assertEqual([entry.id for entry in presence_entries], ["presence_away_threshold"])
 
         category_titles = {category.id: category.title for category in CATEGORIES}
         self.assertNotIn("security", category_titles)
@@ -247,6 +361,154 @@ class SettingsComponentTests(unittest.TestCase):
         wheel.set_color("#000000")
         self.assertEqual(wheel.color(), "#000000")
 
+    def test_context_actions_use_responsive_two_column_layout(self):
+        panel = ContextPanel(lambda: {})
+        try:
+            self.assertEqual(panel._action_grid.rowCount(), 2)
+            self.assertEqual(panel._action_grid.columnCount(), 2)
+            for button in (
+                panel.activity_button,
+                panel.providers_button,
+                panel.permissions_button,
+                panel.connected_apps_button,
+            ):
+                self.assertEqual(button.minimumWidth(), 0)
+                self.assertTrue(button.accessibleName().startswith("Open "))
+        finally:
+            panel._refresh_timer.stop()
+            panel.close()
+
+    def test_chat_bubbles_use_theme_surface_and_empty_state_is_structured(self):
+        from types import SimpleNamespace
+
+        class ScrollBar:
+            def value(self):
+                return 0
+
+            def maximum(self):
+                return 0
+
+            def setValue(self, _value):
+                pass
+
+        class ChatView:
+            def __init__(self):
+                self.html = ""
+
+            def verticalScrollBar(self):
+                return ScrollBar()
+
+            def set_response_times(self, _values):
+                pass
+
+            def setHtml(self, value):
+                self.html = value
+
+        view = ChatView()
+        owner = SimpleNamespace(
+            _chat_view=view,
+            _active_chat_turns=lambda: [{
+                "id": "turn-1",
+                "request": "Hello",
+                "result": "Hi",
+                "status": "complete",
+            }],
+            _expanded_chat_turns=set(),
+            _tr=lambda value: value,
+        )
+        original_mode = current_theme_mode()
+        original_accent = C.ACCENT
+        try:
+            for mode, accent in (
+                ("dark", DEFAULT_UI_COLOR),
+                ("light", DEFAULT_UI_COLOR),
+                ("light", "#ff003b"),
+            ):
+                with self.subTest(mode=mode, accent=accent):
+                    self.assertTrue(apply_ui_theme(mode))
+                    self.assertTrue(apply_ui_accent(accent))
+                    MainWindow._refresh_chat(owner)
+                    self.assertIn(f"background:{C.PANEL3}", view.html)
+                    self.assertIn("Hello", view.html)
+                    self.assertIn("Hi", view.html)
+
+            owner._active_chat_turns = lambda: []
+            MainWindow._refresh_chat(owner)
+            self.assertIn("No messages yet", view.html)
+            self.assertIn("Send a message to start a conversation", view.html)
+            self.assertIn(
+                "Previous conversations and saved memories are unchanged",
+                view.html,
+            )
+        finally:
+            apply_ui_theme(original_mode)
+            apply_ui_accent(original_accent)
+
+    def test_advanced_telemetry_waits_until_both_columns_fit(self):
+        from types import SimpleNamespace
+
+        class Panel:
+            def __init__(self):
+                self.visible = None
+
+            def setVisible(self, value):
+                self.visible = value
+
+        class Left:
+            def __init__(self, width):
+                self._width = width
+
+            def isVisible(self):
+                return True
+
+            def width(self):
+                return self._width
+
+        class Tabs:
+            def __init__(self, current):
+                self.current = current
+
+            def currentWidget(self):
+                return self.current
+
+        class Scroll:
+            def __init__(self):
+                self.policy = None
+
+            def setVerticalScrollBarPolicy(self, value):
+                self.policy = value
+
+        system_page = QWidget()
+        for width, expected in ((390, False), (479, False), (480, True)):
+            owner = SimpleNamespace(
+                _advanced_panel=Panel(),
+                _left_panel=Left(width),
+                _left_tabs=Tabs(system_page),
+                _system_page=system_page,
+                _system_scroll=Scroll(),
+            )
+            MainWindow._update_advanced_telemetry_visibility(owner)
+            self.assertEqual(owner._advanced_panel.visible, expected)
+            self.assertEqual(
+                owner._system_scroll.policy,
+                Qt.ScrollBarPolicy.ScrollBarAsNeeded
+                if expected
+                else Qt.ScrollBarPolicy.ScrollBarAlwaysOff,
+            )
+
+    def test_appearance_presets_have_readable_touch_targets(self):
+        panel = CustomizeOverlay(embedded=True, appearance_only=True)
+        for object_name in (
+            "AppearanceBlackPreset",
+            "AppearanceWhitePreset",
+            "AppearanceDefaultPreset",
+        ):
+            button = panel.findChild(QPushButton, object_name)
+            self.assertIsNotNone(button)
+            self.assertGreaterEqual(button.height(), 28)
+            self.assertTrue(button.accessibleName())
+        panel.close()
+
     def test_category_pages_are_built_on_first_visit_and_cached(self):
         built = []
         center = SettingsCenter(
@@ -281,6 +543,40 @@ class SettingsComponentTests(unittest.TestCase):
         self.assertTrue(center.show_category("identity"))
         self.assertEqual(child.refresh_count, 1)
         center.close()
+
+    def test_context_settings_route_opens_center_before_navigation(self):
+        from types import SimpleNamespace
+
+        calls = []
+
+        class FakeSettingsCenter:
+            def show_category(self, category_id):
+                calls.append(("category", category_id))
+                return True
+
+            def raise_(self):
+                calls.append(("raise",))
+
+            def activateWindow(self):
+                calls.append(("activate",))
+
+        owner = SimpleNamespace(
+            _settings_center=None,
+            _open_settings_center=lambda: (
+                calls.append(("open",)),
+                setattr(owner, "_settings_center", FakeSettingsCenter()),
+            ),
+            _append_activity=lambda message: calls.append(("log", message)),
+        )
+        MainWindow._open_context_settings_category(owner, "integrations")
+        self.assertEqual(calls[0], ("open",))
+        self.assertIn(("category", "integrations"), calls)
+        self.assertIn(("raise",), calls)
+        self.assertIn(("activate",), calls)
+
+        calls.clear()
+        MainWindow._open_context_settings_category(owner, "permissions")
+        self.assertIn(("category", "permissions"), calls)
 
     def test_real_ai_providers_settings_page_stays_visible_after_apply(self):
         # Exercise MainWindow's actual category builder and embedding path.
@@ -421,17 +717,27 @@ class SettingsComponentTests(unittest.TestCase):
             user_name="Akrom",
             voice="Charon",
             voices=("Charon", "Kore"),
-            apply_changes=lambda name, user, voice: saved.append((name, user, voice)) or True,
+            apply_changes=lambda *values: saved.append(values) or True,
         )
         page.assistant_name_input.setText("Astra")
         page.user_name_input.setText("Alex")
         page.voice_combo.setCurrentIndex(1)
+        page.personality_combo.setCurrentIndex(page.personality_combo.findData("technical"))
+        page.response_style_combo.setCurrentIndex(page.response_style_combo.findData("detailed"))
+        page.custom_instructions.setPlainText("Prefer practical examples.")
         self.assertTrue(page.apply())
-        self.assertEqual(saved, [("Astra", "Alex", "Kore")])
+        self.assertEqual(
+            saved,
+            [("Astra", "Alex", "Kore", "technical", "detailed", "Prefer practical examples.")],
+        )
 
         page.assistant_name_input.setText("Unsaved")
+        page.personality_combo.setCurrentIndex(page.personality_combo.findData("friendly"))
+        page.custom_instructions.setPlainText("Unsaved")
         page.cancel()
         self.assertEqual(page.assistant_name_input.text(), "Astra")
+        self.assertEqual(page.personality_combo.currentData(), "technical")
+        self.assertEqual(page.custom_instructions.toPlainText(), "Prefer practical examples.")
         self.assertEqual(page.user_name_input.text(), "Alex")
 
         failed = AssistantIdentityPage(
@@ -465,6 +771,82 @@ class SettingsComponentTests(unittest.TestCase):
             self.assertEqual(applied, [True])
             self.assertTrue(panel.isVisible())
             panel.close()
+
+
+    def test_onboarding_uses_frameless_jarvis_theme(self):
+        dialog = OnboardingDialog(language="en")
+        self.assertTrue(
+            dialog.windowFlags() & Qt.WindowType.FramelessWindowHint
+        )
+        self.assertEqual(dialog._title_bar.height(), 34)
+        self.assertIn("QCheckBox::indicator", dialog.styleSheet())
+        self.assertIn("QWidget#OnboardingPage", dialog.styleSheet())
+        dialog.close()
+
+    def test_qprocess_terminal_adapter_reads_shell_output_without_winpty(self):
+        process = QProcess()
+        process.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
+        process.start(
+            __import__("sys").executable,
+            ["-c", "print('qprocess-terminal-ok')"],
+        )
+        self.assertTrue(process.waitForStarted(3000))
+        self.assertTrue(process.waitForFinished(5000))
+        terminal = _QProcessTerminal(process)
+        self.assertFalse(terminal.isalive())
+        self.assertIn("qprocess-terminal-ok", terminal.read())
+        terminal.dispose()
+
+    def test_onboarding_requires_terms_and_cloud_voice_consent(self):
+        dialog = OnboardingDialog(language="en")
+        self.assertEqual(dialog._stack.count(), 4)
+
+        dialog._step = 1
+        dialog._update_navigation()
+        self.assertFalse(dialog._next_btn.isEnabled())
+
+        dialog._agreement_check.setChecked(True)
+        self.assertFalse(dialog._next_btn.isEnabled())
+        dialog._cloud_voice_check.setChecked(True)
+        self.assertTrue(dialog._next_btn.isEnabled())
+
+        dialog._language_combo.setCurrentIndex(
+            dialog._language_combo.findData("ru")
+        )
+        self.assertEqual(dialog._labels["Choose your interface language"].text(),
+                         "Выберите язык интерфейса")
+        dialog.reject()
+
+    def test_onboarding_and_settings_strings_have_ru_and_uz_translations(self):
+        keys = (
+            "Terms of use and privacy",
+            "Choose what JARVIS may access",
+            "Connect Google Gemini",
+            "I consent to sending voice audio to Google Gemini.",
+            "AI providers",
+            "Runtime mode",
+        )
+        for key in keys:
+            with self.subTest(key=key):
+                self.assertNotEqual(translate(key, "ru"), key)
+                self.assertNotEqual(translate(key, "uz"), key)
+
+    def test_translate_from_converts_already_rendered_text(self):
+        self.assertEqual(
+            translate_from("Выберите язык интерфейса", "ru", "uz"),
+            "Interfeys tilini tanlang",
+        )
+        self.assertEqual(
+            translate_from("Выберите язык интерфейса", "ru", "en"),
+            "Choose your interface language",
+        )
+
+    def test_settings_navigation_uses_selected_locale(self):
+        with patch("memory.config_manager.get_ui_language", return_value="ru"):
+            center = SettingsCenter()
+        self.assertEqual(center._category_rows["integrations"].text(), "AI-провайдеры")
+        self.assertEqual(center.search.placeholderText(), "Поиск настроек")
+        center.close()
 
 
 if __name__ == "__main__":

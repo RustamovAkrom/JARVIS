@@ -5,7 +5,9 @@ from datetime import datetime
 from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtWidgets import (
+    QAbstractItemView,
     QComboBox,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -112,14 +114,43 @@ class ActivityPanel(QWidget):
         self.event_list.setObjectName("activity_events")
         self.event_list.setWordWrap(True)
         self.event_list.setUniformItemSizes(False)
+        self.event_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.event_list.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
+        self.event_list.setHorizontalScrollMode(QListWidget.ScrollMode.ScrollPerPixel)
+        self.event_list.setFrameShape(QFrame.Shape.NoFrame)
         self.event_list.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
+        # Style the scroll area, viewport and both scrollbars explicitly.
+        # Styling only QListWidget leaves the native Windows scrollbar gutter
+        # and horizontal scrollbar with the platform's default dark palette.
+        self.event_list.viewport().setAutoFillBackground(True)
+        self.event_list.viewport().setStyleSheet(
+            f"background:{C.PANEL2}; border:0;"
+        )
         self.event_list.setStyleSheet(
             f"QListWidget {{ background:{C.PANEL2}; color:{C.TEXT}; "
-            f"border:1px solid {C.BORDER}; border-radius:7px; padding:3px; }}"
-            f"QListWidget::item {{ padding:5px 4px; border-bottom:1px solid {C.BORDER}; }}"
+            f"border:1px solid {C.BORDER}; border-radius:7px; padding:3px; outline:0; }}"
+            f"QListWidget::item {{ padding:6px 5px; border-bottom:1px solid {C.BORDER}; }}"
             f"QListWidget::item:selected {{ background:{C.PRI_GHO}; }}"
+            f"QScrollBar:vertical {{ background:{C.PANEL}; width:10px; "
+            f"margin:3px 2px 3px 0; border:0; border-radius:5px; }}"
+            f"QScrollBar::handle:vertical {{ background:{C.BORDER_B}; "
+            f"min-height:28px; border-radius:4px; margin:1px; }}"
+            f"QScrollBar::handle:vertical:hover {{ background:{C.PRI_DIM}; }}"
+            f"QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ "
+            f"height:0; border:0; background:transparent; }}"
+            f"QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ "
+            f"background:{C.PANEL}; }}"
+            f"QScrollBar:horizontal {{ background:{C.PANEL}; height:8px; "
+            f"border:0; margin:0; }}"
+            f"QScrollBar::handle:horizontal {{ background:{C.BORDER_B}; "
+            f"min-width:28px; border-radius:4px; }}"
+            f"QScrollBar::handle:horizontal:hover {{ background:{C.PRI_DIM}; }}"
+            f"QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ "
+            f"width:0; border:0; background:transparent; }}"
+            f"QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {{ "
+            f"background:{C.PANEL}; }}"
         )
         self._content_stack.addWidget(self.event_list)
 

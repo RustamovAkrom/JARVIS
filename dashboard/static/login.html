@@ -2,223 +2,116 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>JARVIS</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#080a12">
+  <title>JARVIS · Remote Access</title>
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    :root {
-      --bg:     #07090f;
-      --card:   rgba(255,255,255,0.04);
-      --border: rgba(255,255,255,0.08);
-      --accent: #6366f1;
-      --adim:   rgba(99,102,241,0.15);
-      --text:   #dde3ed;
-      --muted:  #5e6a7e;
-    }
-    html, body {
-      height: 100%;
-      background: var(--bg);
-      color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .card {
-      width: 340px;
-      padding: 44px 36px;
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 22px;
-      text-align: center;
-    }
-    .logo {
-      font-size: 28px;
-      font-weight: 700;
-      letter-spacing: 10px;
-      margin-bottom: 6px;
-    }
-    .logo em { color: var(--accent); font-style: normal; }
-    .sub {
-      font-size: 11px;
-      color: var(--muted);
-      letter-spacing: 3px;
-      text-transform: uppercase;
-      margin-bottom: 10px;
-    }
-    .hint {
-      font-size: 12px;
-      color: var(--muted);
-      line-height: 1.55;
-      margin-bottom: 28px;
-    }
-    .key-wrap {
-      position: relative;
-      margin-bottom: 16px;
-    }
-    .key-input {
-      width: 100%;
-      padding: 18px 14px;
-      background: rgba(255,255,255,0.05);
-      border: 1.5px solid var(--border);
-      border-radius: 14px;
-      color: var(--text);
-      font-size: 30px;
-      font-weight: 700;
-      font-family: 'Courier New', monospace;
-      text-align: center;
-      letter-spacing: 10px;
-      text-transform: uppercase;
-      outline: none;
-      transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
-      caret-color: var(--accent);
-    }
-    .key-input::placeholder {
-      color: rgba(94,106,126,0.5);
-      letter-spacing: 6px;
-      font-size: 20px;
-    }
-    .key-input:focus {
-      border-color: var(--accent);
-      background: var(--adim);
-      box-shadow: 0 0 0 3px rgba(99,102,241,0.12);
-    }
-    .err {
-      font-size: 12px;
-      color: #f87171;
-      min-height: 18px;
-      margin-bottom: 14px;
-    }
-    .btn {
-      width: 100%;
-      padding: 14px;
-      background: var(--accent);
-      color: #fff;
-      font-size: 12px;
-      font-weight: 700;
-      letter-spacing: 3px;
-      border: none;
-      border-radius: 12px;
-      cursor: pointer;
-      transition: opacity 0.15s, transform 0.1s;
-    }
-    .btn:hover  { opacity: 0.88; }
-    .btn:active { transform: scale(0.98); }
-    @keyframes shake {
-      0%,100% { transform: translateX(0); }
-      20%,60% { transform: translateX(-7px); }
-      40%,80% { transform: translateX(7px); }
-    }
-    .shake { animation: shake 0.35s ease; }
-    .voice-note {
-      font-size: 10px;
-      color: var(--muted);
-      margin-top: 20px;
-      line-height: 1.6;
-      text-align: left;
-    }
-    .voice-note code {
-      background: rgba(255,255,255,0.07);
-      padding: 1px 4px;
-      border-radius: 3px;
-      font-family: 'Courier New', monospace;
-      font-size: 9px;
-    }
-    #reconnecting {
-      display: none;
-      color: var(--muted);
-      font-size: 12px;
-      margin-bottom: 16px;
-    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    :root{--bg:#080a12;--panel:#10131d;--line:rgba(255,255,255,.09);--accent:#7168ff;--accent2:#8d87ff;--text:#eef0ff;--muted:#8b91a8;--danger:#ff647c;--success:#5be0a1}
+    html,body{min-height:100%;background:var(--bg);color:var(--text);font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    body{min-height:100svh;display:grid;place-items:center;padding:24px;overflow-x:hidden}
+    body:before{content:"";position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at 50% 10%,rgba(103,95,255,.16),transparent 48%),radial-gradient(ellipse at 10% 90%,rgba(46,121,255,.08),transparent 38%)}
+    .shell{position:relative;width:min(100%,440px)}
+    .card{background:linear-gradient(145deg,rgba(255,255,255,.045),rgba(255,255,255,.018));border:1px solid var(--line);border-radius:28px;padding:clamp(26px,7vw,42px);box-shadow:0 24px 80px rgba(0,0,0,.35),inset 0 1px rgba(255,255,255,.04);backdrop-filter:blur(18px)}
+    .brand{display:flex;justify-content:center;align-items:center;gap:10px;margin-bottom:30px}
+    .brand-mark{width:36px;height:36px;border-radius:12px;background:linear-gradient(135deg,#7067ff,#4e47c9);display:grid;place-items:center;font-weight:800;font-size:18px;box-shadow:0 8px 25px rgba(99,102,241,.25)}
+    .brand-name{font-weight:750;letter-spacing:5px;font-size:19px}
+    .eyebrow{color:var(--accent2);font-size:10px;font-weight:700;letter-spacing:3px;text-transform:uppercase;text-align:center}
+    h1{text-align:center;font-size:clamp(24px,5vw,29px);letter-spacing:-.8px;margin:10px 0 9px}
+    .description{max-width:310px;margin:0 auto 28px;text-align:center;color:var(--muted);font-size:14px;line-height:1.65}
+    .key-label{display:flex;justify-content:space-between;align-items:center;margin:0 2px 10px;font-size:12px;color:#b7bdd2;font-weight:600}
+    .key-label span:last-child{font-weight:500;color:var(--muted)}
+    .key-input{width:100%;height:70px;border:1px solid rgba(255,255,255,.1);border-radius:16px;background:rgba(255,255,255,.035);color:var(--text);font-size:clamp(23px,7vw,30px);font-weight:750;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;letter-spacing:clamp(5px,2vw,9px);text-align:center;text-transform:uppercase;outline:none;transition:.2s;caret-color:var(--accent2)}
+    .key-input::placeholder{color:#34394d;letter-spacing:clamp(5px,2vw,9px)}
+    .key-input:focus{border-color:rgba(113,104,255,.75);background:rgba(113,104,255,.07);box-shadow:0 0 0 4px rgba(113,104,255,.12)}
+    .key-input.invalid{border-color:rgba(255,100,124,.6);box-shadow:0 0 0 3px rgba(255,100,124,.08)}
+    .progress{height:3px;margin:10px 2px 0;background:rgba(255,255,255,.04);border-radius:99px;overflow:hidden}
+    .progress span{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .15s}
+    .error{min-height:22px;margin:12px 2px 8px;color:var(--danger);font-size:12px;text-align:center}
+    .connect{width:100%;height:54px;border:0;border-radius:15px;background:linear-gradient(135deg,#7168ff,#5b56e9);color:white;font-size:12px;font-weight:800;letter-spacing:3px;cursor:pointer;box-shadow:0 12px 28px rgba(91,86,233,.22);transition:transform .15s,filter .15s,opacity .15s}
+    .connect:hover{filter:brightness(1.08);transform:translateY(-1px)}
+    .connect:active{transform:scale(.985)}
+    .connect:disabled{opacity:.6;cursor:wait;transform:none}
+    .bottom{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:20px;color:var(--muted);font-size:11px}
+    .secure-dot{width:6px;height:6px;border-radius:50%;background:var(--success);box-shadow:0 0 8px rgba(91,224,161,.5)}
+    .help{margin-top:22px;padding:14px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.018)}
+    .help summary{list-style:none;display:flex;align-items:center;justify-content:space-between;cursor:pointer;color:#b8bfd3;font-size:12px;font-weight:600}
+    .help summary::-webkit-details-marker{display:none}
+    .help summary:after{content:"+";font-size:18px;color:var(--muted)}
+    .help[open] summary:after{content:"−"}
+    .help p{margin-top:12px;color:var(--muted);font-size:11px;line-height:1.65}
+    code{font-family:ui-monospace,Consolas,monospace;color:#c4c8ff;background:rgba(255,255,255,.06);padding:2px 5px;border-radius:5px}
+    #reconnecting{display:none;margin:-10px 0 18px;text-align:center;color:var(--muted);font-size:12px}
+    @media(max-width:420px){body{padding:16px}.card{border-radius:22px;padding:26px 22px}.brand{margin-bottom:24px}.key-input{height:64px}}
+    @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
   </style>
 </head>
 <body>
-  <div class="card" id="card">
-    <div class="logo"><em>J</em>ARVIS</div>
-    <div class="sub">Remote Access</div>
-    <p id="reconnecting">Reconnecting…</p>
-    <p class="hint">Press <strong style="color:var(--text)">Remote Control</strong> in the JARVIS desktop app to get a QR code or session key.</p>
-    <div class="key-wrap">
-      <input class="key-input" id="key" type="text" maxlength="6"
-             autocomplete="off" autocorrect="off" spellcheck="false"
-             placeholder="· · · · · ·">
-    </div>
-    <div class="err" id="err"></div>
-    <button class="btn" onclick="doLogin()">CONNECT</button>
-    <p class="voice-note">
-      🎤 <strong style="color:var(--text)">Voice commands:</strong> open
-      <code>chrome://flags</code> on your phone, search
-      <code>Insecure origins treated as secure</code>, add your JARVIS URL, tap Relaunch.
-    </p>
-  </div>
-
+  <main class="shell">
+    <section class="card" id="card">
+      <div class="brand"><div class="brand-mark">J</div><div class="brand-name">JARVIS</div></div>
+      <div class="eyebrow">Secure remote session</div>
+      <h1>Connect to your assistant</h1>
+      <p class="description">Enter the 8-character pairing key shown in the Remote Control window on your desktop.</p>
+      <p id="reconnecting">Checking remembered device…</p>
+      <label class="key-label" for="key"><span>Pairing key</span><span>8 characters</span></label>
+      <input class="key-input" id="key" type="text" maxlength="8" inputmode="text" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" placeholder="••••••••" aria-label="8-character pairing key">
+      <div class="progress"><span id="progress"></span></div>
+      <div class="error" id="err" role="alert" aria-live="polite"></div>
+      <button class="connect" id="connect" type="button">CONNECT</button>
+      <div class="bottom"><span class="secure-dot"></span><span>Pairing key is one-time and expires</span></div>
+      <details class="help">
+        <summary>Voice commands setup</summary>
+        <p>For microphone access on a local network, open <code>chrome://flags</code> on your phone and enable <code>Insecure origins treated as secure</code>. Add your JARVIS URL and relaunch the browser. This is only required for voice features; text control works without it.</p>
+      </details>
+    </section>
+  </main>
   <script>
-    // Try auto-reconnect with stored device token (set on first QR login)
-    (async function() {
-      const devTok = localStorage.getItem('jarvis_device_token');
-      if (!devTok) return;
-      document.getElementById('reconnecting').style.display = 'block';
-      try {
-        const r = await fetch('/api/device-login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ device_token: devTok }),
-        });
-        const d = await r.json();
-        if (d.ok && d.token) {
-          sessionStorage.setItem('jarvis_key', d.key);
-          sessionStorage.setItem('jarvis_token', d.token);
+    const inp=document.getElementById('key'),err=document.getElementById('err'),btn=document.getElementById('connect'),progress=document.getElementById('progress'),card=document.getElementById('card');
+    const VALID=/^[A-HJKMNP-Z2-9]{8}$/;
+    inp.focus();
+    inp.addEventListener('input',()=>{
+      inp.value=inp.value.toUpperCase().replace(/[^A-HJKMNP-Z2-9]/g,'');
+      progress.style.width=(inp.value.length/8*100)+'%';
+      err.textContent='';
+      inp.classList.remove('invalid');
+      if(inp.value.length===8)doLogin();
+    });
+    inp.addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+    btn.addEventListener('click',doLogin);
+    async function doLogin(){
+      const key=inp.value.trim();
+      if(!VALID.test(key)){showError('Enter all 8 characters of your pairing key.');return;}
+      if(btn.disabled)return;
+      btn.disabled=true;btn.textContent='CONNECTING…';err.textContent='';
+      try{
+        const r=await fetch('/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:key})});
+        const data=await r.json();
+        if(data.ok&&data.token){
+          sessionStorage.setItem('jarvis_key',key);
+          sessionStorage.setItem('jarvis_token',data.token);
           location.replace('/');
           return;
         }
-      } catch (_) {}
-      // Device token rejected (server restarted) — clear it and show normal form
+        showError(data.error||'Invalid or expired key.');
+      }catch(e){showError('Cannot reach JARVIS. Check your connection and try again.');}
+      finally{btn.disabled=false;btn.textContent='CONNECT';}
+    }
+    function showError(message){
+      err.textContent=message;inp.classList.add('invalid');card.animate([{transform:'translateX(0)'},{transform:'translateX(-5px)'},{transform:'translateX(5px)'},{transform:'translateX(0)'}],{duration:260});
+    }
+    (async()=>{
+      const devTok=localStorage.getItem('jarvis_device_token');
+      if(!devTok)return;
+      document.getElementById('reconnecting').style.display='block';
+      try{
+        const r=await fetch('/api/device-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_token:devTok})});
+        const d=await r.json();
+        if(d.ok&&d.token){sessionStorage.setItem('jarvis_key',d.key);sessionStorage.setItem('jarvis_token',d.token);location.replace('/');return;}
+      }catch(_){}
       localStorage.removeItem('jarvis_device_token');
-      document.getElementById('reconnecting').style.display = 'none';
+      document.getElementById('reconnecting').style.display='none';
     })();
-
-    const inp = document.getElementById('key');
-    inp.focus();
-
-    inp.addEventListener('input', () => {
-      inp.value = inp.value.toUpperCase().replace(/[^A-Z2-9]/g, '');
-      if (inp.value.length === 6) doLogin();
-    });
-    inp.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
-
-    async function doLogin() {
-      const key = inp.value.trim();
-      if (key.length < 6) { shake(); return; }
-      let data;
-      try {
-        const r = await fetch('/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pin: key })
-        });
-        data = await r.json();
-      } catch (e) {
-        document.getElementById('err').textContent = 'Connection error';
-        shake(); return;
-      }
-      if (data.ok && data.token) {
-        sessionStorage.setItem('jarvis_key', key);
-        sessionStorage.setItem('jarvis_token', data.token);
-        location.href = '/';
-      } else {
-        inp.value = '';
-        inp.focus();
-        document.getElementById('err').textContent = 'Invalid or expired key';
-        shake();
-      }
-    }
-
-    function shake() {
-      const c = document.getElementById('card');
-      c.classList.remove('shake');
-      void c.offsetWidth;
-      c.classList.add('shake');
-    }
   </script>
 </body>
 </html>

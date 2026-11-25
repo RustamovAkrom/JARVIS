@@ -27,9 +27,20 @@ class _SysMetrics:
         self.mem_available_bytes = int(memory.available)
         self.net_upload_bps = 0.0
         self.net_download_bps = 0.0
+        self.disk_read_bps = 0.0
+        self.disk_write_bps = 0.0
+        self.disk_total_bytes = 0
+        self.disk_used_bytes = 0
+        self.swap_total_bytes = 0
+        self.swap_used_bytes = 0
+        self.swap_percent = 0.0
+        self.battery_percent = -1.0
+        self.battery_plugged = None
         self.gpu_memory_used_mb = -1.0
         self.gpu_memory_total_mb = -1.0
         self.gpu_temp = -1.0
+        self._last_disk = psutil.disk_io_counters()
+        self._last_disk_t = time.time()
         self._lock = threading.Lock()
         self._last_net = psutil.net_io_counters()
         self._last_net_t = time.time()
@@ -67,6 +78,18 @@ class _SysMetrics:
 
         nc = psutil.net_io_counters()
         now = time.time()
+        disk_read_bps = disk_write_bps = 0.0
+        try:
+            dc = psutil.disk_io_counters()
+            dt = now - self._last_disk_t
+            if dc and self._last_disk and dt > 0:
+                disk_read_bps = max(0.0, (dc.read_bytes - self._last_disk.read_bytes) / dt)
+                disk_write_bps = max(0.0, (dc.write_bytes - self._last_disk.write_bytes) / dt)
+            if dc:
+                self._last_disk = dc
+                self._last_disk_t = now
+        except Exception:
+            pass
         dt = now - self._last_net_t
         if dt > 0:
             upload_bps = max(0.0, (nc.bytes_sent - self._last_net.bytes_sent) / dt)
@@ -97,6 +120,24 @@ class _SysMetrics:
             gpu = self.gpu
             tmp = self.tmp
 
+        try:
+            root = psutil.disk_usage("C:\\") if _OS == "Windows" else psutil.disk_usage("/")
+            disk_total_bytes, disk_used_bytes = int(root.total), int(root.used)
+        except Exception:
+            disk_total_bytes = disk_used_bytes = 0
+        try:
+            swap = psutil.swap_memory()
+            swap_total_bytes, swap_used_bytes, swap_percent = int(swap.total), int(swap.used), float(swap.percent)
+        except Exception:
+            swap_total_bytes = swap_used_bytes = 0
+            swap_percent = 0.0
+        try:
+            battery = psutil.sensors_battery()
+            battery_percent = float(battery.percent) if battery else -1.0
+            battery_plugged = bool(battery.power_plugged) if battery else None
+        except Exception:
+            battery_percent, battery_plugged = -1.0, None
+
         with self._lock:
             self.cpu = cpu
             self.mem = mem
@@ -109,6 +150,15 @@ class _SysMetrics:
             self.mem_available_bytes = int(memory.available)
             self.net_upload_bps = upload_bps
             self.net_download_bps = download_bps
+            self.disk_read_bps = disk_read_bps
+            self.disk_write_bps = disk_write_bps
+            self.disk_total_bytes = disk_total_bytes
+            self.disk_used_bytes = disk_used_bytes
+            self.swap_total_bytes = swap_total_bytes
+            self.swap_used_bytes = swap_used_bytes
+            self.swap_percent = swap_percent
+            self.battery_percent = battery_percent
+            self.battery_plugged = battery_plugged
 
     def _read_nvidia_smi(self) -> tuple[float, float, float, float] | None:
         """Return GPU utilization, used/total VRAM and temperature in MB/°C."""
@@ -153,7 +203,13 @@ class _SysMetrics:
         # Windows GPU providers can enter COM/NVML code that is not safe to
         # call from the sampler thread. Keep this probe disabled on Windows;
         # CPU, memory, network and process metrics remain available.
+        # NVIDIA telemetry can be queried through the bounded nvidia-smi
+        # subprocess on Windows without entering a COM apartment.
         if _OS == "Windows":
+            # Keep GPU probing disabled on Windows. Even bounded subprocess
+            # probes can interfere with sampler lifecycle and are not needed
+            # for the compact monitor. A dedicated telemetry provider can be
+            # added later without touching the UI thread.
             return -1.0
 
         # nvidia-smi works on Linux/macOS desktop drivers and headless systems.
@@ -259,6 +315,15 @@ class _SysMetrics:
                 "mem_available_bytes": self.mem_available_bytes,
                 "net_upload_bps": self.net_upload_bps,
                 "net_download_bps": self.net_download_bps,
+                "disk_read_bps": self.disk_read_bps,
+                "disk_write_bps": self.disk_write_bps,
+                "disk_total_bytes": self.disk_total_bytes,
+                "disk_used_bytes": self.disk_used_bytes,
+                "swap_total_bytes": self.swap_total_bytes,
+                "swap_used_bytes": self.swap_used_bytes,
+                "swap_percent": self.swap_percent,
+                "battery_percent": self.battery_percent,
+                "battery_plugged": self.battery_plugged,
                 "gpu_memory_used_mb": self.gpu_memory_used_mb,
                 "gpu_memory_total_mb": self.gpu_memory_total_mb,
                 "gpu_temp": self.gpu_temp,

@@ -16,6 +16,11 @@ config/ui_tab_close.png
 config/ui_history.json
 config/ui_reminders.json
 memory/pomodoro_state.json
+cache/
+holo_desk/
+tasks/
+cloud_state/
+databases/
 
 **/token*.json
 **/client_secret*.json
@@ -57,8 +62,12 @@ Thumbs.db
 desktop.ini
 
 # ── Runtime output ────────────────────────────────────────────────────────────
+*.lock
 *.log
 logs/
 downloads/
 screenshots/
 DIAMOND HILLS/
+
+# Local credentials
+api_key.json

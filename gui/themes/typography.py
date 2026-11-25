@@ -23,12 +23,22 @@ R_L, R_S = 16, 8
 class TypeScale:
     """Stable pixel sizes for UI text; diagnostic output may use mono fonts."""
 
+    MICRO = 10  # dense metadata, timestamps
     CAPTION = 11
     SECONDARY = 12
     BODY = 14
     SECTION = 13
     TITLE = 20
     METRIC = 22
+    DISPLAY = 28  # hero headings, onboarding titles, empty-state headlines
+
+
+class Weights:
+    """Named QFont weights so call sites read as design intent."""
+
+    REGULAR = QFont.Weight.Normal
+    DEMIBOLD = QFont.Weight.DemiBold
+    BOLD = QFont.Weight.Bold
 
 
 def ui_font(pixel_size: int = TypeScale.BODY, weight=QFont.Weight.Normal) -> QFont:

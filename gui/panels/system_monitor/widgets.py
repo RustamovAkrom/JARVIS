@@ -12,10 +12,32 @@ from gui.themes.typography import FONT_MONO, FONT_UI
 
 class MetricGauge(QWidget):
 
-    def __init__(self, label: str, color: str = C.PRI, detail: str = "", parent=None):
+    def __init__(
+        self,
+        label: str,
+        color: str = C.PRI,
+        detail: str = "",
+        parent=None,
+        *,
+        theme_token: str | None = None,
+    ):
         super().__init__(parent)
         self._label = label
         self._color = color
+        # Preserve semantic token identity so custom-painted gauges can follow
+        # live theme changes without losing explicit caller-selected colours.
+        semantic_tokens = {"PRI", "GREEN", "GREEN_D", "ACC", "ACC2", "RED", "MUTED_C"}
+        self._theme_color_key = (
+            theme_token
+            if theme_token in semantic_tokens
+            else next(
+                (
+                    key for key in ("PRI", "GREEN", "GREEN_D", "ACC", "ACC2", "RED", "MUTED_C")
+                    if getattr(C, key) == color
+                ),
+                None,
+            )
+        )
         self._detail = detail
         self._value = 0.0
         self._display_value = 0.0
@@ -25,6 +47,12 @@ class MetricGauge(QWidget):
         self._animation.setDuration(520)
         self._animation.setEasingCurve(QEasingCurve.Type.OutCubic)
         self._animation.valueChanged.connect(self._set_display_value)
+
+    def apply_jarvis_theme(self) -> None:
+        """Refresh cached semantic colour after a global theme transition."""
+        if self._theme_color_key:
+            self._color = getattr(C, self._theme_color_key)
+        self.update()
 
     def set_value(self, pct: float, text: str):
         v = max(0.0, min(100.0, float(pct)))
@@ -64,8 +92,10 @@ class MetricGauge(QWidget):
         p.drawEllipse(outer)
 
         p.setBrush(Qt.BrushStyle.NoBrush)
+        # The remainder track must stay visually separate from the
+        # semantic progress arc, including in the pure white/black presets.
         p.setPen(
-            QPen(qcol(C.BORDER_B), 6, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
+            QPen(qcol(C.BORDER_B, 72), 6, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
         )
         p.drawArc(ring, 90 * 16, -360 * 16)
 

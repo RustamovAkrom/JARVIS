@@ -547,7 +547,8 @@ def _screen_find(description: str) -> tuple[int, int] | None:
             return int(match.group(1)), int(match.group(2))
 
     except Exception as e:
-        print(f"[ComputerControl] ⚠️ screen_find failed: {e}")
+        from core.security_logging import redact_sensitive_text
+        print(f"[ComputerControl] ⚠️ screen_find failed: {redact_sensitive_text(e)}")
 
     return None
 
@@ -686,7 +687,7 @@ def computer_control(
             if not microphone_locked:
                 return "Screen action paused: microphone protection could not be acquired."
         except Exception as exc:
-            return f"Screen action paused: microphone protection could not start ({exc})."
+            return f"Screen action paused: microphone protection could not start ({type(exc).__name__})."
 
     if player:
         # Terminal, not the HUD: the activity log is for the conversation and
@@ -694,7 +695,7 @@ def computer_control(
         # core/outcome.is_problem().
         print(f"[ComputerControl] {action}")
 
-    print(f"[ComputerControl] ▶ {action}  {params}")
+    print("[ComputerControl] Action started.")
 
     try:
 
@@ -784,7 +785,8 @@ def computer_control(
         if action == "random_data":
             dt = params.get("type", "name")
             result = _random_data(dt)
-            print(f"[ComputerControl] 🎲 random {dt} → {result}")
+            from core.security_logging import redact_sensitive_text
+            print("[ComputerControl] Random data generated.")
             return result
 
         if action == "user_data":
@@ -793,16 +795,15 @@ def computer_control(
             value = profile.get(field, "")
             if not value:
                 value = _random_data(field)
-                print(
-                    f"[ComputerControl] ⚠️ No '{field}' in memory, using random: {value}"
-                )
+                print("[ComputerControl] User data was unavailable; a generated value was used.")
             return value
 
         return f"Unknown action: '{action}'"
 
     except Exception as e:
-        print(f"[ComputerControl] ❌ {action}: {e}")
-        return f"computer_control '{action}' failed: {e}"
+        from core.security_logging import redact_sensitive_text
+        print(f"[ComputerControl] ❌ {action}: {redact_sensitive_text(e)}")
+        return f"computer_control '{action}' failed: {type(e).__name__}"
     finally:
         if microphone_locked and input_lock is not None:
             input_lock.release("computer-screen-action")

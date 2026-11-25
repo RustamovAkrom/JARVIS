@@ -17,7 +17,7 @@ def background_tasks(parameters: dict, player=None) -> str:
                 "background_tasks",
                 task_id=task["id"],
                 status=task["status"],
-                note="the research report will appear in the content panel",
+                note="the task will appear in the Tasks panel; the report file is saved when available",
             )
 
         if action == "list":
@@ -44,6 +44,9 @@ def background_tasks(parameters: dict, player=None) -> str:
                 status=task["status"],
                 query=task["query"],
                 error=task.get("error") or None,
+                report_status=task.get("report_status") or None,
+                report_error=task.get("report_error") or None,
+                report_path=task.get("report_path") or None,
             )
         if action == "result":
             if task["status"] != "done":
@@ -66,7 +69,14 @@ def background_tasks(parameters: dict, player=None) -> str:
                     status=task["status"],
                 )
             return (
-                outcome.done("background_tasks", task_id=task_id, status="done")
+                outcome.done(
+                    "background_tasks",
+                    task_id=task_id,
+                    status="done",
+                    report_status=task.get("report_status") or None,
+                    report_error=task.get("report_error") or None,
+                    report_path=task.get("report_path") or None,
+                )
                 + "\n"
                 + outcome.untrusted("background-research", task["result"])
             )
@@ -89,8 +99,9 @@ TOOL = {
     "name": "background_tasks",
     "description": (
         "Run longer, read-only web research in the background while the conversation continues. "
-        "Use start with the user's research question; the completed report appears in the content "
-        "panel. Use list, status, result, or cancel to manage tasks. For a quick answer, use "
+        "Use start with the user's research question; the task appears in the Tasks panel and "
+        "a report file is saved when available. Use list, status, result, or cancel to manage tasks. "
+        "For a quick answer, use "
         "web_search instead. This tool cannot control the computer or modify files."
     ),
     "tier": "core",

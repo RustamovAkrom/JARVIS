@@ -15,6 +15,17 @@ class SystemMetricsTests(unittest.TestCase):
         sampler._lock = threading.Lock()
         sampler._last_net = SimpleNamespace(bytes_sent=100, bytes_recv=200)
         sampler._last_net_t = time.time() - 1
+        sampler._last_disk = SimpleNamespace(read_bytes=100, write_bytes=100)
+        sampler._last_disk_t = time.time() - 1
+        sampler.disk_read_bps = 0.0
+        sampler.disk_write_bps = 0.0
+        sampler.disk_total_bytes = 0
+        sampler.disk_used_bytes = 0
+        sampler.swap_total_bytes = 0
+        sampler.swap_used_bytes = 0
+        sampler.swap_percent = 0.0
+        sampler.battery_percent = -1.0
+        sampler.battery_plugged = None
         sampler._process_tick = 0
         sampler.process_count = 0
         sampler._slow_tick = 0

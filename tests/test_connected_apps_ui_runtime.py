@@ -1,0 +1,663 @@
+from __future__ import annotations
+
+import copy
+import os
+
+import pytest
+
+
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+
+class FakeStore:
+    def __init__(self, rows=None, credentials=None):
+        self.rows = copy.deepcopy(rows or {})
+        self.credentials = dict(credentials or {})
+
+    def get_connection(self, cid):
+        row = self.rows.get(cid)
+        return copy.deepcopy(row) if row else None
+
+    def upsert_connection(self, row):
+        self.rows[row["id"]] = copy.deepcopy(row)
+
+    def get_credential(self, cid, key):
+        return self.credentials.get((cid, key), "")
+
+    def set_credential(self, cid, key, value):
+        self.credentials[(cid, key)] = value
+
+    def delete_credential(self, cid, key):
+        self.credentials.pop((cid, key), None)
+
+
+class FakeConnectedAppsService:
+    def __init__(self, rows=None, credentials=None):
+        self.store = FakeStore(rows, credentials)
+        self.disconnect_calls = []
+        self.remove_calls = []
+        self.reauthorize_calls = []
+        self.permission_updates = []
+        self.tool_calls = []
+
+    def connections(self):
+        return list(self.store.rows.values())
+
+    def native_tools(self, cid):
+        return []
+
+    def tools(self, cid):
+        return []
+
+    def reauthorize_github(self, *, client_id, client_secret="", connection_id="github-native"):
+        self.reauthorize_calls.append((client_id, client_secret, connection_id))
+        row = self.store.get_connection(connection_id) or {
+            "id": connection_id,
+            "app_id": "github",
+            "display_name": "GitHub",
+            "enabled": True,
+            "metadata": {"native": True, "native_adapter": "github"},
+        }
+        row["status"] = "connected"
+        row["last_error"] = ""
+        row.setdefault("metadata", {})["health"] = "healthy"
+        self.store.upsert_connection(row)
+        self.store.set_credential(connection_id, "access_token", "fresh-test-token")
+        return row
+
+    def reauthorize_native_oauth(
+        self, app_id, provider_id, *, client_id, client_secret="", connection_id=None
+    ):
+        self.reauthorize_calls.append((app_id, provider_id, client_id, client_secret, connection_id))
+        row = self.store.get_connection(connection_id)
+        row["status"] = "connected"
+        row["last_error"] = ""
+        row.setdefault("metadata", {})["health"] = "healthy"
+        self.store.upsert_connection(row)
+        self.store.set_credential(connection_id, "access_token", "fresh-calendar-token")
+        return row
+
+    def disconnect(self, cid):
+        self.disconnect_calls.append(cid)
+        row = self.store.get_connection(cid)
+        if row:
+            row["status"] = "disconnected"
+            row["last_error"] = ""
+            row.setdefault("metadata", {})["health"] = "disconnected"
+            self.store.upsert_connection(row)
+            for key in ("access_token", "refresh_token", "id_token", "expires_at", "token_type"):
+                self.store.delete_credential(cid, key)
+        return True
+
+    def remove(self, cid):
+        self.remove_calls.append(cid)
+        self.store.rows.pop(cid, None)
+        for key in [item for item in self.store.credentials if item[0] == cid]:
+            self.store.credentials.pop(key, None)
+        return True
+
+    def call_native_tool(self, cid, tool_name, arguments):
+        self.tool_calls.append((cid, tool_name, arguments))
+        if tool_name == "telegram_list_chats":
+            return [{"chat_id": "1001", "name": "Allowed test chat"}]
+        return {}
+
+    def update_telegram_permissions(self, cid, *, permissions=None, allowed_chats=None):
+        row = self.store.get_connection(cid)
+        metadata = dict(row.get("metadata") or {})
+        metadata["telegram_permissions"] = dict(permissions or {})
+        metadata["telegram_allowed_chats"] = list(allowed_chats or [])
+        row["metadata"] = metadata
+        self.store.upsert_connection(row)
+        self.permission_updates.append((cid, permissions, allowed_chats))
+        return row
+
+
+class InlinePool:
+    """Run QRunnable inline so tests cover Qt signal wiring deterministically."""
+
+    def start(self, worker):
+        worker.run()
+
+
+@pytest.fixture(scope="module")
+def qapp():
+    from PyQt6.QtWidgets import QApplication
+
+    app = QApplication.instance() or QApplication([])
+    yield app
+
+
+def _github_row():
+    return {
+        "id": "github-native",
+        "app_id": "github",
+        "display_name": "GitHub",
+        "status": "connected",
+        "enabled": True,
+        "auth_type": "oauth2",
+        "scopes": ["repo", "read:user", "user:email"],
+        "last_error": "",
+        "metadata": {"native": True, "native_adapter": "github", "health": "healthy"},
+    }
+
+
+def _google_calendar_row():
+    return {
+        "id": "google-calendar-native",
+        "app_id": "google_calendar",
+        "display_name": "Google Calendar",
+        "status": "connected",
+        "enabled": True,
+        "auth_type": "oauth2",
+        "scopes": ["https://www.googleapis.com/auth/calendar.events"],
+        "last_error": "",
+        "metadata": {"native": True, "native_adapter": "google_calendar", "health": "healthy"},
+    }
+
+
+def _telegram_row():
+    from core.connected_apps.adapters.telegram_personal import DEFAULT_PERMISSIONS
+
+    return {
+        "id": "telegram-test",
+        "app_id": "telegram_personal",
+        "display_name": "Telegram Personal",
+        "status": "connected",
+        "enabled": True,
+        "auth_type": "custom",
+        "scopes": ["local-session"],
+        "last_error": "",
+        "metadata": {
+            "native": True,
+            "native_adapter": "telegram_personal",
+            "telegram_permissions": dict(DEFAULT_PERMISSIONS),
+            "telegram_allowed_chats": [],
+        },
+    }
+
+
+def test_connected_apps_panel_github_reconnect_and_disconnect_button_runtime(
+    qapp, monkeypatch
+):
+    import gui.settings.connected_apps_panel as panel_module
+    from gui.settings.connected_apps_panel import ConnectedAppsPanel
+    from PyQt6.QtCore import Qt
+    from PyQt6.QtTest import QTest
+
+    service = FakeConnectedAppsService(
+        rows={"github-native": _github_row()},
+        credentials={
+            ("github-native", "access_token"): "old-token",
+            ("github-native", "oauth_client_id"): "client-id",
+            ("github-native", "oauth_client_secret"): "client-secret",
+        },
+    )
+    monkeypatch.setattr(panel_module, "service", service)
+
+    panel = ConnectedAppsPanel()
+    panel.pool = InlinePool()
+    panel.show()
+    qapp.processEvents()
+    try:
+        assert panel.github_status_label.text() == "Connected"
+        assert panel.add_github_btn.text() == "Reconnect"
+        assert panel.add_github_btn.isEnabled()
+        assert panel.native_disconnect_btn.isVisible()
+        assert panel.native_disconnect_btn.isEnabled()
+
+        QTest.mouseClick(panel.add_github_btn, Qt.MouseButton.LeftButton)
+        qapp.processEvents()
+        assert service.reauthorize_calls == [
+            ("client-id", "client-secret", "github-native")
+        ]
+        assert service.store.get_credential("github-native", "access_token") == "fresh-test-token"
+        assert panel.github_status_label.text() == "Connected"
+
+        QTest.mouseClick(panel.native_disconnect_btn, Qt.MouseButton.LeftButton)
+        qapp.processEvents()
+        assert service.disconnect_calls == ["github-native"]
+        assert service.store.get_credential("github-native", "access_token") == ""
+        assert panel.github_status_label.text() == "Not connected"
+        assert not panel.native_disconnect_btn.isVisible()
+    finally:
+        panel.close()
+        panel.deleteLater()
+        qapp.processEvents()
+
+
+def test_connected_apps_panel_telegram_permissions_dialog_saves_chat_allowlist(
+    qapp, monkeypatch
+):
+    import gui.settings.connected_apps_panel as panel_module
+    from gui.settings.connected_apps_panel import ConnectedAppsPanel
+    from PyQt6.QtCore import Qt
+    from PyQt6.QtWidgets import QDialog, QListWidget, QCheckBox
+
+    service = FakeConnectedAppsService(rows={"telegram-test": _telegram_row()})
+    monkeypatch.setattr(panel_module, "service", service)
+
+    def accept_permissions_dialog(dialog):
+        chat_lists = dialog.findChildren(QListWidget)
+        assert len(chat_lists) == 1
+        chat_lists[0].item(0).setCheckState(Qt.CheckState.Checked)
+        for checkbox in dialog.findChildren(QCheckBox):
+            if checkbox.text() == "Read recent messages":
+                checkbox.setChecked(True)
+        return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(QDialog, "exec", accept_permissions_dialog)
+    panel = ConnectedAppsPanel()
+    panel.pool = InlinePool()
+    panel.show()
+    qapp.processEvents()
+    try:
+        assert panel.telegram_status_label.text() == "Connected"
+        assert panel.telegram_manage_btn.isVisible()
+        assert panel.telegram_manage_btn.isEnabled()
+
+        panel.manage_telegram_personal()
+        saved = service.store.get_connection("telegram-test")["metadata"]
+        assert saved["telegram_allowed_chats"] == ["1001"]
+        assert saved["telegram_permissions"]["read_recent_messages"] is True
+        assert saved["telegram_permissions"]["ai_access"] is False
+        assert service.tool_calls == [
+            ("telegram-test", "telegram_list_chats", {"limit": 100})
+        ]
+    finally:
+        panel.close()
+        panel.deleteLater()
+        qapp.processEvents()
+
+
+def test_connected_apps_panel_telegram_disconnect_removes_session_and_credentials(
+    qapp, monkeypatch
+):
+    import gui.settings.connected_apps_panel as panel_module
+    from gui.settings.connected_apps_panel import ConnectedAppsPanel
+    from PyQt6.QtCore import Qt
+    from PyQt6.QtTest import QTest
+    from PyQt6.QtWidgets import QMessageBox
+
+    service = FakeConnectedAppsService(
+        rows={"telegram-test": _telegram_row()},
+        credentials={("telegram-test", "mtproto_session"): "test-session"},
+    )
+    monkeypatch.setattr(panel_module, "service", service)
+    monkeypatch.setattr(
+        QMessageBox,
+        "question",
+        lambda *args, **kwargs: QMessageBox.StandardButton.Yes,
+    )
+
+    panel = ConnectedAppsPanel()
+    panel.pool = InlinePool()
+    panel.show()
+    qapp.processEvents()
+    try:
+        assert panel.telegram_disconnect_btn.isVisible()
+        assert panel.telegram_disconnect_btn.isEnabled()
+        QTest.mouseClick(panel.telegram_disconnect_btn, Qt.MouseButton.LeftButton)
+        qapp.processEvents()
+
+        assert service.remove_calls == ["telegram-test"]
+        assert "telegram-test" not in service.store.rows
+        assert service.store.get_credential("telegram-test", "mtproto_session") == ""
+        assert panel.telegram_status_label.text() == "Not connected"
+        assert not panel.telegram_manage_btn.isVisible()
+        assert not panel.telegram_disconnect_btn.isVisible()
+    finally:
+        panel.close()
+        panel.deleteLater()
+        qapp.processEvents()
+
+
+
+
+def test_connected_apps_panel_busy_state_blocks_and_restores_telegram_actions(
+    qapp, monkeypatch
+):
+    import gui.settings.connected_apps_panel as panel_module
+    from gui.settings.connected_apps_panel import ConnectedAppsPanel
+
+    service = FakeConnectedAppsService()
+    monkeypatch.setattr(panel_module, "service", service)
+
+    panel = ConnectedAppsPanel()
+    try:
+        assert panel.telegram_connect_btn.isEnabled()
+        assert not panel.telegram_manage_btn.isVisible()
+        assert not panel.telegram_disconnect_btn.isVisible()
+
+        panel._busy(True, "Connecting Telegram…")
+        assert not panel.telegram_connect_btn.isEnabled()
+        assert not panel.telegram_manage_btn.isEnabled()
+        assert not panel.telegram_disconnect_btn.isEnabled()
+
+        # A search refresh must not re-enable actions while a worker is active.
+        panel.search.setText("calendar")
+        qapp.processEvents()
+        assert not panel.telegram_connect_btn.isEnabled()
+        assert not panel.add_github_btn.isEnabled()
+        assert not panel.add_calendar_btn.isEnabled()
+
+        panel._busy(False)
+        assert panel.telegram_connect_btn.isEnabled()
+        assert not panel.telegram_manage_btn.isVisible()
+        assert not panel.telegram_disconnect_btn.isVisible()
+    finally:
+        panel.close()
+        panel.deleteLater()
+        qapp.processEvents()
+
+
+def test_connected_telegram_actions_restore_only_for_live_session(qapp, monkeypatch):
+    import gui.settings.connected_apps_panel as panel_module
+    from gui.settings.connected_apps_panel import ConnectedAppsPanel
+
+    service = FakeConnectedAppsService(rows={"telegram-test": _telegram_row()})
+    monkeypatch.setattr(panel_module, "service", service)
+
+    panel = ConnectedAppsPanel()
+    panel.show()
+    qapp.processEvents()
+    try:
+        panel._busy(True, "Disconnecting Telegram…")
+        assert not panel.telegram_connect_btn.isEnabled()
+        assert not panel.telegram_manage_btn.isEnabled()
+        assert not panel.telegram_disconnect_btn.isEnabled()
+
+        panel._busy(False)
+        assert panel.telegram_connect_btn.isEnabled()
+        assert panel.telegram_connect_btn.text() == "Reconnect"
+        assert panel.telegram_manage_btn.isVisible()
+        assert panel.telegram_manage_btn.isEnabled()
+        assert panel.telegram_disconnect_btn.isVisible()
+        assert panel.telegram_disconnect_btn.isEnabled()
+    finally:
+        panel.close()
+        panel.deleteLater()
+        qapp.processEvents()
+
+
+
+def test_connected_apps_oauth_failure_exits_busy_state_and_surfaces_error(qapp, monkeypatch):
+    import gui.settings.connected_apps_panel as panel_module
+    from gui.settings.connected_apps_panel import ConnectedAppsPanel
+    from PyQt6.QtWidgets import QMessageBox
+
+    service = FakeConnectedAppsService(rows={"github-native": _github_row()})
+    monkeypatch.setattr(panel_module, "service", service)
+    warnings = []
+    monkeypatch.setattr(
+        QMessageBox,
+        "warning",
+        lambda *args, **kwargs: warnings.append((args, kwargs)),
+    )
+
+    panel = ConnectedAppsPanel()
+    try:
+        panel._busy(True, "Opening GitHub authorization in browser…")
+        panel._connected(None, RuntimeError("OAuth callback timed out"))
+
+        assert panel._busy_active is False
+        assert panel.add_github_btn.isEnabled()
+        assert panel.status.text().startswith("Connection failed:")
+        assert warnings
+        # The panel must not invent a disconnected state when the service still
+        # reports a previously valid connection.
+        assert panel.github_status_label.text() == "Connected"
+    finally:
+        panel.close()
+        panel.deleteLater()
+        qapp.processEvents()
+
+
+def test_connected_apps_oauth_error_state_is_reflected_after_refresh(qapp, monkeypatch):
+    import gui.settings.connected_apps_panel as panel_module
+    from gui.settings.connected_apps_panel import ConnectedAppsPanel
+
+    row = _github_row()
+    row["status"] = "error"
+    row["last_error"] = "OAuth token exchange failed"
+    service = FakeConnectedAppsService(rows={"github-native": row})
+    monkeypatch.setattr(panel_module, "service", service)
+
+    panel = ConnectedAppsPanel()
+    panel.show()
+    qapp.processEvents()
+    try:
+        assert panel.github_status_label.text() == "Error"
+        assert panel.github_status_label.toolTip() == "OAuth token exchange failed"
+        assert panel.add_github_btn.text() == "Reconnect"
+        assert panel.native_disconnect_btn.isVisible()
+    finally:
+        panel.close()
+        panel.deleteLater()
+        qapp.processEvents()
+
+def test_connected_apps_panel_tabs_and_mcp_controls_are_mounted(qapp, monkeypatch):
+    import gui.settings.connected_apps_panel as panel_module
+    from gui.settings.connected_apps_panel import ConnectedAppsPanel
+    from PyQt6.QtCore import Qt
+    from PyQt6.QtTest import QTest
+
+    service = FakeConnectedAppsService()
+    monkeypatch.setattr(panel_module, "service", service)
+
+    panel = ConnectedAppsPanel()
+    panel.show()
+    qapp.processEvents()
+    try:
+        assert panel.sections.count() == 2
+        assert panel.sections.tabText(0) == "Apps"
+        assert panel.sections.tabText(1) == "MCP Servers"
+
+        panel.sections.setCurrentIndex(1)
+        QTest.qWait(20)
+        assert panel.sections.currentIndex() == 1
+        assert not panel.add_server_btn.isHidden()
+        assert not panel.reconnect_all_btn.isHidden()
+        assert not panel.health_all_btn.isHidden()
+        panel.sections.setCurrentIndex(0)
+        QTest.qWait(20)
+        assert panel.sections.currentIndex() == 0
+    finally:
+        panel.close()
+        panel.deleteLater()
+        qapp.processEvents()
+
+
+
+def test_connected_apps_panel_google_calendar_reconnect_and_disconnect_runtime(
+    qapp, monkeypatch
+):
+    import gui.settings.connected_apps_panel as panel_module
+    from gui.settings.connected_apps_panel import ConnectedAppsPanel
+    from PyQt6.QtCore import Qt
+    from PyQt6.QtTest import QTest
+
+    service = FakeConnectedAppsService(
+        rows={"google-calendar-native": _google_calendar_row()},
+        credentials={
+            ("google-calendar-native", "access_token"): "old-calendar-token",
+            ("google-calendar-native", "oauth_client_id"): "google-client-id",
+            ("google-calendar-native", "oauth_client_secret"): "google-client-secret",
+        },
+    )
+    monkeypatch.setattr(panel_module, "service", service)
+
+    panel = ConnectedAppsPanel()
+    panel.pool = InlinePool()
+    panel.show()
+    qapp.processEvents()
+    try:
+        assert panel.calendar_status_label.text() == "Connected"
+        assert panel.add_calendar_btn.text() == "Reconnect"
+        assert panel.add_calendar_btn.isEnabled()
+        assert panel.calendar_disconnect_btn.isVisible()
+        assert panel.calendar_disconnect_btn.isEnabled()
+
+        QTest.mouseClick(panel.add_calendar_btn, Qt.MouseButton.LeftButton)
+        qapp.processEvents()
+        assert service.reauthorize_calls == [
+            (
+                "google_calendar",
+                "google",
+                "google-client-id",
+                "google-client-secret",
+                "google-calendar-native",
+            )
+        ]
+        assert service.store.get_credential(
+            "google-calendar-native", "access_token"
+        ) == "fresh-calendar-token"
+
+        QTest.mouseClick(panel.calendar_disconnect_btn, Qt.MouseButton.LeftButton)
+        qapp.processEvents()
+        assert service.disconnect_calls == ["google-calendar-native"]
+        assert service.store.get_credential(
+            "google-calendar-native", "access_token"
+        ) == ""
+        assert panel.calendar_status_label.text() == "Not connected"
+        assert not panel.calendar_disconnect_btn.isVisible()
+    finally:
+        panel.close()
+        panel.deleteLater()
+        qapp.processEvents()
+
+
+def test_connected_apps_layout_reflows_for_narrow_and_wide_windows(qapp, monkeypatch):
+    import gui.settings.connected_apps_panel as panel_module
+    from gui.settings.connected_apps_panel import ConnectedAppsPanel
+    from PyQt6.QtWidgets import QBoxLayout
+
+    monkeypatch.setattr(panel_module, "service", FakeConnectedAppsService())
+    panel = ConnectedAppsPanel()
+    panel.show()
+    qapp.processEvents()
+    try:
+        panel.resize(640, 900)
+        qapp.processEvents()
+        responsive_layouts = (
+            panel.native_cards_layout,
+            panel.telegram_actions_layout,
+            panel.toolbar_top_layout,
+            panel.toolbar_actions_layout,
+            panel.primary_actions_layout,
+            panel.secondary_actions_layout,
+        )
+        assert all(
+            layout.direction() == QBoxLayout.Direction.TopToBottom
+            for layout in responsive_layouts
+        )
+        stylesheet = panel.styleSheet()
+        assert "QPushButton:focus" in stylesheet
+        assert "QCheckBox:focus" in stylesheet
+        assert "QListWidget:focus" in stylesheet
+        assert "border: 2px solid" in stylesheet
+
+        panel.resize(1000, 900)
+        qapp.processEvents()
+        assert all(
+            layout.direction() == QBoxLayout.Direction.LeftToRight
+            for layout in responsive_layouts
+        )
+    finally:
+        panel.close()
+        panel.deleteLater()
+        qapp.processEvents()
+
+
+def test_connected_apps_refresh_preserves_operation_feedback_with_native_selection(
+    qapp, monkeypatch
+):
+    import gui.settings.connected_apps_panel as panel_module
+    from gui.settings.connected_apps_panel import ConnectedAppsPanel
+
+    service = FakeConnectedAppsService(
+        rows={"github-native": _github_row()}
+    )
+    monkeypatch.setattr(panel_module, "service", service)
+
+    panel = ConnectedAppsPanel()
+    panel.show()
+    qapp.processEvents()
+    try:
+        panel.native_list.setCurrentRow(0)
+        qapp.processEvents()
+        panel.status.setText("Connection failed: OAuth callback timed out")
+
+        panel.refresh()
+
+        assert panel.status.text() == "Connection failed: OAuth callback timed out"
+        assert panel.details.toPlainText().startswith("GitHub")
+    finally:
+        panel.close()
+        panel.deleteLater()
+        qapp.processEvents()
+
+
+def test_connected_apps_diagnostics_redacts_errors_metadata_and_remote_tool_schemas(
+    qapp, monkeypatch
+):
+    import gui.settings.connected_apps_panel as panel_module
+    from gui.settings.connected_apps_panel import ConnectedAppsPanel
+
+    row = {
+        "id": "mcp-test",
+        "app_id": "custom-mcp",
+        "display_name": "Custom MCP",
+        "status": "connected",
+        "enabled": True,
+        "auth_type": "api_key",
+        "scopes": [],
+        "created_at": 1,
+        "updated_at": 2,
+        "last_error": "Provider returned access_token=error-secret",
+        "metadata": {
+            "native": False,
+            "env": {"API_TOKEN": "metadata-secret"},
+            "args": ["--api-key", "argument-secret"],
+        },
+    }
+    service = FakeConnectedAppsService(rows={"mcp-test": row})
+    monkeypatch.setattr(panel_module, "service", service)
+    monkeypatch.setattr(
+        service,
+        "tools",
+        lambda cid: [{
+            "name": "inspect",
+            "description": "Authorization: Bearer schema-secret",
+            "input_schema": {
+                "type": "object",
+                "properties": {"token": {"type": "string", "default": "schema-default-secret"}},
+            },
+        }],
+    )
+
+    panel = ConnectedAppsPanel()
+    try:
+        panel.list.addItem("Custom MCP")
+        panel.list.setCurrentRow(0)
+        panel.list.currentItem().setData(
+            __import__("PyQt6.QtCore", fromlist=["Qt"]).Qt.ItemDataRole.UserRole,
+            "mcp-test",
+        )
+        panel.copy_diagnostics()
+        exported = panel_module.QApplication.clipboard().text()
+
+        for secret in (
+            "error-secret",
+            "metadata-secret",
+            "argument-secret",
+            "schema-secret",
+            "schema-default-secret",
+        ):
+            assert secret not in exported
+        assert "[redacted]" in exported
+    finally:
+        panel.close()
+        panel.deleteLater()
+        qapp.processEvents()
+

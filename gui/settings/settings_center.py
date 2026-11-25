@@ -3,10 +3,11 @@
 import ctypes
 import platform
 
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QFont, QKeySequence, QShortcut
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal
+from PyQt6.QtGui import QColor, QFont, QKeySequence, QPalette, QShortcut
 from PyQt6.QtWidgets import (
     QApplication,
+    QComboBox,
     QDialog,
     QFrame,
     QHBoxLayout,
@@ -19,6 +20,7 @@ from PyQt6.QtWidgets import (
     QScrollArea,
     QSizeGrip,
     QStackedWidget,
+    QTabBar,
     QVBoxLayout,
     QWidget,
 )
@@ -40,7 +42,7 @@ def _center_style(glass_opacity: int = 100) -> str:
     panel_surface = glass_rgba(C.PANEL, glass_opacity, minimum_alpha=225, maximum_alpha=255)
     title_surface = glass_rgba(C.DARK, glass_opacity, minimum_alpha=220, maximum_alpha=255)
     return f"""
-        QDialog#SettingsCenter {{ background:{dialog_surface}; color:{C.TEXT}; border:1px solid {C.BORDER_B}; border-radius:{Radius.MD}px; }}
+        QDialog#SettingsCenter, QWidget#SettingsCenter {{ background:{dialog_surface}; color:{C.TEXT}; border:1px solid {C.BORDER}; border-radius:{Radius.MD}px; }}
         QWidget#SettingsContent {{ background:transparent; }}
         QFrame#SettingsTitleBar {{ background:{title_surface}; border-bottom:1px solid {C.BORDER}; border-top-left-radius:{Radius.MD}px; border-top-right-radius:{Radius.MD}px; }}
         QLabel#SettingsWindowTitle {{ color:{C.PRI}; background:transparent; letter-spacing:1px; }}
@@ -53,10 +55,11 @@ def _center_style(glass_opacity: int = 100) -> str:
         QScrollArea::viewport {{ background:transparent; border:0; }}
         QWidget#SettingsPage {{ background:transparent; }}
         QFrame#SettingsSidebar {{ background:{panel_surface}; border:1px solid {C.BORDER}; border-radius:{Radius.MD}px; }}
-        QFrame#SettingsEmbeddedCard {{ background:{panel_surface}; border:1px solid {C.BORDER}; border-radius:{Radius.MD}px; }}
+        QFrame#SettingsEmbeddedCard {{ background:transparent; border:0; }}
         QLabel {{ color:{C.TEXT}; background:transparent; }}
-        QLineEdit {{ background:{glass_rgba(C.PANEL2, glass_opacity, minimum_alpha=220)}; color:{C.WHITE}; border:1px solid {C.BORDER}; border-radius:6px; padding:8px 10px; }}
+        QLineEdit {{ background:{glass_rgba(C.PANEL2, glass_opacity, minimum_alpha=220)}; color:{C.TEXT}; border:1px solid {C.BORDER}; border-radius:7px; padding:8px 10px; selection-background-color:{C.PRI_GHO}; selection-color:{C.PRI}; }}
         QLineEdit:focus {{ border-color:{C.PRI}; }}
+        QLineEdit:disabled {{ color:{C.TEXT_DIM}; border-color:{C.BORDER}; }}
         QComboBox {{ background:{glass_rgba(C.PANEL2, glass_opacity, minimum_alpha=220)}; color:{C.TEXT}; border:1px solid {C.BORDER}; border-radius:7px; padding:6px 30px 6px 10px; min-height:24px; }}
         QComboBox:hover {{ border-color:{C.BORDER_B}; }}
         QComboBox:focus {{ border-color:{C.PRI}; }}
@@ -111,6 +114,12 @@ class SettingsCenter(QDialog):
     action_requested = pyqtSignal(str)
     closed = pyqtSignal()
 
+    def _tr(self, text: str, **values) -> str:
+        from memory.config_manager import get_ui_language
+        from memory.translations import translate
+
+        return translate(text, get_ui_language(), **values)
+
     def __init__(self, parent=None, page_builders: dict[str, object] | None = None):
         super().__init__(parent)
         self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.FramelessWindowHint)
@@ -125,6 +134,7 @@ class SettingsCenter(QDialog):
         # transparent.
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, False)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setAutoFillBackground(True)
         self._glass_opacity = 100
         screen = QApplication.primaryScreen()
         available = screen.availableGeometry() if screen is not None else None
@@ -137,6 +147,7 @@ class SettingsCenter(QDialog):
             min(980, max(minimum_width, available_width - 48)),
             min(680, max(minimum_height, available_height - 96)),
         )
+        self._sync_theme_palette()
         self.setStyleSheet(_center_style(self._glass_opacity))
 
         root = QVBoxLayout(self)
@@ -184,14 +195,14 @@ class SettingsCenter(QDialog):
         side = QVBoxLayout(sidebar)
         side.setContentsMargins(Space.MD, Space.MD, Space.MD, Space.MD)
         side.setSpacing(Space.SM)
-        brand = QLabel("SETTINGS")
+        brand = QLabel(self._tr("SETTINGS"))
         brand.setFont(ui_font(TypeScale.SECTION, QFont.Weight.DemiBold))
         side.addWidget(brand)
         self.search = QLineEdit()
-        self.search.setPlaceholderText("Search settings")
+        self.search.setPlaceholderText(self._tr("Search settings"))
         self.search.setClearButtonEnabled(True)
-        self.search.setToolTip("Search by setting, category, description, or keyword")
-        self.search.setAccessibleName("Search settings")
+        self.search.setToolTip(self._tr("Search by setting, category, description, or keyword"))
+        self.search.setAccessibleName(self._tr("Search settings"))
         side.addWidget(self.search)
         self.navigation = QListWidget()
         self.navigation.setAccessibleName("Settings categories and results")
@@ -275,10 +286,10 @@ class SettingsCenter(QDialog):
             page_layout.setContentsMargins(Space.XL, Space.XL, Space.XL, Space.XL)
             page_layout.setSpacing(Space.LG)
 
-            title = QLabel(category.title)
+            title = QLabel(self._tr(category.title))
             title.setFont(ui_font(TypeScale.TITLE, QFont.Weight.DemiBold))
             page_layout.addWidget(title)
-            description = QLabel(category.description)
+            description = QLabel(self._tr(category.description))
             description.setFont(ui_font(TypeScale.BODY))
             description.setWordWrap(True)
             description.setStyleSheet(f"color:{C.TEXT_MED};")
@@ -317,6 +328,7 @@ class SettingsCenter(QDialog):
             scroll = QScrollArea()
             scroll.setWidgetResizable(True)
             scroll.setFrameShape(QFrame.Shape.NoFrame)
+            scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
             scroll.setStyleSheet(
                 "QScrollArea { background:transparent; border:0; }"
                 "QScrollArea::viewport { background:transparent; border:0; }"
@@ -324,7 +336,8 @@ class SettingsCenter(QDialog):
             scroll.setWidget(page)
             self.pages.addWidget(scroll)
             self._category_pages[category.id] = scroll
-            item = QListWidgetItem(category.title)
+            item = QListWidgetItem(self._tr(category.title))
+            item.setToolTip(self._tr(category.description))
             item.setData(Qt.ItemDataRole.UserRole, ("category", category.id))
             self.navigation.addItem(item)
             self._category_rows[category.id] = item
@@ -333,7 +346,8 @@ class SettingsCenter(QDialog):
         self.navigation.clear()
         self._category_rows.clear()
         for category in CATEGORIES:
-            item = QListWidgetItem(category.title)
+            item = QListWidgetItem(self._tr(category.title))
+            item.setToolTip(self._tr(category.description))
             item.setData(Qt.ItemDataRole.UserRole, ("category", category.id))
             self.navigation.addItem(item)
             self._category_rows[category.id] = item
@@ -349,12 +363,14 @@ class SettingsCenter(QDialog):
             return
         for index, entry in enumerate(self._search_entries):
             category = next(item for item in CATEGORIES if item.id == entry.category_id)
-            result = QListWidgetItem(f"{entry.title}  ·  {category.title}")
-            result.setToolTip(entry.description)
+            result = QListWidgetItem(
+                f"{self._tr(entry.title)}  ·  {self._tr(category.title)}"
+            )
+            result.setToolTip(self._tr(entry.description))
             result.setData(Qt.ItemDataRole.UserRole, ("result", index))
             self.navigation.addItem(result)
         if not self._search_entries:
-            self.navigation.addItem(QListWidgetItem("No matching settings"))
+            self.navigation.addItem(QListWidgetItem(self._tr("No matching settings")))
         elif self.navigation.count():
             self.navigation.setCurrentRow(0)
 
@@ -427,9 +443,122 @@ class SettingsCenter(QDialog):
             self._built_categories.add(category_id)
             return
         content = builder()
+        if category_id == "integrations":
+            self._add_provider_policy_control(content)
+            self._fit_provider_content(content)
         layout.insertWidget(max(0, layout.count() - 1), content)
         self._apply_glass_to_widget(content)
         self._built_categories.add(category_id)
+
+    def _add_provider_policy_control(self, content: QWidget) -> None:
+        """Expose the runtime policy separately from the profile being edited."""
+        from memory.config_manager import get_provider_selection, save_providers
+
+        host_layout = content.layout()
+        if host_layout is None:
+            return
+        provider_panels = [
+            child for child in content.findChildren(QWidget)
+            if child.__class__.__name__ == "ProvidersOverlay"
+        ]
+
+        row = QFrame(content)
+        row.setObjectName("ProviderRuntimePolicy")
+        row.setStyleSheet(
+            f"QFrame#ProviderRuntimePolicy {{ background:{C.PANEL}; "
+            f"border:1px solid {C.BORDER}; border-radius:{Radius.MD}px; }}"
+        )
+        row_layout = QHBoxLayout(row)
+        row_layout.setContentsMargins(Space.MD, Space.SM, Space.MD, Space.SM)
+        row_layout.setSpacing(Space.MD)
+
+        labels = QVBoxLayout()
+        heading = QLabel(self._tr("Runtime mode"))
+        heading.setFont(ui_font(TypeScale.BODY, QFont.Weight.DemiBold))
+        detail = QLabel(self._tr(
+            "Auto prefers Online and falls back to Offline only when the local "
+            "AI model and its configured dependencies are ready."
+        ))
+        detail.setWordWrap(True)
+        detail.setStyleSheet(f"color:{C.TEXT_MED};")
+        labels.addWidget(heading)
+        labels.addWidget(detail)
+        row_layout.addLayout(labels, 1)
+
+        selector = QTabBar()
+        selector.setObjectName("provider_runtime_mode")
+        selector.setExpanding(False)
+        selector.setUsesScrollButtons(False)
+        selector.setDrawBase(False)
+        for label in ("Online", "Offline", "Auto"):
+            selector.addTab(self._tr(label))
+        current = get_provider_selection()
+        selector.setCurrentIndex({"online": 0, "offline": 1, "auto": 2}.get(current, 0))
+        selector.setStyleSheet(f"""
+            QTabBar::tab {{ color:{C.TEXT_MED}; background:{C.PANEL2};
+                border:1px solid {C.BORDER}; padding:8px 14px; }}
+            QTabBar::tab:selected {{ color:{C.PRI}; background:{C.PRI_GHO};
+                border-color:{C.PRI_DIM}; }}
+            QTabBar::tab:hover {{ color:{C.TEXT}; }}
+        """)
+        row_layout.addWidget(selector)
+        host_layout.insertWidget(0, row)
+
+        status = QLabel("")
+        status.setWordWrap(True)
+        status.setStyleSheet(f"color:{C.TEXT_MED};")
+        host_layout.insertWidget(1, status)
+
+        profile_tabs = [
+            tab for tab in content.findChildren(QTabBar) if tab is not selector
+        ]
+        def apply_policy(index: int, *, persist: bool = True) -> None:
+            selection = ("online", "offline", "auto")[index]
+            if persist:
+                save_providers(selection=selection)
+                for provider_panel in provider_panels:
+                    changed = getattr(provider_panel, "changed", None)
+                    if changed is not None:
+                        changed.emit()
+            if selection in ("online", "offline") and profile_tabs:
+                profile_tabs[0].setCurrentIndex(0 if selection == "online" else 1)
+            status.setText(
+                self._tr(
+                    "Automatic switching is enabled. Offline is selected only when "
+                    "its local profile passes readiness checks."
+                )
+                if selection == "auto"
+                else self._tr(
+                    "{mode} mode is selected. The profile tabs below remain available "
+                    "for editing either configuration.",
+                    mode=self._tr(selection.title()),
+                )
+            )
+            self._fit_provider_content(content)
+
+        selector.currentChanged.connect(
+            lambda index: apply_policy(index, persist=True)
+        )
+        for tab in profile_tabs:
+            tab.currentChanged.connect(lambda _index: self._fit_provider_content(content))
+        apply_policy(selector.currentIndex(), persist=False)
+
+    @staticmethod
+    def _fit_provider_content(content: QWidget) -> None:
+        """Let the Settings page own scrolling instead of nesting scrollbars."""
+        def fit() -> None:
+            for area in content.findChildren(QScrollArea):
+                area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+                area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+                area.setMaximumHeight(16777215)
+                area.setSizePolicy(
+                    QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
+                )
+                body = area.widget()
+                if body is not None:
+                    body.adjustSize()
+                    area.setMinimumHeight(body.sizeHint().height() + 12)
+        QTimer.singleShot(0, fit)
 
     @staticmethod
     def _focus_entry(page: QWidget, entry: SettingEntry, focus: bool = True):
@@ -488,15 +617,33 @@ class SettingsCenter(QDialog):
                 f"QLabel {{ background:transparent; color:{C.TEXT}; border:0; }}"
             )
 
+    def _sync_theme_palette(self) -> None:
+        """Keep the native dialog surface in sync with the active JARVIS theme."""
+        palette = self.palette()
+        for role, color in (
+            (QPalette.ColorRole.Window, C.BG),
+            (QPalette.ColorRole.WindowText, C.TEXT),
+            (QPalette.ColorRole.Base, C.PANEL2),
+            (QPalette.ColorRole.AlternateBase, C.PANEL2),
+            (QPalette.ColorRole.Text, C.TEXT),
+            (QPalette.ColorRole.Button, C.PANEL),
+            (QPalette.ColorRole.ButtonText, C.TEXT),
+        ):
+            palette.setColor(role, QColor(color))
+        self.setPalette(palette)
+        self.setAutoFillBackground(True)
+
     def set_glass_opacity(self, opacity: int) -> None:
         """Apply the app's Glass value to Settings surfaces, not to its text."""
         self._glass_opacity = max(60, min(100, int(opacity)))
+        self._sync_theme_palette()
         self.setStyleSheet(_center_style(self._glass_opacity))
         self._apply_glass_to_widget(self)
         self.update()
 
     def refresh_theme(self) -> None:
         """Refresh token-based styles after the app accent/theme changes."""
+        self._sync_theme_palette()
         self.setStyleSheet(_center_style(self._glass_opacity))
         self._apply_glass_to_widget(self)
         for section in self.findChildren(SettingsSection):

@@ -852,7 +852,8 @@ class _BrowserSession:
             except PlaywrightTimeout:
                 pass  # page may have partially loaded — check URL below
             except Exception as e:
-                print(f"[Browser] goto exception (non-fatal): {e}")
+                from core.security_logging import redact_sensitive_text
+                print(f"[Browser] goto exception (non-fatal): {redact_sensitive_text(e)}")
             return p.url
 
         result_url = await _do_goto(page)
@@ -862,13 +863,13 @@ class _BrowserSession:
             "",
             None,
         ):
-            print(f"[Browser] Still blank after goto — retrying on new tab: {url}")
+            print("[Browser] Navigation returned a blank page; retrying in a new tab.")
             try:
                 new_page = await self._context.new_page()
                 self._page = new_page
                 result_url = await _do_goto(new_page)
             except Exception as e:
-                print(f"[Browser] New-tab retry failed: {e}")
+                print(f"[Browser] New-tab retry failed: {redact_sensitive_text(e)}")
 
         if result_url and result_url not in ("about:blank", "", None):
             # Verified, and cheaply: this is the page's OWN url read back after
@@ -1238,9 +1239,10 @@ def browser_control(
                 else:
                     result = sess.run(sess.go_to(params.get("url", "")))
             except concurrent.futures.TimeoutError:
-                result = f"Browser action '{action}' timed out (60s)."
+                result = outcome.failed("browser_control", f"action '{action}' timed out after 60 seconds", action=action)
             except Exception as e:
-                result = f"Browser error ({action}): {e}"
+                from core.security_logging import redact_sensitive_text
+        result = outcome.failed("browser_control", f"browser action failed: {redact_sensitive_text(e)}", action=action)
             _log(player, result)
             return result
 
@@ -1265,7 +1267,7 @@ def browser_control(
     try:
         sess = _registry.get(browser)
     except Exception as e:
-        result = f"Could not start browser session: {e}"
+        result = outcome.failed("browser_control", f"could not start browser session: {e}", action=action)
         _log(player, result)
         return result
 
@@ -1318,19 +1320,21 @@ def browser_control(
         elif action == "reload":
             result = sess.run(sess.reload())
         else:
-            result = f"Unknown browser action: '{action}'"
+            result = outcome.failed("browser_control", "unknown browser action", action=action)
 
     except concurrent.futures.TimeoutError:
-        result = f"Browser action '{action}' timed out (60s)."
+        result = outcome.failed("browser_control", f"action '{action}' timed out after 60 seconds", action=action)
     except Exception as e:
-        result = f"Browser error ({action}): {e}"
+        from core.security_logging import redact_sensitive_text
+        result = outcome.failed("browser_control", f"browser action failed: {redact_sensitive_text(e)}", action=action)
 
     _log(player, result)
     return result
 
 
 def _log(player, text: str):
-    short = str(text)[:80]
+    from core.security_logging import redact_sensitive_text
+    short = redact_sensitive_text(text)[:80]
     print(f"[Browser] {short}")
     if player:
         print(f"[Browser] {short[:80]}")  # terminal, not the HUD

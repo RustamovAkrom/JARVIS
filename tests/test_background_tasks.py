@@ -1,134 +1,99 @@
-import json
-import tempfile
-import threading
 import unittest
-from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from core.background_tasks import BackgroundTaskManager
 
 
-class _Player:
-    def __init__(self):
-        self.contents = []
-        self.logs = []
-        self.speeches = []
-
-    def show_content(self, *args, **kwargs):
-        self.contents.append((args, kwargs))
-
-    def write_log(self, text):
-        self.logs.append(text)
-
-    def request_say(self, text):
-        self.speeches.append(text)
-
-
-class BackgroundTaskTests(unittest.TestCase):
+class BackgroundTaskFacadeTests(unittest.TestCase):
     def setUp(self):
-        self.temp_dir = tempfile.TemporaryDirectory()
-        self.path = Path(self.temp_dir.name) / "background_tasks.json"
+        self.engine = Mock()
+        self.player = object()
 
-    def tearDown(self):
-        self.temp_dir.cleanup()
+    @patch("core.background_tasks.desktop.ensure")
+    def test_start_uses_shared_research_agent(self, ensure):
+        ensure.return_value = self.engine
+        self.engine.start.return_value = {
+            "id": "task-1",
+            "status": "queued",
+            "task": "Compare solar and wind power",
+        }
 
-    def test_completed_research_is_persisted_and_delivered(self):
-        player = _Player()
-        manager = BackgroundTaskManager(
-            self.path, search=lambda query: f"Report for {query}"
+        manager = BackgroundTaskManager(self.player)
+        task = manager.start("  Compare   solar and wind power  ")
+
+        ensure.assert_called_once_with(self.player)
+        self.engine.start.assert_called_once_with(
+            "Compare solar and wind power",
+            agent="researcher",
+            title="Compare solar and wind power",
+            origin="assistant",
+            deliver="voice",
         )
-        manager.bind_player(player)
+        self.assertEqual(task["id"], "task-1")
 
-        task = manager.start("Compare solar and wind power")
-        thread = manager._threads[task["id"]]
-        thread.join(timeout=2)
+    @patch("core.background_tasks.desktop.ensure")
+    def test_legacy_list_maps_task_to_query(self, ensure):
+        ensure.return_value = self.engine
+        self.engine.list.return_value = [
+            {"id": "task-2", "task": "Read official docs", "status": "running"}
+        ]
 
-        saved = json.loads(self.path.read_text(encoding="utf-8"))
-        self.assertEqual(manager.get(task["id"])["status"], "done")
-        self.assertEqual(
-            saved["tasks"][0]["result"], "Report for Compare solar and wind power"
-        )
-        self.assertEqual(len(player.contents), 1)
-        self.assertTrue(player.logs)
-        self.assertTrue(player.speeches)
+        rows = BackgroundTaskManager().list(limit=5)
 
-    def test_running_task_is_requeued_after_restart(self):
-        self.path.write_text(
-            json.dumps(
-                {
-                    "version": 1,
-                    "tasks": [
-                        {
-                            "id": "resume1",
-                            "query": "A saved question",
-                            "status": "running",
-                            "created": 1,
-                            "updated": 1,
-                            "result": "",
-                            "error": "",
-                        }
-                    ],
-                }
-            ),
-            encoding="utf-8",
-        )
-        manager = BackgroundTaskManager(
-            self.path, search=lambda _query: "Recovered report"
-        )
-        manager.bind_player(_Player())
-        manager._threads["resume1"].join(timeout=2)
-        self.assertEqual(manager.get("resume1")["status"], "done")
+        self.engine.list.assert_called_once_with(5)
+        self.assertEqual(rows[0]["query"], "Read official docs")
 
-    def test_active_task_limit_is_enforced(self):
-        entered = threading.Event()
-        release = threading.Event()
+    @patch("core.background_tasks.desktop.ensure")
+    def test_get_preserves_result_and_error(self, ensure):
+        ensure.return_value = self.engine
+        self.engine.get.return_value = {
+            "id": "task-3",
+            "title": "Research",
+            "task": "Research API",
+            "result": "Collected facts",
+            "error": "",
+        }
 
-        def wait_for_release(_query):
-            entered.set()
-            release.wait(timeout=2)
-            return "finished"
+        task = BackgroundTaskManager().get("task-3")
 
-        manager = BackgroundTaskManager(
-            self.path, search=wait_for_release, max_active=1
-        )
-        first = manager.start("first")
-        self.assertTrue(entered.wait(timeout=1))
-        with self.assertRaises(ValueError):
-            manager.start("second")
-        release.set()
-        manager._threads[first["id"]].join(timeout=2)
+        self.assertEqual(task["query"], "Research API")
+        self.assertEqual(task["result"], "Collected facts")
+        self.assertEqual(task["error"], "")
 
-    def test_cancelled_running_task_does_not_publish_a_report(self):
-        entered = threading.Event()
-        release = threading.Event()
-        player = _Player()
+    @patch("core.background_tasks.desktop.ensure")
+    def test_cancel_delegates_to_shared_engine(self, ensure):
+        ensure.return_value = self.engine
+        self.engine.cancel.return_value = True
 
-        def wait_for_release(_query):
-            entered.set()
-            release.wait(timeout=2)
-            return "must not be delivered"
+        self.assertTrue(BackgroundTaskManager().cancel("task-4"))
+        self.engine.cancel.assert_called_once_with("task-4")
 
-        manager = BackgroundTaskManager(self.path, search=wait_for_release)
-        manager.bind_player(player)
-        task = manager.start("cancel me")
-        self.assertTrue(entered.wait(timeout=1))
-        self.assertTrue(manager.cancel(task["id"]))
-        release.set()
-        manager._threads[task["id"]].join(timeout=2)
-        self.assertEqual(manager.get(task["id"])["status"], "cancelled")
-        self.assertFalse(player.contents)
+    @patch("core.background_tasks.desktop.attach")
+    @patch("core.background_tasks.desktop.ensure")
+    def test_bind_player_attaches_to_shared_engine(self, ensure, attach):
+        ensure.return_value = self.engine
+        BackgroundTaskManager().bind_player(self.player)
+        attach.assert_called_once_with(self.player)
 
-    def test_action_reports_store_errors_instead_of_claiming_success(self):
+    @patch("core.background_tasks.desktop.shutdown")
+    def test_shutdown_uses_same_engine_lifecycle(self, shutdown):
+        from core.background_tasks import shutdown_background_task_manager
+
+        shutdown.return_value = False
+        self.assertFalse(shutdown_background_task_manager(timeout=1.25))
+        shutdown.assert_called_once_with(wait=1.25)
+
+    def test_action_surfaces_store_errors(self):
         from actions import background_tasks
 
-        with patch.object(
-            background_tasks,
-            "get_background_task_manager",
+        with patch(
+            "actions.background_tasks.get_background_task_manager",
             side_effect=RuntimeError("store unavailable"),
         ):
             result = background_tasks.background_tasks(
                 {"action": "start", "query": "test"}
             )
+
         self.assertIn("status=failed", result)
         self.assertIn("store unavailable", result)
 

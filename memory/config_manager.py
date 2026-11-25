@@ -64,7 +64,7 @@ def get_ui_opacity() -> int:
         return 100
     try:
         value = round(value)
-    except OverflowError, ValueError:
+    except (OverflowError, ValueError):
         return 100
     return max(60, min(100, value))
 
@@ -87,6 +87,72 @@ def save_ui_language(language: str) -> None:
     _save_flag("ui_language", value)
 
 
+
+# ── Local conversation recall ───────────────────────────────────────────────
+
+CONVERSATION_MEMORY_DEFAULTS = {"enabled": False, "days": 90}
+
+def get_conversation_memory() -> dict:
+    raw = load_api_keys().get("conversation_memory", {})
+    raw = raw if isinstance(raw, dict) else {}
+    try:
+        days = int(raw.get("days", CONVERSATION_MEMORY_DEFAULTS["days"]))
+    except (TypeError, ValueError):
+        days = CONVERSATION_MEMORY_DEFAULTS["days"]
+    return {"enabled": bool(raw.get("enabled", False)), "days": max(1, min(3650, days))}
+
+def save_conversation_memory(*, enabled=None, days=None) -> dict:
+    current = get_conversation_memory()
+    updates = dict(current)
+    if enabled is not None:
+        updates["enabled"] = bool(enabled)
+    if days is not None:
+        try: value = int(days)
+        except (TypeError, ValueError): raise ValueError("days must be an integer") from None
+        if not 1 <= value <= 3650: raise ValueError("days must be between 1 and 3650")
+        updates["days"] = value
+    _patch_config(conversation_memory=updates)
+    return updates
+
+# ── Presence ────────────────────────────────────────────────────────────────
+
+PRESENCE_DEFAULTS = {"enabled": True, "away_minutes": 10, "greet": True}
+
+
+def get_presence_settings() -> dict:
+    """Return validated presence settings without mutating stored config."""
+    raw = load_api_keys().get("presence", {})
+    raw = raw if isinstance(raw, dict) else {}
+    try:
+        away_minutes = int(raw.get("away_minutes", PRESENCE_DEFAULTS["away_minutes"]))
+    except (TypeError, ValueError):
+        away_minutes = PRESENCE_DEFAULTS["away_minutes"]
+    return {
+        "enabled": bool(raw.get("enabled", PRESENCE_DEFAULTS["enabled"])),
+        "away_minutes": max(1, min(240, away_minutes)),
+        "greet": bool(raw.get("greet", PRESENCE_DEFAULTS["greet"])),
+    }
+
+
+def save_presence_settings(*, enabled=None, away_minutes=None, greet=None) -> dict:
+    """Persist validated presence settings while preserving unrelated config."""
+    current = get_presence_settings()
+    updates = dict(current)
+    if enabled is not None:
+        updates["enabled"] = bool(enabled)
+    if away_minutes is not None:
+        try:
+            minutes = int(away_minutes)
+        except (TypeError, ValueError):
+            raise ValueError("away_minutes must be an integer") from None
+        if not 1 <= minutes <= 240:
+            raise ValueError("away_minutes must be between 1 and 240")
+        updates["away_minutes"] = minutes
+    if greet is not None:
+        updates["greet"] = bool(greet)
+    _patch_config(presence=updates)
+    return updates
+
 def get_workspace_path() -> str:
     """Return the configured project folder if it still exists."""
     value = load_api_keys().get("workspace_path", "")
@@ -94,7 +160,7 @@ def get_workspace_path() -> str:
         return ""
     try:
         path = Path(value).expanduser().resolve()
-    except OSError, RuntimeError:
+    except (OSError, RuntimeError):
         return ""
     return str(path) if path.is_dir() else ""
 
@@ -112,6 +178,70 @@ def save_workspace_path(path: str) -> None:
     if not resolved.is_dir():
         raise ValueError(f"Workspace path is not a folder: {resolved}")
     _save_flag("workspace_path", str(resolved))
+
+
+PROJECT_HISTORY_LIMIT = 20
+
+def get_project_history() -> list[dict]:
+    """Recent project paths, including missing folders, newest first.
+
+    Missing or moved folders remain in history so the UI can mark them
+    unavailable and let the user remove the stale entry deliberately.
+    """
+    raw = load_api_keys().get("project_history", [])
+    if not isinstance(raw, list):
+        return []
+    result = []
+    seen = set()
+    for item in raw:
+        if not isinstance(item, dict) or not isinstance(item.get("path"), str):
+            continue
+        raw_path = item["path"].strip()
+        if not raw_path:
+            continue
+        try:
+            path = Path(raw_path).expanduser().resolve()
+            normalized = str(path)
+            name = str(item.get("name") or path.name or raw_path)
+            available = path.is_dir()
+        except (OSError, RuntimeError, ValueError):
+            normalized = raw_path
+            name = str(item.get("name") or Path(raw_path).name or raw_path)
+            available = False
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        try:
+            last_opened = float(item.get("last_opened") or 0)
+        except (TypeError, ValueError):
+            last_opened = 0.0
+        result.append({
+            "path": normalized,
+            "name": name,
+            "last_opened": last_opened,
+            "available": available,
+        })
+    return result[:PROJECT_HISTORY_LIMIT]
+
+
+def add_project_to_history(path: str) -> list[dict]:
+    """Persist an opened project and make it the active workspace."""
+    resolved = Path(path).expanduser().resolve(strict=True)
+    if not resolved.is_dir():
+        raise ValueError("Project path is not a directory.")
+    now = time.time()
+    history = [entry for entry in get_project_history() if entry["path"] != str(resolved)]
+    history.insert(0, {"path": str(resolved), "name": resolved.name, "last_opened": now})
+    history = history[:PROJECT_HISTORY_LIMIT]
+    _patch_config(workspace_path=str(resolved), project_history=history, active_project_file="")
+    return history
+
+
+def remove_project_from_history(path: str) -> list[dict]:
+    resolved = str(Path(path).expanduser().resolve())
+    history = [entry for entry in get_project_history() if entry["path"] != resolved]
+    _patch_config(project_history=history)
+    return history
 
 
 def get_project_open_mode() -> str:
@@ -183,6 +313,46 @@ def save_voice(voice_name: str) -> None:
     bad value can never reach the API and break the session."""
     v = (voice_name or "").strip()
     _patch_config(voice_name=v if v in AVAILABLE_VOICES else DEFAULT_VOICE)
+
+
+WAKE_WORD_THRESHOLD_DEFAULT = 0.5
+
+def get_wake_word_threshold() -> float:
+    value = load_api_keys().get("wake_word_threshold", WAKE_WORD_THRESHOLD_DEFAULT)
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return WAKE_WORD_THRESHOLD_DEFAULT
+    if not 0.1 <= value <= 0.95:
+        return WAKE_WORD_THRESHOLD_DEFAULT
+    return round(value, 2)
+
+def save_wake_word_threshold(threshold: float) -> float:
+    try:
+        value = float(threshold)
+    except (TypeError, ValueError):
+        raise ValueError("Wake word threshold must be a number") from None
+    if not 0.1 <= value <= 0.95:
+        raise ValueError("Wake word threshold must be between 0.10 and 0.95")
+    value = round(value, 2)
+    _patch_config(wake_word_threshold=value)
+    return value
+
+
+def get_plugins_system_enabled() -> bool:
+    """Global opt-in for the optional plugin subsystem."""
+    return bool(load_api_keys().get("plugins_system_enabled", True))
+
+def save_plugins_system_enabled(enabled: bool) -> None:
+    _save_flag("plugins_system_enabled", bool(enabled))
+
+
+def get_typed_language_detection_enabled() -> bool:
+    """Whether confident offline detection annotates typed requests."""
+    return bool(load_api_keys().get("typed_language_detection", True))
+
+def save_typed_language_detection_enabled(enabled: bool) -> None:
+    _save_flag("typed_language_detection", bool(enabled))
 
 
 def get_wake_word_enabled() -> bool:
@@ -258,7 +428,7 @@ def get_turn_tuning() -> dict:
     def _int(key, default, lo, hi):
         try:
             return max(lo, min(hi, int(cfg.get(key, default))))
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             return default
 
     return {
@@ -430,7 +600,7 @@ def get_cursor_assistant_settings() -> dict:
     style = str(cfg.get("style", "halo")).lower()
     try:
         size = int(cfg.get("size", 24))
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         size = 24
     actions = cfg.get("menu_actions", DEFAULT_CURSOR_MENU_ACTIONS)
     if not isinstance(actions, list):
@@ -471,7 +641,7 @@ def save_cursor_assistant_settings(values: dict) -> None:
     if "size" in values:
         try:
             size = int(values["size"])
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             size = 24
         current["size"] = size if size in CURSOR_SIZES else 24
     if "hotkey" in values:
@@ -617,6 +787,90 @@ def get_output_device() -> str:
 
 def save_output_device(name: str) -> None:
     _patch_config(output_device=(name or "").strip())
+
+
+# ── Clap launcher ────────────────────────────────────────────────────────────
+CLAP_LAUNCHER_DEFAULTS = {
+    "claps": 2,
+    "sensitivity": "normal",
+    "level": None,
+    "notify_heard": False,
+    "preload": False,
+    "greet": True,
+}
+
+
+def get_clap_launcher() -> dict:
+    """Return validated clap-launcher settings, falling back safely on corrupt data."""
+    raw = load_api_keys().get("clap_launcher", {})
+    raw = raw if isinstance(raw, dict) else {}
+    defaults = dict(CLAP_LAUNCHER_DEFAULTS)
+
+    try:
+        claps = int(raw.get("claps", defaults["claps"]))
+    except (TypeError, ValueError):
+        claps = defaults["claps"]
+    defaults["claps"] = claps if claps in (1, 2) else 2
+
+    sensitivity = str(raw.get("sensitivity", defaults["sensitivity"])).lower()
+    defaults["sensitivity"] = sensitivity if sensitivity in ("low", "normal", "high") else "normal"
+
+    level = raw.get("level")
+    try:
+        level = float(level) if level is not None else None
+    except (TypeError, ValueError):
+        level = None
+    defaults["level"] = level if level is not None and 0.0 < level <= 1.0 else None
+
+    for key in ("notify_heard", "preload", "greet"):
+        defaults[key] = bool(raw.get(key, defaults[key]))
+
+    # Standby/preload was never connected to the main application's lifecycle.
+    # Keep reading legacy config but force the unsupported feature off.
+    defaults["preload"] = False
+    return defaults
+
+
+def save_clap_launcher(**updates) -> dict:
+    """Persist validated clap-launcher settings without touching other config."""
+    current = get_clap_launcher()
+    allowed = set(CLAP_LAUNCHER_DEFAULTS)
+    unknown = set(updates) - allowed
+    if unknown:
+        raise ValueError(f"Unknown clap-launcher settings: {', '.join(sorted(unknown))}")
+
+    for key, value in updates.items():
+        if key == "claps":
+            value = int(value)
+            if value not in (1, 2):
+                raise ValueError("claps must be 1 or 2")
+        elif key == "sensitivity":
+            value = str(value).lower()
+            if value not in ("low", "normal", "high"):
+                raise ValueError("sensitivity must be low, normal, or high")
+        elif key == "level":
+            if value is not None:
+                value = float(value)
+                if not 0.0 < value <= 1.0:
+                    raise ValueError("level must be between 0 and 1")
+        elif key in ("notify_heard", "preload", "greet"):
+            value = bool(value)
+        current[key] = value
+
+    current["preload"] = False
+    _patch_config(clap_launcher=current)
+    return current
+
+
+def get_plugins_subsystem_enabled() -> bool:
+    """Global optional-plugin switch. Built-in actions are unaffected."""
+    value = load_api_keys().get("plugins_subsystem_enabled", True)
+    return value if isinstance(value, bool) else True
+
+
+def save_plugins_subsystem_enabled(enabled: bool) -> None:
+    """Enable/disable plugin discovery and execution without affecting actions."""
+    _patch_config(plugins_subsystem_enabled=bool(enabled))
 
 
 def get_plugin_enabled(plugin_name: str) -> bool:
@@ -1043,6 +1297,49 @@ def save_providers(
         if sidecar_first is not None:
             block["sidecar_first"] = bool(sidecar_first)
         data["providers"] = block
+
+    _update_config(merge)
+
+
+def get_workspace_layout_settings() -> dict:
+    """Return persisted workspace splitter sizes, normalized and validated."""
+    raw = load_api_keys().get("workspace_layout", {})
+    raw = raw if isinstance(raw, dict) else {}
+    result = {}
+    for key in ("main", "root", "workspace", "center"):
+        value = raw.get(key)
+        if isinstance(value, list) and len(value) in (2, 3):
+            sizes = []
+            for item in value:
+                try:
+                    sizes.append(max(0, min(100000, int(item))))
+                except (TypeError, ValueError):
+                    sizes.append(0)
+            if any(sizes):
+                result[key] = sizes
+    return result
+
+
+def save_workspace_layout_settings(**sizes: list[int]) -> None:
+    """Persist only valid splitter size arrays; unrelated settings are preserved."""
+    fields = {}
+    for key, value in sizes.items():
+        if key not in {"main", "root", "workspace", "center"}:
+            continue
+        if not isinstance(value, (list, tuple)) or len(value) not in (2, 3):
+            continue
+        try:
+            fields[key] = [max(0, min(100000, int(item))) for item in value]
+        except (TypeError, ValueError):
+            continue
+    if not fields:
+        return
+
+    def merge(data: dict) -> None:
+        current = data.get("workspace_layout")
+        current = dict(current) if isinstance(current, dict) else {}
+        current.update(fields)
+        data["workspace_layout"] = current
 
     _update_config(merge)
 

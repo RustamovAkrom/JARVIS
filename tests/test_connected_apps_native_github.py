@@ -1,0 +1,282 @@
+from __future__ import annotations
+
+import base64
+import json
+import io
+import urllib.error
+
+import pytest
+
+from core.connected_apps.adapters.github.adapter import GitHubAdapter
+from core.connected_apps.native import NativeAppRegistry
+
+
+class Store:
+    def __init__(self, token="test-token"):
+        self.token = token
+        self.rows = {}
+    def get_credential(self, connection_id, name):
+        return self.token if name == "access_token" else ""
+
+
+def test_github_adapter_catalog_has_read_and_write_tools():
+    names = {tool.name for tool in GitHubAdapter.tools}
+    assert {
+        "github_get_profile",
+        "github_list_repositories",
+        "github_search_repositories",
+        "github_list_issues",
+        "github_get_issue",
+        "github_list_pull_requests",
+        "github_get_file",
+        "github_create_issue",
+        "github_search_code",
+        "github_get_pull_request",
+        "github_list_commits",
+        "github_create_issue_comment",
+    } <= names
+    create = next(tool for tool in GitHubAdapter.tools if tool.name == "github_create_issue")
+    assert create.read_only is False
+    assert create.requires_confirmation is True
+
+
+def test_native_registry_rejects_duplicate_and_normalizes_lookup():
+    registry = NativeAppRegistry()
+    adapter = GitHubAdapter(Store())
+    registry.register(adapter)
+    assert registry.get("GITHUB") is adapter
+    with pytest.raises(ValueError):
+        registry.register(adapter)
+
+
+def test_github_repository_validation():
+    adapter = GitHubAdapter(Store())
+    assert adapter._repo("owner/repo") == "owner/repo"
+    with pytest.raises(ValueError):
+        adapter._repo("owner")
+    with pytest.raises(ValueError):
+        adapter._repo("owner/../repo")
+
+
+def test_github_profile_request_uses_token_and_api_headers(monkeypatch):
+    adapter = GitHubAdapter(Store())
+    captured = {}
+
+    class Response:
+        def __enter__(self): return self
+        def __exit__(self, *args): return None
+        def read(self, limit): return b'{"login":"akrom"}'
+
+    def fake_urlopen(request, timeout):
+        captured["url"] = request.full_url
+        captured["headers"] = dict(request.header_items())
+        captured["timeout"] = timeout
+        return Response()
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    result = adapter.execute("c1", "github_get_profile", {})
+    assert result["login"] == "akrom"
+    assert captured["url"] == "https://api.github.com/user"
+    assert captured["timeout"] == 20
+    assert captured["headers"]["Authorization"] == "Bearer test-token"
+    assert captured["headers"]["Accept"] == "application/vnd.github+json"
+
+
+def test_github_search_repository_encodes_query(monkeypatch):
+    adapter = GitHubAdapter(Store())
+    captured = {}
+
+    class Response:
+        def __enter__(self): return self
+        def __exit__(self, *args): return None
+        def read(self, limit): return b'{"items":[]}'
+
+    def fake_urlopen(request, timeout):
+        captured["url"] = request.full_url
+        return Response()
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    adapter.execute("c1", "github_search_repositories", {"query":"fast api", "limit":5})
+    assert "q=fast+api" in captured["url"]
+    assert "per_page=5" in captured["url"]
+
+
+def test_github_create_issue_builds_payload(monkeypatch):
+    adapter = GitHubAdapter(Store())
+    captured = {}
+
+    def fake_request(connection_id, method, path, query=None, payload=None):
+        captured.update(method=method, path=path, payload=payload)
+        return {"number": 10}
+
+    monkeypatch.setattr(adapter, "_request", fake_request)
+    result = adapter.execute("c1", "github_create_issue", {
+        "repository":"owner/repo", "title":"Bug", "body":"Details", "labels":["bug"]
+    })
+    assert result["number"] == 10
+    assert captured == {
+        "method":"POST",
+        "path":"/repos/owner/repo/issues",
+        "payload":{"title":"Bug","body":"Details","labels":["bug"]},
+    }
+
+
+def test_github_api_error_does_not_expose_response_secrets(monkeypatch):
+    adapter = GitHubAdapter(Store())
+
+    error = urllib.error.HTTPError(
+        url="https://api.github.com/user",
+        code=401,
+        msg="Unauthorized",
+        hdrs=None,
+        fp=io.BytesIO(b'{"message":"Bad credentials"}'),
+    )
+
+    def fake_urlopen(request, timeout):
+        raise error
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    with pytest.raises(PermissionError, match="authorization failed"):
+        adapter.execute("c1", "github_get_profile", {})
+
+def test_native_github_connection_persists_token_and_discovers_tools(monkeypatch):
+    import importlib
+    service_module = importlib.import_module("core.connected_apps.service")
+    from core.connected_apps.service import ConnectedAppsService
+    from core.connected_apps.agent import ConnectedAppsAgent
+
+    class MemoryStore:
+        def __init__(self):
+            self.rows = {}
+            self.credentials = {}
+        def get_connection(self, cid):
+            row=self.rows.get(cid)
+            return dict(row) if row else None
+        def upsert_connection(self, row):
+            self.rows[row["id"]]=dict(row)
+        def list_connections(self):
+            return list(self.rows.values())
+        def set_credential(self, cid, key, value):
+            self.credentials[(cid,key)]=value
+        def get_credential(self, cid, key):
+            return self.credentials.get((cid,key),"")
+        def delete_credential(self, cid, key):
+            self.credentials.pop((cid,key),None)
+
+    store=MemoryStore()
+    svc=ConnectedAppsService(store=store)
+    monkeypatch.setattr(svc._native_adapters["github"],"health_check",lambda cid: True)
+    row=svc.connect_native("github",access_token="secret-token",connection_id="github-1")
+    assert row["status"]=="connected"
+    assert row["metadata"]["native"] is True
+    assert store.get_credential("github-1","access_token")=="secret-token"
+    agent=ConnectedAppsAgent(svc)
+    tools=agent.describe_tools()
+    assert any(tool["name"]=="github_list_repositories" for tool in tools)
+    assert all(tool["native"] for tool in tools)
+
+
+def test_native_github_tools_use_confirmation_for_write(monkeypatch):
+    from core.connected_apps.service import ConnectedAppsService
+    from core.connected_apps.agent import ConnectedAppsAgent
+    from unittest.mock import patch
+
+    class Store:
+        def __init__(self):
+            self.rows={}
+            self.credentials={}
+        def get_connection(self,cid):
+            return dict(self.rows[cid]) if cid in self.rows else None
+        def upsert_connection(self,row):
+            self.rows[row["id"]]=dict(row)
+        def list_connections(self):
+            return list(self.rows.values())
+        def set_credential(self,cid,key,value):
+            self.credentials[(cid,key)]=value
+        def get_credential(self,cid,key):
+            return self.credentials.get((cid,key),"")
+        def delete_credential(self,cid,key):
+            self.credentials.pop((cid,key),None)
+
+    store=Store()
+    svc=ConnectedAppsService(store=store)
+    monkeypatch.setattr(svc._native_adapters["github"],"health_check",lambda cid: True)
+    monkeypatch.setattr(svc._native_adapters["github"],"execute",lambda cid,name,args: {"ok":name})
+    svc.connect_native("github",access_token="token",connection_id="c1")
+    agent=ConnectedAppsAgent(svc)
+    captured={}
+    # Native read-only execution is confirmation-gated by default. The
+    # connection-level setting is the explicit opt-in for trusted automation.
+    with patch("core.confirm.request",side_effect=lambda **kw: captured.update(kw) or "pending"):
+        result=agent.execute("c1","github_get_profile",{},read_only=True)
+    assert result=="pending"
+    assert captured["key"]=="connected_apps:c1:github_get_profile"
+
+    store.rows["c1"]["metadata"]["auto_approve_read_only"]=True
+    assert agent.execute("c1","github_get_profile",{},read_only=True)=={"ok":"github_get_profile"}
+
+    captured={}
+    with patch("core.confirm.request",side_effect=lambda **kw: captured.update(kw) or "pending"):
+        result=agent.execute("c1","github_create_issue",{"repository":"owner/repo","title":"Test"})
+    assert result=="pending"
+    assert captured["key"]=="connected_apps:c1:github_create_issue"
+
+def test_github_code_search_and_pr_requests(monkeypatch):
+    adapter=GitHubAdapter(Store())
+    calls=[]
+    monkeypatch.setattr(adapter,"_request",lambda cid,method,path,query=None,payload=None: calls.append((method,path,query,payload)) or {})
+    adapter.execute("c1","github_search_code",{"query":"repo:owner/repo TODO","limit":7})
+    adapter.execute("c1","github_get_pull_request",{"repository":"owner/repo","number":12})
+    adapter.execute("c1","github_list_commits",{"repository":"owner/repo","branch":"main","limit":4})
+    assert calls[0][1]=="/search/code"
+    assert calls[0][2]=={"q":"repo:owner/repo TODO","per_page":7}
+    assert calls[1][1]=="/repos/owner/repo/pulls/12"
+    assert calls[2][1]=="/repos/owner/repo/commits"
+    assert calls[2][2]=={"per_page":4,"sha":"main"}
+
+
+@pytest.mark.parametrize(
+    ("tool", "arguments", "expected_method", "expected_path"),
+    [
+        ("github_list_repositories", {"limit": 8}, "GET", "/user/repos"),
+        ("github_list_issues", {"repository": "owner/repo", "state": "closed", "limit": 9}, "GET", "/repos/owner/repo/issues"),
+        ("github_get_issue", {"repository": "owner/repo", "number": 17}, "GET", "/repos/owner/repo/issues/17"),
+        ("github_list_pull_requests", {"repository": "owner/repo", "state": "all", "limit": 6}, "GET", "/repos/owner/repo/pulls"),
+        ("github_get_pull_request", {"repository": "owner/repo", "number": 18}, "GET", "/repos/owner/repo/pulls/18"),
+        ("github_list_commits", {"repository": "owner/repo", "branch": "dev", "limit": 5}, "GET", "/repos/owner/repo/commits"),
+        ("github_create_issue_comment", {"repository": "owner/repo", "number": 19, "body": "Reviewed"}, "POST", "/repos/owner/repo/issues/19/comments"),
+    ],
+)
+def test_github_adapter_dispatches_remaining_operations(
+    monkeypatch, tool, arguments, expected_method, expected_path
+):
+    adapter = GitHubAdapter(Store())
+    captured = {}
+
+    def fake_request(cid, method, path, query=None, payload=None):
+        captured.update(method=method, path=path, query=query, payload=payload)
+        return {"ok": True}
+
+    monkeypatch.setattr(adapter, "_request", fake_request)
+    assert adapter.execute("c1", tool, arguments) == {"ok": True}
+    assert captured["method"] == expected_method
+    assert captured["path"] == expected_path
+    if tool == "github_create_issue_comment":
+        assert captured["payload"] == {"body": "Reviewed"}
+
+
+def test_github_get_file_decodes_base64_content(monkeypatch):
+    adapter = GitHubAdapter(Store())
+    monkeypatch.setattr(
+        adapter,
+        "_request",
+        lambda *args, **kwargs: {
+            "encoding": "base64",
+            "content": base64.b64encode(b"print('jarvis')").decode("ascii"),
+        },
+    )
+    result = adapter.execute(
+        "c1", "github_get_file",
+        {"repository": "owner/repo", "path": "src/main.py", "ref": "v2"},
+    )
+    assert result["decoded_content"] == "print('jarvis')"

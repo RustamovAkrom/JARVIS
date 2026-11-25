@@ -813,20 +813,22 @@ def call(
                 kwargs["config"] = config
             return cl.models.generate_content(**kwargs)
         except Exception as e:
-            msg = str(e)
+            from core.security_logging import redact_sensitive_text
+            msg = redact_sensitive_text(e)
+            safe_model = redact_sensitive_text(model)
             if is_quota_error(msg):
                 _cool(model)
                 print(
-                    f"[Gemini] {model}: out of quota — skipping it for "
+                    "[Gemini] A model is out of quota — trying the next option for "
                     f"{_COOLDOWN_SECONDS // 60} minutes"
                 )
             elif is_gone_error(msg):
                 _cool(model, _GONE_SECONDS)
-                print(f"[Gemini] {model}: unavailable to this key — set aside")
+                print("[Gemini] A model is unavailable to this key — trying the next option.")
             elif is_unavailable_error(msg):
                 _cool(model, _UNAVAILABLE_SECONDS)
                 print(
-                    f"[Gemini] {model}: not answering — resting it for "
+                    "[Gemini] A model is not answering — resting it for "
                     f"{_UNAVAILABLE_SECONDS // 60} minutes"
                 )
             else:
@@ -869,5 +871,5 @@ def as_json(
     try:
         return json.loads(raw)
     except Exception as e:
-        print(f"[Gemini] reply was not JSON: {e}")
+        print(f"[Gemini] reply was not JSON ({type(e).__name__})")
         return default

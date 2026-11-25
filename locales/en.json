@@ -1,0 +1,18 @@
+{
+  "_comment": "Sentences plugins ask for by key (core/i18n.t). The same keys as Torvis's locales/en.json; add a key here when a plugin starts using one.",
+  "confirm.build_code": "Write code and run it on this computer",
+  "confirm.call": "Call {to} on WhatsApp",
+  "confirm.dev_project": "Build a project and run it on this computer (it may install packages)",
+  "confirm.run_code": "Run code on this computer: {name}",
+  "confirm.screen_step_irreversible": "A step on the screen that cannot be undone",
+  "confirm.send_email": "Send an email to {to}",
+  "ui.log.online": "{name} online.",
+  "ui.log.online_sleeping": "{name} online — sleeping. Say “{phrase}” to wake me.",
+  "confirm.screen_step": "Next step on the screen",
+  "ui.lock.locked": "LOCKED",
+  "ui.lock.other_way": "Unlock another way",
+  "ui.lock.licence_hint": "Your unlock PIN",
+  "ui.lock.unlock": "UNLOCK",
+  "ui.lock.wrong": "That is not the unlock PIN.",
+  "ui.lock.wait": "Too many tries. Try again in {seconds} s."
+}

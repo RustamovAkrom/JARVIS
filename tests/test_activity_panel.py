@@ -48,6 +48,26 @@ class ActivityPanelTests(unittest.TestCase):
         finally:
             panel.close()
 
+    def test_scrollbars_match_activity_theme_and_horizontal_overflow_is_disabled(self):
+        panel = ActivityPanel()
+        try:
+            self.assertEqual(
+                panel.event_list.horizontalScrollBarPolicy(),
+                __import__("PyQt6.QtCore", fromlist=["Qt"]).Qt.ScrollBarPolicy.ScrollBarAlwaysOff,
+            )
+            style = panel.event_list.styleSheet()
+            for expected in (
+                "QScrollBar:vertical",
+                "QScrollBar::handle:vertical",
+                "QScrollBar:horizontal",
+                "QScrollBar::handle:horizontal",
+                "QScrollBar::add-page:vertical",
+            ):
+                self.assertIn(expected, style)
+            self.assertIn("background:", panel.event_list.viewport().styleSheet())
+        finally:
+            panel.close()
+
     def test_category_without_events_has_an_explicit_empty_state(self):
         panel = ActivityPanel()
         try:

@@ -18,6 +18,26 @@ class FakeResponse(io.BytesIO):
         self.close()
 
 
+class CameraFrameValidationTests(unittest.TestCase):
+    def test_valid_bgr_frame(self):
+        import numpy as np
+        self.assertTrue(face._valid_frame(np.zeros((480, 640, 3), dtype=np.uint8), np))
+
+    def test_invalid_camera_frames(self):
+        import numpy as np
+        cases = [
+            None,
+            np.zeros((480, 640), dtype=np.uint8),
+            np.zeros((480, 640, 4), dtype=np.uint8),
+            np.zeros((1, 640, 3), dtype=np.uint8),
+            np.zeros((480, 1, 3), dtype=np.uint8),
+            np.empty((480, 640, 3), dtype=object),
+        ]
+        for frame in cases:
+            with self.subTest(shape=getattr(frame, "shape", None)):
+                self.assertFalse(face._valid_frame(frame, np))
+
+
 class ModelDownloadTests(unittest.TestCase):
     def setUp(self):
         self.tempdir = tempfile.TemporaryDirectory()

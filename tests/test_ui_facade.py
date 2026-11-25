@@ -25,17 +25,34 @@ class UiFacadeTests(unittest.TestCase):
 
     def test_left_monitor_scroll_surfaces_do_not_cover_panel_theme(self):
         app = QApplication.instance() or QApplication([])
-        # Keep this UI test independent from a developer-mode preference saved
-        # in the local user profile by a previous interactive session.
-        with patch.object(implementation, "_read_full_config", return_value={}):
+        # Keep this UI test independent from developer preferences and native
+        # multimedia backends. Video playback is not under test; constructing
+        # QMediaPlayer starts platform-specific FFmpeg/audio workers that are
+        # unreliable in Qt's offscreen GitHub Actions environment.
+        #
+        # MainWindow normally reads config/api_keys.json and schedules the
+        # first-run onboarding dialog when that file is absent. Keep startup
+        # deterministic: this test exercises the settings UI, not onboarding.
+        with (
+            patch.object(implementation, "_read_full_config", return_value={}),
+            patch.object(implementation, "HAVE_VIDEO", False),
+            patch.object(implementation.MainWindow, "_check_config", return_value=True),
+            patch.object(implementation.MainWindow, "_show_setup") as show_setup,
+        ):
             window = ui.MainWindow("")
+        self.assertIsNone(window._video_player)
         try:
             self.assertFalse(hasattr(window, "_ctrl_btn"))
             panel = window._left_panel
             scroll = panel.findChild(QScrollArea)
             self.assertIsNotNone(scroll)
+            # The left rail contains System, Explorer and Activity. Tasks
+            # moved to the central workspace tabs and are not a left-rail tab.
             self.assertEqual(window._left_tabs.count(), 3)
-            self.assertEqual(window._left_tabs.tabText(2), "ACTIVITY")
+            self.assertEqual(window._left_tabs.tabText(0), "SYS")
+            self.assertEqual(window._left_tabs.tabText(1), "EXP")
+            self.assertEqual(window._left_tabs.tabText(2), "ACT")
+            self.assertEqual(window._work_tabs.tabText(2), "TASKS")
             self.assertTrue(window._debug_toggle_btn.isHidden())
             self.assertEqual(
                 window._work_tabs.tabBar().elideMode(),
@@ -61,12 +78,21 @@ class UiFacadeTests(unittest.TestCase):
             )
             identity_page = window._settings_center._category_pages["identity"].widget()
             self.assertIsNotNone(identity_page.findChild(QLineEdit, "assistant_name"))
-            window._settings_center.action_requested.emit("audio")
-            self.assertTrue(window._settings_center.isVisible())
-            self.assertEqual(
-                window._settings_center.pages.currentWidget(),
-                window._settings_center._category_pages["audio"],
-            )
+            # This test validates Settings Center routing, not host audio
+            # hardware. MainWindow is constructed directly here, so the normal
+            # startup audio_devices.prefetch() has not run. Without these mocks,
+            # list_devices() can synchronously probe PortAudio devices on the
+            # GUI thread and make the test hang on machines with slow drivers.
+            with (
+                patch("core.audio_devices.list_devices", return_value=[]),
+                patch("core.audio_devices.get_output_volume", return_value=None),
+            ):
+                window._settings_center.action_requested.emit("audio")
+                self.assertTrue(window._settings_center.isVisible())
+                self.assertEqual(
+                    window._settings_center.pages.currentWidget(),
+                    window._settings_center._category_pages["audio"],
+                )
             self.assertEqual(routed, [])
             window._settings_center.action_requested.emit("controls")
             self.assertTrue(window._settings_center.isVisible())
@@ -84,6 +110,7 @@ class UiFacadeTests(unittest.TestCase):
         finally:
             window.close()
             app.processEvents()
+            show_setup.assert_not_called()
 
 
 if __name__ == "__main__":

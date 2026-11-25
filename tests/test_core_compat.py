@@ -48,114 +48,50 @@ class InputLockTests(unittest.TestCase):
 
 
 class CameraCompatibilityTests(unittest.TestCase):
-    def test_legacy_constructor_open_and_cap_proxy(self):
+    def test_camera_opens_preferred_device_and_releases_capture(self):
         cameras = importlib.import_module("core.cameras")
-
-        class FakeDevice:
-            index = 0
-            _closed = False
-            _capture = object()
-            _condition = threading.RLock()
-            _capture_lock = threading.RLock()
-            _width = _height = 0
-            _fps = 0.0
-            _last_error = None
-
-            def acquire(self): pass
-            def configure(self, width, height, fps):
-                self.requested = (width, height, fps)
-            def info(self):
-                return cameras.CameraInfo(0, "Fake", 1280, 720, 30, True, 1)
-
-        class FakeManager:
-            def __init__(self): self.device = FakeDevice()
-            def acquire(self, index): return self.device
-            def release(self, device): pass
-
         class FakeCapture:
-            def __init__(self): self.values = {}
-            def set(self, prop, value): self.values[prop] = value; return True
-            def get(self, prop): return self.values.get(prop, 0)
-
-        fake_manager = FakeManager()
-        fake_manager.device._capture = FakeCapture()
-        with patch.object(cameras, "_manager", fake_manager), patch.object(cameras, "_configured_index", return_value=0):
-            cam = cameras.Camera(None, fast=True, want=(1280, 720, 30))
-            self.assertTrue(cam.open())
-            self.assertEqual(cam.how, "shared")
-            self.assertTrue(cam.cap.set(3, 640))
-            self.assertEqual(cam.cap.get(3), 640.0)
-            cam.close()
-
+            def release(self):
+                self.released = True
+        fake_capture = FakeCapture()
+        camera = cameras.Camera(preferred=0)
+        with patch.object(cameras, "open_index", return_value=fake_capture), patch.object(cameras, "films", return_value=True):
+            self.assertTrue(camera.open())
+            self.assertIs(camera.cap, fake_capture)
+            self.assertEqual(camera.index, 0)
+        camera.release()
+        self.assertTrue(fake_capture.released)
+        self.assertIsNone(camera.cap)
 
 
 class CameraCaptureBackendTests(unittest.TestCase):
-    def test_closed_timeout_capture_retries_without_open_parameters(self):
+    def test_open_index_uses_platform_backend_and_releases_failed_capture(self):
         cameras = importlib.import_module("core.cameras")
 
         class FakeCapture:
             def __init__(self, opened):
                 self.opened = opened
                 self.released = False
-                self.values = {}
-
             def isOpened(self):
                 return self.opened
-
             def release(self):
                 self.released = True
 
-            def set(self, prop, value):
-                self.values[prop] = value
-                return True
-
-            def get(self, prop):
-                return self.values.get(prop, 0)
-
-        captures = [FakeCapture(False), FakeCapture(True)]
+        capture = FakeCapture(False)
         calls = []
-
         class FakeCV2:
-            CAP_AVFOUNDATION = 1200
-            CAP_PROP_OPEN_TIMEOUT_MSEC = 1
-            CAP_PROP_READ_TIMEOUT_MSEC = 2
-            CAP_PROP_FOURCC = 3
-            CAP_PROP_FRAME_WIDTH = 4
-            CAP_PROP_FRAME_HEIGHT = 5
-            CAP_PROP_FPS = 6
-            CAP_PROP_BUFFERSIZE = 7
-            error = RuntimeError
-
-            @staticmethod
-            def VideoWriter_fourcc(*_):
-                return 0
-
+            CAP_ANY = 0
+            CAP_DSHOW = 700
+            CAP_V4L2 = 800
             @staticmethod
             def VideoCapture(*args):
                 calls.append(args)
-                return captures[len(calls) - 1]
+                return capture
 
-        device = object.__new__(cameras._Device)
-        device.index = 0
-        device._condition = threading.Condition()
-        device._capture = None
-        device._width = device._height = 0
-        device._fps = 0.0
-        device._last_error = None
-        device._blocked_by = None
-
-        with (
-            patch.object(cameras, "cv2", FakeCV2),
-            patch.object(cameras.platform, "system", return_value="Darwin"),
-        ):
-            self.assertTrue(device._open_capture())
-
-        self.assertEqual(len(calls), 2)
-        self.assertEqual(calls[0][:2], (0, FakeCV2.CAP_AVFOUNDATION))
-        self.assertEqual(len(calls[0]), 3)  # timeout-parameterized AVFoundation open
-        self.assertEqual(calls[1], (0, FakeCV2.CAP_AVFOUNDATION))  # legacy fallback
-        self.assertTrue(captures[0].released)
-        self.assertIs(device._capture, captures[1])
+        with patch.dict("sys.modules", {"cv2": FakeCV2}), patch.object(cameras.sys, "platform", "darwin"):
+            self.assertIsNone(cameras.open_index(3))
+        self.assertEqual(calls, [(3, FakeCV2.CAP_ANY)])
+        self.assertTrue(capture.released)
 
 
 class SecretStoreTests(unittest.TestCase):
@@ -167,8 +103,9 @@ class SecretStoreTests(unittest.TestCase):
         import os
         if os.name != "nt":
             secretstore = importlib.import_module("core.secretstore")
-            with self.assertRaises(secretstore.SecretStoreError):
-                secretstore.protect("embedding", "face_lock.profile")
+            with patch.object(secretstore, "available", return_value=False):
+                with self.assertRaises(secretstore.SecretStoreError):
+                    secretstore.protect("embedding", "face_lock.profile")
 
 
 if __name__ == "__main__":

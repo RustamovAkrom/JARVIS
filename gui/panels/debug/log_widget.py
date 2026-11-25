@@ -1,7 +1,7 @@
 """Queued, bounded Qt log view for debug and system output."""
 
 from PyQt6.QtCore import QTimer, pyqtSignal
-from PyQt6.QtGui import QBrush, QFont
+from PyQt6.QtGui import QBrush, QFont, QTextCharFormat, QTextCursor
 from PyQt6.QtWidgets import QTextEdit
 
 from gui.themes.tokens import C, qcol
@@ -22,7 +22,7 @@ class LogWidget(QTextEdit):
         self.setFont(QFont(FONT_MONO, 10))
         self.setStyleSheet(f"""
             QTextEdit {{
-                background: rgba(4, 10, 24, 120);
+                background: {C.PANEL2};
                 color: {C.TEXT};
                 border: 1px solid {C.BORDER};
                 border-radius: 10px;
@@ -50,6 +50,33 @@ class LogWidget(QTextEdit):
         self._tmr.timeout.connect(self._step)
         self._sig.connect(self._enqueue)
         self._console_sig.connect(self._append_console_line)
+
+    def apply_jarvis_theme(self) -> None:
+        """Recolour existing rich-text log lines after a live theme transition."""
+        content = self.toPlainText()
+        cursor = QTextCursor(self.document())
+        cursor.beginEditBlock()
+        cursor.select(QTextCursor.SelectionType.Document)
+        cursor.removeSelectedText()
+        for line in content.splitlines():
+            lowered = line.lower()
+            if line.startswith("[stderr]") or "err" in lowered:
+                color = C.RED
+            elif lowered.startswith("you:"):
+                color = C.WHITE
+            elif lowered.startswith(f"{self._ai_name_lc}:") or lowered.startswith("jarvis:"):
+                color = C.PRI
+            elif lowered.startswith("file:"):
+                color = C.GREEN
+            else:
+                color = C.TEXT_MED
+            char_format = QTextCharFormat()
+            char_format.setForeground(QBrush(qcol(color)))
+            cursor.insertText(line + "\n", char_format)
+        cursor.endEditBlock()
+        self.setTextCursor(cursor)
+        self.verticalScrollBar().setValue(self.verticalScrollBar().maximum())
+        self.update()
 
     def append_log(self, text: str):
         self._sig.emit(text)

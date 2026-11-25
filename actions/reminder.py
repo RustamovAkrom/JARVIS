@@ -4,6 +4,11 @@ import platform
 import shutil
 import subprocess
 import sys
+import re
+import threading
+import time
+import uuid
+from xml.sax.saxutils import escape
 from datetime import datetime
 from pathlib import Path
 from core.runtime_paths import PATHS
@@ -160,8 +165,8 @@ def _schedule_windows(
         "    <Enabled>true</Enabled>\n"
         "  </TimeTrigger></Triggers>\n"
         "  <Actions><Exec>\n"
-        f"    <Command>{python_exe}</Command>\n"
-        f'    <Arguments>"{script_path}"</Arguments>\n'
+        f"    <Command>{escape(str(python_exe))}</Command>\n"
+        f'    <Arguments>"{escape(str(script_path))}"</Arguments>\n'
         "  </Exec></Actions>\n"
         "  <Settings>\n"
         "    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>\n"
@@ -275,7 +280,7 @@ def _schedule_linux(target_dt: datetime, task_name: str, script_path: Path) -> s
             errors="replace",
         )
         if result.returncode == 0:
-            return task_name
+            return f"systemd:{task_name}"
         print(f"[Reminder] ⚠️ systemd-run failed: {result.stderr.strip()}, trying 'at'")
 
     if shutil.which("at"):
@@ -290,13 +295,203 @@ def _schedule_linux(target_dt: datetime, task_name: str, script_path: Path) -> s
             errors="replace",
         )
         if result.returncode == 0:
-            return task_name
+            match = re.search(r"job\s+(\d+)", result.stdout or "", re.IGNORECASE)
+            return f"at:{match.group(1)}" if match else f"at:{task_name}"
         print(f"[Reminder] ❌ at: {result.stderr.strip()}")
         return ""
 
     print("[Reminder] ❌ Neither systemd-run nor at found on this Linux system.")
     return ""
 
+
+
+_REMINDER_CLEANUP_LOCK = threading.Lock()
+_REMINDER_CLEANUP_STATE = threading.local()
+_REMINDER_RETENTION_SECONDS = 30 * 24 * 60 * 60
+
+
+def _read_reminder_index() -> list[dict]:
+    index = PATHS.config_dir / "ui_reminders.json"
+    try:
+        data = json.loads(index.read_text(encoding="utf-8")) if index.exists() else {}
+        rows = data.get("reminders", []) if isinstance(data, dict) else []
+        return [row for row in rows if isinstance(row, dict)]
+    except (OSError, json.JSONDecodeError, TypeError, ValueError):
+        return []
+
+
+def list_reminders() -> list[dict]:
+    """Return reminders newest first and opportunistically prune old stale jobs.
+
+    Cleanup only considers reminders more than 30 days past due. The OS
+    scheduler remains authoritative: cancel_reminder must verify cancellation
+    (or verified absence) before the local index row and generated script go.
+    """
+    rows = _read_reminder_index()
+    if not getattr(_REMINDER_CLEANUP_STATE, "active", False):
+        with _REMINDER_CLEANUP_LOCK:
+            _REMINDER_CLEANUP_STATE.active = True
+            try:
+                cutoff = time.time() - _REMINDER_RETENTION_SECONDS
+                for row in rows:
+                    try:
+                        due = float(row.get("due") or 0)
+                    except (TypeError, ValueError):
+                        continue
+                    reminder_id = str(row.get("id") or "").strip()
+                    if reminder_id and due > 0 and due < cutoff:
+                        # cancel_reminder() calls list_reminders(); the
+                        # thread-local guard prevents recursive cleanup.
+                        cancel_reminder(reminder_id)
+            finally:
+                _REMINDER_CLEANUP_STATE.active = False
+        rows = _read_reminder_index()
+
+    def _due(row):
+        try:
+            return float(row.get("due") or 0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    return sorted(rows, key=_due)
+
+
+def cancel_reminder(reminder_id: str) -> tuple[bool, str]:
+    """Cancel a scheduled reminder and remove it from the local index."""
+    reminder_id = str(reminder_id or "").strip()
+    if not reminder_id:
+        return False, "Reminder ID is required."
+    rows = list_reminders()
+    row = next((r for r in rows if str(r.get("id")) == reminder_id), None)
+    if row is None:
+        return False, "Reminder was not found."
+    job_id = str(row.get("job_id") or "")
+    platform_name = str(row.get("platform") or _get_os())
+    try:
+        if platform_name == "windows":
+            result = subprocess.run(
+                ["schtasks", "/Delete", "/TN", job_id, "/F"],
+                capture_output=True,
+                text=True,
+                **_CNW,
+                check=False,
+            )
+            if result.returncode != 0:
+                probe = subprocess.run(
+                    ["schtasks", "/Query", "/TN", job_id],
+                    capture_output=True,
+                    text=True,
+                    **_CNW,
+                    check=False,
+                )
+                if probe.returncode == 0:
+                    return False, "Windows Task Scheduler still reports the reminder."
+                detail = (probe.stderr or probe.stdout).lower()
+                if not any(
+                    marker in detail
+                    for marker in ("cannot find", "does not exist", "no tasks are running")
+                ):
+                    return False, (
+                        "Could not verify Windows scheduler cancellation: "
+                        + (probe.stderr or probe.stdout or result.stderr or "unknown response")
+                    )
+        elif platform_name == "mac":
+            plist = Path.home() / "Library" / "LaunchAgents" / f"{job_id}.plist"
+            result = subprocess.run(
+                ["launchctl", "unload", str(plist)],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode != 0:
+                detail = (result.stderr or result.stdout).strip()
+                # A failed unload is acceptable only when launchd confirms that
+                # the label is no longer registered (for example, already fired).
+                probe = subprocess.run(
+                    ["launchctl", "list", job_id],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if probe.returncode == 0:
+                    return False, (
+                        "launchd still reports this reminder as loaded: "
+                        + (detail or probe.stdout.strip())
+                    )
+                probe_detail = (probe.stderr or probe.stdout).lower()
+                if not any(
+                    marker in probe_detail
+                    for marker in ("could not find service", "service is not loaded", "not found")
+                ):
+                    return False, (
+                        "Could not verify launchd cancellation: "
+                        + (probe.stderr or probe.stdout or detail or "unknown scheduler response")
+                    )
+            plist.unlink(missing_ok=True)
+        elif job_id.startswith("at:"):
+            job_number = job_id.split(":", 1)[1]
+            result = subprocess.run(
+                ["atrm", job_number],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode != 0:
+                probe = subprocess.run(
+                    ["atq"], capture_output=True, text=True, check=False
+                )
+                if probe.returncode != 0:
+                    return False, (
+                        "Could not verify at-job cancellation: "
+                        + (probe.stderr or result.stderr or "atq failed")
+                    )
+                pending = {
+                    line.split()[0]
+                    for line in probe.stdout.splitlines()
+                    if line.split() and line.split()[0].isdigit()
+                }
+                if not job_number.isdigit() or job_number in pending:
+                    return False, "The at scheduler still reports this reminder as pending."
+        else:
+            unit = job_id.removeprefix("systemd:")
+            result = subprocess.run(
+                ["systemctl", "--user", "stop", f"{unit}.timer", f"{unit}.service"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode != 0:
+                probe = subprocess.run(
+                    [
+                        "systemctl", "--user", "show",
+                        f"{unit}.timer", f"{unit}.service",
+                        "--property=ActiveState", "--value",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                states = [line.strip().lower() for line in probe.stdout.splitlines()]
+                if probe.returncode != 0 or len(states) < 2:
+                    detail = (result.stderr or result.stdout or probe.stderr).strip()
+                    return False, f"Could not verify scheduler cancellation: {detail}"
+                if any(state in {"active", "activating", "reloading", "deactivating"} for state in states):
+                    return False, "systemd still reports the reminder timer or service active."
+    except (OSError, subprocess.CalledProcessError) as exc:
+        return False, f"Could not cancel system reminder: {exc}"
+    remaining = [r for r in rows if str(r.get("id")) != reminder_id]
+    index = PATHS.config_dir / "ui_reminders.json"
+    try:
+        index.parent.mkdir(parents=True, exist_ok=True)
+        tmp = index.with_suffix(index.suffix + ".tmp")
+        tmp.write_text(json.dumps({"reminders": remaining}, ensure_ascii=False, indent=2),
+                       encoding="utf-8")
+        tmp.replace(index)
+    except OSError as exc:
+        return False, f"Reminder cancelled, but index could not be updated: {exc}"
+    script = _scripts_dir() / f"{reminder_id}.py"
+    script.unlink(missing_ok=True)
+    return True, "Reminder cancelled."
 
 def reminder(
     parameters: dict,
@@ -322,7 +517,7 @@ def reminder(
 
     os_name = _get_os()
     safe_msg = _sanitise(message)
-    task_name = f"JARVISReminder_{target_dt.strftime('%Y%m%d_%H%M%S')}"
+    task_name = f"JARVISReminder_{target_dt.strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
 
     try:
         script_path = _write_notify_script(task_name, safe_msg, os_name)
@@ -361,6 +556,7 @@ def reminder(
                 "due": target_dt.timestamp(),
                 "message": safe_msg,
                 "job_id": str(job_id),
+                "platform": os_name,
             }
         )
         config_dir.mkdir(parents=True, exist_ok=True)

@@ -23,6 +23,50 @@
       display: flex; flex-direction: column; overflow: hidden;
     }
 
+    /* Responsive remote-control dashboard */
+    html { -webkit-text-size-adjust: 100%; }
+    body { padding-bottom: env(safe-area-inset-bottom); }
+    button, input, label { -webkit-tap-highlight-color: transparent; }
+    button { touch-action: manipulation; }
+    header { padding-top: max(12px, env(safe-area-inset-top)); }
+    .quick-actions {
+      flex-shrink:0;display:flex;gap:8px;padding:8px 14px 10px;
+      overflow-x:auto;border-bottom:1px solid var(--border);
+      scrollbar-width:none;background:rgba(7,9,15,.82)
+    }
+    .quick-actions::-webkit-scrollbar{display:none}
+    .quick-action {
+      white-space:nowrap;background:var(--surface);border:1px solid var(--border);
+      color:#b8bfd3;border-radius:999px;padding:9px 13px;font-size:11px;
+      font-weight:600;cursor:pointer;min-height:36px;transition:.15s
+    }
+    .quick-action:hover,.quick-action:active{border-color:var(--accent);color:#fff;background:var(--adim)}
+    .btn-logout{background:transparent;border:1px solid var(--border);color:var(--muted);padding:7px 10px;border-radius:8px;font-size:10px;cursor:pointer}
+    .btn-logout:hover{color:var(--text);border-color:var(--accent)}
+    #inp{min-width:0}
+    footer{padding-bottom:max(10px,env(safe-area-inset-bottom))}
+    @media(max-width:600px){
+      header{gap:7px;padding:10px 11px}
+      .logo{letter-spacing:4px;font-size:14px}
+      .pill{padding:5px 8px;font-size:9px;letter-spacing:1px}
+      .enc-badge{font-size:8px;letter-spacing:1px;padding:3px 5px}
+      .url{display:none}
+      .btn-logout{padding:8px 9px}
+      main{padding:12px 11px 8px;gap:9px}
+      .msg{max-width:92%;font-size:14px}
+      footer{gap:6px;padding:8px 9px}
+      #inp{padding:12px 12px;font-size:16px;border-radius:12px}
+      .btn-send{padding:12px 13px}
+      .btn-attach,#mic-btn{padding:11px 10px}
+      .quick-actions{padding:7px 10px 9px}
+    }
+    @media(max-width:360px){
+      .logo{letter-spacing:2px}
+      .pill{letter-spacing:0}
+      .btn-logout{font-size:9px;padding:7px}
+      .btn-send{letter-spacing:1px;padding:11px}
+    }
+
     /* ── HEADER ── */
     header {
       flex-shrink: 0; display: flex; align-items: center; gap: 10px;
@@ -140,7 +184,14 @@
     <div class="enc-badge" id="enc">AES-GCM</div>
     <div class="spacer"></div>
     <div class="url">__IP__:__PORT__</div>
+    <button class="btn-logout" id="logout" type="button" title="Disconnect this device">EXIT</button>
   </header>
+  <nav class="quick-actions" aria-label="Quick commands">
+    <button class="quick-action" data-command="Give me a system status report">System status</button>
+    <button class="quick-action" data-command="What is currently on my screen?">Screen</button>
+    <button class="quick-action" data-command="Stop listening and pause voice interaction">Stop listening</button>
+    <button class="quick-action" data-command="What can you do right now?">Capabilities</button>
+  </nav>
   <main id="feed"></main>
   <footer>
     <input id="inp" placeholder="Send a command to JARVIS…" autocomplete="off">
@@ -406,6 +457,21 @@
     document.getElementById('file-inp').addEventListener('change', function () {
       Array.from(this.files).forEach(_uploadFile);
       this.value = ''; // reset so the same file can be re-sent
+    });
+
+    // Quick actions and local logout.
+    document.querySelectorAll('.quick-action').forEach(button=>{
+      button.addEventListener('click',()=>{
+        const inp=document.getElementById('inp');
+        inp.value=button.dataset.command||'';
+        doSend();
+      });
+    });
+    document.getElementById('logout').addEventListener('click',()=>{
+      sessionStorage.removeItem('jarvis_token');
+      sessionStorage.removeItem('jarvis_key');
+      localStorage.removeItem('jarvis_device_token');
+      location.replace('/login');
     });
 
     // ── Commands ──────────────────────────────────────────────────────────────

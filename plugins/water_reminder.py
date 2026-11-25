@@ -136,7 +136,7 @@ def _panel(player, ml: int, goal: int) -> None:
 def _clamp(val, default, lo, hi):
     try:
         return max(lo, min(hi, int(val)))
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         return default
 
 

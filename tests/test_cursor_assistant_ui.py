@@ -6,6 +6,7 @@ import tempfile
 from io import BytesIO
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from PIL import Image
@@ -18,10 +19,12 @@ from PyQt6.QtWidgets import (
     QComboBox,
     QMainWindow,
     QScrollArea,
+    QSplitter,
     QWidget,
 )
 
 from memory import config_manager
+from gui.themes.tokens import C, DEFAULT_UI_COLOR, apply_ui_accent, apply_ui_theme
 from ui import (
     ChatInput,
     ClipboardPanel,
@@ -73,6 +76,57 @@ class CursorAssistantUiTests(unittest.TestCase):
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
 
+    def test_adaptive_side_panels_can_hide_hud_without_collapsing_left_navigation(self):
+        left_panel = QWidget()
+        left_panel.setMinimumWidth(150)
+        center_views = QWidget()
+        center_views.setMinimumWidth(240)
+
+        main_splitter = QSplitter(Qt.Orientation.Horizontal)
+        main_splitter.setContentsMargins(6, 6, 6, 6)
+        main_splitter.setChildrenCollapsible(False)
+        main_splitter.addWidget(left_panel)
+        main_splitter.addWidget(center_views)
+
+        workspace_split = QSplitter(Qt.Orientation.Vertical)
+        workspace_split.addWidget(main_splitter)
+        owner = SimpleNamespace(
+            _left_panel=left_panel,
+            _center_views=center_views,
+            _main_splitter=main_splitter,
+            _workspace_split=workspace_split,
+        )
+
+        try:
+            MainWindow._sync_adaptive_side_panel_constraints(owner)
+
+            expected_minimum = (
+                left_panel.minimumWidth()
+                + main_splitter.handleWidth()
+                + main_splitter.contentsMargins().left()
+                + main_splitter.contentsMargins().right()
+            )
+            self.assertEqual(center_views.minimumWidth(), 0)
+            self.assertFalse(main_splitter.isCollapsible(0))
+            self.assertTrue(main_splitter.isCollapsible(1))
+            self.assertEqual(main_splitter.minimumWidth(), expected_minimum)
+            self.assertEqual(workspace_split.minimumWidth(), expected_minimum)
+
+            left_panel.hide()
+            MainWindow._sync_adaptive_side_panel_constraints(owner)
+            self.assertEqual(main_splitter.minimumWidth(), 0)
+            self.assertEqual(workspace_split.minimumWidth(), 0)
+
+            left_panel.show()
+            MainWindow._sync_adaptive_side_panel_constraints(owner)
+            self.assertEqual(main_splitter.minimumWidth(), expected_minimum)
+            self.assertEqual(workspace_split.minimumWidth(), expected_minimum)
+        finally:
+            workspace_split.close()
+            main_splitter.close()
+            left_panel.close()
+            center_views.close()
+
     def test_metric_gauge_animates_to_the_latest_reading(self):
         gauge = MetricGauge("CPU", "#00d4ff")
         try:
@@ -92,6 +146,78 @@ class CursorAssistantUiTests(unittest.TestCase):
 
         self.assertEqual(len(chart._samples), 30)
         self.assertEqual(chart._samples[-1], (34.0, 66.0))
+
+    def test_hud_restores_original_orbital_renderer(self):
+        # Older config files may still contain either legacy style value. The
+        # restored JARVIS HUD always uses its original interactive orbital view.
+        for legacy_style in ("core", "orbital"):
+            with patch.object(
+                config_manager, "get_hud_style", return_value=legacy_style
+            ):
+                canvas = HudCanvas("", "JARVIS")
+            try:
+                canvas.resize(320, 320)
+                image = QImage(320, 320, QImage.Format.Format_ARGB32)
+                image.fill(Qt.GlobalColor.transparent)
+                with (
+                    patch.object(canvas, "_paint_core") as core,
+                    patch.object(canvas, "_paint_orb3d") as orbital,
+                ):
+                    canvas.render(image)
+                    orbital.assert_called_once()
+                    core.assert_not_called()
+            finally:
+                canvas._tmr.stop()
+                canvas.close()
+
+    def test_hud_orbit_uses_red_for_mute_and_amber_accents_for_thinking(self):
+        apply_ui_theme("dark")
+        apply_ui_accent(DEFAULT_UI_COLOR)
+        canvas = HudCanvas("", "JARVIS")
+        try:
+            canvas.state = "IDLE"
+            canvas.muted = False
+            main, _accent = canvas._core_colours()
+            self.assertEqual(main.name(), C.PRI)
+
+            canvas.state = "THINKING"
+            main, accent = canvas._core_colours()
+            self.assertEqual(main.name(), C.PRI)
+            self.assertEqual(accent.name(), C.ACC2)
+
+            canvas.muted = True
+            main, accent = canvas._core_colours()
+            self.assertEqual(main.name(), "#ff3366")
+            self.assertEqual(accent.name(), "#ff3366")
+        finally:
+            canvas._tmr.stop()
+            canvas.close()
+            apply_ui_theme("dark")
+            apply_ui_accent(DEFAULT_UI_COLOR)
+
+    def test_hud_accessibility_description_tracks_live_status_and_mute(self):
+        canvas = HudCanvas("", "JARVIS")
+        try:
+            canvas.resize(320, 320)
+            image = QImage(320, 320, QImage.Format.Format_ARGB32)
+            image.fill(Qt.GlobalColor.transparent)
+
+            canvas.state = "THINKING"
+            canvas.muted = False
+            canvas.render(image)
+            self.assertEqual(
+                canvas.accessibleName(), "JARVIS assistant status display"
+            )
+            self.assertIn("thinking", canvas.accessibleDescription())
+            self.assertIn("microphone is unmuted", canvas.accessibleDescription().lower())
+
+            canvas.muted = True
+            canvas.render(image)
+            self.assertIn("microphone is muted", canvas.accessibleDescription().lower())
+            self.assertIn("double-click", canvas.accessibleDescription().lower())
+        finally:
+            canvas._tmr.stop()
+            canvas.close()
 
     def test_hud_orbit_reacts_to_cursor_and_recenters_on_leave(self):
         canvas = HudCanvas("", "JARVIS")
@@ -147,8 +273,10 @@ class CursorAssistantUiTests(unittest.TestCase):
         ):
             menu = CursorRadialMenu(_Owner())
         try:
-            self.assertEqual(menu.width(), 356)
-            self.assertLessEqual(menu.height(), 110)
+            self.assertEqual(menu.width(), 300)
+            self.assertLessEqual(menu.height(), 145)
+            self.assertLessEqual(menu.maximumWidth(), 320)
+            self.assertGreaterEqual(menu.minimumWidth(), 240)
             self.assertAlmostEqual(menu.windowOpacity(), 0.9, places=2)
             self.assertIn("screen", menu._buttons)
             self.assertFalse(menu._prompt_row.isVisible())

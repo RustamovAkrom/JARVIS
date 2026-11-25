@@ -104,7 +104,7 @@ def _fmt_money(value):
         return "N/A"
     try:
         n = float(value)
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         return "N/A"
     return f"${n:,.2f}"
 
@@ -114,7 +114,7 @@ def _fmt_pct(value):
         return "N/A"
     try:
         n = float(value)
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         return "N/A"
     sign = "+" if n >= 0 else ""
     return f"{sign}{n:.2f}%"

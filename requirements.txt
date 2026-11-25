@@ -9,7 +9,9 @@
 # ── Core: UI, audio, Gemini Live ──────────────────────────────────────────────
 PyQt6>=6.6,<7
 packaging>=24,<27
-PyQt6-WebEngine>=6.6,<7
+PyQt6-WebEngine>=6.11.0
+# PySide6 is optional; the desktop UI uses PyQt6. Install only when testing
+# the alternate binding: python -m pip install "PySide6>=6.6,<7"
 pywinpty>=3.1.2,<4; sys_platform == "win32"
 sounddevice>=0.4,<1
 numpy>=1.24,<3
@@ -19,6 +21,7 @@ av>=19.0.0
 # directly, and a package you import is a package you depend on — relying on
 # somebody else's transitive dependency works right up until they drop it.
 httpx>=0.27,<1
+py3langid>=0.3.0  # offline typed-language detection
 
 # ── Web search & browser control ──────────────────────────────────────────────
 requests>=2.31,<3
@@ -83,6 +86,8 @@ pycaw;      sys_platform == "win32"
 win10toast; sys_platform == "win32"
 pywin32;    sys_platform == "win32"
 wmi;        sys_platform == "win32"
+winrt-Windows.UI.Notifications.Management>=4!10.0.28000.2705,<5!0; sys_platform == "win32"
+winrt-Windows.UI.Notifications>=4!10.0.28000.2705,<5!0; sys_platform == "win32"
 # pywinauto drives the Windows accessibility tree. Three plugins read it:
 # screen_agent (to aim without a model call), the WhatsApp pair, and
 # game_updater (Steam's install dialog).
@@ -152,3 +157,9 @@ sherlock-project>=0.14.4     # osint_toolkit — username lookup CLI
 # macOS / Linux OS actions (volume, brightness, reminders) shell out to native
 # tools (pactl / brightnessctl / osascript / systemd), so no extra Python
 # packages are needed there — nothing Windows-specific is ever pulled in.
+
+# ── Test runner ──────────────────────────────────────────────────────────────
+pytest>=8,<10
+
+# Optional personal-account Telegram MTProto integration (install explicitly).
+# pip install -e .[telegram-personal]
