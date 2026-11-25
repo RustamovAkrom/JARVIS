@@ -145,8 +145,14 @@ class RemindersPanel(QWidget):
                 due = float(row.get("due", 0))
                 if not reminder_id or not math.isfinite(due) or due <= now:
                     continue
-                valid_rows.append((due, str(reminder_id), str(row.get("message") or "Reminder")))
-            except (TypeError, ValueError, OverflowError):
+                stamp = datetime.fromtimestamp(due).strftime("%Y-%m-%d %H:%M")
+                valid_rows.append((
+                    due,
+                    str(reminder_id),
+                    str(row.get("message") or "Reminder"),
+                    stamp,
+                ))
+            except (TypeError, ValueError, OverflowError, OSError):
                 continue
 
         valid_rows.sort(key=lambda entry: (entry[0], entry[1]))
@@ -155,8 +161,7 @@ class RemindersPanel(QWidget):
         try:
             self.list_widget.clear()
             restored_item = None
-            for due, reminder_id, message in valid_rows:
-                stamp = datetime.fromtimestamp(due).strftime("%Y-%m-%d %H:%M")
+            for _due, reminder_id, message, stamp in valid_rows:
                 item = QListWidgetItem(f"{stamp}  |  {message}")
                 item.setData(Qt.ItemDataRole.UserRole, reminder_id)
                 item.setToolTip(message)
