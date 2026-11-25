@@ -871,5 +871,5 @@ def as_json(
     try:
         return json.loads(raw)
     except Exception as e:
-        print(f"[Gemini] reply was not JSON: {e}")
+        print(f"[Gemini] reply was not JSON ({type(e).__name__})")
         return default
