@@ -1598,14 +1598,16 @@ def _run_command(player, client, cmd: dict) -> None:
             return _post(client, cid, done=True, caption=job.get("caption", ""),
                          photo_b64=base64.b64encode(job["data"]).decode("ascii"))
         except Exception as e:
-            return _post(client, cid, done=True, error=f"Screenshot failed: {e}")
+            from core.security_logging import redact_sensitive_text
+            return _post(client, cid, done=True, error=f"Screenshot failed: {redact_sensitive_text(e)}")
 
     if kind == "system":
         try:
             from plugins import _telegram_ops as ops
             return _post(client, cid, done=True, text=ops.produce("system_status", "", {})["text"])
         except Exception as e:
-            return _post(client, cid, done=True, error=f"No readout: {e}")
+            from core.security_logging import redact_sensitive_text
+            return _post(client, cid, done=True, error=f"No readout: {redact_sensitive_text(e)}")
 
     if not cfg.get("accept_commands"):
         return _post(client, cid, done=True, error=(
@@ -1925,7 +1927,8 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
     except ImportError:
         return _MISSING
     except Exception as e:
-        return f"The cloud link failed: {e}"
+        from core.security_logging import redact_sensitive_text
+        return f"The cloud link failed: {redact_sensitive_text(e)}"
     return f"I don't have a '{action}' action for the cloud agent."
 
 
