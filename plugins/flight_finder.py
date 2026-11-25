@@ -340,8 +340,7 @@ def _save_to_desktop(content: str, origin: str, destination: str) -> str:
     filepath = desktop / filename
 
     filepath.write_text(content, encoding="utf-8")
-    from core.security_logging import redact_sensitive_text
-    print(f"[FlightFinder] 💾 Saved: {redact_sensitive_text(filepath)}")
+    print("[FlightFinder] Results saved to the Desktop.")
 
     try:
         if is_windows():
@@ -403,16 +402,12 @@ def flight_finder(parameters: dict, player=None, speak=None) -> str:
         return "Return date must be on or after the departure date."
 
     if player:
-        player.write_log(f"[FlightFinder] {redact_sensitive_text(origin)} → {redact_sensitive_text(destination)} on {date}")
+        player.write_log("[FlightFinder] Flight search started.")
 
     if speak:
         speak(f"Searching flights from {origin} to {destination} on {date}.")
 
-    print(
-        f"[FlightFinder] ▶️ {redact_sensitive_text(origin)} → {redact_sensitive_text(destination)} | {date}"
-        f"{' → ' + return_date if return_date else ''}"
-        f" | {cabin} | {passengers} pax"
-    )
+    print("[FlightFinder] Flight search started.")
 
     if not _reads_pages():
         import webbrowser
