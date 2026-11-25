@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from PyQt6.QtCore import Qt, QObject, QRunnable, QThreadPool, pyqtSignal, QSize, QTimer
 from PyQt6.QtGui import QIcon
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QTextEdit, QListWidget, QListWidgetItem, QMessageBox, QInputDialog, QGroupBox, QCheckBox, QApplication, QFrame, QMenu, QTabWidget, QDialog, QDialogButtonBox, QFileDialog
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QBoxLayout, QLabel, QPushButton, QLineEdit, QTextEdit, QListWidget, QListWidgetItem, QMessageBox, QInputDialog, QGroupBox, QCheckBox, QApplication, QFrame, QMenu, QTabWidget, QDialog, QDialogButtonBox, QFileDialog
 from core.connected_apps.models import AppDescriptor, TransportType
 from gui.themes.tokens import C
 from core.connected_apps.service import service
@@ -44,6 +44,7 @@ class ConnectedAppsPanel(QWidget):
 
         native_cards=QHBoxLayout()
         native_cards.setSpacing(8)
+        self.native_cards_layout = native_cards
 
         github_card=QFrame()
         github_card.setObjectName("nativeAppCard")
@@ -130,6 +131,7 @@ class ConnectedAppsPanel(QWidget):
         telegram_summary.setWordWrap(True)
         telegram_layout.addWidget(telegram_summary)
         telegram_actions=QHBoxLayout()
+        self.telegram_actions_layout = telegram_actions
         self.telegram_connect_btn=QPushButton("Connect")
         self.telegram_connect_btn.setObjectName("primaryAction")
         self.telegram_connect_btn.setProperty("compact",True)
@@ -177,6 +179,7 @@ class ConnectedAppsPanel(QWidget):
         toolbar=QVBoxLayout()
         toolbar.setSpacing(8)
         toolbar_top=QHBoxLayout()
+        self.toolbar_top_layout = toolbar_top
         self.search=QLineEdit()
         self.search.setObjectName("appsSearch")
         self.search.setPlaceholderText("Search configured MCP servers…")
@@ -209,6 +212,7 @@ class ConnectedAppsPanel(QWidget):
         add_menu.addAction("MCP OAuth",self.add_mcp_oauth)
         self.add_server_btn.setMenu(add_menu)
         toolbar_actions=QHBoxLayout()
+        self.toolbar_actions_layout = toolbar_actions
         self.reconnect_all_btn=QPushButton("Reconnect all")
         self.reconnect_all_btn.clicked.connect(self.reconnect_all)
         self.health_all_btn=QPushButton("Check all health")
@@ -255,6 +259,7 @@ class ConnectedAppsPanel(QWidget):
 
         actions=QVBoxLayout()
         primary_actions=QHBoxLayout()
+        self.primary_actions_layout = primary_actions
         self.connect_btn=QPushButton("Connect / Reconnect")
         self.connect_btn.setObjectName("primaryAction")
         self.connect_btn.clicked.connect(self.connect_selected)
@@ -269,6 +274,7 @@ class ConnectedAppsPanel(QWidget):
         primary_actions.addStretch(1)
         actions.addLayout(primary_actions)
         secondary_actions=QHBoxLayout()
+        self.secondary_actions_layout = secondary_actions
         self.block_tool_btn=QPushButton("Block tool")
         self.block_tool_btn.clicked.connect(lambda:self.set_tool_permission(True))
         self.allow_tool_btn=QPushButton("Unblock tool")
@@ -317,6 +323,25 @@ class ConnectedAppsPanel(QWidget):
         self._apply_theme_styles()
         self._check_runtime()
         self.refresh()
+    def resizeEvent(self, event):
+        """Reflow action groups when the settings page has limited width."""
+        super().resizeEvent(event)
+        compact = self.width() < 760
+        direction = (
+            QBoxLayout.Direction.TopToBottom
+            if compact else QBoxLayout.Direction.LeftToRight
+        )
+        for layout in (
+            self.native_cards_layout,
+            self.telegram_actions_layout,
+            self.toolbar_top_layout,
+            self.toolbar_actions_layout,
+            self.primary_actions_layout,
+            self.secondary_actions_layout,
+        ):
+            if layout.direction() != direction:
+                layout.setDirection(direction)
+
     def _telegram_connection(self):
         return next((row for row in service.connections() if row.get("app_id")=="telegram_personal"),None)
 
