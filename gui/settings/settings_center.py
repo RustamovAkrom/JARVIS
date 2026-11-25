@@ -57,8 +57,9 @@ def _center_style(glass_opacity: int = 100) -> str:
         QFrame#SettingsSidebar {{ background:{panel_surface}; border:1px solid {C.BORDER}; border-radius:{Radius.MD}px; }}
         QFrame#SettingsEmbeddedCard {{ background:transparent; border:0; }}
         QLabel {{ color:{C.TEXT}; background:transparent; }}
-        QLineEdit {{ background:{glass_rgba(C.PANEL2, glass_opacity, minimum_alpha=220)}; color:{C.WHITE}; border:1px solid {C.BORDER}; border-radius:6px; padding:8px 10px; }}
+        QLineEdit {{ background:{glass_rgba(C.PANEL2, glass_opacity, minimum_alpha=220)}; color:{C.TEXT}; border:1px solid {C.BORDER}; border-radius:7px; padding:8px 10px; selection-background-color:{C.PRI_GHO}; selection-color:{C.PRI}; }}
         QLineEdit:focus {{ border-color:{C.PRI}; }}
+        QLineEdit:disabled {{ color:{C.TEXT_DIM}; border-color:{C.BORDER}; }}
         QComboBox {{ background:{glass_rgba(C.PANEL2, glass_opacity, minimum_alpha=220)}; color:{C.TEXT}; border:1px solid {C.BORDER}; border-radius:7px; padding:6px 30px 6px 10px; min-height:24px; }}
         QComboBox:hover {{ border-color:{C.BORDER_B}; }}
         QComboBox:focus {{ border-color:{C.PRI}; }}
