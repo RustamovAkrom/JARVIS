@@ -863,8 +863,7 @@ class _BrowserSession:
             "",
             None,
         ):
-            from core.security_logging import redact_sensitive_text
-            print(f"[Browser] Still blank after goto — retrying on new tab: {redact_sensitive_text(url)}")
+            print("[Browser] Navigation returned a blank page; retrying in a new tab.")
             try:
                 new_page = await self._context.new_page()
                 self._page = new_page
