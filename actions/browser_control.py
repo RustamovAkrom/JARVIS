@@ -1326,7 +1326,8 @@ def browser_control(
     except concurrent.futures.TimeoutError:
         result = outcome.failed("browser_control", f"action '{action}' timed out after 60 seconds", action=action)
     except Exception as e:
-        result = outcome.failed("browser_control", f"browser action failed: {e}", action=action)
+        from core.security_logging import redact_sensitive_text
+        result = outcome.failed("browser_control", f"browser action failed: {redact_sensitive_text(e)}", action=action)
 
     _log(player, result)
     return result
