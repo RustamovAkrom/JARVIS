@@ -379,6 +379,63 @@ def test_connected_telegram_actions_restore_only_for_live_session(qapp, monkeypa
         panel.deleteLater()
         qapp.processEvents()
 
+
+
+def test_connected_apps_oauth_failure_exits_busy_state_and_surfaces_error(qapp, monkeypatch):
+    import gui.settings.connected_apps_panel as panel_module
+    from gui.settings.connected_apps_panel import ConnectedAppsPanel
+    from PyQt6.QtWidgets import QMessageBox
+
+    service = FakeConnectedAppsService(rows={"github-native": _github_row()})
+    monkeypatch.setattr(panel_module, "service", service)
+    warnings = []
+    monkeypatch.setattr(
+        QMessageBox,
+        "warning",
+        lambda *args, **kwargs: warnings.append((args, kwargs)),
+    )
+
+    panel = ConnectedAppsPanel()
+    try:
+        panel._busy(True, "Opening GitHub authorization in browser…")
+        panel._connected(None, RuntimeError("OAuth callback timed out"))
+
+        assert panel._busy_active is False
+        assert panel.add_github_btn.isEnabled()
+        assert panel.status.text().startswith("Connection failed:")
+        assert warnings
+        # The panel must not invent a disconnected state when the service still
+        # reports a previously valid connection.
+        assert panel.github_status_label.text() == "Connected"
+    finally:
+        panel.close()
+        panel.deleteLater()
+        qapp.processEvents()
+
+
+def test_connected_apps_oauth_error_state_is_reflected_after_refresh(qapp, monkeypatch):
+    import gui.settings.connected_apps_panel as panel_module
+    from gui.settings.connected_apps_panel import ConnectedAppsPanel
+
+    row = _github_row()
+    row["status"] = "error"
+    row["last_error"] = "OAuth token exchange failed"
+    service = FakeConnectedAppsService(rows={"github-native": row})
+    monkeypatch.setattr(panel_module, "service", service)
+
+    panel = ConnectedAppsPanel()
+    panel.show()
+    qapp.processEvents()
+    try:
+        assert panel.github_status_label.text() == "Error"
+        assert panel.github_status_label.toolTip() == "OAuth token exchange failed"
+        assert panel.add_github_btn.text() == "Reconnect"
+        assert panel.native_disconnect_btn.isVisible()
+    finally:
+        panel.close()
+        panel.deleteLater()
+        qapp.processEvents()
+
 def test_connected_apps_panel_tabs_and_mcp_controls_are_mounted(qapp, monkeypatch):
     import gui.settings.connected_apps_panel as panel_module
     from gui.settings.connected_apps_panel import ConnectedAppsPanel
