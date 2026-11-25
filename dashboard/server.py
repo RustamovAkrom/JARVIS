@@ -952,6 +952,10 @@ class DashboardServer:
                 {"type": "sys", "text": "Remote connection established via QR code."}
             ))
 
+            import json as _json
+            js_token = _json.dumps(tok).replace("<", "\\u003c")
+            js_key = _json.dumps(key).replace("<", "\\u003c")
+            js_device_token = _json.dumps(dev_tok).replace("<", "\\u003c")
             return HTMLResponse(f"""<!DOCTYPE html>
 <html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width">
 <style>
@@ -961,9 +965,9 @@ class DashboardServer:
 </style></head>
 <body>
 <script>
-  sessionStorage.setItem('jarvis_token','{tok}');
-  sessionStorage.setItem('jarvis_key','{key}');
-  localStorage.setItem('jarvis_device_token','{dev_tok}');
+  sessionStorage.setItem('jarvis_token',{js_token});
+  sessionStorage.setItem('jarvis_key',{js_key});
+  localStorage.setItem('jarvis_device_token',{js_device_token});
   setTimeout(function(){{location.replace('/')}},400);
 </script>
 <p>Connecting to JARVIS…</p>
