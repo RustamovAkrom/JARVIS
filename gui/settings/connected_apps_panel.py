@@ -761,7 +761,8 @@ class ConnectedAppsPanel(QWidget):
             f"Last error: {row.get('last_error') or 'None'}",
         ]
         self.details.setPlainText("\n".join(lines))
-        self.status.setText(f"{row.get('display_name','Connected App')}: {row.get('status','unknown')} · {len(tools)} tools")
+        # Selection changes update the details view only. The status line is
+        # reserved for operation feedback and must survive list refreshes.
 
     def disconnect_native_app(self, app_id):
         row = next((item for item in service.connections()
