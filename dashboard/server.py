@@ -1223,13 +1223,21 @@ class DashboardServer:
 
         @bounce.get("/{path:path}")
         async def _to_https(path: str, request: Request):
-            query = f"?{request.url.query}" if request.url.query else ""
-            safe_path = "/".join(
-                urllib.parse.quote(segment, safe="") for segment in path.split("/")
-            )
-            return RedirectResponse(
-                f"https://{self._ip}:{SECURE_PORT}/{safe_path}{query}",
-                status_code=307)
+            # Only redirect known dashboard routes; never reflect arbitrary
+            # client-controlled paths into a Location header.
+            allowed = {"", "index.html", "static", "api", "uploads", "ws"}
+            first = path.split("/", 1)[0]
+            if first not in allowed:
+                return JSONResponse({"error": "Not found"}, status_code=404)
+            query = request.url.query
+            location = f"https://{self._ip}:{SECURE_PORT}/"
+            if path:
+                location += "/".join(
+                    urllib.parse.quote(segment, safe="") for segment in path.split("/")
+                )
+            if query:
+                location += "?" + query
+            return RedirectResponse(location, status_code=307)
 
         cfg = uvicorn.Config(bounce, host=self._ip, port=PORT,
                              log_level="warning")
