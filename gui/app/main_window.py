@@ -10785,6 +10785,10 @@ class MainWindow(QMainWindow):
         chat_history_layout.setContentsMargins(0, 0, 0, 0)
         chat_history_layout.setSpacing(0)
         self._chat_view = _ChatBrowser()
+        self._chat_view.setAccessibleName(self._tr("Conversation history"))
+        self._chat_view.setAccessibleDescription(
+            self._tr("Messages from you and JARVIS. Use the composer below to send a message.")
+        )
         self._chat_view.setOpenLinks(False)
         self._chat_view.setOpenExternalLinks(False)
         self._chat_view.anchorClicked.connect(self._chat_link_clicked)
@@ -17446,7 +17450,7 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
             cards.append(
                 f'<table width="100%" cellspacing="0" cellpadding="0" style="margin-bottom:4px;">'
                 f'<tr><td align="right"><table width="84%" cellspacing="0" cellpadding="0">'
-                f'<tr><td style="padding:7px 9px;background:{C.DARK};border:1px solid transparent;'
+                f'<tr><td style="padding:7px 9px;background:{C.PANEL3};border:1px solid {C.BORDER};'
                 f'border-right:2px solid {C.ACC};border-radius:11px;">'
                 f'<table width="100%" cellspacing="0" cellpadding="0"><tr>'
                 f'<td style="color:{C.TEXT_MED};font-size:8pt;font-weight:600;padding-bottom:2px;">You</td>'
@@ -17469,8 +17473,21 @@ new QWebChannel(qt.webChannelTransport,channel=>{const bridge=channel.objects.br
                 f'</table>'
             )
         if not cards:
+            empty_title = _html.escape(self._tr("No messages yet"))
+            empty_hint = _html.escape(
+                self._tr("Send a message to start a conversation with JARVIS.")
+            )
+            empty_note = _html.escape(
+                self._tr("Previous conversations and saved memories are unchanged.")
+            )
             cards.append(
-                f'<p style="color:{C.TEXT_DIM};">Chat is empty. Previous conversations and saved memories are unchanged.</p>'
+                f'<div style="padding:30px 12px 20px;text-align:center;">'
+                f'<div style="color:{C.TEXT};font-size:12pt;font-weight:600;'
+                f'margin-bottom:7px;">{empty_title}</div>'
+                f'<div style="color:{C.TEXT_MED};font-size:10pt;line-height:1.45;'
+                f'margin-bottom:7px;">{empty_hint}</div>'
+                f'<div style="color:{C.TEXT_DIM};font-size:9pt;line-height:1.4;">'
+                f'{empty_note}</div></div>'
             )
         self._chat_view.setHtml(
             f'<html><body style="font-family:Inter,Segoe UI,sans-serif;font-size:10pt;color:{C.TEXT};'
