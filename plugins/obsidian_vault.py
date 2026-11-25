@@ -513,7 +513,9 @@ def _do_create(vault: Path, note: str, content: str, player) -> str:
                 f"Say 'add it to {path.stem}' if you want it appended instead.")
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        body = (content or "").strip()
+        from core.security_logging import redact_sensitive_text
+        # Notes remain verbatim except explicit credential assignments.
+        body = redact_sensitive_text((content or "").strip())
         path.write_text(f"# {path.stem}\n\n{body}\n" if body else f"# {path.stem}\n",
                         encoding="utf-8")
     except Exception as e:
@@ -525,7 +527,8 @@ def _do_create(vault: Path, note: str, content: str, player) -> str:
 
 
 def _append_to(vault: Path, path: Path, content: str, player, what: str) -> str:
-    body = (content or "").strip()
+    from core.security_logging import redact_sensitive_text
+    body = redact_sensitive_text((content or "").strip())
     if not body:
         return "What should I write in it?"
     existed  = path.exists()
