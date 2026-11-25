@@ -1157,12 +1157,12 @@ class DashboardServer:
             tok = token.strip()
             if not _valid(tok):
                 return JSONResponse({"error": "Unauthorized"}, status_code=401)
-            safe = re.sub(r'[/\\]', '', filename)
-            if safe in ("", ".", ".."):
+            safe = Path(filename).name
+            if not safe or safe in (".", "..") or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_. -]{0,179}", safe):
                 return JSONResponse({"error": "Not found"}, status_code=404)
             root = self._uploads_dir.resolve()
-            path = (root / safe).resolve()
-            if path.parent != root or not path.exists() or not path.is_file():
+            path = root.joinpath(safe)
+            if path.is_symlink() or not path.is_file():
                 return JSONResponse({"error": "Not found"}, status_code=404)
             return FileResponse(str(path), filename=safe)
 
