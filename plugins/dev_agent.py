@@ -70,7 +70,8 @@ def _projects_dir() -> Path:
         p.mkdir(parents=True, exist_ok=True)
         return p
     except Exception as e:
-        print(f"[DevAgent] ⚠️ projects_dir {raw!r} unusable ({e}) — using {PROJECTS_DIR}")
+        from core.security_logging import redact_sensitive_text
+        print(f"[DevAgent] ⚠️ projects_dir {redact_sensitive_text(raw)!r} unusable ({redact_sensitive_text(e)}) — using {PROJECTS_DIR}")
         return PROJECTS_DIR
 
 
