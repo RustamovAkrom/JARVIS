@@ -362,24 +362,10 @@ class ConnectedAppsAgent:
         if tool_name in blocked:
             raise PermissionError("This MCP tool is blocked by Connected Apps permissions")
         _validate_arguments(tool.get("input_schema") or {}, args)
-        # Automatic execution is permitted only when the MCP server explicitly
-        # marks the operation read-only and non-destructive. All other calls fail closed.
-        from core.connected_apps.service import _auto_approve_read_only
-        safe_read = _auto_approve_read_only(
-            tool.get("connection_metadata") or {},
-            read_only=_annotation(tool, "readOnlyHint"),
-            destructive=_annotation(tool, "destructiveHint"),
-            requires_confirmation=False,
-        )
-        if read_only and safe_read and not destructive:
-            return self._service.call_tool(connection_id, tool_name, args)
-        from core import confirm
-        return confirm.request(
-            key=f"connected_apps:{connection_id}:{tool_name}",
-            title=f"Connected App — {tool_name}",
-            detail=f"Execute tool {tool_name} with arguments:\n\n{args!r}",
-            run=lambda: str(self._service.call_tool(connection_id, tool_name, args)),
-        )
+        # The service owns the execution policy so direct service callers cannot
+        # bypass confirmation. MCP annotations are evaluated against persisted
+        # per-connection consent there; caller-supplied read_only flags are hints only.
+        return self._service.call_tool(connection_id, tool_name, args)
 
 
 agent = ConnectedAppsAgent(service)
