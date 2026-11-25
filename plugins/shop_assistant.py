@@ -851,7 +851,9 @@ def _remember_shops(country: str, cands: list[dict]) -> None:
     data[country.upper()] = dict(sorted(shops.items(), key=lambda kv: (-kv[1]["hits"], -kv[1].get("last", 0)))[:60])
     try:
         KNOWN_FILE.parent.mkdir(parents=True, exist_ok=True)
-        KNOWN_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+        from core.security_logging import redact_sensitive_mapping
+        safe_data = redact_sensitive_mapping(data)
+        KNOWN_FILE.write_text(json.dumps(safe_data, ensure_ascii=False, indent=1), encoding="utf-8")
     except Exception:
         pass
 
