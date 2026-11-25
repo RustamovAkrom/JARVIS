@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 from datetime import datetime
+import math
+from collections.abc import Mapping
 from PyQt6.QtCore import Qt, pyqtSignal, QDateTime
 from gui.themes.tokens import C
 
@@ -25,22 +27,37 @@ class RemindersPanel(QWidget):
         layout.setSpacing(8)
         layout.addWidget(QLabel("REMINDERS"))
         self.message = QLineEdit()
+        self.message.setObjectName("reminder_message")
+        self.message.setAccessibleName("Reminder message")
         self.message.setPlaceholderText("What should JARVIS remind you about?")
         layout.addWidget(self.message)
         self.when = QDateTimeEdit(QDateTime.currentDateTime().addSecs(600))
+        self.when.setObjectName("reminder_due_datetime")
+        self.when.setAccessibleName("Reminder date and time")
         self.when.setCalendarPopup(True)
         self.when.setDisplayFormat("yyyy-MM-dd HH:mm")
         self.when.setMinimumDateTime(QDateTime.currentDateTime().addSecs(60))
         layout.addWidget(self.when)
         row = QHBoxLayout()
         self.create_button = QPushButton("+ Schedule Reminder")
+        self.create_button.setAccessibleName("Schedule reminder")
+        self.create_button.setMinimumHeight(34)
         self.refresh_button = QPushButton("Refresh")
+        self.refresh_button.setAccessibleName("Refresh reminders")
+        self.refresh_button.setMinimumHeight(34)
         row.addWidget(self.create_button, 1)
         row.addWidget(self.refresh_button)
         layout.addLayout(row)
         self.list_widget = QListWidget()
+        self.list_widget.setObjectName("reminder_list")
+        self.list_widget.setAccessibleName("Upcoming reminders")
+        self.list_widget.setAlternatingRowColors(True)
+        self.list_widget.setSelectionMode(QListWidget.SelectionMode.SingleSelection)
         layout.addWidget(self.list_widget, 1)
         self.cancel_button = QPushButton("Cancel Selected Reminder")
+        self.cancel_button.setAccessibleName("Cancel selected reminder")
+        self.cancel_button.setMinimumHeight(34)
+        self.cancel_button.setEnabled(False)
         layout.addWidget(self.cancel_button)
         self.info = QLabel("Reminders are registered with the operating system and persist after JARVIS closes.")
         self.info.setWordWrap(True)
@@ -49,6 +66,7 @@ class RemindersPanel(QWidget):
         self.create_button.clicked.connect(self._create)
         self.refresh_button.clicked.connect(self.refresh_requested.emit)
         self.cancel_button.clicked.connect(self._cancel)
+        self.list_widget.currentItemChanged.connect(self._update_cancel_state)
         self.set_reminders([])
 
     def _stylesheet(self):
@@ -90,28 +108,70 @@ class RemindersPanel(QWidget):
             "time": due.toString("HH:mm"),
         })
 
+    def _update_cancel_state(self, current=None, _previous=None):
+        reminder_id = (
+            current.data(Qt.ItemDataRole.UserRole)
+            if current is not None
+            else None
+        )
+        self.cancel_button.setEnabled(bool(reminder_id))
+
     def _cancel(self):
         item = self.list_widget.currentItem()
-        if item:
-            reminder_id = item.data(Qt.ItemDataRole.UserRole)
-            if reminder_id:
-                self.cancel_requested.emit(str(reminder_id))
+        reminder_id = (
+            item.data(Qt.ItemDataRole.UserRole)
+            if item is not None
+            else None
+        )
+        if reminder_id:
+            self.cancel_requested.emit(str(reminder_id))
 
     def set_reminders(self, reminders):
-        self.list_widget.clear()
+        # The panel refreshes periodically. Keep the selected reminder stable
+        # across snapshots so the 15-second refresh does not interrupt cancel.
+        current = self.list_widget.currentItem()
+        selected_id = (
+            current.data(Qt.ItemDataRole.UserRole)
+            if current is not None
+            else None
+        )
         now = datetime.now().timestamp()
+        valid_rows = []
         for row in reminders or []:
-            try:
-                due = float(row.get("due", 0))
-                if due <= now:
-                    continue
-                stamp = datetime.fromtimestamp(due).strftime("%Y-%m-%d %H:%M")
-                item = QListWidgetItem(f"{stamp}  |  {row.get('message', 'Reminder')}")
-                item.setData(Qt.ItemDataRole.UserRole, row.get("id"))
-                self.list_widget.addItem(item)
-            except (TypeError, ValueError, OSError):
+            if not isinstance(row, Mapping):
                 continue
-        if not self.list_widget.count():
-            item = QListWidgetItem("No upcoming reminders.")
-            item.setFlags(Qt.ItemFlag.NoItemFlags)
-            self.list_widget.addItem(item)
+            try:
+                reminder_id = row.get("id")
+                due = float(row.get("due", 0))
+                if not reminder_id or not math.isfinite(due) or due <= now:
+                    continue
+                valid_rows.append((due, str(reminder_id), str(row.get("message") or "Reminder")))
+            except (TypeError, ValueError, OverflowError):
+                continue
+
+        valid_rows.sort(key=lambda entry: (entry[0], entry[1]))
+        self.list_widget.blockSignals(True)
+        self.list_widget.setUpdatesEnabled(False)
+        try:
+            self.list_widget.clear()
+            restored_item = None
+            for due, reminder_id, message in valid_rows:
+                stamp = datetime.fromtimestamp(due).strftime("%Y-%m-%d %H:%M")
+                item = QListWidgetItem(f"{stamp}  |  {message}")
+                item.setData(Qt.ItemDataRole.UserRole, reminder_id)
+                item.setToolTip(message)
+                self.list_widget.addItem(item)
+                if reminder_id == selected_id:
+                    restored_item = item
+
+            if not valid_rows:
+                item = QListWidgetItem("No upcoming reminders.")
+                item.setFlags(Qt.ItemFlag.NoItemFlags)
+                self.list_widget.addItem(item)
+
+            if restored_item is not None:
+                self.list_widget.setCurrentItem(restored_item)
+        finally:
+            self.list_widget.setUpdatesEnabled(True)
+            self.list_widget.blockSignals(False)
+        self._update_cancel_state(self.list_widget.currentItem())
