@@ -16,6 +16,7 @@ import re
 import secrets
 import socket
 import string
+import urllib.parse
 import threading
 import time
 from pathlib import Path
@@ -1113,7 +1114,7 @@ class DashboardServer:
                         dest.unlink(missing_ok=True)
                     except Exception:
                         pass
-                    return JSONResponse({"error": str(exc)}, status_code=500)
+                    return JSONResponse({"error": "Upload failed. Please retry."}, status_code=500)
 
                 asyncio.create_task(self.broadcast({
                     "type": "file_received",
@@ -1153,8 +1154,11 @@ class DashboardServer:
             if not _valid(tok):
                 return JSONResponse({"error": "Unauthorized"}, status_code=401)
             safe = re.sub(r'[/\\]', '', filename)
-            path = self._uploads_dir / safe
-            if not path.exists() or not path.is_file():
+            if safe in ("", ".", ".."):
+                return JSONResponse({"error": "Not found"}, status_code=404)
+            root = self._uploads_dir.resolve()
+            path = (root / safe).resolve()
+            if path.parent != root or not path.exists() or not path.is_file():
                 return JSONResponse({"error": "Not found"}, status_code=404)
             return FileResponse(str(path), filename=safe)
 
@@ -1216,8 +1220,11 @@ class DashboardServer:
         @bounce.get("/{path:path}")
         async def _to_https(path: str, request: Request):
             query = f"?{request.url.query}" if request.url.query else ""
+            safe_path = "/".join(
+                urllib.parse.quote(segment, safe="") for segment in path.split("/")
+            )
             return RedirectResponse(
-                f"https://{self._ip}:{SECURE_PORT}/{path}{query}",
+                f"https://{self._ip}:{SECURE_PORT}/{safe_path}{query}",
                 status_code=307)
 
         cfg = uvicorn.Config(bounce, host="0.0.0.0", port=PORT,
@@ -1302,7 +1309,7 @@ class DashboardServer:
         # being tested for, so setting it made the probe always succeed.
         _probe = _socket.socket()
         try:
-            _probe.bind(("0.0.0.0", SECURE_PORT if use_ssl else PORT))
+            _probe.bind((self._ip, SECURE_PORT if use_ssl else PORT))
         except OSError as exc:
             _probe.close()
             self._bind_error = (
