@@ -26,6 +26,7 @@ from gui.app.main_window import (
     PluginManagerOverlay,
     _QProcessTerminal,
     AudioDeviceOverlay,
+    CustomizeOverlay,
     HueWheel,
     MainWindow,
     MemoryOverlay,
@@ -350,6 +351,19 @@ class SettingsComponentTests(unittest.TestCase):
         self.assertEqual(wheel.color(), "#ffffff")
         wheel.set_color("#000000")
         self.assertEqual(wheel.color(), "#000000")
+
+    def test_appearance_presets_have_readable_touch_targets(self):
+        panel = CustomizeOverlay(embedded=True, appearance_only=True)
+        for object_name in (
+            "AppearanceBlackPreset",
+            "AppearanceWhitePreset",
+            "AppearanceDefaultPreset",
+        ):
+            button = panel.findChild(QPushButton, object_name)
+            self.assertIsNotNone(button)
+            self.assertGreaterEqual(button.height(), 28)
+            self.assertTrue(button.accessibleName())
+        panel.close()
 
     def test_category_pages_are_built_on_first_visit_and_cached(self):
         built = []
