@@ -8,17 +8,6 @@ from typing import Any
 from core.connected_apps.service import service
 
 
-def _annotation(tool: dict[str, Any], name: str) -> bool:
-    """Treat MCP annotations as trusted only when explicitly boolean true."""
-    annotations = tool.get("annotations")
-    if isinstance(annotations, dict):
-        return annotations.get(name) is True
-    try:
-        return getattr(annotations, name, False) is True
-    except Exception:
-        return False
-
-
 def _validate_value(schema: dict[str, Any], value: Any, path: str) -> None:
     if not isinstance(schema, dict):
         raise ValueError(f"{path} has an invalid schema")
