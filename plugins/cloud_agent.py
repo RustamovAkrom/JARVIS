@@ -1174,7 +1174,7 @@ def _loop(player, stop: threading.Event) -> None:
     except Exception as e:
         from core.security_logging import redact_sensitive_text
         print(f"[CloudAgent] startup failed: {type(e).__name__}: {redact_sensitive_text(e)}", flush=True)
-        _log(player, f"SYS: Cloud memory could not start: {e}")
+        _log(player, "SYS: Cloud memory could not start. Check the application log for details.")
         with _lock:
             _state["running"] = False
             _state["stop"] = None
@@ -1245,10 +1245,11 @@ def _loop(player, stop: threading.Event) -> None:
                                  daemon=True, name="cloud-agent-cmd").start()
         except cloud.LinkError as e:
             fails += 1
-            _state["last_error"] = str(e)
+            from core.security_logging import redact_sensitive_text
+            safe_error = redact_sensitive_text(e)
+            _state["last_error"] = safe_error
             if fails == 1 or fails % 20 == 0:
-                from core.security_logging import redact_sensitive_text
-            print(f"[CloudAgent] {redact_sensitive_text(e)} Retrying.", flush=True)
+                print(f"[CloudAgent] {safe_error} Retrying.", flush=True)
             if e.status == 401:
                 _log(player, "SYS: Cloud memory stopped — " + (
                     "the subscription is not active." if isinstance(client, _ManagedLink)
@@ -1259,7 +1260,6 @@ def _loop(player, stop: threading.Event) -> None:
             fails += 1
             from core.security_logging import redact_sensitive_text
             _state["last_error"] = redact_sensitive_text(f"{type(e).__name__}: {e}")
-            from core.security_logging import redact_sensitive_text
             print(f"[CloudAgent] loop error: {redact_sensitive_text(e)}")
             stop.wait(min(60, 2 ** min(fails, 6)))
     try:
