@@ -568,3 +568,32 @@ def test_connected_apps_layout_reflows_for_narrow_and_wide_windows(qapp, monkeyp
         panel.deleteLater()
         qapp.processEvents()
 
+
+def test_connected_apps_refresh_preserves_operation_feedback_with_native_selection(
+    qapp, monkeypatch
+):
+    import gui.settings.connected_apps_panel as panel_module
+    from gui.settings.connected_apps_panel import ConnectedAppsPanel
+
+    service = FakeConnectedAppsService(
+        rows={"github-native": _github_row()}
+    )
+    monkeypatch.setattr(panel_module, "service", service)
+
+    panel = ConnectedAppsPanel()
+    panel.show()
+    qapp.processEvents()
+    try:
+        panel.native_list.setCurrentRow(0)
+        qapp.processEvents()
+        panel.status.setText("Connection failed: OAuth callback timed out")
+
+        panel.refresh()
+
+        assert panel.status.text() == "Connection failed: OAuth callback timed out"
+        assert panel.details.toPlainText().startswith("GitHub")
+    finally:
+        panel.close()
+        panel.deleteLater()
+        qapp.processEvents()
+
