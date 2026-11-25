@@ -334,6 +334,13 @@ def test_connected_apps_panel_busy_state_blocks_and_restores_telegram_actions(
         assert not panel.telegram_manage_btn.isEnabled()
         assert not panel.telegram_disconnect_btn.isEnabled()
 
+        # A search refresh must not re-enable actions while a worker is active.
+        panel.search.setText("calendar")
+        qapp.processEvents()
+        assert not panel.telegram_connect_btn.isEnabled()
+        assert not panel.add_github_btn.isEnabled()
+        assert not panel.add_calendar_btn.isEnabled()
+
         panel._busy(False)
         assert panel.telegram_connect_btn.isEnabled()
         assert not panel.telegram_manage_btn.isVisible()
