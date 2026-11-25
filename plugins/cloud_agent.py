@@ -1657,8 +1657,9 @@ def _run_command(player, client, cmd: dict) -> None:
         _post(client, cid, done=True)
     except Exception as e:
         from core.security_logging import redact_sensitive_text
-        print(f"[CloudAgent] phone command failed: {type(e).__name__}: {redact_sensitive_text(e)}", flush=True)
-        _post(client, cid, done=True, error=f"Command failed: {type(e).__name__}")
+        safe_error = redact_sensitive_text(e)
+        print(f"[CloudAgent] phone command failed: {type(e).__name__}: {safe_error}", flush=True)
+        _post(client, cid, done=True, error=f"Command failed: {safe_error}")
     finally:
         if gate_started:
             try:
