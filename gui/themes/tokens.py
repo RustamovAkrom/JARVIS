@@ -87,14 +87,14 @@ if THEME_MODE not in {"dark", "light"}:
 # Custom Colour tints the canvas and every surface. Black/White presets
 # switch to a separate neutral palette with monochrome foregrounds.
 _DARK_SURFACES = {
-    # Preserve the original JARVIS dark canvas and blue-black panel hierarchy.
-    # These are the DEFAULT surfaces; custom accents may tint them at runtime.
-    "BG": "#000000",
-    "PANEL": "#020609",
-    "PANEL2": "#03090d",
-    "PANEL3": "#050d12",
-    "DARK": "#000000",
-    "BAR_BG": "#000000",
+    # Near-black blue surfaces keep the HUD depth while remaining hue-tintable.
+    # The DEFAULT cyan uses these neutral bases; custom accents tint each level.
+    "BG": "#05090d",
+    "PANEL": "#081018",
+    "PANEL2": "#0c1a28",
+    "PANEL3": "#102235",
+    "DARK": "#05090d",
+    "BAR_BG": "#05090d",
 }
 _LIGHT_SURFACES = {
     "BG": "#f8fafc",
@@ -253,6 +253,10 @@ def _apply_palette() -> None:
             value = neutral[key]
         elif key == "PRI":
             value = _ACTIVE_ACCENT
+        elif default_accent:
+            # DEFAULT restores the authored JARVIS cyan palette exactly;
+            # hue shifting is reserved for a genuinely custom colour.
+            value = base
         else:
             value = _shift_hue(base, _ACTIVE_ACCENT)
         setattr(C, key, value)
