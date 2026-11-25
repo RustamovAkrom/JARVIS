@@ -72,7 +72,7 @@ class RemindersPanelTests(unittest.TestCase):
 
             panel.set_reminders([])
             self.assertFalse(panel.cancel_button.isEnabled())
-            self.assertIsNone(panel.list_widget.currentItem().data(Qt.ItemDataRole.UserRole))
+            self.assertIsNone(panel.list_widget.currentItem())
         finally:
             panel.close()
 
