@@ -352,6 +352,58 @@ class SettingsComponentTests(unittest.TestCase):
         wheel.set_color("#000000")
         self.assertEqual(wheel.color(), "#000000")
 
+    def test_advanced_telemetry_waits_until_both_columns_fit(self):
+        from types import SimpleNamespace
+
+        class Panel:
+            def __init__(self):
+                self.visible = None
+
+            def setVisible(self, value):
+                self.visible = value
+
+        class Left:
+            def __init__(self, width):
+                self._width = width
+
+            def isVisible(self):
+                return True
+
+            def width(self):
+                return self._width
+
+        class Tabs:
+            def __init__(self, current):
+                self.current = current
+
+            def currentWidget(self):
+                return self.current
+
+        class Scroll:
+            def __init__(self):
+                self.policy = None
+
+            def setVerticalScrollBarPolicy(self, value):
+                self.policy = value
+
+        system_page = QWidget()
+        for width, expected in ((390, False), (479, False), (480, True)):
+            owner = SimpleNamespace(
+                _advanced_panel=Panel(),
+                _left_panel=Left(width),
+                _left_tabs=Tabs(system_page),
+                _system_page=system_page,
+                _system_scroll=Scroll(),
+            )
+            MainWindow._update_advanced_telemetry_visibility(owner)
+            self.assertEqual(owner._advanced_panel.visible, expected)
+            self.assertEqual(
+                owner._system_scroll.policy,
+                Qt.ScrollBarPolicy.ScrollBarAsNeeded
+                if expected
+                else Qt.ScrollBarPolicy.ScrollBarAlwaysOff,
+            )
+
     def test_appearance_presets_have_readable_touch_targets(self):
         panel = CustomizeOverlay(embedded=True, appearance_only=True)
         for object_name in (
