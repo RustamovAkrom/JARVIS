@@ -908,6 +908,7 @@ service = ConnectedAppsService()
 
 
 def test_service_call_tool_enforces_connection_and_permissions(monkeypatch):
+    import pytest
     from core.connected_apps.service import ConnectedAppsService
     from core.connected_apps.models import ConnectionStatus
     from core.connected_apps import service as service_module
