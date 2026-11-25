@@ -1247,7 +1247,8 @@ def _loop(player, stop: threading.Event) -> None:
             fails += 1
             _state["last_error"] = str(e)
             if fails == 1 or fails % 20 == 0:
-                print(f"[CloudAgent] {e} Retrying.", flush=True)
+                from core.security_logging import redact_sensitive_text
+            print(f"[CloudAgent] {redact_sensitive_text(e)} Retrying.", flush=True)
             if e.status == 401:
                 _log(player, "SYS: Cloud memory stopped — " + (
                     "the subscription is not active." if isinstance(client, _ManagedLink)
@@ -1256,7 +1257,8 @@ def _loop(player, stop: threading.Event) -> None:
             stop.wait(min(60, 2 ** min(fails, 6)))
         except Exception as e:
             fails += 1
-            _state["last_error"] = f"{type(e).__name__}: {e}"
+            from core.security_logging import redact_sensitive_text
+            _state["last_error"] = redact_sensitive_text(f"{type(e).__name__}: {e}")
             from core.security_logging import redact_sensitive_text
             print(f"[CloudAgent] loop error: {redact_sensitive_text(e)}")
             stop.wait(min(60, 2 ** min(fails, 6)))
