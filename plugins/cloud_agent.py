@@ -682,10 +682,25 @@ def _front_payload() -> dict:
 def _push_front(link) -> None:
     """Sent when it changed — the locked body must know the bot it answers."""
     import hashlib
+    import hmac
     import json
+
     front = _front_payload()
-    digest = hashlib.sha256(json.dumps(front, sort_keys=True).encode()).hexdigest()
-    if digest != _cfg().get("front_hash"):
+    # The front payload may contain the Telegram bot token. Use keyed HMAC
+    # instead of a fast, offline-comparable SHA-256 hash of credential material.
+    relay = getattr(link, "relay", None) or {}
+    hmac_key = str(relay.get("licence") or "").encode("utf-8")
+    if not hmac_key:
+        # Without the relay signing secret, avoid persisting any digest derived
+        # from the credential-bearing payload; send the current payload safely.
+        link.op("front", {"front": front}, timeout=30)
+        return
+    digest = hmac.new(
+        hmac_key,
+        json.dumps(front, sort_keys=True, ensure_ascii=False).encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+    if not hmac.compare_digest(digest, str(_cfg().get("front_hash") or "")):
         link.op("front", {"front": front}, timeout=30)
         save_plugin_config(_NS, {"front_hash": digest})
 
