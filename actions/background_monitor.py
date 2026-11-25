@@ -175,7 +175,8 @@ def check_all() -> list[str]:
             if source:
                 parts.append(f"Source: {source}")
             alerts.append("\n".join(parts))
-            print(f"[Monitor] 🔔 New headline for '{topic}': {title[:60]}")
+            from core.security_logging import redact_sensitive_text
+            print(f"[Monitor] 🔔 New headline for '{redact_sensitive_text(topic)}': {redact_sensitive_text(title)[:60]}")
 
         except Exception as e:
             from core.security_logging import redact_sensitive_text
