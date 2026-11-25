@@ -525,3 +525,41 @@ def test_connected_apps_panel_google_calendar_reconnect_and_disconnect_runtime(
         panel.close()
         panel.deleteLater()
         qapp.processEvents()
+
+
+def test_connected_apps_layout_reflows_for_narrow_and_wide_windows(qapp, monkeypatch):
+    import gui.settings.connected_apps_panel as panel_module
+    from gui.settings.connected_apps_panel import ConnectedAppsPanel
+    from PyQt6.QtWidgets import QBoxLayout
+
+    monkeypatch.setattr(panel_module, "service", FakeConnectedAppsService())
+    panel = ConnectedAppsPanel()
+    panel.show()
+    qapp.processEvents()
+    try:
+        panel.resize(640, 900)
+        qapp.processEvents()
+        responsive_layouts = (
+            panel.native_cards_layout,
+            panel.telegram_actions_layout,
+            panel.toolbar_top_layout,
+            panel.toolbar_actions_layout,
+            panel.primary_actions_layout,
+            panel.secondary_actions_layout,
+        )
+        assert all(
+            layout.direction() == QBoxLayout.Direction.TopToBottom
+            for layout in responsive_layouts
+        )
+
+        panel.resize(1000, 900)
+        qapp.processEvents()
+        assert all(
+            layout.direction() == QBoxLayout.Direction.LeftToRight
+            for layout in responsive_layouts
+        )
+    finally:
+        panel.close()
+        panel.deleteLater()
+        qapp.processEvents()
+
