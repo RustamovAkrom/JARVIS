@@ -82,3 +82,52 @@ def test_clear_invalidates_cached_snapshot():
     assert second is not first
     assert second.source == "new-source"
     assert second.captured_packets == 0
+
+
+
+def test_streaming_aggregator_does_not_retain_packet_rows():
+    analyzer = TrafficAnalyzer()
+    analyzer.clear("stream-test")
+    for i in range(5000):
+        analyzer.add_record(PacketRecord(
+            timestamp=2000 + i, src_ip=f"192.0.2.{i}",
+            dst_ip="198.51.100.1", src_port=10000 + i,
+            dst_port=443, protocol="TLS", length=120,
+        ))
+
+    snapshot = analyzer.snapshot()
+    assert snapshot.captured_packets == 5000
+    assert snapshot.total_bytes == 600000
+    assert len(analyzer._src) <= analyzer.MAX_IP_KEYS
+    assert len(analyzer._dst) <= analyzer.MAX_IP_KEYS
+    assert len(analyzer._flows) <= analyzer.MAX_FLOW_KEYS
+    assert not hasattr(analyzer, "_records")
+    assert snapshot.warnings
+
+
+def test_live_capture_does_not_pass_file_only_keep_packets_argument(monkeypatch):
+    import sys
+    from types import SimpleNamespace
+    from plugins import _wireshark_engine
+
+    captured = {}
+
+    class FakeLiveCapture:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+        def sniff_continuously(self):
+            return iter(())
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(_wireshark_engine, "find_tshark", lambda: "tshark")
+    monkeypatch.setitem(sys.modules, "pyshark", SimpleNamespace(LiveCapture=FakeLiveCapture))
+    engine = _wireshark_engine.WiresharkEngine()
+    engine.start_background()
+    engine._thread.join(timeout=2)
+
+    assert "keep_packets" not in captured
+    assert captured["include_raw"] is False
+    assert captured["use_json"] is True
