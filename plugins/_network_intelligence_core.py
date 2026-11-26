@@ -221,21 +221,21 @@ class TrafficAnalyzer:
         s = self.snapshot()
         if not s.captured_packets:
             return {"answer": "No traffic data is loaded. Import a PCAP/PCAPNG or start an authorised live capture.", "snapshot": s.to_dict()}
-        if any(x in q for x in ("rare protocol", "rarest protocol", "самый редкий протокол")):
+        if any(x in q for x in ("rare protocol", "rarest protocol", "самый редкий протокол", "самый редкий", "реже всего")) and ("protocol" in q or "протокол" in q or "rare" in q or "редк" in q):
             rows = s.rare_protocols
             answer = f"Rarest observed protocol: {rows[0]['name']} ({rows[0]['count']} packets)." if rows else "No protocol data."
-        elif any(x in q for x in ("rare ip", "rarest ip", "least common ip", "самый редкий ip")):
+        elif any(x in q for x in ("rare ip", "rarest ip", "least common ip", "самый редкий ip", "реже всего ip")):
             rows = s.rare_ips
             answer = f"Least frequent source IP: {rows[0]['name']} ({rows[0]['count']} packets)." if rows else "No IP data."
-        elif any(x in q for x in ("strange", "suspicious", "anomal", "подозр", "стран")):
+        elif any(x in q for x in ("strange", "suspicious", "anomal", "подозр", "стран", "необыч", "аномал")):
             answer = f"Found {len(s.suspicious)} heuristic finding(s). " + ("; ".join(f"{x['type']} from {x['source']}: {x['details']}" for x in s.suspicious[:5]) if s.suspicious else "No configured heuristic triggered; this does not prove the traffic is benign.")
         elif any(x in q for x in ("protocol", "протокол")):
             answer = "Protocol distribution: " + ", ".join(f"{x['name']} {x['count']}" for x in s.top_protocols[:10])
         elif any(x in q for x in ("port", "порт")):
             answer = f"Observed {s.unique_ports} unique transport ports across {s.unique_flows} flows."
-        elif any(x in q for x in ("how many", "count", "сколько", "количество")):
+        elif any(x in q for x in ("how many", "count", "сколько", "количество", "число")):
             answer = f"{s.captured_packets} packets, {s.total_bytes:,} bytes, {s.unique_ips} unique IPs, {s.unique_ports} unique ports and {s.unique_flows} unique flows."
-        elif any(x in q for x in ("top", "most", "active", "част", "актив")):
+        elif any(x in q for x in ("top", "most", "active", "част", "актив", "популяр", "чаще всего", "самый частый", "наиболее частый")):
             answer = "Most active source IPs: " + ", ".join(f"{x['name']} ({x['count']})" for x in s.top_sources[:5])
         else:
             answer = f"Capture summary: {s.captured_packets} packets, {s.total_bytes:,} bytes, {s.unique_ips} IPs, {s.unique_flows} flows. Top protocols: " + ", ".join(f"{x['name']} ({x['count']})" for x in s.top_protocols[:5])
