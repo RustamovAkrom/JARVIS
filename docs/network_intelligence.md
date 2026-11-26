@@ -1,10 +1,10 @@
 # Network Intelligence
 
-Network Intelligence integrates JARVIS with **Wireshark and TShark**. PyShark is the Python adapter; TShark performs packet dissection and Wireshark provides the desktop GUI. The plugin can inspect saved captures and monitor an explicitly selected interface in a background worker.
+Network Intelligence integrates JARVIS with **Wireshark and TShark**. TShark performs packet dissection through a direct, line-buffered subprocess; Wireshark provides the desktop GUI. The plugin can inspect saved captures and monitor an explicitly selected interface in a background worker.
 
 ## Architecture and capabilities
 
-- PCAP/PCAPNG analysis through PyShark and TShark.
+- PCAP/PCAPNG analysis through TShark's streaming field output.
 - Continuous live capture through TShark, independent of the Wireshark GUI window. The GUI is opened without starting a second capture, avoiding duplicate packet processing.
 - Wireshark GUI launch is independent from capture permissions and never starts monitoring implicitly. Live monitoring is a separate, explicit action.
 - Streaming aggregate counters only: JARVIS does not retain packet rows, payloads, or a packet-history buffer. Live capture uses a 256-byte snap length to avoid collecting full packet payloads. Per-category cardinality is bounded (IPs, flows, DNS names, ports, scan sources); low-frequency keys may be evicted when a limit is reached. Snapshots are generated from counters and cached for five seconds.
@@ -15,20 +15,20 @@ Network Intelligence integrates JARVIS with **Wireshark and TShark**. PyShark is
 
 ## Install
 
-Install the Python adapter:
+Install the project dependencies:
 
 ```bash
 uv sync
 ```
 
-**Wireshark must also be installed separately**, including the TShark command-line executable. PyShark does not bundle Wireshark/TShark. If automatic discovery fails, set the full executable paths in SETUP → PLUGINS → NETWORK INTELLIGENCE.
+**Wireshark must also be installed separately**, including the TShark command-line executable. If automatic discovery fails, set the full executable paths in SETUP → PLUGINS → NETWORK INTELLIGENCE.
 
 Live capture additionally requires the platform capture driver and permissions:
 - Windows: install Npcap; use an account/process with capture permissions.
 - macOS: ensure the process can access the required BPF device.
 - Linux: install libpcap and grant suitable capture capabilities/permissions.
 
-`uv sync` installs PyShark but cannot install Wireshark, TShark, Npcap or libpcap.
+`uv sync` cannot install Wireshark, TShark, Npcap or libpcap.
 
 ## Background monitoring
 
@@ -59,7 +59,7 @@ Examples:
 
 ## Detection limitations
 
-Findings are triage indicators, not proof of compromise. A port sweep or unusual DNS query can have benign explanations. The plugin does not decrypt TLS, execute payloads, identify every malware family, or replace IDS/IPS tooling or professional incident response. Encrypted application content remains encrypted unless separately decrypted with appropriate session secrets. JARVIS processes packet metadata from the selected interface to update fixed-size counters, then discards each packet object. It does not build a packet log, retain full payloads, or upload captures to an external service. Exact totals require observing packets; this is not a zero-inspection mode. TShark still observes and dissects packet headers for each packet delivered by the selected capture filter; it does not export full payloads to JARVIS. High-throughput links can still consume CPU and may drop packets at the OS capture layer. Use a narrow BPF capture filter when only specific protocols or hosts need monitoring.
+Findings are triage indicators, not proof of compromise. A port sweep or unusual DNS query can have benign explanations. The plugin does not decrypt TLS, execute payloads, identify every malware family, or replace IDS/IPS tooling or professional incident response. Encrypted application content remains encrypted unless separately decrypted with appropriate session secrets. JARVIS reads one tab-separated metadata row from TShark at a time to update fixed-size counters, then discards the row. It does not build a packet log, retain full payloads, or upload captures to an external service. Exact totals require observing packets; this is not a zero-inspection mode. TShark still observes and dissects packet headers for each packet delivered by the selected capture filter; it does not export full payloads to JARVIS. High-throughput links can still consume CPU and may drop packets at the OS capture layer. Use a narrow BPF capture filter when only specific protocols or hosts need monitoring.
 
 ## Troubleshooting
 
