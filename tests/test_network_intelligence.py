@@ -131,3 +131,4 @@ def test_live_capture_does_not_pass_file_only_keep_packets_argument(monkeypatch)
     assert "keep_packets" not in captured
     assert captured["include_raw"] is False
     assert captured["use_json"] is True
+    assert captured["custom_parameters"]["-s"] == "128"
