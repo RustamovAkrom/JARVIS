@@ -98,7 +98,10 @@ class TrafficAnalyzer:
             raise ValueError("Capture exceeds the 2 GiB safety limit.")
         self.clear(source=str(p))
         count = 0
-        with PcapReader(str(p)) as reader:
+        with p.open("rb") as header:
+            is_pcapng = header.read(4) == bytes.fromhex("0a0d0d0a")
+        reader_cls = PcapNgReader if is_pcapng else PcapReader
+        with reader_cls(str(p)) as reader:
             for packet in reader:
                 if count >= max(1, min(int(max_packets), MAX_PACKETS)):
                     break
