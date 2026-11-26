@@ -249,7 +249,7 @@ class TrafficAnalyzer:
         elif any(x in q for x in ("port", "порт")):
             answer = f"Observed {s.unique_ports} tracked transport ports across {s.unique_flows} tracked flows."
         elif any(x in q for x in ("how many", "count", "сколько", "количество", "число")):
-            answer = f"{s.captured_packets} observed packets, {s.total_bytes:,} bytes, {s.unique_ips} tracked IPs, {s.unique_ports} ports and {s.unique_flows} tracked flows."
+            answer = f"{s.captured_packets} packets observed, {s.total_bytes:,} bytes, {s.unique_ips} tracked IPs, {s.unique_ports} ports and {s.unique_flows} tracked flows."
         elif any(x in q for x in ("top", "most", "active", "част", "актив", "популяр", "чаще всего", "самый частый", "наиболее частый")):
             answer = "Most active tracked source IPs: " + ", ".join(f"{x['name']} ({x['count']})" for x in s.top_sources[:5])
         else:
