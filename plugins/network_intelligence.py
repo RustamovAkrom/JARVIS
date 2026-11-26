@@ -37,7 +37,7 @@ PLUGIN_SETTINGS = {
     "namespace": _NS,
     "title": "NETWORK INTELLIGENCE",
     "fields": [
-        {"key": "max_packets", "label": "Maximum packets per file", "type": "number", "default": 250000},
+        {"key": "max_packets", "label": "Maximum packets per file", "type": "number", "default": 50000},
         {"key": "allow_live_capture", "label": "Allow live capture (requires OS capture permissions)", "type": "boolean", "default": False},
         {"key": "background_monitoring", "label": "Start authorised background monitoring when JARVIS launches", "type": "boolean", "default": False},
         {"key": "interface", "label": "Capture interface (blank = system default)", "type": "text", "default": ""},
@@ -77,12 +77,6 @@ def _notify(player, finding: dict) -> None:
         f"{finding.get('details')}. This is a heuristic indicator, not confirmation of an attack."
     )
     _show(player, message)
-    say = getattr(player, "request_say", None) if player is not None else None
-    if callable(say):
-        try:
-            say(message)
-        except Exception:
-            pass
 
 
 def on_app_start(player=None) -> None:
@@ -111,6 +105,8 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
             if not path:
                 return "Please provide the PCAP/PCAPNG file path."
             max_packets = max(1, min(int(p.get("max_packets") or 250000), 250000))
+            if _engine().status()["running"]:
+                return "Stop background monitoring before importing a capture file. This prevents live and file-analysis data from being mixed."
             count = core.analyzer().load_pcap(path, max_packets=max_packets)
             result = core.analyzer().answer("give me a traffic summary")
             _show(player, f"Loaded {count:,} packets from {Path(path).name}.")
@@ -152,10 +148,12 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
                 str(p.get("bpf_filter") or ""),
                 on_finding=lambda finding: _notify(player, finding),
             )
-            gui_message = _engine().launch_gui(interface=interface, start_capture=True)
+            # Keep one capture owner: JARVIS/TShark. Starting a second capture
+            # in the GUI would duplicate packet processing and increase load.
+            gui_message = _engine().launch_gui(interface=interface, start_capture=False)
             _show(player, message)
             core.show_dashboard(player)
-            return message + " " + gui_message
+            return message + " " + gui_message + " Wireshark GUI opened without a second capture to avoid duplicate load."
         if action in {"open_in_wireshark", "open_capture"}:
             path = str(p.get("path") or "").strip()
             if not path:
