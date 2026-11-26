@@ -232,7 +232,7 @@ class TrafficAnalyzer:
 
     def answer(self, question: str) -> dict[str, Any]:
         """Map analyst questions to bounded aggregate metrics; never send packet streams to AI."""
-        q = re.sub(r"\\s+", " ", str(question or "").strip().lower())
+        q = re.sub(r"\s+", " ", str(question or "").strip().lower())
         s = self.snapshot()
         if not s.captured_packets:
             return {"answer": "No traffic data is loaded. Import a PCAP/PCAPNG or start authorised monitoring.", "snapshot": s.to_dict()}
