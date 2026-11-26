@@ -78,11 +78,11 @@ class TrafficAnalyzer:
         self._ended_at = 0.0
         self._packets = 0
         self._total_bytes = 0
-        self._protocols = collections.Counter()
-        self._src = collections.Counter()
-        self._dst = collections.Counter()
-        self._flows = collections.Counter()
-        self._dns = collections.Counter()
+        self._protocols = collections.OrderedDict()
+        self._src = collections.OrderedDict()
+        self._dst = collections.OrderedDict()
+        self._flows = collections.OrderedDict()
+        self._dns = collections.OrderedDict()
         self._ports: set[int] = set()
         self._scan_state = collections.OrderedDict()
         self._timeline = collections.OrderedDict()
@@ -111,13 +111,13 @@ class TrafficAnalyzer:
             self._snapshot_cache = None
             self._snapshot_cache_at = 0.0
 
-    def _increment(self, counter: collections.Counter, key, limit: int, label: str) -> None:
+    def _increment(self, counter, key, limit: int, label: str) -> None:
         if key in counter:
             counter[key] += 1
+            counter.move_to_end(key)
             return
         if len(counter) >= limit:
-            victim, _ = min(counter.items(), key=lambda item: item[1])
-            del counter[victim]
+            counter.popitem(last=False)
             self._evicted.add(label)
         counter[key] = 1
 
@@ -169,8 +169,9 @@ class TrafficAnalyzer:
         return engine().analyze_file(str(path), max_packets=max_packets)
 
     @staticmethod
-    def _top(counter: collections.Counter, limit: int = 10) -> list[dict[str, Any]]:
-        return [{"name": str(key), "count": int(value)} for key, value in counter.most_common(limit)]
+    def _top(counter, limit: int = 10) -> list[dict[str, Any]]:
+        rows = sorted(counter.items(), key=lambda item: (-item[1], str(item[0])))[:limit]
+        return [{"name": str(key), "count": int(value)} for key, value in rows]
 
     def snapshot(self) -> AnalysisSnapshot:
         now = time.monotonic()
@@ -199,7 +200,7 @@ class TrafficAnalyzer:
                     "details": f"{len(seen_ports)} destination ports; {syn_count} SYN-without-ACK packets",
                     "evidence": {"unique_destination_ports": len(seen_ports), "syn_packets": syn_count},
                 })
-        for name, count in dns.most_common():
+        for name, count in sorted(dns.items(), key=lambda item: item[1], reverse=True):
             if len(name) >= 55 and name.count(".") >= 4:
                 suspicious.append({
                     "severity": "medium", "type": "unusually_long_dns_name",
