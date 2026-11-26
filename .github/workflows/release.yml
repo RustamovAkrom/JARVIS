@@ -1,4 +1,5 @@
-name: Windows Release
+name: Release
+run-name: Release / ${{ github.ref_name }} / ${{ github.event_name }}
 
 on:
   push:
@@ -7,27 +8,28 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Do not cancel a running release build. Each successful main push should
+# retain its own artifact; duplicate version publication is handled below.
 permissions:
   contents: write
 
 jobs:
-  test:
+  tests:
+    name: Cross-platform test suite
     if: github.event_name != 'pull_request'
     uses: ./.github/workflows/tests.yml
 
   package:
     name: Build and validate Windows distribution
-    needs: test
+    needs: tests
     if: >-
       always() &&
-      (github.event_name == 'pull_request' || needs.test.result == 'success')
+      (github.event_name == 'pull_request' || needs.tests.result == 'success')
     runs-on: windows-latest
     timeout-minutes: 90
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v7
@@ -41,35 +43,64 @@ jobs:
         with:
           dotnet-version: "8.0.x"
 
-      - name: Validate project version and determine release eligibility
+      - name: Validate version and determine release eligibility
         id: release
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = "Stop"
+
           $version = (python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])").Trim()
-          if ($LASTEXITCODE -ne 0) { throw "Could not read project version from pyproject.toml." }
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not read the project version from pyproject.toml."
+          }
           if ($version -notmatch '^\d+\.\d+\.\d+$') {
             throw "Expected a stable MAJOR.MINOR.PATCH version, got '$version'."
           }
 
           $tag = "v$version"
           $shouldPublish = "false"
-          if ($env:GITHUB_EVENT_NAME -ne "pull_request" -and $env:GITHUB_REF -eq "refs/heads/main") {
-            $existingTag = git ls-remote --exit-code --tags origin "refs/tags/$tag"
-            $gitExit = $LASTEXITCODE
-            if ($gitExit -eq 0 -and $existingTag) {
-              Write-Host "Version $version is already released as $tag. Build artifacts will be retained; duplicate publication is skipped."
-            } elseif ($gitExit -eq 2) {
-              $shouldPublish = "true"
-              Write-Host "Version $version has not been released. This successful main build is eligible to publish $tag."
-            } else {
-              throw "Unable to query remote tag $tag (git exit code $gitExit). Refusing to guess release state."
+          $isMainRef = $env:GITHUB_REF -eq "refs/heads/main"
+          $isReleaseEvent = $env:GITHUB_EVENT_NAME -in @("push", "workflow_dispatch")
+
+          if ($isMainRef -and $isReleaseEvent) {
+            $tagUri = "https://api.github.com/repos/$env:GITHUB_REPOSITORY/git/ref/tags/$tag"
+            $headers = @{
+              Accept = "application/vnd.github+json"
+              Authorization = "Bearer $env:GH_TOKEN"
+              "X-GitHub-Api-Version" = "2022-11-28"
+            }
+
+            try {
+              $null = Invoke-RestMethod -Method Get -Uri $tagUri -Headers $headers
+              Write-Host "Version $version is already released as $tag. The build artifact will still be uploaded; duplicate publication is skipped."
+            }
+            catch {
+              $statusCode = 0
+              if ($_.Exception.Response -and $_.Exception.Response.StatusCode) {
+                $statusCode = [int]$_.Exception.Response.StatusCode
+              }
+
+              if ($statusCode -eq 404) {
+                $shouldPublish = "true"
+                Write-Host "Version $version has not been released. This main-branch build is eligible to publish $tag."
+              }
+              else {
+                throw "Could not verify release tag '$tag' (HTTP status $statusCode). Refusing to publish without a reliable tag check. $($_.Exception.Message)"
+              }
             }
           }
+          else {
+            Write-Host "This is a validation build. GitHub Releases are published only from main."
+          }
 
-          "version=$version" >> $env:GITHUB_OUTPUT
-          "tag=$tag" >> $env:GITHUB_OUTPUT
-          "should_publish=$shouldPublish" >> $env:GITHUB_OUTPUT
+          $outputs = @(
+            "version=$version"
+            "tag=$tag"
+            "should_publish=$shouldPublish"
+          ) -join "`n"
+          [System.IO.File]::AppendAllText($env:GITHUB_OUTPUT, "$outputs`n")
 
       - name: Install application dependencies
         run: |
@@ -86,32 +117,35 @@ jobs:
       - name: Build application and companion launcher
         run: python tools/build_release.py --output release
 
-      - name: Verify release package contents
+      - name: Verify Windows release package
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          $launcher = "release/JARVISClapLauncher.exe"
-          if (-not (Test-Path $launcher -PathType Leaf)) {
-            throw "Clap launcher executable is missing: $launcher"
+
+          $requiredFiles = @(
+            "release/JARVISClapLauncher.exe",
+            "release/RELEASES"
+          )
+          foreach ($file in $requiredFiles) {
+            if (-not (Test-Path $file -PathType Leaf)) {
+              throw "Required release output is missing: $file"
+            }
           }
-          if ((Get-Item $launcher).Length -lt 1000000) {
+
+          if ((Get-Item "release/JARVISClapLauncher.exe").Length -lt 1000000) {
             throw "Clap launcher executable is unexpectedly small."
           }
 
-          $packages = @(Get-ChildItem release -File -Filter "*.nupkg")
-          if ($packages.Count -eq 0) {
+          if (@(Get-ChildItem release -File -Filter "*.nupkg").Count -eq 0) {
             throw "Velopack did not produce a .nupkg package."
           }
-          if (-not (Test-Path "release/RELEASES" -PathType Leaf)) {
-            throw "Velopack RELEASES manifest is missing."
-          }
-          if (-not (Get-ChildItem release -File -Filter "*Setup.exe")) {
-            throw "Velopack setup executable is missing."
+          if (@(Get-ChildItem release -File -Filter "*Setup.exe").Count -eq 0) {
+            throw "Velopack did not produce a Setup executable."
           }
 
           Get-ChildItem release -File | Select-Object Name, Length
 
-      - name: Generate SHA-256 manifest
+      - name: Generate SHA-256 checksums
         shell: pwsh
         run: |
           $files = Get-ChildItem release -File | Where-Object { $_.Name -ne "SHA256SUMS.txt" }
@@ -121,7 +155,7 @@ jobs:
           }
           $lines | Set-Content -Path release/SHA256SUMS.txt -Encoding ascii
 
-      - name: Upload validated build artifacts
+      - name: Upload Windows build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: JARVIS-Windows-${{ steps.release.outputs.version }}-${{ github.run_id }}-${{ github.run_attempt }}
@@ -134,8 +168,9 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${{ steps.release.outputs.tag }}" release/* --title "JARVIS ${{ steps.release.outputs.tag }}" --generate-notes --target "$env:GITHUB_SHA"
+        run: |
+          gh release create "${{ steps.release.outputs.tag }}" release/* --title "JARVIS ${{ steps.release.outputs.tag }}" --generate-notes --target "$env:GITHUB_SHA"
 
-      - name: Report existing version
-        if: steps.release.outputs.should_publish == 'false' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-        run: echo "Build validated and uploaded. No duplicate GitHub Release was created for version ${{ steps.release.outputs.version }}."
+      - name: Report skipped duplicate release
+        if: steps.release.outputs.should_publish == 'false' && github.ref == 'refs/heads/main'
+        run: echo "Build validated and uploaded. The version already exists; no duplicate GitHub Release was created."
