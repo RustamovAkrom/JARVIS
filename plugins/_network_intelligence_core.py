@@ -88,48 +88,9 @@ class TrafficAnalyzer:
             self._ended_at = max(self._ended_at, record.timestamp)
 
     def load_pcap(self, path: str | os.PathLike[str], max_packets: int = MAX_PACKETS) -> int:
-        """Read PCAP/PCAPNG using Scapy. Payloads are never persisted."""
-        from scapy.all import PcapReader, Ether, IP, IPv6, TCP, UDP, DNS, DNSQR
-
-        p = Path(path).expanduser().resolve()
-        if not p.is_file():
-            raise FileNotFoundError(f"Capture file does not exist: {p}")
-        if p.stat().st_size > 2 * 1024 * 1024 * 1024:
-            raise ValueError("Capture exceeds the 2 GiB safety limit.")
-        self.clear(source=str(p))
-        count = 0
-        with p.open("rb") as header:
-            is_pcapng = header.read(4) == bytes.fromhex("0a0d0d0a")
-        reader_cls = PcapNgReader if is_pcapng else PcapReader
-        with reader_cls(str(p)) as reader:
-            for packet in reader:
-                if count >= max(1, min(int(max_packets), MAX_PACKETS)):
-                    break
-                try:
-                    ip_layer = packet.getlayer(IP) or packet.getlayer(IPv6)
-                    if ip_layer is None:
-                        continue
-                    tcp = packet.getlayer(TCP)
-                    udp = packet.getlayer(UDP)
-                    dns = packet.getlayer(DNS)
-                    query = ""
-                    if dns and dns.qd and isinstance(dns.qd, DNSQR):
-                        query = bytes(dns.qd.qname).decode("idna", errors="replace").rstrip(".").lower()[:253]
-                    proto = "TCP" if tcp else "UDP" if udp else str(getattr(ip_layer, "nh", "OTHER"))
-                    flags = str(tcp.flags) if tcp else ""
-                    self.add_record(PacketRecord(
-                        timestamp=float(getattr(packet, "time", time.time())),
-                        src_ip=str(ip_layer.src), dst_ip=str(ip_layer.dst),
-                        src_port=int(tcp.sport if tcp else udp.sport) if tcp or udp else None,
-                        dst_port=int(tcp.dport if tcp else udp.dport) if tcp or udp else None,
-                        protocol=proto, length=len(packet), tcp_flags=flags, dns_query=query,
-                    ))
-                    count += 1
-                except (ValueError, TypeError, AttributeError):
-                    continue
-        if count == 0:
-            raise ValueError("No IPv4/IPv6 packets could be read from this capture.")
-        return count
+        """Dissect PCAP/PCAPNG through Wireshark's TShark engine."""
+        from plugins._wireshark_engine import engine
+        return engine().analyze_file(str(path), max_packets=max_packets)
 
     def add_scapy_packet(self, packet: Any) -> None:
         from scapy.all import IP, IPv6, TCP, UDP, DNS, DNSQR
@@ -255,29 +216,15 @@ def analyzer() -> TrafficAnalyzer:
 
 
 def start_capture(interface: str = "", bpf_filter: str = "") -> str:
-    """Start bounded live capture. Requires Npcap/libpcap and suitable privileges."""
-    global _SNIFFER
-    from scapy.all import AsyncSniffer
-    with _SNIFFER_LOCK:
-        if _SNIFFER is not None and getattr(_SNIFFER, "running", False):
-            return "A live capture is already running."
-        _ANALYZER.clear(source=f"live:{interface or 'default'}")
-        kwargs: dict[str, Any] = {"prn": _ANALYZER.add_scapy_packet, "store": False}
-        if interface.strip(): kwargs["iface"] = interface.strip()
-        if bpf_filter.strip(): kwargs["filter"] = bpf_filter.strip()[:512]
-        _SNIFFER = AsyncSniffer(**kwargs)
-        _SNIFFER.start()
-        return f"Live capture started on {interface or 'default interface'}."
+    """Start continuous background capture through Wireshark/TShark."""
+    from plugins._wireshark_engine import engine
+    return engine().start_background(interface, bpf_filter)
 
 
 def stop_capture() -> str:
-    global _SNIFFER
-    with _SNIFFER_LOCK:
-        sniffer, _SNIFFER = _SNIFFER, None
-    if sniffer is None or not getattr(sniffer, "running", False):
-        return "No live capture is running."
-    sniffer.stop()
-    return f"Live capture stopped. {_ANALYZER.snapshot().captured_packets} packets retained."
+    """Stop the TShark background capture."""
+    from plugins._wireshark_engine import engine
+    return engine().stop_background()
 
 
 def show_dashboard(player, question: str = "") -> bool:
