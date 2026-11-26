@@ -132,3 +132,35 @@ def test_live_capture_does_not_pass_file_only_keep_packets_argument(monkeypatch)
     assert captured["include_raw"] is False
     assert captured["use_json"] is True
     assert captured["custom_parameters"]["-s"] == "256"
+
+
+
+def test_pyshark_event_loop_is_created_in_worker_thread():
+    import asyncio
+    import threading
+    from plugins._wireshark_engine import _ensure_event_loop
+
+    result = {}
+
+    def worker():
+        with _ensure_event_loop() as loop:
+            result["loop"] = loop
+            result["running"] = asyncio.get_event_loop() is loop
+            result["closed_inside"] = loop.is_closed()
+        result["closed_after"] = loop.is_closed()
+        try:
+            asyncio.get_event_loop()
+        except RuntimeError:
+            result["cleared_after"] = True
+        else:
+            result["cleared_after"] = False
+
+    thread = threading.Thread(target=worker)
+    thread.start()
+    thread.join(timeout=2)
+
+    assert not thread.is_alive()
+    assert result["running"] is True
+    assert result["closed_inside"] is False
+    assert result["closed_after"] is True
+    assert result["cleared_after"] is True
