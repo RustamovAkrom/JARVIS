@@ -130,7 +130,7 @@ class TrafficAnalyzer:
             if row.dst_port is not None: ports.add(row.dst_port)
             flows[(row.src_ip, row.src_port, row.dst_ip, row.dst_port, row.protocol)] += 1
             if row.dst_port is not None: dst_ports_by_src[row.src_ip].add(row.dst_port)
-            if row.protocol == "TCP" and "S" in row.tcp_flags and "A" not in row.tcp_flags:
+            if "S" in row.tcp_flags and "A" not in row.tcp_flags:
                 syn_only[row.src_ip] += 1
             if row.dns_query: dns[row.dns_query] += 1
             buckets[int(row.timestamp // 10) * 10] += row.length
