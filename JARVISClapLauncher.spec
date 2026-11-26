@@ -5,10 +5,20 @@ from PyInstaller.utils.hooks import collect_submodules
 
 root = Path(SPECPATH)
 hiddenimports = []
-for package in ("core", "memory", "numpy", "sounddevice", "PyQt6.QtNetwork", "PyQt6.QtCore", "PyQt6.QtWidgets"):
+for package in (
+    "core",
+    "memory",
+    "sounddevice",
+    "PyQt6.QtNetwork",
+    "PyQt6.QtCore",
+    "PyQt6.QtWidgets",
+):
     try:
         hiddenimports += collect_submodules(package)
-    except Exception:
+    except (ImportError, ModuleNotFoundError):
+        # Optional/platform-specific modules are handled by the launcher at
+        # runtime. Do not make a release build fail only because a package
+        # has no importable submodules on this platform.
         pass
 
 a = Analysis(
@@ -24,9 +34,17 @@ a = Analysis(
     noarchive=False,
     optimize=1,
 )
+
 pyz = PYZ(a.pure)
+
+# Keep this as a true one-file executable. PyInstaller writes the executable
+# directly to dist/JARVISClapLauncher.exe; there is no COLLECT directory.
 exe = EXE(
-    pyz, a.scripts, a.binaries, a.datas, [],
+    pyz,
+    a.scripts,
+    a.binaries,
+    a.datas,
+    [],
     name="JARVISClapLauncher",
     debug=False,
     bootloader_ignore_signals=False,
