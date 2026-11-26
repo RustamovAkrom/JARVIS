@@ -16,7 +16,8 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-MAX_PACKETS = 250_000
+MAX_PACKETS = 50_000
+SNAPSHOT_CACHE_SECONDS = 5.0
 MAX_FLOWS = 50_000
 MAX_DNS_NAMES = 20_000
 
@@ -69,6 +70,9 @@ class TrafficAnalyzer:
         self._started_at = 0.0
         self._ended_at = 0.0
         self._dropped = 0
+        self._generation = 0
+        self._snapshot_cache = None
+        self._snapshot_cache_at = 0.0
 
     def clear(self, source: str = "empty") -> None:
         with self._lock:
@@ -77,6 +81,9 @@ class TrafficAnalyzer:
             self._started_at = time.time()
             self._ended_at = self._started_at
             self._dropped = 0
+            self._generation += 1
+            self._snapshot_cache = None
+            self._snapshot_cache_at = 0.0
 
     def add_record(self, record: PacketRecord) -> None:
         with self._lock:
@@ -97,16 +104,20 @@ class TrafficAnalyzer:
         return [{"name": str(k), "count": int(v)} for k, v in counter.most_common(limit)]
 
     def snapshot(self) -> AnalysisSnapshot:
+        now = time.monotonic()
         with self._lock:
+            cached = self._snapshot_cache
+            if cached is not None and now - self._snapshot_cache_at < SNAPSHOT_CACHE_SECONDS:
+                return cached
             rows = list(self._records)
             source, started, ended, dropped = self._source, self._started_at, self._ended_at, self._dropped
+            generation = self._generation
         protocols: collections.Counter = collections.Counter()
         src: collections.Counter = collections.Counter()
         dst: collections.Counter = collections.Counter()
         ports: set[int] = set()
         flows: collections.Counter = collections.Counter()
         dns: collections.Counter = collections.Counter()
-        ip_bytes: collections.Counter = collections.Counter()
         dst_ports_by_src: dict[str, set[int]] = collections.defaultdict(set)
         syn_only: collections.Counter = collections.Counter()
         buckets: collections.Counter = collections.Counter()
@@ -115,8 +126,6 @@ class TrafficAnalyzer:
             protocols[row.protocol] += 1
             src[row.src_ip] += 1
             dst[row.dst_ip] += 1
-            ip_bytes[row.src_ip] += row.length
-            ip_bytes[row.dst_ip] += row.length
             if row.src_port is not None: ports.add(row.src_port)
             if row.dst_port is not None: ports.add(row.dst_port)
             flows[(row.src_ip, row.src_port, row.dst_ip, row.dst_port, row.protocol)] += 1
@@ -152,7 +161,7 @@ class TrafficAnalyzer:
         warnings = []
         if dropped: warnings.append(f"Bounded buffer evicted {dropped} oldest packets.")
         if len(rows) >= MAX_PACKETS: warnings.append("Analysis reached the in-memory packet limit; results may be partial.")
-        return AnalysisSnapshot(
+        result = AnalysisSnapshot(
             source=source, captured_packets=len(rows), total_bytes=total_bytes,
             unique_ips=len(set(src) | set(dst)), unique_ports=len(ports), unique_flows=len(flows),
             protocols=dict(protocols), top_sources=self._top(src), top_destinations=self._top(dst),
@@ -160,6 +169,11 @@ class TrafficAnalyzer:
             suspicious=suspicious[:100], dns_top=self._top(dns), timeline=timeline,
             started_at=started, ended_at=ended, warnings=warnings,
         )
+        with self._lock:
+            if generation == self._generation:
+                self._snapshot_cache = result
+                self._snapshot_cache_at = time.monotonic()
+        return result
 
     def answer(self, question: str) -> dict[str, Any]:
         """Map common analyst questions to deterministic metrics, never guess."""
