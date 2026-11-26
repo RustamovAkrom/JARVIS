@@ -124,7 +124,7 @@ jobs:
       - name: Upload validated build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: JARVIS-Windows-${{ steps.release.outputs.version }}-${{ github.run_number }}
+          name: JARVIS-Windows-${{ steps.release.outputs.version }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: release/*
           if-no-files-found: error
           retention-days: 30
@@ -137,5 +137,5 @@ jobs:
         run: gh release create "${{ steps.release.outputs.tag }}" release/* --title "JARVIS ${{ steps.release.outputs.tag }}" --generate-notes --target "$env:GITHUB_SHA"
 
       - name: Report existing version
-        if: steps.release.outputs.should_publish == 'false' && github.event_name != 'pull_request'
+        if: steps.release.outputs.should_publish == 'false' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         run: echo "Build validated and uploaded. No duplicate GitHub Release was created for version ${{ steps.release.outputs.version }}."
