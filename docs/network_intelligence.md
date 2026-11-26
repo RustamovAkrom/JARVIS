@@ -5,11 +5,11 @@ Network Intelligence integrates JARVIS with **Wireshark and TShark**. PyShark is
 ## Architecture and capabilities
 
 - PCAP/PCAPNG analysis through PyShark and TShark.
-- Continuous live capture through TShark, independent of the Wireshark GUI window.
+- Continuous live capture through TShark, independent of the Wireshark GUI window. The GUI is opened without starting a second capture, avoiding duplicate packet processing.
 - Optional Wireshark GUI launch, including opening a saved capture or starting a live capture.
-- Bounded in-memory packet metadata (250,000 records by default); packet payloads are not retained by JARVIS.
+- Bounded in-memory packet metadata (50,000 records by default); packet payloads are not retained by JARVIS. Expensive snapshots are cached for five seconds.
 - Packet/byte counts, unique IPs/ports/flows, protocol distribution, top talkers, rare source IPs, DNS query frequency and a traffic timeline.
-- Heuristic indicators for broad TCP SYN/port sweeps and unusually long DNS names.
+- Heuristic indicators for broad TCP SYN/port sweeps and unusually long DNS names, evaluated on a 15-second interval during live capture.
 - Natural-language questions routed to deterministic metrics; the configured JARVIS model may explain measured results but cannot invent metrics.
 - HUD dashboard and notifications for newly observed heuristic findings.
 
