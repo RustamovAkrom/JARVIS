@@ -5,11 +5,13 @@ launched separately so background capture never depends on a visible window.
 """
 from __future__ import annotations
 
+import asyncio
 import os
 import shutil
 import subprocess
 import threading
 import time
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Callable
 
@@ -18,6 +20,32 @@ from plugins._network_intelligence_core import PacketRecord, analyzer
 MAX_CAPTURE_FILE_BYTES = 2 * 1024 * 1024 * 1024
 MAX_FILE_PACKETS = 50_000
 FINDING_CHECK_INTERVAL = 15.0
+
+
+@contextmanager
+def _ensure_event_loop():
+    """Provide PyShark with a thread-local asyncio loop when called from a worker.
+
+    Python 3.14 no longer implicitly creates a loop in arbitrary threads.
+    Keep the loop alive for the complete synchronous PyShark operation and
+    close only loops created by this context.
+    """
+    created = False
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        created = True
+
+    try:
+        yield loop
+    finally:
+        if created:
+            try:
+                asyncio.set_event_loop(None)
+            finally:
+                loop.close()
 
 
 def _configured_path(key: str) -> str | None:
@@ -148,21 +176,22 @@ class WiresharkEngine:
         count = 0
         processed = 0
         limit = max(1, min(int(max_packets), MAX_FILE_PACKETS))
-        cap = pyshark.FileCapture(
-            str(capture_path), tshark_path=tshark, keep_packets=False,
-            use_json=True, include_raw=False, custom_parameters={"-n": ""},
-        )
-        try:
-            for packet in cap:
-                processed += 1
-                if processed > limit:
-                    break
-                record = _packet_record(packet)
-                if record is not None and record.src_ip and record.dst_ip:
-                    analyzer().add_record(record)
-                    count += 1
-        finally:
-            cap.close()
+        with _ensure_event_loop():
+            cap = pyshark.FileCapture(
+                str(capture_path), tshark_path=tshark, keep_packets=False,
+                use_json=True, include_raw=False, custom_parameters={"-n": ""},
+            )
+            try:
+                for packet in cap:
+                    processed += 1
+                    if processed > limit:
+                        break
+                    record = _packet_record(packet)
+                    if record is not None and record.src_ip and record.dst_ip:
+                        analyzer().add_record(record)
+                        count += 1
+            finally:
+                cap.close()
         if not count:
             raise ValueError("TShark found no IPv4/IPv6 packets in this capture.")
         return count
@@ -178,14 +207,18 @@ class WiresharkEngine:
             self._filter = bpf_filter.strip()[:512]
             self._last_error = ""
             analyzer().clear(source=f"wireshark-live:{self._interface or 'default'}")
-            capture = pyshark.LiveCapture(
-                interface=self._interface or None,
-                bpf_filter=self._filter or None,
-                tshark_path=tshark,
-                use_json=True,
-                include_raw=False,
-                custom_parameters={"-n": "", "-s": "256", "-o": "tcp.desegment_tcp_streams:false"},
-            )
+            # PyShark may query asyncio during capture construction. This
+            # context covers constructor-time loop access; the worker creates
+            # its own loop for the actual capture lifetime.
+            with _ensure_event_loop():
+                capture = pyshark.LiveCapture(
+                    interface=self._interface or None,
+                    bpf_filter=self._filter or None,
+                    tshark_path=tshark,
+                    use_json=True,
+                    include_raw=False,
+                    custom_parameters={"-n": "", "-s": "256", "-o": "tcp.desegment_tcp_streams:false"},
+                )
             self._capture = capture
             self._thread = threading.Thread(
                 target=self._capture_loop, args=(capture, self._stop, on_finding),
@@ -198,21 +231,24 @@ class WiresharkEngine:
         seen_findings: set[tuple] = set()
         last_check = time.monotonic()
         try:
-            for packet in capture.sniff_continuously():
-                if stop.is_set():
-                    break
-                record = _packet_record(packet)
-                if record is not None and record.src_ip and record.dst_ip:
-                    analyzer().add_record(record)
-                if on_finding and time.monotonic() - last_check >= FINDING_CHECK_INTERVAL:
-                    last_check = time.monotonic()
-                    for finding in analyzer().snapshot().suspicious:
-                        key = (finding.get("type"), finding.get("source"), finding.get("details"))
-                        if key not in seen_findings:
-                            if len(seen_findings) >= 512:
-                                seen_findings.clear()
-                            seen_findings.add(key)
-                            on_finding(finding)
+            # The capture thread is independent of the caller's event loop.
+            # PyShark must resolve asyncio.get_event_loop() in this thread too.
+            with _ensure_event_loop():
+                for packet in capture.sniff_continuously():
+                    if stop.is_set():
+                        break
+                    record = _packet_record(packet)
+                    if record is not None and record.src_ip and record.dst_ip:
+                        analyzer().add_record(record)
+                    if on_finding and time.monotonic() - last_check >= FINDING_CHECK_INTERVAL:
+                        last_check = time.monotonic()
+                        for finding in analyzer().snapshot().suspicious:
+                            key = (finding.get("type"), finding.get("source"), finding.get("details"))
+                            if key not in seen_findings:
+                                if len(seen_findings) >= 512:
+                                    seen_findings.clear()
+                                seen_findings.add(key)
+                                on_finding(finding)
         except Exception as exc:
             with self._lock:
                 self._last_error = f"{type(exc).__name__}: {exc}"
