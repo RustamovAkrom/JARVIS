@@ -144,10 +144,18 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
             core.show_dashboard(player)
             return message
         if action in {"launch_wireshark", "wireshark"}:
-            return _engine().launch_gui(
-                interface=str(p.get("interface") or _setting("interface", "")),
-                start_capture=True,
+            if not bool(_setting("allow_live_capture", False)):
+                return "Live capture is disabled. Enable 'Allow live capture' in plugin settings before starting a Wireshark capture."
+            interface = str(p.get("interface") or _setting("interface", ""))
+            message = _engine().start_background(
+                interface,
+                str(p.get("bpf_filter") or ""),
+                on_finding=lambda finding: _notify(player, finding),
             )
+            gui_message = _engine().launch_gui(interface=interface, start_capture=True)
+            _show(player, message)
+            core.show_dashboard(player)
+            return message + " " + gui_message
         if action in {"open_in_wireshark", "open_capture"}:
             path = str(p.get("path") or "").strip()
             if not path:
@@ -164,7 +172,8 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
                 f"Wireshark GUI={'available' if state['wireshark'] else 'missing'}, "
                 f"background monitoring={'running' if state['running'] else 'stopped'}, "
                 f"interface={state['interface'] or 'default'}. "
-                f"Packets retained: {core.analyzer().snapshot().captured_packets}."
+                f"Packets retained: {core.analyzer().snapshot().captured_packets}. "
+                f"Last capture error: {state['last_error'] or 'none'}."
             )
         if action in {"ask", "question", "analyze"}:
             question = str(p.get("question") or "Summarise the loaded network traffic.")
