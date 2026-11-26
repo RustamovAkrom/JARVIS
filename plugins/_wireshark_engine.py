@@ -108,7 +108,7 @@ def _record_from_fields(line: str) -> PacketRecord | None:
 def _command_base(tshark: str) -> list[str]:
     return [
         tshark, "-n", "-l", "-T", "fields",
-        "-E", "separator=\\t", "-E", "occurrence=f", "-E", "quote=n",
+        "-E", "separator=\t", "-E", "occurrence=f", "-E", "quote=n",
         *[arg for field in _FIELDS for arg in ("-e", field)],
     ]
 
