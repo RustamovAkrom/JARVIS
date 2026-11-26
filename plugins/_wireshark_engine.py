@@ -78,7 +78,7 @@ def _packet_record(packet) -> PacketRecord | None:
             flags += "A"
     dns = getattr(packet, "dns", None)
     query = str(getattr(dns, "qry_name", "") or "").rstrip(".").lower()[:253] if dns else ""
-    protocol = str(getattr(packet, "transport_layer", None) or getattr(packet, "highest_layer", "OTHER")).upper()
+    protocol = str(getattr(packet, "highest_layer", None) or getattr(packet, "transport_layer", None) or "OTHER").upper()
     try:
         timestamp = float(packet.sniff_timestamp)
     except (AttributeError, TypeError, ValueError):
