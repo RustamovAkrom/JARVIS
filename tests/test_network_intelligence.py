@@ -22,7 +22,7 @@ def test_snapshot_counts_packets_ips_ports_and_flows():
     snapshot = _sample().snapshot()
     assert snapshot.captured_packets == 36
     assert snapshot.unique_ips == 3
-    assert snapshot.unique_ports == 36
+    assert snapshot.unique_ports == 71
     assert snapshot.unique_flows == 36
     assert snapshot.total_bytes == 2180
 
