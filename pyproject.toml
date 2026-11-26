@@ -52,7 +52,6 @@ dependencies = [
     "pywinauto>=0.6.9 ; sys_platform == 'win32'",
     "qrcode[pil]>=7,<9",
     "requests>=2.31,<3",
-    "pyshark>=0.6,<1",
     "send2trash>=2.1.0",
     "sherlock-project>=0.14.4",
     "soundfile>=0.14",
