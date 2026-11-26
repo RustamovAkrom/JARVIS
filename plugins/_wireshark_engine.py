@@ -16,6 +16,8 @@ from typing import Callable
 from plugins._network_intelligence_core import PacketRecord, analyzer
 
 MAX_CAPTURE_FILE_BYTES = 2 * 1024 * 1024 * 1024
+MAX_FILE_PACKETS = 250_000
+FINDING_CHECK_INTERVAL = 15.0
 
 
 def _configured_path(key: str) -> str | None:
@@ -144,13 +146,16 @@ class WiresharkEngine:
             raise ValueError("Capture exceeds the 2 GiB safety limit.")
         analyzer().clear(source=str(capture_path))
         count = 0
+        processed = 0
+        limit = max(1, min(int(max_packets), MAX_FILE_PACKETS))
         cap = pyshark.FileCapture(
             str(capture_path), tshark_path=tshark, keep_packets=False,
             use_json=True, include_raw=False, custom_parameters={"-n": ""},
         )
         try:
             for packet in cap:
-                if count >= max(1, min(int(max_packets), 250_000)):
+                processed += 1
+                if processed > limit:
                     break
                 record = _packet_record(packet)
                 if record is not None and record.src_ip and record.dst_ip:
@@ -198,7 +203,7 @@ class WiresharkEngine:
                 record = _packet_record(packet)
                 if record is not None and record.src_ip and record.dst_ip:
                     analyzer().add_record(record)
-                if on_finding and time.monotonic() - last_check >= 5:
+                if on_finding and time.monotonic() - last_check >= FINDING_CHECK_INTERVAL:
                     last_check = time.monotonic()
                     for finding in analyzer().snapshot().suspicious:
                         key = (finding.get("type"), finding.get("source"), finding.get("details"))
@@ -227,7 +232,9 @@ class WiresharkEngine:
         except Exception:
             pass
         if thread is not threading.current_thread():
-            thread.join(timeout=5)
+            thread.join(timeout=10)
+        if thread.is_alive():
+            return "Stop requested, but TShark has not exited yet. The capture handle is retained so it can be stopped safely."
         with self._lock:
             self._thread = None
             self._capture = None
