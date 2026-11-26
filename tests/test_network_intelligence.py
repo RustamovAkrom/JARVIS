@@ -51,7 +51,7 @@ def test_tshark_fields_adapter_normalizes_ipv4_tcp_and_dns_fields():
         "1700000000.5", "192.0.2.10", "", "", "198.51.100.20",
         "51515", "", "443", "", "TLS", "74", "1", "0", "example.test",
     ]
-    record = _record_from_fields("\\t".join(fields))
+    record = _record_from_fields("\t".join(fields))
     assert record is not None
     assert record.src_ip == "192.0.2.10"
     assert record.dst_ip == "198.51.100.20"
@@ -68,7 +68,7 @@ def test_tshark_fields_adapter_supports_ipv6_and_missing_transport():
         "1700000001.0", "", "2001:db8::1", "", "2001:db8::2",
         "", "", "", "", "ICMPV6", "128", "", "", "",
     ]
-    record = _record_from_fields("\\t".join(fields))
+    record = _record_from_fields("\t".join(fields))
     assert record is not None
     assert record.src_ip == "2001:db8::1"
     assert record.dst_ip == "2001:db8::2"
