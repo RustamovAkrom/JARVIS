@@ -322,6 +322,16 @@ def show_dashboard(player, question: str = "") -> bool:
         summary.setWordWrap(True)
         summary.setStyleSheet("padding:8px;color:#a9c5d8;")
         layout.addWidget(summary)
+        traffic_table = QTableWidget(0, 3)
+        traffic_table.setHorizontalHeaderLabels(["RANKING", "IP / PROTOCOL", "PACKETS"])
+        for category, items in (("TOP SOURCE", snap.top_sources[:5]), ("PROTOCOL", snap.top_protocols[:5])):
+            for item in items:
+                row = traffic_table.rowCount(); traffic_table.insertRow(row)
+                for col, value in enumerate((category, item["name"], item["count"])):
+                    traffic_table.setItem(row, col, QTableWidgetItem(str(value)))
+        traffic_table.resizeColumnsToContents()
+        traffic_table.setMaximumHeight(190)
+        layout.addWidget(traffic_table)
         table = QTableWidget(0, 4)
         table.setHorizontalHeaderLabels(["SEVERITY", "DETECTION", "SOURCE", "EVIDENCE"])
         for item in snap.suspicious[:30]:
