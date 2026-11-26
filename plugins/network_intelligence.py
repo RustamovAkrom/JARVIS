@@ -23,7 +23,7 @@ PLUGIN = {
             "question": {"type": "STRING", "description": "Natural-language analyst question about the currently loaded traffic."},
             "interface": {"type": "STRING", "description": "Explicit network interface name for authorised live capture or Wireshark GUI."},
             "bpf_filter": {"type": "STRING", "description": "Optional BPF capture filter, e.g. 'tcp or udp'."},
-            "max_packets": {"type": "INTEGER", "description": "Maximum packets to read from a file, capped at 250000."},
+            "max_packets": {"type": "INTEGER", "description": "Maximum packets to inspect from a file, capped at 50000."},
         },
         "required": ["action"],
     },
@@ -140,20 +140,11 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
             core.show_dashboard(player)
             return message
         if action in {"launch_wireshark", "wireshark"}:
-            if not bool(_setting("allow_live_capture", False)):
-                return "Live capture is disabled. Enable 'Allow live capture' in plugin settings before starting a Wireshark capture."
-            interface = str(p.get("interface") or _setting("interface", ""))
-            message = _engine().start_background(
-                interface,
-                str(p.get("bpf_filter") or ""),
-                on_finding=lambda finding: _notify(player, finding),
-            )
-            # Keep one capture owner: JARVIS/TShark. Starting a second capture
-            # in the GUI would duplicate packet processing and increase load.
-            gui_message = _engine().launch_gui(interface=interface, start_capture=False)
-            _show(player, message)
-            core.show_dashboard(player)
-            return message + " " + gui_message + " Wireshark GUI opened without a second capture to avoid duplicate load."
+            # Opening the desktop application is independent from packet capture.
+            # It must work even when live monitoring is disabled.
+            gui_message = _engine().launch_gui()
+            _show(player, gui_message)
+            return gui_message + " Live monitoring remains stopped; start it separately when explicitly requested."
         if action in {"open_in_wireshark", "open_capture"}:
             path = str(p.get("path") or "").strip()
             if not path:
