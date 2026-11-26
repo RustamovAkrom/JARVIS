@@ -182,8 +182,8 @@ class WiresharkEngine:
                 interface=self._interface or None,
                 bpf_filter=self._filter or None,
                 tshark_path=tshark,
-                keep_packets=False,
                 use_json=True,
+                include_raw=False,
                 custom_parameters={"-n": "", "-o": "tcp.desegment_tcp_streams:false"},
             )
             self._capture = capture
