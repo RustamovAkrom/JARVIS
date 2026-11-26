@@ -2,7 +2,7 @@
 
 This catalogue documents every standalone Python plugin module currently present in the repository's `plugins/` directory on the `v2` branch.
 
-**Catalogue size: 40 plugin modules.** The names in parentheses are the exact tool identifiers exposed to the assistant. Select a plugin name to open its implementation.
+**Catalogue size: 41 plugin modules.** The names in parentheses are the exact tool identifiers exposed to the assistant. Select a plugin name to open its implementation.
 
 | Emoji | # | Plugin name | Description |
 |:---:|---:|---|---|
@@ -47,7 +47,7 @@ This catalogue documents every standalone Python plugin module currently present
 | 🛡️ | 39 | [WhatsApp Call Guard](../plugins/whatsapp_guard.py) (`whatsapp_guard`) | Handles incoming WhatsApp calls according to the user's instruction: announce, accept, decline, send a text response or speak to the caller. The source explicitly warns that automated WhatsApp operation is not permitted by WhatsApp and may put the account at risk of restriction; enable only after understanding that risk. |
 | ▶️ | 40 | [YouTube Controller](../plugins/youtube_control.py) (`youtube_controller`) | Controls an already-open YouTube tab using keyboard/desktop automation: play/pause, captions, next/previous video, seek, rewind/forward, volume, playback speed, fullscreen, theater/miniplayer and supported ad skipping. It does not search for or open new videos. |
 
-## Catalogue notes
+| 🧠 | 41 | [Network Intelligence](../plugins/network_intelligence.py) (`network_intelligence`) | Analyses PCAP/PCAPNG files and explicitly requested live captures; reports packet, byte, IP, port, flow, protocol, DNS and top-talker statistics, flags heuristic traffic anomalies, answers natural-language analyst questions and opens a HUD dashboard. Live capture is disabled by default and requires Npcap/libpcap plus appropriate permissions. See the [setup and analysis guide](network_intelligence.md). |\n\n## Catalogue notes
 
 - The catalogue is a snapshot of the repository's `v2` branch. The plugin manager in the running application is the source of truth for which modules actually loaded on a particular machine.
 - The plugin loader scans top-level `plugins/*.py` files that do not begin with an underscore and validates their `PLUGIN` declaration and `run()` handler. A module can be present in the repository but still be unavailable if an optional dependency, companion application, account authorization, device or operating-system capability is missing.
