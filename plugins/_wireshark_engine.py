@@ -107,7 +107,7 @@ def _record_from_fields(line: str) -> PacketRecord | None:
 
 def _command_base(tshark: str) -> list[str]:
     return [
-        tshark, "-n", "-T", "fields",
+        tshark, "-n", "-l", "-T", "fields",
         "-E", "separator=\\t", "-E", "occurrence=f", "-E", "quote=n",
         *[arg for field in _FIELDS for arg in ("-e", field)],
     ]
@@ -262,7 +262,8 @@ class WiresharkEngine:
                       stop: threading.Event, on_finding, ready: threading.Event,
                       startup_error: list[BaseException]) -> None:
         command = _command_base(tshark)
-        command.extend(["-i", interface or "any"])
+        if interface:
+            command.extend(["-i", interface])
         if bpf_filter:
             command.extend(["-f", bpf_filter])
         stderr_file = tempfile.TemporaryFile(mode="w+t", encoding="utf-8")
