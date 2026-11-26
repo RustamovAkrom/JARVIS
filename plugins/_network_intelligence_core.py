@@ -161,6 +161,7 @@ class TrafficAnalyzer:
             while len(self._timeline) > self.MAX_TIMELINE_BUCKETS:
                 self._timeline.popitem(last=False)
             self._snapshot_cache = None
+            self._generation += 1
 
     def load_pcap(self, path: str | os.PathLike[str], max_packets: int = MAX_PACKETS) -> int:
         """Dissect a bounded prefix of a PCAP/PCAPNG file through TShark."""
