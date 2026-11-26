@@ -146,7 +146,7 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
         if action in {"launch_wireshark", "wireshark"}:
             return _engine().launch_gui(
                 interface=str(p.get("interface") or _setting("interface", "")),
-                start_capture=bool(p.get("interface") or _setting("interface", "")),
+                start_capture=True,
             )
         if action in {"open_in_wireshark", "open_capture"}:
             path = str(p.get("path") or "").strip()
@@ -157,7 +157,16 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
             question = str(p.get("question") or "")
             shown = core.show_dashboard(player, question)
             return "Network Intelligence dashboard opened." if shown else "Could not open the HUD dashboard. Ensure the JARVIS HUD and Live Panels plugin are available."
-        if action in {"ask", "question", "analyze", "status"}:
+        if action == "status":
+            state = _engine().status()
+            return (
+                f"Wireshark integration: TShark={'available' if state['tshark'] else 'missing'}, "
+                f"Wireshark GUI={'available' if state['wireshark'] else 'missing'}, "
+                f"background monitoring={'running' if state['running'] else 'stopped'}, "
+                f"interface={state['interface'] or 'default'}. "
+                f"Packets retained: {core.analyzer().snapshot().captured_packets}."
+            )
+        if action in {"ask", "question", "analyze"}:
             question = str(p.get("question") or "Summarise the loaded network traffic.")
             result = core.analyzer().answer(question)
             answer = result["answer"]
@@ -180,15 +189,6 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
             except Exception:
                 pass
             return answer
-        if action == "status":
-            state = _engine().status()
-            return (
-                f"Wireshark integration: TShark={'available' if state['tshark'] else 'missing'}, "
-                f"Wireshark GUI={'available' if state['wireshark'] else 'missing'}, "
-                f"background monitoring={'running' if state['running'] else 'stopped'}, "
-                f"interface={state['interface'] or 'default'}. "
-                f"Packets retained: {core.analyzer().snapshot().captured_packets}."
-            )
         return "Unknown action. Use analyze_file, ask, dashboard, start_monitor, stop_monitor, launch_wireshark, open_in_wireshark or status."
     except FileNotFoundError as exc:
         return f"Capture file not found: {exc}"
