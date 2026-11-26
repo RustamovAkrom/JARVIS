@@ -184,7 +184,7 @@ class WiresharkEngine:
                 tshark_path=tshark,
                 use_json=True,
                 include_raw=False,
-                custom_parameters={"-n": "", "-o": "tcp.desegment_tcp_streams:false"},
+                custom_parameters={"-n": "", "-s": "128", "-o": "tcp.desegment_tcp_streams:false"},
             )
             self._capture = capture
             self._thread = threading.Thread(
