@@ -209,6 +209,8 @@ class WiresharkEngine:
                     for finding in analyzer().snapshot().suspicious:
                         key = (finding.get("type"), finding.get("source"), finding.get("details"))
                         if key not in seen_findings:
+                            if len(seen_findings) >= 512:
+                                seen_findings.clear()
                             seen_findings.add(key)
                             on_finding(finding)
         except Exception as exc:
