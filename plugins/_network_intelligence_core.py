@@ -92,24 +92,6 @@ class TrafficAnalyzer:
         from plugins._wireshark_engine import engine
         return engine().analyze_file(str(path), max_packets=max_packets)
 
-    def add_scapy_packet(self, packet: Any) -> None:
-        from scapy.all import IP, IPv6, TCP, UDP, DNS, DNSQR
-        layer = packet.getlayer(IP) or packet.getlayer(IPv6)
-        if layer is None:
-            return
-        tcp, udp, dns = packet.getlayer(TCP), packet.getlayer(UDP), packet.getlayer(DNS)
-        query = ""
-        if dns and dns.qd and isinstance(dns.qd, DNSQR):
-            query = bytes(dns.qd.qname).decode("idna", errors="replace").rstrip(".").lower()[:253]
-        self.add_record(PacketRecord(
-            timestamp=float(getattr(packet, "time", time.time())),
-            src_ip=str(layer.src), dst_ip=str(layer.dst),
-            src_port=int(tcp.sport if tcp else udp.sport) if tcp or udp else None,
-            dst_port=int(tcp.dport if tcp else udp.dport) if tcp or udp else None,
-            protocol="TCP" if tcp else "UDP" if udp else str(getattr(layer, "nh", "OTHER")),
-            length=len(packet), tcp_flags=str(tcp.flags) if tcp else "", dns_query=query,
-        ))
-
     @staticmethod
     def _top(counter: collections.Counter, limit: int = 10) -> list[dict[str, Any]]:
         return [{"name": str(k), "count": int(v)} for k, v in counter.most_common(limit)]
