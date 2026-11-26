@@ -1,17 +1,16 @@
-"""Wireshark/TShark integration for JARVIS Network Intelligence.
+"""Wireshark/TShark integration using bounded streaming subprocess I/O.
 
-PyShark is the Python adapter; TShark performs packet dissection. The GUI is
-launched separately so background capture never depends on a visible window.
+TShark performs dissection. JARVIS consumes one tab-separated metadata row at a
+time; it never stores packet payloads or a complete TShark output buffer.
 """
 from __future__ import annotations
 
-import asyncio
 import os
 import shutil
 import subprocess
+import tempfile
 import threading
 import time
-from contextlib import contextmanager
 from pathlib import Path
 from typing import Callable
 
@@ -20,32 +19,12 @@ from plugins._network_intelligence_core import PacketRecord, analyzer
 MAX_CAPTURE_FILE_BYTES = 2 * 1024 * 1024 * 1024
 MAX_FILE_PACKETS = 50_000
 FINDING_CHECK_INTERVAL = 15.0
-
-
-@contextmanager
-def _ensure_event_loop():
-    """Provide PyShark with a thread-local asyncio loop when called from a worker.
-
-    Python 3.14 no longer implicitly creates a loop in arbitrary threads.
-    Keep the loop alive for the complete synchronous PyShark operation and
-    close only loops created by this context.
-    """
-    created = False
-    try:
-        loop = asyncio.get_event_loop()
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        created = True
-
-    try:
-        yield loop
-    finally:
-        if created:
-            try:
-                asyncio.set_event_loop(None)
-            finally:
-                loop.close()
+_FIELDS = (
+    "frame.time_epoch", "ip.src", "ipv6.src", "ip.dst", "ipv6.dst",
+    "tcp.srcport", "udp.srcport", "tcp.dstport", "udp.dstport",
+    "_ws.col.Protocol", "frame.len", "tcp.flags.syn", "tcp.flags.ack",
+    "dns.qry.name",
+)
 
 
 def _configured_path(key: str) -> str | None:
@@ -89,191 +68,239 @@ def find_wireshark() -> str | None:
     return None
 
 
-def _packet_record(packet) -> PacketRecord | None:
-    ip = getattr(packet, "ip", None)
-    ipv6 = getattr(packet, "ipv6", None)
-    layer = ip or ipv6
-    if layer is None:
-        return None
-    tcp = getattr(packet, "tcp", None)
-    udp = getattr(packet, "udp", None)
-    transport = tcp or udp
-    src_port = _int_or_none(getattr(transport, "srcport", None)) if transport else None
-    dst_port = _int_or_none(getattr(transport, "dstport", None)) if transport else None
-    flags = ""
-    if tcp:
-        if str(getattr(tcp, "flags_syn", "0")) == "1":
-            flags += "S"
-        if str(getattr(tcp, "flags_ack", "0")) == "1":
-            flags += "A"
-    dns = getattr(packet, "dns", None)
-    query = str(getattr(dns, "qry_name", "") or "").rstrip(".").lower()[:253] if dns else ""
-    protocol = str(getattr(packet, "highest_layer", None) or getattr(packet, "transport_layer", None) or "OTHER").upper()
+def _int_or_none(value: str) -> int | None:
     try:
-        timestamp = float(packet.sniff_timestamp)
-    except (AttributeError, TypeError, ValueError):
-        timestamp = time.time()
+        return int(value) if value else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _record_from_fields(line: str) -> PacketRecord | None:
+    """Convert one TShark -T fields row into a small metadata record."""
+    values = line.rstrip("\r\n").split("\t")
+    values.extend([""] * (len(_FIELDS) - len(values)))
+    if len(values) < len(_FIELDS):
+        return None
+    (timestamp, src4, src6, dst4, dst6, tcp_src, udp_src, tcp_dst,
+     udp_dst, protocol, length, syn, ack, dns) = values[:len(_FIELDS)]
+    src_ip, dst_ip = src4 or src6, dst4 or dst6
+    if not src_ip or not dst_ip:
+        return None
+    try:
+        packet_time = float(timestamp)
+    except (TypeError, ValueError):
+        packet_time = time.time()
+    protocol = (protocol or "OTHER").upper()[:32]
+    flags = ("S" if syn == "1" else "") + ("A" if ack == "1" else "")
     return PacketRecord(
-        timestamp=timestamp,
-        src_ip=str(getattr(layer, "src", "")),
-        dst_ip=str(getattr(layer, "dst", "")),
-        src_port=src_port,
-        dst_port=dst_port,
-        protocol=protocol[:32],
-        length=_int_or_none(getattr(packet, "length", None)) or 0,
+        timestamp=packet_time,
+        src_ip=src_ip,
+        dst_ip=dst_ip,
+        src_port=_int_or_none(tcp_src or udp_src),
+        dst_port=_int_or_none(tcp_dst or udp_dst),
+        protocol=protocol,
+        length=_int_or_none(length) or 0,
         tcp_flags=flags,
-        dns_query=query,
+        dns_query=(dns or "").rstrip(".").lower()[:253],
     )
 
 
-def _int_or_none(value):
-    try:
-        return int(value) if value is not None else None
-    except (TypeError, ValueError):
-        return None
+def _command_base(tshark: str) -> list[str]:
+    return [
+        tshark, "-n", "-T", "fields",
+        "-E", "separator=\\t", "-E", "occurrence=f", "-E", "quote=n",
+        *[arg for field in _FIELDS for arg in ("-e", field)],
+    ]
 
 
 class WiresharkEngine:
     def __init__(self):
         self._lock = threading.RLock()
-        self._capture = None
+        self._process: subprocess.Popen | None = None
+        self._stderr_file = None
         self._thread: threading.Thread | None = None
         self._stop = threading.Event()
         self._interface = ""
         self._filter = ""
         self._last_error = ""
+        self._last_packet_at = 0.0
 
     def status(self) -> dict:
         with self._lock:
-            running = bool(self._thread and self._thread.is_alive() and not self._stop.is_set())
+            process = self._process
+            running = bool(
+                self._thread and self._thread.is_alive()
+                and process is not None and process.poll() is None
+                and not self._stop.is_set()
+            )
             return {
                 "running": running,
                 "interface": self._interface,
                 "bpf_filter": self._filter,
                 "last_error": self._last_error,
+                "last_packet_at": self._last_packet_at,
+                "pid": process.pid if process and process.poll() is None else None,
                 "tshark": find_tshark(),
                 "wireshark": find_wireshark(),
             }
 
-    def _pyshark(self):
+    def _require_tshark(self) -> str:
         tshark = find_tshark()
         if not tshark:
-            raise RuntimeError("TShark not found. Install Wireshark (including TShark) or set its executable path in Network Intelligence settings.")
-        try:
-            import pyshark
-        except ImportError as exc:
-            raise RuntimeError("PyShark is missing. Run 'uv sync' and restart JARVIS.") from exc
-        return pyshark, tshark
+            raise RuntimeError(
+                "TShark not found. Install Wireshark including TShark, or set "
+                "the TShark executable path in Network Intelligence settings."
+            )
+        return tshark
 
-    def analyze_file(self, path: str, max_packets: int = 250_000) -> int:
-        pyshark, tshark = self._pyshark()
+    @staticmethod
+    def _spawn(command: list[str], stderr_file):
+        return subprocess.Popen(
+            command,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=stderr_file,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            bufsize=1,
+            close_fds=(os.name != "nt"),
+        )
+
+    @staticmethod
+    def _terminate(process: subprocess.Popen | None) -> None:
+        if process is None or process.poll() is not None:
+            return
+        process.terminate()
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                pass
+
+    def analyze_file(self, path: str, max_packets: int = MAX_FILE_PACKETS) -> int:
+        tshark = self._require_tshark()
         capture_path = Path(path).expanduser().resolve()
         if not capture_path.is_file():
             raise FileNotFoundError(f"Capture file does not exist: {capture_path}")
         if capture_path.stat().st_size > MAX_CAPTURE_FILE_BYTES:
             raise ValueError("Capture exceeds the 2 GiB safety limit.")
+        limit = max(1, min(int(max_packets), MAX_FILE_PACKETS))
         analyzer().clear(source=str(capture_path))
+        command = _command_base(tshark) + ["-r", str(capture_path), "-c", str(limit)]
         count = 0
         processed = 0
-        limit = max(1, min(int(max_packets), MAX_FILE_PACKETS))
-        with _ensure_event_loop():
-            cap = pyshark.FileCapture(
-                str(capture_path), tshark_path=tshark, keep_packets=False,
-                use_json=True, include_raw=False, custom_parameters={"-n": ""},
-            )
+        with tempfile.TemporaryFile(mode="w+t", encoding="utf-8") as stderr_file:
+            process = self._spawn(command, stderr_file)
             try:
-                for packet in cap:
+                assert process.stdout is not None
+                for line in process.stdout:
                     processed += 1
-                    if processed > limit:
-                        break
-                    record = _packet_record(packet)
-                    if record is not None and record.src_ip and record.dst_ip:
+                    record = _record_from_fields(line)
+                    if record is not None:
                         analyzer().add_record(record)
                         count += 1
+                return_code = process.wait(timeout=30)
+            except BaseException:
+                self._terminate(process)
+                raise
             finally:
-                cap.close()
+                if process.stdout is not None:
+                    process.stdout.close()
+            stderr_file.seek(0)
+            error_text = stderr_file.read()[-4000:].strip()
+        if return_code != 0:
+            detail = error_text or f"TShark exited with code {return_code}."
+            raise RuntimeError(f"TShark failed while reading the capture: {detail}")
         if not count:
-            raise ValueError("TShark found no IPv4/IPv6 packets in this capture.")
+            raise ValueError(
+                "TShark completed but found no IPv4/IPv6 packets. "
+                + (error_text or "Check that the selected file is a valid PCAP/PCAPNG.")
+            )
         return count
 
     def start_background(self, interface: str = "", bpf_filter: str = "",
                          on_finding: Callable[[dict], None] | None = None) -> str:
-        pyshark, tshark = self._pyshark()
+        tshark = self._require_tshark()
         with self._lock:
-            if self._thread and self._thread.is_alive() and not self._stop.is_set():
+            if self.status()["running"]:
                 return f"Background monitoring is already running on {self._interface or 'default interface'}."
+            if self._thread and self._thread.is_alive():
+                raise RuntimeError("Previous TShark capture is still shutting down.")
             self._stop = threading.Event()
             stop = self._stop
             self._interface = interface.strip()
             self._filter = bpf_filter.strip()[:512]
             self._last_error = ""
+            self._last_packet_at = 0.0
             analyzer().clear(source=f"wireshark-live:{self._interface or 'default'}")
             ready = threading.Event()
             startup_error: list[BaseException] = []
-            self._capture = None
             self._thread = threading.Thread(
                 target=self._capture_loop,
-                args=(pyshark, tshark, self._interface, self._filter,
-                      stop, on_finding, ready, startup_error),
+                args=(tshark, self._interface, self._filter, stop,
+                      on_finding, ready, startup_error),
                 name="jarvis-tshark-monitor",
                 daemon=True,
             )
             thread = self._thread
             thread.start()
-
-        # Report constructor/permission failures to the caller instead of
-        # claiming monitoring started when the worker could not initialize.
         if not ready.wait(timeout=10):
             stop.set()
-            raise RuntimeError("Timed out while initializing the TShark capture worker.")
+            raise RuntimeError("Timed out while starting the TShark process.")
         if startup_error:
-            raise RuntimeError(f"Could not initialize TShark capture: {startup_error[0]}") from startup_error[0]
-        return f"Wireshark/TShark background monitoring started on {self._interface or 'default interface'}."
+            raise RuntimeError(f"Could not start TShark capture: {startup_error[0]}") from startup_error[0]
+        state = self.status()
+        if not state["running"]:
+            raise RuntimeError(state["last_error"] or "TShark exited before capture became active.")
+        return f"TShark monitoring started on {self._interface or 'default interface'} (PID {state['pid']})."
 
-    def _capture_loop(self, pyshark, tshark: str, interface: str,
-                      bpf_filter: str, stop: threading.Event, on_finding,
-                      ready: threading.Event, startup_error: list[BaseException]) -> None:
+    def _capture_loop(self, tshark: str, interface: str, bpf_filter: str,
+                      stop: threading.Event, on_finding, ready: threading.Event,
+                      startup_error: list[BaseException]) -> None:
+        command = _command_base(tshark)
+        command.extend(["-i", interface or "any"])
+        if bpf_filter:
+            command.extend(["-f", bpf_filter])
+        stderr_file = tempfile.TemporaryFile(mode="w+t", encoding="utf-8")
+        process = None
         seen_findings: set[tuple] = set()
         last_check = time.monotonic()
-        capture = None
         try:
-            # Create, use and close PyShark in the same worker thread and
-            # under the same event loop. This is required by Python 3.14.
-            with _ensure_event_loop():
-                try:
-                    capture = pyshark.LiveCapture(
-                        interface=interface or None,
-                        bpf_filter=bpf_filter or None,
-                        tshark_path=tshark,
-                        use_json=True,
-                        include_raw=False,
-                        custom_parameters={"-n": "", "-s": "256", "-o": "tcp.desegment_tcp_streams:false"},
-                    )
+            process = self._spawn(command, stderr_file)
+            with self._lock:
+                self._process = process
+                self._stderr_file = stderr_file
+            ready.set()
+            assert process.stdout is not None
+            for line in process.stdout:
+                if stop.is_set():
+                    break
+                record = _record_from_fields(line)
+                if record is not None:
+                    analyzer().add_record(record)
                     with self._lock:
-                        self._capture = capture
-                    ready.set()
-
-                    for packet in capture.sniff_continuously():
-                        if stop.is_set():
-                            break
-                        record = _packet_record(packet)
-                        if record is not None and record.src_ip and record.dst_ip:
-                            analyzer().add_record(record)
-                        if on_finding and time.monotonic() - last_check >= FINDING_CHECK_INTERVAL:
-                            last_check = time.monotonic()
-                            for finding in analyzer().snapshot().suspicious:
-                                key = (finding.get("type"), finding.get("source"), finding.get("details"))
-                                if key not in seen_findings:
-                                    if len(seen_findings) >= 512:
-                                        seen_findings.clear()
-                                    seen_findings.add(key)
-                                    on_finding(finding)
-                finally:
-                    if capture is not None:
-                        try:
-                            capture.close()
-                        except Exception:
-                            pass
+                        self._last_packet_at = time.time()
+                if on_finding and time.monotonic() - last_check >= FINDING_CHECK_INTERVAL:
+                    last_check = time.monotonic()
+                    for finding in analyzer().snapshot().suspicious:
+                        key = (finding.get("type"), finding.get("source"), finding.get("details"))
+                        if key not in seen_findings:
+                            if len(seen_findings) >= 512:
+                                seen_findings.clear()
+                            seen_findings.add(key)
+                            on_finding(finding)
+            if stop.is_set():
+                self._terminate(process)
+            else:
+                return_code = process.wait()
+                if return_code:
+                    stderr_file.seek(0)
+                    detail = stderr_file.read()[-4000:].strip()
+                    raise RuntimeError(detail or f"TShark exited with code {return_code}.")
         except Exception as exc:
             with self._lock:
                 self._last_error = f"{type(exc).__name__}: {exc}"
@@ -281,30 +308,33 @@ class WiresharkEngine:
                 startup_error.append(exc)
         finally:
             ready.set()
+            if process is not None:
+                self._terminate(process)
+                if process.stdout is not None:
+                    process.stdout.close()
+            stderr_file.close()
             with self._lock:
-                if self._capture is capture:
-                    self._capture = None
+                if self._process is process:
+                    self._process = None
+                self._stderr_file = None
 
     def stop_background(self) -> str:
         with self._lock:
-            thread, capture = self._thread, self._capture
+            thread, process = self._thread, self._process
             if not thread or not thread.is_alive():
                 self._thread = None
-                self._capture = None
+                self._process = None
                 return "Background monitoring is not running."
             self._stop.set()
-        try:
-            capture.close()
-        except Exception:
-            pass
+        self._terminate(process)
         if thread is not threading.current_thread():
             thread.join(timeout=10)
         if thread.is_alive():
-            return "Stop requested, but TShark has not exited yet. The capture handle is retained so it can be stopped safely."
+            return "Stop requested, but TShark has not exited yet; its worker is retained."
         with self._lock:
             self._thread = None
-            self._capture = None
-        return f"Background monitoring stopped. {analyzer().snapshot().captured_packets:,} packets retained."
+            self._process = None
+        return f"Background monitoring stopped. {analyzer().snapshot().captured_packets:,} packets observed."
 
     def launch_gui(self, path: str | None = None, interface: str = "", start_capture: bool = False) -> str:
         executable = find_wireshark()
@@ -320,8 +350,10 @@ class WiresharkEngine:
             args.append("-k")
             if interface:
                 args.extend(["-i", interface])
-        subprocess.Popen(args, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                         stderr=subprocess.DEVNULL, close_fds=(os.name != "nt"))
+        subprocess.Popen(
+            args, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL, close_fds=(os.name != "nt"),
+        )
         return "Wireshark GUI launched."
 
 
