@@ -87,6 +87,7 @@ def main() -> int:
         "--mainExe", "JARVIS.exe",
         "--packTitle", "JARVIS",
         "--channel", args.channel,
+        "--runtime", "win-x64",
         "--icon", str(ROOT / "config" / "jarvis.ico"),
         "--outputDir", str(output),
         "--packAuthors", "JARVIS",
