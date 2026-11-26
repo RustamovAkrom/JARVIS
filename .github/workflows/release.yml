@@ -182,6 +182,12 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Check out release commit
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
       - name: Download validated release artifacts
         uses: actions/download-artifact@v4
         with:
@@ -193,6 +199,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "${{ needs.package.outputs.tag }}" release/* \
+            --repo "${{ github.repository }}" \
             --title "JARVIS ${{ needs.package.outputs.tag }}" \
             --generate-notes \
             --target "${{ github.sha }}"
