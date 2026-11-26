@@ -104,7 +104,7 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
             path = str(p.get("path") or "").strip()
             if not path:
                 return "Please provide the PCAP/PCAPNG file path."
-            max_packets = max(1, min(int(p.get("max_packets") or 250000), 250000))
+            max_packets = max(1, min(int(p.get("max_packets") or _setting("max_packets", 50000)), 50000))
             if _engine().status()["running"]:
                 return "Stop background monitoring before importing a capture file. This prevents live and file-analysis data from being mixed."
             count = core.analyzer().load_pcap(path, max_packets=max_packets)
