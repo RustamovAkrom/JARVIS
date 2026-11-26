@@ -6,9 +6,9 @@ Network Intelligence integrates JARVIS with **Wireshark and TShark**. PyShark is
 
 - PCAP/PCAPNG analysis through PyShark and TShark.
 - Continuous live capture through TShark, independent of the Wireshark GUI window. The GUI is opened without starting a second capture, avoiding duplicate packet processing.
-- Optional Wireshark GUI launch, including opening a saved capture or starting a live capture.
-- Bounded in-memory packet metadata (50,000 records by default); packet payloads are not retained by JARVIS. Expensive snapshots are cached for five seconds.
-- Packet/byte counts, unique IPs/ports/flows, protocol distribution, top talkers, rare source IPs, DNS query frequency and a traffic timeline.
+- Wireshark GUI launch is independent from capture permissions and never starts monitoring implicitly. Live monitoring is a separate, explicit action.
+- Streaming aggregate counters only: JARVIS does not retain packet rows, payloads, or a packet-history buffer. Per-category cardinality is bounded (IPs, flows, DNS names, ports, scan sources); low-frequency keys may be evicted when a limit is reached. Snapshots are generated from counters and cached for five seconds.
+- Packet/byte totals, tracked IPs/ports/flows, protocol categories, top talkers, rare tracked sources/protocols, DNS query frequency, a short traffic timeline and bounded heuristic detections.
 - Heuristic indicators for broad TCP SYN/port sweeps and unusually long DNS names, evaluated on a 15-second interval during live capture.
 - Natural-language questions routed to deterministic metrics; the configured JARVIS model may explain measured results but cannot invent metrics.
 - HUD dashboard and notifications for newly observed heuristic findings.
@@ -36,7 +36,7 @@ Live capture additionally requires the platform capture driver and permissions:
 2. Enable **Allow live capture** in Network Intelligence settings.
 3. Select the intended capture interface (blank uses the system default interface).
 4. Optionally enable **Start authorised background monitoring when JARVIS launches**.
-5. Restart JARVIS. The plugin's app-start hook starts a daemon capture worker; the HUD can be closed without stopping capture.
+5. Start monitoring explicitly with the `start_monitor` action. Automatic startup monitoring is available only when both opt-in settings are enabled. The HUD can be closed without stopping capture.
 6. Say “stop network monitoring” or invoke `stop_monitor` to stop it.
 
 Both settings are off by default. Monitoring is opt-in because packet metadata can reveal sensitive browsing and network activity. Only monitor devices and networks you own or are authorised to inspect.
@@ -47,7 +47,8 @@ Actions: `analyze_file`, `ask`, `dashboard`, `start_monitor`, `stop_monitor`, `l
 
 Examples:
 - “Start background network monitoring.”
-- “Open Wireshark and start a capture.”
+- “Open Wireshark.” (GUI only; does not start capture.)
+- “Start authorised network monitoring.” (starts the separate background monitor.)
 - “Analyse this capture file: C:\\captures\\lab.pcapng”
 - “Open this capture in Wireshark.”
 - “How many packets, IPs, ports and flows have you seen?”
@@ -58,7 +59,7 @@ Examples:
 
 ## Detection limitations
 
-Findings are triage indicators, not proof of compromise. A port sweep or unusual DNS query can have benign explanations. The plugin does not decrypt TLS, execute payloads, identify every malware family, or replace IDS/IPS tooling or professional incident response. Encrypted application content remains encrypted unless separately decrypted with appropriate session secrets. JARVIS retains bounded packet metadata only; it does not retain full payloads or upload captures to an external service.
+Findings are triage indicators, not proof of compromise. A port sweep or unusual DNS query can have benign explanations. The plugin does not decrypt TLS, execute payloads, identify every malware family, or replace IDS/IPS tooling or professional incident response. Encrypted application content remains encrypted unless separately decrypted with appropriate session secrets. JARVIS processes packet metadata from the selected interface to update fixed-size counters, then discards each packet object. It does not build a packet log, retain full payloads, or upload captures to an external service. Exact totals require observing packets; this is not a zero-inspection mode. TShark still performs packet dissection, so high-throughput links can consume CPU and may drop packets at the OS capture layer.
 
 ## Troubleshooting
 
