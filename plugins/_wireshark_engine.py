@@ -203,60 +203,87 @@ class WiresharkEngine:
             if self._thread and self._thread.is_alive() and not self._stop.is_set():
                 return f"Background monitoring is already running on {self._interface or 'default interface'}."
             self._stop = threading.Event()
+            stop = self._stop
             self._interface = interface.strip()
             self._filter = bpf_filter.strip()[:512]
             self._last_error = ""
             analyzer().clear(source=f"wireshark-live:{self._interface or 'default'}")
-            # PyShark may query asyncio during capture construction. This
-            # context covers constructor-time loop access; the worker creates
-            # its own loop for the actual capture lifetime.
-            with _ensure_event_loop():
-                capture = pyshark.LiveCapture(
-                    interface=self._interface or None,
-                    bpf_filter=self._filter or None,
-                    tshark_path=tshark,
-                    use_json=True,
-                    include_raw=False,
-                    custom_parameters={"-n": "", "-s": "256", "-o": "tcp.desegment_tcp_streams:false"},
-                )
-            self._capture = capture
+            ready = threading.Event()
+            startup_error: list[BaseException] = []
+            self._capture = None
             self._thread = threading.Thread(
-                target=self._capture_loop, args=(capture, self._stop, on_finding),
-                name="jarvis-tshark-monitor", daemon=True,
+                target=self._capture_loop,
+                args=(pyshark, tshark, self._interface, self._filter,
+                      stop, on_finding, ready, startup_error),
+                name="jarvis-tshark-monitor",
+                daemon=True,
             )
-            self._thread.start()
+            thread = self._thread
+            thread.start()
+
+        # Report constructor/permission failures to the caller instead of
+        # claiming monitoring started when the worker could not initialize.
+        if not ready.wait(timeout=10):
+            stop.set()
+            raise RuntimeError("Timed out while initializing the TShark capture worker.")
+        if startup_error:
+            raise RuntimeError(f"Could not initialize TShark capture: {startup_error[0]}") from startup_error[0]
         return f"Wireshark/TShark background monitoring started on {self._interface or 'default interface'}."
 
-    def _capture_loop(self, capture, stop: threading.Event, on_finding) -> None:
+    def _capture_loop(self, pyshark, tshark: str, interface: str,
+                      bpf_filter: str, stop: threading.Event, on_finding,
+                      ready: threading.Event, startup_error: list[BaseException]) -> None:
         seen_findings: set[tuple] = set()
         last_check = time.monotonic()
+        capture = None
         try:
-            # The capture thread is independent of the caller's event loop.
-            # PyShark must resolve asyncio.get_event_loop() in this thread too.
+            # Create, use and close PyShark in the same worker thread and
+            # under the same event loop. This is required by Python 3.14.
             with _ensure_event_loop():
-                for packet in capture.sniff_continuously():
-                    if stop.is_set():
-                        break
-                    record = _packet_record(packet)
-                    if record is not None and record.src_ip and record.dst_ip:
-                        analyzer().add_record(record)
-                    if on_finding and time.monotonic() - last_check >= FINDING_CHECK_INTERVAL:
-                        last_check = time.monotonic()
-                        for finding in analyzer().snapshot().suspicious:
-                            key = (finding.get("type"), finding.get("source"), finding.get("details"))
-                            if key not in seen_findings:
-                                if len(seen_findings) >= 512:
-                                    seen_findings.clear()
-                                seen_findings.add(key)
-                                on_finding(finding)
+                try:
+                    capture = pyshark.LiveCapture(
+                        interface=interface or None,
+                        bpf_filter=bpf_filter or None,
+                        tshark_path=tshark,
+                        use_json=True,
+                        include_raw=False,
+                        custom_parameters={"-n": "", "-s": "256", "-o": "tcp.desegment_tcp_streams:false"},
+                    )
+                    with self._lock:
+                        self._capture = capture
+                    ready.set()
+
+                    for packet in capture.sniff_continuously():
+                        if stop.is_set():
+                            break
+                        record = _packet_record(packet)
+                        if record is not None and record.src_ip and record.dst_ip:
+                            analyzer().add_record(record)
+                        if on_finding and time.monotonic() - last_check >= FINDING_CHECK_INTERVAL:
+                            last_check = time.monotonic()
+                            for finding in analyzer().snapshot().suspicious:
+                                key = (finding.get("type"), finding.get("source"), finding.get("details"))
+                                if key not in seen_findings:
+                                    if len(seen_findings) >= 512:
+                                        seen_findings.clear()
+                                    seen_findings.add(key)
+                                    on_finding(finding)
+                finally:
+                    if capture is not None:
+                        try:
+                            capture.close()
+                        except Exception:
+                            pass
         except Exception as exc:
             with self._lock:
                 self._last_error = f"{type(exc).__name__}: {exc}"
+            if not ready.is_set():
+                startup_error.append(exc)
         finally:
-            try:
-                capture.close()
-            except Exception:
-                pass
+            ready.set()
+            with self._lock:
+                if self._capture is capture:
+                    self._capture = None
 
     def stop_background(self) -> str:
         with self._lock:
