@@ -16,7 +16,7 @@ from typing import Callable
 from plugins._network_intelligence_core import PacketRecord, analyzer
 
 MAX_CAPTURE_FILE_BYTES = 2 * 1024 * 1024 * 1024
-MAX_FILE_PACKETS = 250_000
+MAX_FILE_PACKETS = 50_000
 FINDING_CHECK_INTERVAL = 15.0
 
 
@@ -184,6 +184,7 @@ class WiresharkEngine:
                 tshark_path=tshark,
                 keep_packets=False,
                 use_json=True,
+                custom_parameters={"-n": "", "-o": "tcp.desegment_tcp_streams:false"},
             )
             self._capture = capture
             self._thread = threading.Thread(
