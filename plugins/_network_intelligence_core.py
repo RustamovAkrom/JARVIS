@@ -61,84 +61,136 @@ class AnalysisSnapshot:
 
 
 class TrafficAnalyzer:
-    """Bounded, deterministic packet analyzer; no packet payloads are retained."""
+    """Streaming, bounded-memory traffic aggregator; packet rows and payloads are never retained."""
+
+    MAX_IP_KEYS = 4096
+    MAX_FLOW_KEYS = 8192
+    MAX_DNS_KEYS = 2048
+    MAX_PORT_KEYS = 4096
+    MAX_SCAN_SOURCES = 512
+    MAX_SCAN_PORTS_PER_SOURCE = 128
+    MAX_TIMELINE_BUCKETS = 360
 
     def __init__(self) -> None:
         self._lock = threading.RLock()
-        self._records: collections.deque[PacketRecord] = collections.deque(maxlen=MAX_PACKETS)
         self._source = "empty"
         self._started_at = 0.0
         self._ended_at = 0.0
-        self._dropped = 0
+        self._packets = 0
+        self._total_bytes = 0
+        self._protocols = collections.Counter()
+        self._src = collections.Counter()
+        self._dst = collections.Counter()
+        self._flows = collections.Counter()
+        self._dns = collections.Counter()
+        self._ports: set[int] = set()
+        self._scan_state = collections.OrderedDict()
+        self._timeline = collections.OrderedDict()
+        self._evicted = set()
         self._generation = 0
         self._snapshot_cache = None
         self._snapshot_cache_at = 0.0
 
     def clear(self, source: str = "empty") -> None:
         with self._lock:
-            self._records.clear()
             self._source = source
             self._started_at = time.time()
             self._ended_at = self._started_at
-            self._dropped = 0
+            self._packets = 0
+            self._total_bytes = 0
+            self._protocols.clear()
+            self._src.clear()
+            self._dst.clear()
+            self._flows.clear()
+            self._dns.clear()
+            self._ports.clear()
+            self._scan_state.clear()
+            self._timeline.clear()
+            self._evicted.clear()
             self._generation += 1
             self._snapshot_cache = None
             self._snapshot_cache_at = 0.0
 
+    def _increment(self, counter: collections.Counter, key, limit: int, label: str) -> None:
+        if key in counter:
+            counter[key] += 1
+            return
+        if len(counter) >= limit:
+            victim, _ = min(counter.items(), key=lambda item: item[1])
+            del counter[victim]
+            self._evicted.add(label)
+        counter[key] = 1
+
     def add_record(self, record: PacketRecord) -> None:
+        """Update fixed-size counters from packet metadata and immediately discard the row."""
         with self._lock:
             if not self._started_at:
                 self._started_at = record.timestamp
-            if len(self._records) == self._records.maxlen:
-                self._dropped += 1
-            self._records.append(record)
             self._ended_at = max(self._ended_at, record.timestamp)
+            self._packets += 1
+            self._total_bytes += max(0, int(record.length))
+            self._increment(self._protocols, record.protocol[:32] or "OTHER", 64, "protocols")
+            self._increment(self._src, record.src_ip, self.MAX_IP_KEYS, "source IPs")
+            self._increment(self._dst, record.dst_ip, self.MAX_IP_KEYS, "destination IPs")
+            if record.src_port is not None:
+                self._ports.add(record.src_port)
+            if record.dst_port is not None:
+                self._ports.add(record.dst_port)
+            if len(self._ports) > self.MAX_PORT_KEYS:
+                self._ports.pop()
+                self._evicted.add("ports")
+            flow = (record.src_ip, record.src_port, record.dst_ip, record.dst_port, record.protocol)
+            self._increment(self._flows, flow, self.MAX_FLOW_KEYS, "flows")
+            if record.dns_query:
+                self._increment(self._dns, record.dns_query[:253], self.MAX_DNS_KEYS, "DNS names")
+            if "S" in record.tcp_flags and "A" not in record.tcp_flags:
+                state = self._scan_state.get(record.src_ip)
+                if state is None:
+                    if len(self._scan_state) >= self.MAX_SCAN_SOURCES:
+                        self._scan_state.popitem(last=False)
+                        self._evicted.add("scan sources")
+                    state = {"syn": 0, "ports": set()}
+                    self._scan_state[record.src_ip] = state
+                self._scan_state.move_to_end(record.src_ip)
+                state["syn"] += 1
+                if record.dst_port is not None and len(state["ports"]) < self.MAX_SCAN_PORTS_PER_SOURCE:
+                    state["ports"].add(record.dst_port)
+            bucket = int(record.timestamp // 10) * 10
+            self._timeline[bucket] = self._timeline.get(bucket, 0) + max(0, int(record.length))
+            self._timeline.move_to_end(bucket)
+            while len(self._timeline) > self.MAX_TIMELINE_BUCKETS:
+                self._timeline.popitem(last=False)
+            self._snapshot_cache = None
 
     def load_pcap(self, path: str | os.PathLike[str], max_packets: int = MAX_PACKETS) -> int:
-        """Dissect PCAP/PCAPNG through Wireshark's TShark engine."""
+        """Dissect a bounded prefix of a PCAP/PCAPNG file through TShark."""
         from plugins._wireshark_engine import engine
         return engine().analyze_file(str(path), max_packets=max_packets)
 
     @staticmethod
     def _top(counter: collections.Counter, limit: int = 10) -> list[dict[str, Any]]:
-        return [{"name": str(k), "count": int(v)} for k, v in counter.most_common(limit)]
+        return [{"name": str(key), "count": int(value)} for key, value in counter.most_common(limit)]
 
     def snapshot(self) -> AnalysisSnapshot:
         now = time.monotonic()
         with self._lock:
-            cached = self._snapshot_cache
-            if cached is not None and now - self._snapshot_cache_at < SNAPSHOT_CACHE_SECONDS:
-                return cached
-            rows = list(self._records)
-            source, started, ended, dropped = self._source, self._started_at, self._ended_at, self._dropped
+            if self._snapshot_cache is not None and now - self._snapshot_cache_at < SNAPSHOT_CACHE_SECONDS:
+                return self._snapshot_cache
+            protocols = self._protocols.copy()
+            src = self._src.copy()
+            dst = self._dst.copy()
+            flows = self._flows.copy()
+            dns = self._dns.copy()
+            scan_state = [(ip, state["syn"], set(state["ports"])) for ip, state in self._scan_state.items()]
+            source, started, ended = self._source, self._started_at, self._ended_at
+            packets, total_bytes = self._packets, self._total_bytes
+            ports = len(self._ports)
+            timeline = list(self._timeline.items())
+            evicted = sorted(self._evicted)
             generation = self._generation
-        protocols: collections.Counter = collections.Counter()
-        src: collections.Counter = collections.Counter()
-        dst: collections.Counter = collections.Counter()
-        ports: set[int] = set()
-        flows: collections.Counter = collections.Counter()
-        dns: collections.Counter = collections.Counter()
-        dst_ports_by_src: dict[str, set[int]] = collections.defaultdict(set)
-        syn_only: collections.Counter = collections.Counter()
-        buckets: collections.Counter = collections.Counter()
-        total_bytes = 0
-        for row in rows:
-            protocols[row.protocol] += 1
-            src[row.src_ip] += 1
-            dst[row.dst_ip] += 1
-            if row.src_port is not None: ports.add(row.src_port)
-            if row.dst_port is not None: ports.add(row.dst_port)
-            flows[(row.src_ip, row.src_port, row.dst_ip, row.dst_port, row.protocol)] += 1
-            if row.dst_port is not None: dst_ports_by_src[row.src_ip].add(row.dst_port)
-            if "S" in row.tcp_flags and "A" not in row.tcp_flags:
-                syn_only[row.src_ip] += 1
-            if row.dns_query: dns[row.dns_query] += 1
-            buckets[int(row.timestamp // 10) * 10] += row.length
-            total_bytes += row.length
 
-        suspicious: list[dict[str, Any]] = []
-        for ip, seen_ports in dst_ports_by_src.items():
-            syn_count = syn_only[ip]
+        suspicious = []
+        for ip, syn_count, seen_ports in scan_state:
             if len(seen_ports) >= 20 or syn_count >= 30:
                 suspicious.append({
                     "severity": "high" if len(seen_ports) >= 80 or syn_count >= 100 else "medium",
@@ -153,20 +205,21 @@ class TrafficAnalyzer:
                     "source": name, "details": f"DNS query length {len(name)}; inspect manually",
                     "evidence": {"query_length": len(name), "count": count},
                 })
-                if len(suspicious) >= 100: break
+                if len(suspicious) >= 100:
+                    break
 
-        rare_ips = [{"name": ip, "count": count} for ip, count in sorted(src.items(), key=lambda x: (x[1], x[0]))[:10]]
-        rare_protocols = [{"name": p, "count": c} for p, c in sorted(protocols.items(), key=lambda x: (x[1], x[0]))[:10]]
-        timeline = [{"timestamp": ts, "bytes": size} for ts, size in sorted(buckets.items())[-60:]]
         warnings = []
-        if dropped: warnings.append(f"Bounded buffer evicted {dropped} oldest packets.")
-        if len(rows) >= MAX_PACKETS: warnings.append("Analysis reached the in-memory packet limit; results may be partial.")
+        if evicted:
+            warnings.append("Cardinality limits reached; some low-frequency keys are omitted: " + ", ".join(evicted) + ".")
         result = AnalysisSnapshot(
-            source=source, captured_packets=len(rows), total_bytes=total_bytes,
-            unique_ips=len(set(src) | set(dst)), unique_ports=len(ports), unique_flows=len(flows),
+            source=source, captured_packets=packets, total_bytes=total_bytes,
+            unique_ips=len(set(src) | set(dst)), unique_ports=ports, unique_flows=len(flows),
             protocols=dict(protocols), top_sources=self._top(src), top_destinations=self._top(dst),
-            top_protocols=self._top(protocols), rare_protocols=rare_protocols, rare_ips=rare_ips,
-            suspicious=suspicious[:100], dns_top=self._top(dns), timeline=timeline,
+            top_protocols=self._top(protocols),
+            rare_protocols=[{"name": key, "count": value} for key, value in sorted(protocols.items(), key=lambda item: (item[1], item[0]))[:10]],
+            rare_ips=[{"name": key, "count": value} for key, value in sorted(src.items(), key=lambda item: (item[1], item[0]))[:10]],
+            suspicious=suspicious[:100], dns_top=self._top(dns),
+            timeline=[{"timestamp": ts, "bytes": size} for ts, size in timeline[-60:]],
             started_at=started, ended_at=ended, warnings=warnings,
         )
         with self._lock:
@@ -176,29 +229,29 @@ class TrafficAnalyzer:
         return result
 
     def answer(self, question: str) -> dict[str, Any]:
-        """Map common analyst questions to deterministic metrics, never guess."""
-        q = re.sub(r"\s+", " ", str(question or "").strip().lower())
+        """Map analyst questions to bounded aggregate metrics; never send packet streams to AI."""
+        q = re.sub(r"\\s+", " ", str(question or "").strip().lower())
         s = self.snapshot()
         if not s.captured_packets:
-            return {"answer": "No traffic data is loaded. Import a PCAP/PCAPNG or start an authorised live capture.", "snapshot": s.to_dict()}
+            return {"answer": "No traffic data is loaded. Import a PCAP/PCAPNG or start authorised monitoring.", "snapshot": s.to_dict()}
         if any(x in q for x in ("rare protocol", "rarest protocol", "самый редкий протокол", "самый редкий", "реже всего")) and ("protocol" in q or "протокол" in q or "rare" in q or "редк" in q):
             rows = s.rare_protocols
-            answer = f"Rarest observed protocol: {rows[0]['name']} ({rows[0]['count']} packets)." if rows else "No protocol data."
+            answer = f"Rarest tracked protocol: {rows[0]['name']} ({rows[0]['count']} packets)." if rows else "No protocol data."
         elif any(x in q for x in ("rare ip", "rarest ip", "least common ip", "самый редкий ip", "реже всего ip")):
             rows = s.rare_ips
-            answer = f"Least frequent source IP: {rows[0]['name']} ({rows[0]['count']} packets)." if rows else "No IP data."
+            answer = f"Least frequent tracked source IP: {rows[0]['name']} ({rows[0]['count']} packets)." if rows else "No IP data."
         elif any(x in q for x in ("strange", "suspicious", "anomal", "подозр", "стран", "необыч", "аномал")):
-            answer = f"Found {len(s.suspicious)} heuristic finding(s). " + ("; ".join(f"{x['type']} from {x['source']}: {x['details']}" for x in s.suspicious[:5]) if s.suspicious else "No configured heuristic triggered; this does not prove the traffic is benign.")
+            answer = f"Found {len(s.suspicious)} heuristic finding(s). " + ("; ".join(f"{x['type']} from {x['source']}: {x['details']}" for x in s.suspicious[:5]) if s.suspicious else "No configured heuristic triggered; this does not prove traffic is benign.")
         elif any(x in q for x in ("protocol", "протокол")):
             answer = "Protocol distribution: " + ", ".join(f"{x['name']} {x['count']}" for x in s.top_protocols[:10])
         elif any(x in q for x in ("port", "порт")):
-            answer = f"Observed {s.unique_ports} unique transport ports across {s.unique_flows} flows."
+            answer = f"Observed {s.unique_ports} tracked transport ports across {s.unique_flows} tracked flows."
         elif any(x in q for x in ("how many", "count", "сколько", "количество", "число")):
-            answer = f"{s.captured_packets} packets, {s.total_bytes:,} bytes, {s.unique_ips} unique IPs, {s.unique_ports} unique ports and {s.unique_flows} unique flows."
+            answer = f"{s.captured_packets} observed packets, {s.total_bytes:,} bytes, {s.unique_ips} tracked IPs, {s.unique_ports} ports and {s.unique_flows} tracked flows."
         elif any(x in q for x in ("top", "most", "active", "част", "актив", "популяр", "чаще всего", "самый частый", "наиболее частый")):
-            answer = "Most active source IPs: " + ", ".join(f"{x['name']} ({x['count']})" for x in s.top_sources[:5])
+            answer = "Most active tracked source IPs: " + ", ".join(f"{x['name']} ({x['count']})" for x in s.top_sources[:5])
         else:
-            answer = f"Capture summary: {s.captured_packets} packets, {s.total_bytes:,} bytes, {s.unique_ips} IPs, {s.unique_flows} flows. Top protocols: " + ", ".join(f"{x['name']} ({x['count']})" for x in s.top_protocols[:5])
+            answer = f"Traffic summary: {s.captured_packets} observed packets, {s.total_bytes:,} bytes, {s.unique_ips} tracked IPs and {s.unique_flows} tracked flows. Top protocols: " + ", ".join(f"{x['name']} ({x['count']})" for x in s.top_protocols[:5])
         return {"answer": answer, "snapshot": s.to_dict()}
 
 
