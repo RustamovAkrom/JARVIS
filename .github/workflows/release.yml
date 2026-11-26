@@ -11,7 +11,7 @@ on:
 # Do not cancel a running release build. Each successful main push should
 # retain its own artifact; duplicate version publication is handled below.
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   tests:
@@ -22,6 +22,12 @@ jobs:
   package:
     name: Build and validate Windows distribution
     needs: tests
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      tag: ${{ steps.release.outputs.tag }}
+      should_publish: ${{ steps.release.outputs.should_publish }}
     if: >-
       always() &&
       (github.event_name == 'pull_request' || needs.tests.result == 'success')
@@ -163,14 +169,30 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Publish GitHub Release
-        if: steps.release.outputs.should_publish == 'true'
-        shell: pwsh
+  publish:
+    name: Publish GitHub Release
+    needs: package
+    if: >-
+      needs.package.result == 'success' &&
+      needs.package.outputs.should_publish == 'true' &&
+      github.ref == 'refs/heads/main' &&
+      github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Download validated release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: JARVIS-Windows-${{ needs.package.outputs.version }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: release
+
+      - name: Publish versioned GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${{ steps.release.outputs.tag }}" release/* --title "JARVIS ${{ steps.release.outputs.tag }}" --generate-notes --target "$env:GITHUB_SHA"
-
-      - name: Report skipped duplicate release
-        if: steps.release.outputs.should_publish == 'false' && github.ref == 'refs/heads/main'
-        run: echo "Build validated and uploaded. The version already exists; no duplicate GitHub Release was created."
+          gh release create "${{ needs.package.outputs.tag }}" release/* \
+            --title "JARVIS ${{ needs.package.outputs.tag }}" \
+            --generate-notes \
+            --target "${{ github.sha }}"
