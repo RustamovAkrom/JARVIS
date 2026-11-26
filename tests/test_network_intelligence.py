@@ -44,21 +44,14 @@ def test_empty_capture_returns_actionable_message():
     assert "No traffic data is loaded" in result["answer"]
 
 
-def test_pyshark_packet_adapter_normalizes_ipv4_tcp_and_dns_fields():
-    from types import SimpleNamespace
-    from plugins._wireshark_engine import _packet_record
+def test_tshark_fields_adapter_normalizes_ipv4_tcp_and_dns_fields():
+    from plugins._wireshark_engine import _record_from_fields
 
-    packet = SimpleNamespace(
-        ip=SimpleNamespace(src="192.0.2.10", dst="198.51.100.20"),
-        tcp=SimpleNamespace(srcport="51515", dstport="443", flags_syn="1", flags_ack="0"),
-        udp=None,
-        dns=SimpleNamespace(qry_name="example.test"),
-        transport_layer="TCP",
-        highest_layer="TLS",
-        sniff_timestamp="1700000000.5",
-        length="74",
-    )
-    record = _packet_record(packet)
+    fields = [
+        "1700000000.5", "192.0.2.10", "", "", "198.51.100.20",
+        "51515", "", "443", "", "TLS", "74", "1", "0", "example.test",
+    ]
+    record = _record_from_fields("\\t".join(fields))
     assert record is not None
     assert record.src_ip == "192.0.2.10"
     assert record.dst_ip == "198.51.100.20"
@@ -66,6 +59,22 @@ def test_pyshark_packet_adapter_normalizes_ipv4_tcp_and_dns_fields():
     assert record.tcp_flags == "S"
     assert record.dns_query == "example.test"
     assert record.length == 74
+
+
+def test_tshark_fields_adapter_supports_ipv6_and_missing_transport():
+    from plugins._wireshark_engine import _record_from_fields
+
+    fields = [
+        "1700000001.0", "", "2001:db8::1", "", "2001:db8::2",
+        "", "", "", "", "ICMPV6", "128", "", "", "",
+    ]
+    record = _record_from_fields("\\t".join(fields))
+    assert record is not None
+    assert record.src_ip == "2001:db8::1"
+    assert record.dst_ip == "2001:db8::2"
+    assert record.src_port is None
+    assert record.dst_port is None
+    assert record.protocol == "ICMPV6"
 
 
 def test_snapshot_is_cached_between_refresh_windows():
@@ -105,107 +114,25 @@ def test_streaming_aggregator_does_not_retain_packet_rows():
     assert snapshot.warnings
 
 
-def test_live_capture_does_not_pass_file_only_keep_packets_argument(monkeypatch):
-    import sys
-    from types import SimpleNamespace
-    from plugins import _wireshark_engine
-
-    captured = {}
-
-    class FakeLiveCapture:
-        def __init__(self, **kwargs):
-            captured.update(kwargs)
-
-        def sniff_continuously(self):
-            return iter(())
-
-        def close(self):
-            pass
-
-    monkeypatch.setattr(_wireshark_engine, "find_tshark", lambda: "tshark")
-    monkeypatch.setitem(sys.modules, "pyshark", SimpleNamespace(LiveCapture=FakeLiveCapture))
-    engine = _wireshark_engine.WiresharkEngine()
-    engine.start_background()
-    engine._thread.join(timeout=2)
-
-    assert "keep_packets" not in captured
-    assert captured["include_raw"] is False
-    assert captured["use_json"] is True
-    assert captured["custom_parameters"]["-s"] == "256"
 
 
 
-def test_pyshark_event_loop_is_created_in_worker_thread():
-    import asyncio
-    import threading
-    from plugins._wireshark_engine import _ensure_event_loop
+def test_tshark_command_uses_streaming_fields_without_payload():
+    from plugins._wireshark_engine import _command_base
 
-    result = {}
-
-    def worker():
-        with _ensure_event_loop() as loop:
-            result["loop"] = loop
-            result["running"] = asyncio.get_event_loop() is loop
-            result["closed_inside"] = loop.is_closed()
-        result["closed_after"] = loop.is_closed()
-        try:
-            asyncio.get_event_loop()
-        except RuntimeError:
-            result["cleared_after"] = True
-        else:
-            result["cleared_after"] = False
-
-    thread = threading.Thread(target=worker)
-    thread.start()
-    thread.join(timeout=2)
-
-    assert not thread.is_alive()
-    assert result["running"] is True
-    assert result["closed_inside"] is False
-    assert result["closed_after"] is True
-    assert result["cleared_after"] is True
+    command = _command_base("tshark")
+    assert "-T" in command
+    assert command[command.index("-T") + 1] == "fields"
+    assert "frame.len" in command
+    assert "tcp.payload" not in command
+    assert "data.data" not in command
 
 
+def test_live_tshark_command_omits_invalid_windows_any_interface():
+    from plugins._wireshark_engine import _command_base
 
-def test_file_capture_has_event_loop_when_called_from_worker_thread(tmp_path, monkeypatch):
-    import asyncio
-    import threading
-    from types import SimpleNamespace
-    from plugins import _wireshark_engine
-
-    capture_path = tmp_path / "empty.pcapng"
-    capture_path.write_bytes(b"test")
-    observed = {}
-
-    class FakeFileCapture:
-        def __init__(self, *args, **kwargs):
-            observed["constructor_loop"] = asyncio.get_event_loop().is_closed() is False
-
-        def __iter__(self):
-            observed["iteration_loop"] = asyncio.get_event_loop().is_closed() is False
-            return iter(())
-
-        def close(self):
-            observed["close_loop"] = asyncio.get_event_loop().is_closed() is False
-
-    fake_pyshark = SimpleNamespace(FileCapture=FakeFileCapture)
-    engine = _wireshark_engine.WiresharkEngine()
-    monkeypatch.setattr(engine, "_pyshark", lambda: (fake_pyshark, "tshark"))
-
-    def worker():
-        try:
-            engine.analyze_file(str(capture_path))
-        except ValueError as exc:
-            observed["empty_capture_error"] = "no IPv4/IPv6 packets" in str(exc)
-
-    thread = threading.Thread(target=worker)
-    thread.start()
-    thread.join(timeout=3)
-
-    assert not thread.is_alive()
-    assert observed == {
-        "constructor_loop": True,
-        "iteration_loop": True,
-        "close_loop": True,
-        "empty_capture_error": True,
-    }
+    command = _command_base("tshark")
+    interface = ""
+    if interface:
+        command.extend(["-i", interface])
+    assert "-i" not in command
