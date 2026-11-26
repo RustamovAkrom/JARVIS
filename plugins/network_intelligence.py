@@ -18,10 +18,10 @@ PLUGIN = {
     "parameters": {
         "type": "OBJECT",
         "properties": {
-            "action": {"type": "STRING", "description": "'analyze_file', 'ask', 'dashboard', 'start_capture', 'stop_capture', 'status'"},
+            "action": {"type": "STRING", "description": "'analyze_file', 'ask', 'dashboard', 'start_capture', 'stop_capture', 'start_monitor', 'stop_monitor', 'launch_wireshark', 'open_in_wireshark', 'status'"},
             "path": {"type": "STRING", "description": "Absolute or user-selected path to a PCAP/PCAPNG file."},
             "question": {"type": "STRING", "description": "Natural-language analyst question about the currently loaded traffic."},
-            "interface": {"type": "STRING", "description": "Explicit network interface name for authorised live capture."},
+            "interface": {"type": "STRING", "description": "Explicit network interface name for authorised live capture or Wireshark GUI."},
             "bpf_filter": {"type": "STRING", "description": "Optional BPF capture filter, e.g. 'tcp or udp'."},
             "max_packets": {"type": "INTEGER", "description": "Maximum packets to read from a file, capped at 250000."},
         },
@@ -39,6 +39,10 @@ PLUGIN_SETTINGS = {
     "fields": [
         {"key": "max_packets", "label": "Maximum packets per file", "type": "number", "default": 250000},
         {"key": "allow_live_capture", "label": "Allow live capture (requires OS capture permissions)", "type": "boolean", "default": False},
+        {"key": "background_monitoring", "label": "Start authorised background monitoring when JARVIS launches", "type": "boolean", "default": False},
+        {"key": "interface", "label": "Capture interface (blank = system default)", "type": "text", "default": ""},
+        {"key": "tshark_path", "label": "Custom TShark executable path", "type": "text", "default": ""},
+        {"key": "wireshark_path", "label": "Custom Wireshark executable path", "type": "text", "default": ""},
     ],
 }
 
@@ -50,6 +54,52 @@ def _core():
         import _network_intelligence_core as core
     return core
 
+
+
+
+def _engine():
+    from plugins._wireshark_engine import engine
+    return engine()
+
+
+def _setting(key: str, default=""):
+    try:
+        from memory.config_manager import get_plugin_setting
+        return get_plugin_setting(_NS, key, default)
+    except Exception:
+        return default
+
+
+def _notify(player, finding: dict) -> None:
+    message = (
+        f"Possible network anomaly ({finding.get('severity', 'info')}): "
+        f"{finding.get('type')} from {finding.get('source')}. "
+        f"{finding.get('details')}. This is a heuristic indicator, not confirmation of an attack."
+    )
+    _show(player, message)
+    say = getattr(player, "request_say", None) if player is not None else None
+    if callable(say):
+        try:
+            say(message)
+        except Exception:
+            pass
+
+
+def on_app_start(player=None) -> None:
+    """Resume monitoring only after the user explicitly enabled both consent settings."""
+    if not bool(_setting("allow_live_capture", False)):
+        return
+    if not bool(_setting("background_monitoring", False)):
+        return
+    interface = str(_setting("interface", "") or "")
+    try:
+        message = _engine().start_background(
+            interface,
+            on_finding=lambda finding: _notify(player, finding),
+        )
+        _show(player, message)
+    except Exception as exc:
+        _show(player, f"Background monitoring could not start: {type(exc).__name__}: {exc}")
 
 def run(parameters: dict, player=None, session_memory=None) -> str:
     p = dict(parameters or {})
@@ -74,14 +124,35 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
                 allowed = False
             if not allowed:
                 return "Live capture is disabled. Enable 'Allow live capture' in JARVIS plugin settings first. Only monitor interfaces and networks you are authorised to inspect."
-            message = core.start_capture(str(p.get("interface") or ""), str(p.get("bpf_filter") or ""))
+            message = _engine().start_background(str(p.get("interface") or _setting("interface", "")), str(p.get("bpf_filter") or ""), on_finding=lambda finding: _notify(player, finding))
             _show(player, message)
             core.show_dashboard(player)
             return message
-        if action in {"stop_capture", "capture_stop"}:
+        if action in {"stop_capture", "capture_stop", "stop_monitor"}:
             message = core.stop_capture()
             _show(player, message)
             return message
+        if action in {"start_monitor", "monitor_start"}:
+            if not bool(_setting("allow_live_capture", False)):
+                return "Live monitoring is disabled. Enable 'Allow live capture' in plugin settings first."
+            message = _engine().start_background(
+                str(p.get("interface") or _setting("interface", "")),
+                str(p.get("bpf_filter") or ""),
+                on_finding=lambda finding: _notify(player, finding),
+            )
+            _show(player, message)
+            core.show_dashboard(player)
+            return message
+        if action in {"launch_wireshark", "wireshark"}:
+            return _engine().launch_gui(
+                interface=str(p.get("interface") or _setting("interface", "")),
+                start_capture=bool(p.get("interface") or _setting("interface", "")),
+            )
+        if action in {"open_in_wireshark", "open_capture"}:
+            path = str(p.get("path") or "").strip()
+            if not path:
+                return "Please provide the capture file path."
+            return _engine().launch_gui(path=path)
         if action in {"dashboard", "show_dashboard", "open"}:
             question = str(p.get("question") or "")
             shown = core.show_dashboard(player, question)
@@ -109,7 +180,16 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
             except Exception:
                 pass
             return answer
-        return "Unknown action. Use analyze_file, ask, dashboard, start_capture, stop_capture or status."
+        if action == "status":
+            state = _engine().status()
+            return (
+                f"Wireshark integration: TShark={'available' if state['tshark'] else 'missing'}, "
+                f"Wireshark GUI={'available' if state['wireshark'] else 'missing'}, "
+                f"background monitoring={'running' if state['running'] else 'stopped'}, "
+                f"interface={state['interface'] or 'default'}. "
+                f"Packets retained: {core.analyzer().snapshot().captured_packets}."
+            )
+        return "Unknown action. Use analyze_file, ask, dashboard, start_monitor, stop_monitor, launch_wireshark, open_in_wireshark or status."
     except FileNotFoundError as exc:
         return f"Capture file not found: {exc}"
     except ImportError as exc:
