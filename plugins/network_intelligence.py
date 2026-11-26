@@ -64,6 +64,7 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
             count = core.analyzer().load_pcap(path, max_packets=max_packets)
             result = core.analyzer().answer("give me a traffic summary")
             _show(player, f"Loaded {count:,} packets from {Path(path).name}.")
+            core.show_dashboard(player, "give me a traffic summary")
             return f"Loaded {count:,} packets. {result['answer']} Open the Network Intelligence dashboard to inspect findings."
         if action in {"start_capture", "capture_start"}:
             try:
@@ -75,6 +76,7 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
                 return "Live capture is disabled. Enable 'Allow live capture' in JARVIS plugin settings first. Only monitor interfaces and networks you are authorised to inspect."
             message = core.start_capture(str(p.get("interface") or ""), str(p.get("bpf_filter") or ""))
             _show(player, message)
+            core.show_dashboard(player)
             return message
         if action in {"stop_capture", "capture_stop"}:
             message = core.stop_capture()
