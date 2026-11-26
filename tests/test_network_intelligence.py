@@ -66,3 +66,19 @@ def test_pyshark_packet_adapter_normalizes_ipv4_tcp_and_dns_fields():
     assert record.tcp_flags == "S"
     assert record.dns_query == "example.test"
     assert record.length == 74
+
+
+def test_snapshot_is_cached_between_refresh_windows():
+    analyzer = _sample()
+    first = analyzer.snapshot()
+    assert analyzer.snapshot() is first
+
+
+def test_clear_invalidates_cached_snapshot():
+    analyzer = _sample()
+    first = analyzer.snapshot()
+    analyzer.clear("new-source")
+    second = analyzer.snapshot()
+    assert second is not first
+    assert second.source == "new-source"
+    assert second.captured_packets == 0
