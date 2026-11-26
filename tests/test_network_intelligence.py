@@ -164,3 +164,48 @@ def test_pyshark_event_loop_is_created_in_worker_thread():
     assert result["closed_inside"] is False
     assert result["closed_after"] is True
     assert result["cleared_after"] is True
+
+
+
+def test_file_capture_has_event_loop_when_called_from_worker_thread(tmp_path, monkeypatch):
+    import asyncio
+    import threading
+    from types import SimpleNamespace
+    from plugins import _wireshark_engine
+
+    capture_path = tmp_path / "empty.pcapng"
+    capture_path.write_bytes(b"test")
+    observed = {}
+
+    class FakeFileCapture:
+        def __init__(self, *args, **kwargs):
+            observed["constructor_loop"] = asyncio.get_event_loop().is_closed() is False
+
+        def __iter__(self):
+            observed["iteration_loop"] = asyncio.get_event_loop().is_closed() is False
+            return iter(())
+
+        def close(self):
+            observed["close_loop"] = asyncio.get_event_loop().is_closed() is False
+
+    fake_pyshark = SimpleNamespace(FileCapture=FakeFileCapture)
+    engine = _wireshark_engine.WiresharkEngine()
+    monkeypatch.setattr(engine, "_pyshark", lambda: (fake_pyshark, "tshark"))
+
+    def worker():
+        try:
+            engine.analyze_file(str(capture_path))
+        except ValueError as exc:
+            observed["empty_capture_error"] = "no IPv4/IPv6 packets" in str(exc)
+
+    thread = threading.Thread(target=worker)
+    thread.start()
+    thread.join(timeout=3)
+
+    assert not thread.is_alive()
+    assert observed == {
+        "constructor_loop": True,
+        "iteration_loop": True,
+        "close_loop": True,
+        "empty_capture_error": True,
+    }
