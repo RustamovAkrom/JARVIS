@@ -161,7 +161,7 @@ def run(parameters: dict, player=None, session_memory=None) -> str:
                 f"Wireshark GUI={'available' if state['wireshark'] else 'missing'}, "
                 f"background monitoring={'running' if state['running'] else 'stopped'}, "
                 f"interface={state['interface'] or 'default'}. "
-                f"Packets retained: {core.analyzer().snapshot().captured_packets}. "
+                f"Packets observed: {core.analyzer().snapshot().captured_packets}. "
                 f"Last capture error: {state['last_error'] or 'none'}."
             )
         if action in {"ask", "question", "analyze"}:
