@@ -124,7 +124,7 @@ jobs:
 
           $requiredFiles = @(
             "release/JARVISClapLauncher.exe",
-            "release/RELEASES"
+            "release/releases.stable.json"
           )
           foreach ($file in $requiredFiles) {
             if (-not (Test-Path $file -PathType Leaf)) {
@@ -136,8 +136,8 @@ jobs:
             throw "Clap launcher executable is unexpectedly small."
           }
 
-          if (@(Get-ChildItem release -File -Filter "*.nupkg").Count -eq 0) {
-            throw "Velopack did not produce a .nupkg package."
+          if (@(Get-ChildItem release -File -Filter "*-full.nupkg").Count -eq 0) {
+            throw "Velopack did not produce the required full update package (*-full.nupkg)."
           }
           if (@(Get-ChildItem release -File -Filter "*Setup.exe").Count -eq 0) {
             throw "Velopack did not produce a Setup executable."
